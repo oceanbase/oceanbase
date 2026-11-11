@@ -78,31 +78,17 @@ bool ObRootServiceRoleChecker::is_rootserver()
 {
   bool bret = false;
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = OB_SYS_TENANT_ID;
-
-  MTL_SWITCH(tenant_id) {
-    int64_t proposal_id = -1;
-    ObRole role = FOLLOWER;
-    palf::PalfHandleGuard palf_handle_guard;
-    logservice::ObLogService *log_service = nullptr;
-
-    if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("MTL ObLogService is null", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(log_service->open_palf(SYS_LS, palf_handle_guard))) {
-      LOG_WARN("open palf failed", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(palf_handle_guard.get_role(role, proposal_id))) {
-      LOG_WARN("get role failed", KR(ret), K(tenant_id));
-    } else {
-      bret = (is_strong_leader(role));
-      LOG_DEBUG("get __all_core_table role", K(role), K(bret));
-    }
-  } else {
+  int64_t proposal_id = -1;
+  ObRole role = FOLLOWER;
+  if (OB_FAIL(ObRootUtils::get_proposal_id(OB_SYS_TENANT_ID, SYS_LS, proposal_id, role))) {
     if (OB_TENANT_NOT_IN_SERVER == ret) {
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("fail to get tenant storage", KR(ret), "tenant_id", OB_SYS_TENANT_ID);
     }
+  } else {
+      bret = (is_strong_leader(role));
+      LOG_DEBUG("get __all_core_table role", K(role), K(bret));
   }
   return bret;
 }
@@ -2117,25 +2103,29 @@ int ObRootUtils::check_left_f_in_primary_zone(ObZoneManager &zone_mgr,
   return ret;
 }
 
-int ObRootUtils::get_proposal_id_from_sys_ls(int64_t &proposal_id, ObRole &role)
+int ObRootUtils::get_proposal_id(const uint64_t tenant_id, const share::ObLSID &ls_id,
+      int64_t &proposal_id, ObRole &role)
 {
   int ret = OB_SUCCESS;
-  storage::ObLSHandle ls_handle;
-  logservice::ObLogHandler *handler = nullptr;
-  MTL_SWITCH(OB_SYS_TENANT_ID) {
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(SYS_LS, ls_handle, ObLSGetMod::RS_MOD))) {
-      LOG_WARN("fail to get ls", KR(ret));
-    } else if (OB_UNLIKELY(!ls_handle.is_valid())
-        || OB_ISNULL(ls_handle.get_ls())
-        || OB_ISNULL(handler = ls_handle.get_ls()->get_log_handler())) {
+  palf::PalfHandleGuard palf_handle_guard;
+  logservice::ObLogService *log_service = nullptr;
+  MTL_SWITCH(tenant_id) {
+    if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error", KR(ret), KP(ls_handle.get_ls()),
-          KP(ls_handle.get_ls()->get_log_handler()));
-    } else if (OB_FAIL(handler->get_role(role, proposal_id))) {
-      LOG_WARN("fail to get role", KR(ret));
-          }
+      LOG_WARN("MTL ObLogService is null", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(log_service->open_palf(ls_id, palf_handle_guard))) {
+      LOG_WARN("open palf failed", KR(ret), K(tenant_id), K(ls_id));
+    } else if (OB_FAIL(palf_handle_guard.get_role(role, proposal_id))) {
+      LOG_WARN("get role failed", KR(ret), K(tenant_id), K(ls_id));
+    }
   }
   return ret;
+
+}
+
+int ObRootUtils::get_proposal_id_from_sys_ls(int64_t &proposal_id, ObRole &role)
+{
+  return get_proposal_id(OB_SYS_TENANT_ID, SYS_LS, proposal_id, role);
 }
 
 int ObRootUtils::try_notify_switch_ls_leader(
@@ -2307,6 +2297,7 @@ int ObRootUtils::check_ls_balance_and_commit_rs_job(
 }
 
 ERRSIM_POINT_DEF(ERRSIM_USER_LS_SYNC_SCN);
+ERRSIM_POINT_DEF(ERRSIM_INFLATE_SYS_LS_END_SCN);
 int ObRootUtils::wait_user_ls_sync_scn_locally(
     const share::SCN &sys_ls_target_scn,
     logservice::ObLogService *log_ls_svr,
@@ -2328,12 +2319,20 @@ int ObRootUtils::wait_user_ls_sync_scn_locally(
   } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
     LOG_WARN("fail to set timeout", KR(ret));
   } else {
+    share::SCN effective_target_scn = sys_ls_target_scn;
+    const int errsim_inflate_ms = ERRSIM_INFLATE_SYS_LS_END_SCN;
+    if (OB_UNLIKELY(0 != errsim_inflate_ms)) {
+      const int64_t inflate_ns = abs(errsim_inflate_ms) * 1000L * 1000L; // ms -> ns
+      effective_target_scn = share::SCN::plus(sys_ls_target_scn, inflate_ns);
+      LOG_WARN("ERRSIM_INFLATE_SYS_LS_END_SCN: inflated sys_ls_target_scn",
+          K(sys_ls_target_scn), K(effective_target_scn), K(inflate_ns));
+    }
     bool need_retry = true;
     share::SCN curr_end_scn;
     curr_end_scn.set_min();
     common::ObRole role;
     int64_t leader_epoch = 0;
-    (void) keep_alive_handler->set_sys_ls_end_scn(sys_ls_target_scn);
+    (void) keep_alive_handler->set_sys_ls_end_scn(effective_target_scn);
     do {
       if (OB_UNLIKELY(ctx.is_timeouted())) {
         ret = OB_TIMEOUT;
@@ -2348,13 +2347,13 @@ int ObRootUtils::wait_user_ls_sync_scn_locally(
         if (OB_FAIL(log_handler->get_end_scn(curr_end_scn))) {
           LOG_WARN("fail to get ls end scn", KR(ret), K(ls_id));
         } else {
-          curr_end_scn = ERRSIM_USER_LS_SYNC_SCN ? SCN::scn_dec(sys_ls_target_scn) : curr_end_scn;
-          LOG_TRACE("wait curr_end_scn >= sys_ls_target_scn", K(curr_end_scn), K(sys_ls_target_scn),
+          curr_end_scn = ERRSIM_USER_LS_SYNC_SCN ? SCN::scn_dec(effective_target_scn) : curr_end_scn;
+          LOG_TRACE("wait curr_end_scn >= effective_target_scn", K(curr_end_scn), K(effective_target_scn),
               "is_errsim_opened", ERRSIM_USER_LS_SYNC_SCN ? true : false);
         }
-        if (OB_SUCC(ret) && curr_end_scn >= sys_ls_target_scn) {
+        if (OB_SUCC(ret) && curr_end_scn >= effective_target_scn) {
           LOG_INFO("current user ls end scn >= sys ls target scn now", K(curr_end_scn),
-              K(sys_ls_target_scn), "is_errsim_opened", ERRSIM_USER_LS_SYNC_SCN ? true : false,
+              K(effective_target_scn), "is_errsim_opened", ERRSIM_USER_LS_SYNC_SCN ? true : false,
               K(tenant_id), K(ls_id));
           need_retry = false;
         }

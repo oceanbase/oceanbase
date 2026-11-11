@@ -19,6 +19,7 @@ public:
       mutator_buf_size_(0),
       decompress_buf_(nullptr),
       decompress_buf_size_(0),
+      filter_(),
       is_ob_log_service_(flag)
   {
     dir_path_[0] = '\0';

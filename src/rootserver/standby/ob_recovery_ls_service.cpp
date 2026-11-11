@@ -27,6 +27,17 @@
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_struct.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"
+#include "share/ob_sync_standby_status_operator.h" // ObSyncStandbyStatusOperator
+#include "rootserver/standby/ob_protection_mode_utils.h"
+#include "share/ob_sync_standby_dest_parser.h"
+#include "share/ob_log_restore_proxy.h"
+#include "share/ls/ob_ls_status_operator.h"
+#include "share/restore/ob_log_restore_source_mgr.h"
+#include "rootserver/standby/ob_standby_transfer_task_util.h"
+#include "share/ob_rpc_struct.h"
+#include "share/schema/ob_schema_struct.h"
+#include "rootserver/ob_rs_async_rpc_proxy.h"
+#include "share/ob_all_server_tracer.h" // SVR_TRACER
 
 namespace oceanbase
 {
@@ -37,7 +48,62 @@ using namespace storage;
 using namespace palf;
 namespace rootserver
 {
+
+class ObRecoveryTickShouldStop : public ObTransferTickShouldStop
+{
+public:
+  explicit ObRecoveryTickShouldStop(const ObRecoveryLSService &svc) : svc_(svc) {}
+  bool operator()() const override { return svc_.has_set_stop(); }
+private:
+  const ObRecoveryLSService &svc_;
+};
 ERRSIM_POINT_DEF(ERRSIM_END_TRANS_ERROR);
+ERRSIM_POINT_DEF(ERRSIM_RESTORE_PRE_MPT_LEVEL_UPDATE_FAIL);
+
+int ObRecoveryLSService::try_restore_pre_mpt_level_on_new_source_log_(
+    const share::ObAllTenantInfo &old_tenant_info,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  bool semi_sync_enabled = false;
+  int64_t unused_target_ver = OB_INVALID_VERSION;
+  ObAllTenantInfo current_tenant_info;
+  int64_t new_switchover_epoch = OB_INVALID_VERSION;
+
+  if (OB_UNLIKELY(!trans.is_started() || !old_tenant_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K(old_tenant_info),
+        "trans_started", trans.is_started());
+  } else if (OB_FAIL(standby::ObProtectionModeUtils::get_enable_standby_semi_sync_config(
+      tenant_id_, trans, semi_sync_enabled, unused_target_ver))) {
+    LOG_WARN("failed to read enable_standby_semi_sync", KR(ret), K_(tenant_id));
+  } else if (!semi_sync_enabled) {
+    LOG_TRACE("semi-sync is disabled, no need to restore PRE_MPT level", K_(tenant_id));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
+      tenant_id_, &trans, true/* for_update */, current_tenant_info))) {
+    LOG_WARN("failed to load tenant info for update", KR(ret), K_(tenant_id));
+  } else if (!current_tenant_info.is_standby()
+             || !current_tenant_info.get_protection_level().is_sync_level()
+             || current_tenant_info.get_sync_scn() <= old_tenant_info.get_sync_scn()) {
+    LOG_TRACE("no need to restore PRE_MPT level",
+        K_(tenant_id), K(old_tenant_info), K(current_tenant_info));
+  } else if (OB_FAIL(ERRSIM_RESTORE_PRE_MPT_LEVEL_UPDATE_FAIL)) {
+    LOG_WARN("ERRSIM_RESTORE_PRE_MPT_LEVEL_UPDATE_FAIL", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_protection_mode_and_level(
+      tenant_id_, current_tenant_info.get_tenant_role(), &trans,
+      current_tenant_info.get_switchover_epoch()/* expected switchover epoch */,
+      current_tenant_info.get_protection_mode(),
+      ObProtectionLevel(ObProtectionLevel::PRE_MAXIMUM_PROTECTION_LEVEL),
+      current_tenant_info.get_switchover_epoch()/* min new switchover epoch */,
+      new_switchover_epoch, true/* force_inc_switchover_epoch */))) {
+    LOG_WARN("failed to restore PRE_MPT level",
+        KR(ret), K_(tenant_id), K(current_tenant_info), K(new_switchover_epoch));
+  } else {
+    LOG_INFO("restored PRE_MPT level after new source log",
+        K_(tenant_id), K(old_tenant_info), K(current_tenant_info), K(new_switchover_epoch));
+  }
+  return ret;
+}
 
 int ObRecoveryLSService::init()
 {
@@ -54,6 +120,8 @@ int ObRecoveryLSService::init()
     tenant_id_ = MTL_ID();
     proxy_ = GCTX.sql_proxy_;
     last_report_ts_ = OB_INVALID_TIMESTAMP;
+    last_refresh_restore_source_ts_ = OB_INVALID_TIMESTAMP;
+    semi_sync_disable_barrier_.reset();
     restore_status_.reset();
     inited_ = true;
   }
@@ -69,6 +137,8 @@ void ObRecoveryLSService::destroy()
   tenant_id_ = OB_INVALID_TENANT_ID;
   proxy_ = NULL;
   last_report_ts_ = OB_INVALID_TIMESTAMP;
+  last_refresh_restore_source_ts_ = OB_INVALID_TIMESTAMP;
+  semi_sync_disable_barrier_.reset();
   restore_status_.reset();
 }
 
@@ -109,6 +179,7 @@ void ObRecoveryLSService::do_work()
     int64_t idle_time_us = 100 * 1000L;
     SCN start_scn;
     last_report_ts_ = OB_INVALID_TIMESTAMP;
+    last_refresh_restore_source_ts_ = OB_INVALID_TIMESTAMP;
     uint64_t thread_idx = get_thread_idx();
     while (!has_set_stop() && OB_SUCC(ret)) {
       ObCurTraceId::init(GCONF.self_addr_);
@@ -165,9 +236,501 @@ int ObRecoveryLSService::process_thread0_(const ObAllTenantInfo &tenant_info)
     LOG_WARN("failed to process ls balance task", KR(ret), KR(tmp_ret));
   }
   (void)try_tenant_upgrade_end_();
+  if (OB_TMP_FAIL(promote_pre_mpt_level_())) {
+    ret = OB_SUCC(ret) ? tmp_ret : ret;
+    LOG_WARN("failed to promote pre mpt level", KR(ret), KR(tmp_ret), K_(tenant_id));
+  }
 
   return ret;
 }
+
+// semi_sync_disable_barrier_ promoting PRE_MPT after semi-sync is disabled.
+// The cache is fenced by switchover_epoch and has three states:
+// 1. invalid epoch: cfg convergence has not been confirmed;
+// 2. valid epoch + invalid target_scn: cfg has converged, barrier target is not cached yet;
+// 3. valid epoch + valid target_scn: wait for tenant sync_scn to pass the cached barrier.
+// Reset it after promotion, when leaving PRE_MPT, or whenever the current state cannot be reused.
+int ObRecoveryLSService::promote_pre_mpt_level_()
+{
+  int ret = OB_SUCCESS;
+  // Retain state only when the current-epoch cfg result can be reused by a barrier or promotion retry.
+  bool keep_barrier_state = false;
+  ObAllTenantInfo tenant_info;
+  int64_t tenant_info_ora_rowscn = 0;
+  if (OB_UNLIKELY(!inited_) || OB_ISNULL(proxy_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(inited), KP_(proxy));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, proxy_,
+      false/* for_update */, tenant_info_ora_rowscn, tenant_info))) {
+    LOG_WARN("failed to get tenant info", KR(ret), K_(tenant_id));
+  } else if (!tenant_info.get_protection_level().is_pre_maximum_protection()) {
+    // Fast-path: current level is not PRE_MPT; leave the flag false to clear stale state below.
+  } else {
+    bool cfg_converged = false; // whether enable_standby_semi_sync=false has covered all servers
+    bool barrier_satisfied = false; // whether disable barrier is passed or not required
+
+    if (OB_FAIL(check_semi_sync_disable_cfg_converged_(
+        tenant_info, tenant_info_ora_rowscn, cfg_converged, barrier_satisfied))) {
+      LOG_WARN("semi sync disable cfg convergence check failed",
+          KR(ret), K_(tenant_id), K(tenant_info));
+    } else {
+      // Barrier-query and promotion failures can reuse the current-epoch cfg convergence result.
+      keep_barrier_state = semi_sync_disable_barrier_.is_cfg_checked_in_epoch(
+          tenant_info.get_switchover_epoch());
+      if (OB_FAIL(check_semi_sync_disable_barrier_if_needed_(
+          tenant_info, cfg_converged, barrier_satisfied))) {
+        LOG_WARN("semi sync disable barrier check failed",
+            KR(ret), K_(tenant_id), K(tenant_info), K(cfg_converged), K(barrier_satisfied));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (!cfg_converged || !barrier_satisfied) {
+        LOG_INFO("promotion condition is not satisfied, stay in PRE_MPT",
+            K_(tenant_id), K(cfg_converged), K(barrier_satisfied));
+      } else if (OB_FAIL(do_promote_to_steady_level_(tenant_info))) {
+        LOG_WARN("failed to promote PRE_MPT to steady level", KR(ret), K_(tenant_id));
+      } else {
+        keep_barrier_state = false;
+        LOG_INFO("promoted PRE_MPT to steady level", K_(tenant_id));
+      }
+    }
+  }
+  // Reset the cached barrier state at this unified exit when:
+  // 1. tenant info cannot be loaded or the protection level is no longer PRE_MPT;
+  // 2. cfg is enabled, not converged, invalid, or not checked in the current switchover_epoch;
+  // 3. PRE_MPT promotion succeeds or the tenant state changes during promotion.
+  // Retain it only when the current-epoch cfg result can be reused for a barrier or promotion retry.
+  if (!keep_barrier_state) {
+    semi_sync_disable_barrier_.reset();
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::check_semi_sync_disable_cfg_converged_(
+    const share::ObAllTenantInfo &tenant_info,
+    const int64_t tenant_info_ora_rowscn,
+    bool &cfg_converged,
+    bool &barrier_satisfied)
+{
+  int ret = OB_SUCCESS;
+  const int64_t switchover_epoch = tenant_info.get_switchover_epoch();
+  bool target_value = false;
+  int64_t target_ver = OB_INVALID_VERSION;
+  cfg_converged = false;
+  barrier_satisfied = false;
+
+  if (semi_sync_disable_barrier_.is_cfg_checked_in_epoch(switchover_epoch)) {
+    cfg_converged = true;
+    LOG_INFO("reuse semi sync cfg convergence result",
+        K_(tenant_id), K(switchover_epoch));
+  } else if (OB_FAIL(standby::ObProtectionModeUtils::get_enable_standby_semi_sync_config(
+      tenant_id_, *proxy_, target_value, target_ver))) {
+    LOG_WARN("failed to get semi sync target config", KR(ret), K_(tenant_id));
+  } else if (OB_INVALID_VERSION == target_ver) {
+    // No tenant-level override exists. The cluster-wide default is false and there is
+    // no target config version to wait for, so only the transactional PRE_MPT recheck
+    // in do_promote_to_steady_level_ is needed before leaving the wait state.
+    cfg_converged = true;
+    barrier_satisfied = true;
+  } else if (target_value) {
+    // If enable_standby_semi_sync is true, keep PRE_MPT.
+    // If it is false, leave PRE_MPT only after all servers have loaded the target config.
+    LOG_INFO("enable_standby_semi_sync is true, stay in PRE_MPT",
+        K_(tenant_id), K(target_value), K(target_ver));
+  } else {
+    if (OB_FAIL(check_all_server_cfg_converged_(target_ver, tenant_info, tenant_info_ora_rowscn, cfg_converged))) {
+      LOG_WARN("convergence check failed", KR(ret), K_(tenant_id), K(target_ver), K(target_value));
+    } else if (cfg_converged) {
+      semi_sync_disable_barrier_.mark_cfg_checked(switchover_epoch);
+    }
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::check_semi_sync_disable_barrier_if_needed_(
+    const share::ObAllTenantInfo &tenant_info,
+    const bool cfg_converged,
+    bool &barrier_satisfied)
+{
+  int ret = OB_SUCCESS;
+  if (cfg_converged && !barrier_satisfied
+      && OB_FAIL(check_semi_sync_disable_barrier_(tenant_info, barrier_satisfied))) {
+    LOG_WARN("failed to check semi sync disable barrier",
+        KR(ret), K_(tenant_id), K(tenant_info));
+  }
+  return ret;
+}
+
+bool ObRecoveryLSService::ObSemiSyncDisableBarrier::is_cfg_checked_in_epoch(
+    const int64_t switchover_epoch) const
+{
+  return OB_INVALID_VERSION != switchover_epoch
+      && switchover_epoch == switchover_epoch_;
+}
+
+bool ObRecoveryLSService::ObSemiSyncDisableBarrier::has_target_scn_in_epoch(
+    const int64_t switchover_epoch) const
+{
+  return is_cfg_checked_in_epoch(switchover_epoch) && target_scn_.is_valid_and_not_min();
+}
+
+// Record that enable_standby_semi_sync=false has converged on all servers in this epoch.
+void ObRecoveryLSService::ObSemiSyncDisableBarrier::mark_cfg_checked(
+    const int64_t switchover_epoch)
+{
+  switchover_epoch_ = switchover_epoch;
+  target_scn_.reset();
+}
+
+// Cache the primary max end_scn only for an epoch whose cfg convergence has been confirmed.
+int ObRecoveryLSService::ObSemiSyncDisableBarrier::set_target_scn(
+    const int64_t switchover_epoch,
+    const share::SCN &target_scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_cfg_checked_in_epoch(switchover_epoch))) {
+    ret = OB_STATE_NOT_MATCH;
+  } else if (OB_UNLIKELY(!target_scn.is_valid_and_not_min())) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    target_scn_ = target_scn;
+  }
+  return ret;
+}
+
+void ObRecoveryLSService::ObSemiSyncDisableBarrier::reset()
+{
+  switchover_epoch_ = OB_INVALID_VERSION;
+  target_scn_.reset();
+}
+
+int ObRecoveryLSService::do_promote_to_steady_level_(const share::ObAllTenantInfo &expected_tenant_info)
+{
+  int ret = OB_SUCCESS;
+  ObAllTenantInfo tenant_info;
+  int64_t new_switchover_epoch = OB_INVALID_VERSION;
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
+  if (OB_UNLIKELY(!expected_tenant_info.is_valid()
+                  || !expected_tenant_info.get_protection_level().is_pre_maximum_protection()
+                  || OB_INVALID_VERSION == expected_tenant_info.get_switchover_epoch())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid expected tenant info for PRE_MPT promotion",
+        KR(ret), K_(tenant_id), K(expected_tenant_info));
+  } else {
+    START_TRANSACTION(proxy_, exec_tenant_id);
+    DEBUG_SYNC(BEFORE_PROMOTE_PRE_MPT_LOAD_FOR_UPDATE);
+    if (FAILEDx(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, &trans,
+        true/* for_update */, tenant_info))) {
+      LOG_WARN("failed to load tenant info for update", KR(ret), K_(tenant_id));
+    } else if (tenant_info.get_tenant_role() != expected_tenant_info.get_tenant_role()
+               || tenant_info.get_protection_mode() != expected_tenant_info.get_protection_mode()
+               || tenant_info.get_protection_level() != expected_tenant_info.get_protection_level()
+               || tenant_info.get_switchover_epoch() != expected_tenant_info.get_switchover_epoch()) {
+      LOG_INFO("tenant info changed after convergence check, skip PRE_MPT promotion",
+          K_(tenant_id), K(tenant_info), K(expected_tenant_info));
+    } else {
+      const share::ObProtectionMode &mode = tenant_info.get_protection_mode();
+      ObProtectionLevel target_level;
+      if (OB_FAIL(standby::ObProtectionModeUtils::get_sync_protection_level(mode, target_level))) {
+        LOG_WARN("failed to get target level for PRE_MPT promotion",
+            KR(ret), K(mode), K_(tenant_id));
+      }
+
+      if (OB_SUCC(ret) && OB_FAIL(ObAllTenantInfoProxy::update_tenant_protection_mode_and_level(
+          tenant_id_, tenant_info.get_tenant_role(), &trans,
+          tenant_info.get_switchover_epoch()/* expected switchover epoch */,
+          tenant_info.get_protection_mode(), target_level,
+          tenant_info.get_switchover_epoch()/* min new switchover epoch */,
+          new_switchover_epoch, true /* force_inc_switchover_epoch */))) {
+        LOG_WARN("failed to promote protection level", KR(ret), K_(tenant_id), K(mode), K(target_level));
+      }
+    }
+    END_TRANSACTION(trans);
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::get_all_servers_for_cfg_convergence_(common::ObIArray<common::ObAddr> &servers)
+{
+  int ret = OB_SUCCESS;
+  common::ObZone empty_zone;
+  if (OB_FAIL(SVR_TRACER.get_servers_of_zone(empty_zone, servers))) {
+    LOG_WARN("failed to get all servers for cfg convergence", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::check_server_cfg_converged_result_(
+    const common::ObAddr &server,
+    const int64_t target_version,
+    const obrpc::ObCheckTenantConfigAndInfoResult &res,
+    bool &converged)
+{
+  int ret = OB_SUCCESS;
+  converged = false;
+  if (res.get_loaded_version() < target_version) {
+    LOG_INFO("server cfg version behind target, not converged",
+        K(server), "loaded_version", res.get_loaded_version(), K(target_version));
+  } else if (!res.get_tenant_info_refresh_ok()) {
+    LOG_INFO("server tenant_info not ready, not converged",
+        K(server), K_(tenant_id), K(res));
+  } else {
+    converged = true;
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::check_all_server_cfg_converged_(
+    const int64_t target_version,
+    const share::ObAllTenantInfo &expected_tenant_info,
+    const int64_t expected_tenant_info_ora_rowscn,
+    bool &converged)
+{
+  int ret = OB_SUCCESS;
+  converged = false;
+  ObArray<ObAddr> servers;
+  if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("srv rpc proxy is null", KR(ret), KP(GCTX.srv_rpc_proxy_));
+  } else if (!expected_tenant_info.is_valid()
+             || !expected_tenant_info.get_protection_level().is_pre_maximum_protection()
+             || 0 == expected_tenant_info_ora_rowscn) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid expected tenant info for semi sync convergence",
+        KR(ret), K_(tenant_id), K(expected_tenant_info), K(expected_tenant_info_ora_rowscn));
+  } else if (OB_FAIL(get_all_servers_for_cfg_convergence_(servers))) {
+    LOG_WARN("failed to get all servers for cfg convergence", KR(ret), K_(tenant_id));
+  } else if (0 == servers.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("no server found, cannot confirm convergence", K_(tenant_id), K(target_version));
+  } else {
+    // STRICT convergence: every server from SVR_TRACER must have loaded target
+    // config and either refreshed tenant_info or confirmed the tenant is absent.
+    // Unreachable servers block promotion until they recover.
+    ObTimeoutCtx ctx;
+    if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
+      LOG_WARN("failed to set default timeout ctx", KR(ret), K_(tenant_id));
+    } else {
+      ObCheckTenantConfigAndInfoProxy proxy(
+          *GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::check_tenant_config_and_info);
+      ObArray<int> return_code_array;
+      obrpc::ObCheckTenantConfigAndInfoArg arg;
+      int tmp_ret = OB_SUCCESS;
+      converged = true;
+
+      if (OB_FAIL(arg.init(tenant_id_, expected_tenant_info, expected_tenant_info_ora_rowscn))) {
+        LOG_WARN("failed to init convergence rpc arg", KR(ret), K_(tenant_id), K(expected_tenant_info));
+      }
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < servers.count(); ++i) {
+        if (OB_FAIL(proxy.call(servers.at(i), ctx.get_timeout(), OB_SYS_TENANT_ID, arg))) {
+          converged = false;
+          LOG_WARN("failed to send check_tenant_config_and_info rpc, not converged",
+              KR(tmp_ret), "server", servers.at(i), K_(tenant_id), K(target_version));
+        }
+      }
+
+      // 需要等所有rpc返回
+      if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+        LOG_WARN("failed to wait all check_tenant_config_and_info rpc", KR(ret), KR(tmp_ret), K_(tenant_id));
+      } else if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(proxy.check_return_cnt(return_code_array.count()))) {
+        LOG_WARN("failed to check return count for check_tenant_config_and_info rpc",
+            KR(ret), K(return_code_array));
+      }
+
+      for (int64_t i = 0; OB_SUCC(ret) && converged && i < return_code_array.count(); ++i) {
+        bool server_converged = false;
+        const int rpc_ret = return_code_array.at(i);
+        const common::ObAddr &server = proxy.get_dests().at(i);
+        const obrpc::ObCheckTenantConfigAndInfoResult *res = proxy.get_results().at(i);
+        if (OB_SUCCESS != rpc_ret) {
+          LOG_WARN("check_tenant_config_and_info rpc failed, not converged",
+              KR(rpc_ret), K(server), K_(tenant_id));
+        } else if (OB_ISNULL(res)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("check_tenant_config_and_info result is null", KR(ret), K(server), K_(tenant_id));
+        } else if (OB_FAIL(check_server_cfg_converged_result_(server, target_version, *res, server_converged))) {
+          LOG_WARN("failed to check server cfg convergence",
+              KR(ret), K(server), K_(tenant_id));
+        }
+
+        if (OB_SUCC(ret) && !server_converged) {
+          converged = false;
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && converged) {
+      LOG_INFO("all servers cfg converged with tenant_info ready",
+          K_(tenant_id), K(target_version), "server_count", servers.count(),
+          K(expected_tenant_info));
+    }
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::get_ls_id_array_from_status_(common::ObIArray<share::ObLSID> &ls_id_array)
+{
+  int ret = OB_SUCCESS;
+  share::ObLSStatusOperator status_op;
+  share::ObLSStatusInfoArray ls_status_array;
+  ls_id_array.reset();
+  if (OB_ISNULL(proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null when getting ls_id array from status", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(status_op.get_all_ls_status_by_order_for_protection_mode(
+      tenant_id_, true /* ignore_wait_offline */, ls_status_array, *proxy_))) {
+    LOG_WARN("failed to get all ls status by order for protection mode", KR(ret), K_(tenant_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ls_status_array.count(); ++i) {
+      if (OB_FAIL(ls_id_array.push_back(ls_status_array.at(i).get_ls_id()))) {
+        LOG_WARN("failed to push back ls id", KR(ret), K_(tenant_id), K(i), K(ls_status_array));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::get_restore_source_(share::ObLogRestoreSourceItem &restore_source)
+{
+  int ret = OB_SUCCESS;
+  ObLogRestoreSourceMgr restore_source_mgr;
+  restore_source.reset();
+  if (OB_FAIL(restore_source_mgr.init(tenant_id_, proxy_))) {
+    LOG_WARN("failed to init restore source mgr when getting primary max end_scn",
+        KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(restore_source_mgr.get_source(restore_source))) {
+    LOG_WARN("failed to get restore source when getting primary max end_scn",
+        KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::get_restore_source_service_attr_(
+    share::ObRestoreSourceServiceAttr &service_attr)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql_value;
+  ObLogRestoreSourceItem restore_source;
+  if (OB_FAIL(get_restore_source_(restore_source))) {
+    LOG_WARN("failed to get restore source when getting restore source service attr", KR(ret));
+  } else if (OB_UNLIKELY(!restore_source.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("restore source is invalid when getting primary max end_scn",
+        KR(ret), K_(tenant_id), K(restore_source));
+  } else if (OB_UNLIKELY(!is_service_log_source_type(restore_source.type_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("standby tenant log restore source type is not service",
+        KR(ret), K_(tenant_id), K(restore_source));
+  } else if (OB_FAIL(sql_value.assign(restore_source.value_))) {
+    LOG_WARN("failed to assign restore source value when getting primary max end_scn",
+        KR(ret), K_(tenant_id), K(restore_source));
+  } else if (OB_FAIL(service_attr.parse_service_attr_from_str(sql_value))) {
+    LOG_WARN("failed to parse restore source service attr when getting primary max end_scn",
+        KR(ret), K_(tenant_id), K(sql_value));
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::query_primary_max_end_scn_(
+    const share::ObRestoreSourceServiceAttr &service_attr,
+    const common::ObIArray<share::ObLSID> &ls_id_array,
+    share::SCN &max_end_scn)
+{
+  int ret = OB_SUCCESS;
+  SMART_VAR(share::ObLogRestoreProxyUtil, restore_proxy_util) {
+    if (OB_FAIL(restore_proxy_util.init_with_service_attr(tenant_id_, &service_attr))) {
+      LOG_WARN("failed to init restore proxy util when getting primary max end_scn",
+          KR(ret), K_(tenant_id), K(service_attr));
+    } else if (OB_FAIL(restore_proxy_util.get_primary_max_end_scn(
+        service_attr.user_.tenant_id_, ls_id_array, max_end_scn))) {
+      LOG_WARN("failed to get primary max end_scn from restore proxy util",
+          KR(ret), K_(tenant_id), K(service_attr), K(ls_id_array));
+    }
+  }
+  return ret;
+}
+
+// TODO(ziqi): double check log_restore_source before/after querying primary max end_scn,
+// and bind cached primary fallback barrier target to the restore source used to compute it.
+int ObRecoveryLSService::get_primary_max_end_scn_(share::SCN &max_end_scn)
+{
+  int ret = OB_SUCCESS;
+  ObRestoreSourceServiceAttr restore_source_service_attr;
+  common::ObArray<share::ObLSID> ls_id_array;
+  max_end_scn = share::SCN::min_scn();
+
+  if (OB_FAIL(get_ls_id_array_from_status_(ls_id_array))) {
+    LOG_WARN("failed to get ls_id array when getting primary max end_scn", KR(ret), K_(tenant_id));
+  } else if (OB_UNLIKELY(ls_id_array.empty())) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("empty ls_id array when getting primary max end_scn", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(get_restore_source_service_attr_(restore_source_service_attr))) {
+    LOG_WARN("failed to get restore source service attr when getting primary max end_scn", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(query_primary_max_end_scn_(restore_source_service_attr, ls_id_array, max_end_scn))) {
+    LOG_WARN("failed to query primary max end_scn",KR(ret), K_(tenant_id), K(restore_source_service_attr), K(ls_id_array));
+  } else {
+    LOG_INFO("got primary max end_scn from restore source", K_(tenant_id), K(max_end_scn), K(ls_id_array));
+  }
+  if (OB_FAIL(ret)) {
+    max_end_scn = share::SCN::min_scn();
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::check_semi_sync_disable_barrier_(
+    const share::ObAllTenantInfo &tenant_info,
+    bool &passed)
+{
+  int ret = OB_SUCCESS;
+  share::SCN target_scn;
+  const int64_t switchover_epoch = tenant_info.get_switchover_epoch();
+  passed = false;
+  if (OB_UNLIKELY(!tenant_info.is_valid()
+                  || !tenant_info.get_sync_scn().is_valid()
+                  || OB_INVALID_VERSION == switchover_epoch)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_info when checking semi-sync disable barrier",
+        KR(ret), K_(tenant_id), K(tenant_info));
+  } else if (OB_UNLIKELY(!semi_sync_disable_barrier_.is_cfg_checked_in_epoch(switchover_epoch))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("semi-sync disable barrier checked before cfg convergence",
+        KR(ret), K_(tenant_id), K(switchover_epoch), K(tenant_info));
+  } else {
+    if (semi_sync_disable_barrier_.has_target_scn_in_epoch(switchover_epoch)) {
+      target_scn = semi_sync_disable_barrier_.target_scn_;
+    } else if (OB_FAIL(get_primary_max_end_scn_(target_scn))) {
+      LOG_WARN("failed to get primary max end_scn for semi-sync disable barrier",
+          KR(ret), K_(tenant_id), K(tenant_info));
+    } else if (target_scn.is_valid_and_not_min()
+               && OB_FAIL(semi_sync_disable_barrier_.set_target_scn(switchover_epoch, target_scn))) {
+      LOG_WARN("failed to cache semi-sync disable barrier target", KR(ret), K_(tenant_id),
+          K(switchover_epoch), "cached_switchover_epoch", semi_sync_disable_barrier_.switchover_epoch_,
+          K(target_scn));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (!target_scn.is_valid_and_not_min()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid semi-sync disable barrier target", KR(ret), K_(tenant_id), K(switchover_epoch), K(target_scn),
+          "tenant_sync_scn", tenant_info.get_sync_scn());
+    } else if (tenant_info.get_sync_scn() >= target_scn) {
+      passed = true;
+    } else if (REACH_TIME_INTERVAL(1 * 1000 * 1000L)) {
+      LOG_INFO("tenant sync_scn has not passed semi-sync disable barrier", K_(tenant_id), K(switchover_epoch),
+          K(target_scn), "tenant_sync_scn", tenant_info.get_sync_scn());
+    }
+  }
+  if (OB_SUCC(ret) && passed) {
+    LOG_INFO("semi-sync disable barrier passed", K_(tenant_id), K(switchover_epoch), K(target_scn),
+        "tenant_sync_scn", tenant_info.get_sync_scn());
+  }
+  return ret;
+}
+
 ERRSIM_POINT_DEF(ERRSIM_RECOVERY_LS_THREAD1);
 int ObRecoveryLSService::process_thread1_(const ObAllTenantInfo &tenant_info,
      share::SCN &start_scn,
@@ -188,8 +751,11 @@ int ObRecoveryLSService::process_thread1_(const ObAllTenantInfo &tenant_info,
     ObLSRecoveryStat ls_recovery_stat;
     ObLSRecoveryStatOperator ls_recovery;
     PalfHandleGuard palf_handle_guard;
+    SCN effective_upper_scn;
     if (OB_FAIL(init_palf_handle_guard_(palf_handle_guard))) {
       LOG_WARN("failed to init_palf_handle_guard_", KR(ret), K(start_scn), K(tenant_info));
+    } else if (OB_FAIL(compute_effective_upper_scn_(tenant_info, effective_upper_scn))) {
+      LOG_WARN("failed to compute effective upper scn", KR(ret));
     } else if (!start_scn.is_valid()) {
       if (OB_FAIL(ls_recovery.get_ls_recovery_stat(tenant_id_,
               SYS_LS, false, ls_recovery_stat, *proxy_))) {
@@ -198,10 +764,11 @@ int ObRecoveryLSService::process_thread1_(const ObAllTenantInfo &tenant_info,
               "report readable_scn while start_scn is invalid"))) {
         //may recovery end, but readable scn need report
         LOG_WARN("failed to report ls recovery stat", KR(ret), K(ls_recovery_stat));
-      } else if (tenant_info.get_recovery_until_scn() <= ls_recovery_stat.get_sync_scn()) {
+      } else if (effective_upper_scn <= ls_recovery_stat.get_sync_scn()) {
         ret = OB_EAGAIN;
         if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) { // every minute
-          LOG_INFO("has recovered to recovery_until_scn", KR(ret), K(ls_recovery_stat), K(tenant_info));
+          LOG_INFO("has recovered to effective_upper_scn", KR(ret), K(ls_recovery_stat),
+                   K(tenant_info), K(effective_upper_scn));
         }
       } else if (OB_FAIL(seek_log_iterator_(ls_recovery_stat.get_sync_scn(), iterator))) {
         LOG_WARN("failed to seek log iterator", KR(ret), K(ls_recovery_stat));
@@ -318,18 +885,22 @@ int ObRecoveryLSService::process_ls_log_(
       logservice::ObLogBaseHeader header;
       const int64_t HEADER_SIZE = header.get_serialize_size();
       int64_t log_pos = 0;
+      SCN effective_upper_scn;
       if (OB_UNLIKELY(sync_scn <= start_scn)) {
         //通过scn定位的LSN是不准确的，可能会获取多余的数据，所以需要把小于等于sync_scn的过滤掉
         continue;
-      } else if (tenant_info.get_recovery_until_scn() < sync_scn) {
-        if (OB_FAIL(report_sys_ls_recovery_stat_(tenant_info.get_recovery_until_scn(), false,
-                "SYS log scn beyond recovery_until_scn"))) {
+      } else if (OB_FAIL(compute_effective_upper_scn_(tenant_info, effective_upper_scn))) {
+        LOG_WARN("failed to compute effective upper scn", KR(ret));
+      } else if (effective_upper_scn < sync_scn) {
+        if (OB_FAIL(report_sys_ls_recovery_stat_(effective_upper_scn, false,
+                "SYS log scn beyond effective_upper_scn"))) {
           LOG_WARN("failed to report_sys_ls_recovery_stat_", KR(ret), K(sync_scn), K(tenant_info),
-                   K(log_entry), K(target_lsn), K(start_scn));
+                   K(effective_upper_scn), K(log_entry), K(target_lsn), K(start_scn));
         } else {
           ret = OB_ITER_STOP;
-          LOG_WARN("SYS LS has recovered to the recovery_until_scn, need stop iterate SYS LS log",
-                   KR(ret), K(sync_scn), K(tenant_info), K(log_entry), K(target_lsn), K(start_scn));
+          LOG_WARN("SYS LS has recovered to effective_upper_scn, need stop iterate SYS LS log",
+                   KR(ret), K(sync_scn), K(tenant_info), K(effective_upper_scn),
+                   K(log_entry), K(target_lsn), K(start_scn));
           start_scn.reset();
           restore_status_.reset(); // need to reset restore status if iterate to recovery end
         }
@@ -367,6 +938,16 @@ int ObRecoveryLSService::process_ls_log_(
             LOG_WARN("no need process gc log", KR(ret));
           }
           // nothing
+        } else if (logservice::SYNC_MODE_LOG_BASE_TYPE == header.get_log_type()) {
+          ObSyncModeLog sync_mode_log;
+          if (header.is_compressed()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("sync mode log should not be compressed", KR(ret), K(header));
+          } else if (OB_FAIL(sync_mode_log.deserialize(log_buf, log_length, pos))) {
+            LOG_WARN("failed to deserialize sync_mode_log", KR(ret), K(log_length));
+          } else if (OB_FAIL(process_log_(sync_mode_log, sync_scn, false/*need_check_sync_scn*/))) {
+            LOG_WARN("failed to process sync mode log", KR(ret), K(sync_mode_log), K(sync_scn));
+          }
         } else if (logservice::TRANS_SERVICE_LOG_BASE_TYPE == header.get_log_type()) {
           ObTxLogBlock tx_log_block;
           if (OB_FAIL(tx_log_block.init_for_replay(log_body, log_body_size, pos))) {
@@ -431,6 +1012,141 @@ int ObRecoveryLSService::process_ls_log_(
   return ret;
 }
 
+template<typename LOG>
+int ObRecoveryLSService::process_log_(const LOG &log, const share::SCN &sync_scn, const bool need_check_sync_scn)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
+  ObMySQLTransaction trans;
+  ObLSRecoveryGuard guard;
+  share::ObTenantRole::Role tenant_role = MTL_GET_TENANT_ROLE_CACHE();
+  bool has_operation = false;
+  if (is_invalid_tenant(tenant_role)) {
+    ret = OB_EAGAIN;
+    LOG_WARN("tenant role cache is invalid", KR(ret));
+  } else {
+    START_TRANSACTION(proxy_, exec_tenant_id);
+    if (FAILEDx(process_log_in_trans_(trans, tenant_role, log, sync_scn, has_operation))) {
+      LOG_WARN("failed to process log in trans", KR(ret));
+    } else if (has_operation) {
+    //has_operation means we need to report sys ls recovery stat
+    /*
+      * 这里校验有两个目的：
+      * 1. 预期在有多源事务的情况下，tenant_info中汇报的sync_scn应该一定等于1号日志流的sync_scn
+      * 所以这里去校验tenant_info的sync_scn和1号日志流的sync_scn是一个防御性的校验
+      * 2. 日志流由create_pre到create_end的时候,前置检查并不会检查这个日志流的sync_scn，但是在汇报tenant_info的时候
+      * 这个日志流已经变成了NORMAL状态，所以可能会导致tenant_info的sync_scn小于系统日志流的sync_scn，这里增加一个校验
+      * 是为了防止这种情况
+      * */
+      if (OB_FAIL(guard.init(tenant_id_, SYS_LS))) {
+        LOG_WARN("failed to init guard", KR(ret));
+      } else if (OB_FAIL(report_sys_ls_recovery_stat_in_trans_(sync_scn, false, trans,
+              "report recovery stat and has multi data source", need_check_sync_scn))) {
+        LOG_WARN("failed to report sys ls recovery stat", KR(ret), K(sync_scn));
+      } else if (OB_FAIL(check_standby_tenant_not_in_cloning_(trans))) {
+        LOG_WARN("fail to check standby tenant in cloning", KR(ret));
+      }
+    }
+    ret = ERRSIM_END_TRANS_ERROR ? : ret;
+    END_TRANSACTION(trans);
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::process_log_in_trans_(
+  ObMySQLTransaction &trans,
+  const share::ObTenantRole::Role &role,
+  const transaction::ObTxBufferNodeArray &source_data,
+  const share::SCN &sync_scn,
+  bool &has_operation)
+{
+  int ret = OB_SUCCESS;
+  if (!trans.is_started()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("trans is not started", KR(ret));
+  } else if (is_invalid_tenant(role)) {
+    ret = OB_EAGAIN;
+    LOG_WARN("tenant role cache is invalid", KR(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < source_data.count(); ++i) {
+    const ObTxBufferNode &node = source_data.at(i);
+    if (is_standby_tenant(role)
+        && ObTxDataSourceType::MV_UPDATE_SCN == node.get_data_source_type()) {
+      ret = OB_ITER_STOP;
+      LOG_ERROR("new mview has been create in primary tenant, stop", KR(ret), K(sync_scn));
+    } else if (OB_FAIL(try_cancel_clone_job_for_standby_tenant_(node))) {
+      LOG_WARN("fail to cancel clone job for standby tenant", KR(ret), K(node));
+    } else if (ObTxDataSourceType::STANDBY_UPGRADE == node.get_data_source_type()) {
+      if (OB_FAIL(process_upgrade_log_(sync_scn, node))) {
+        LOG_WARN("failed to process_upgrade_log_", KR(ret), K(node));
+      }
+    } else if (ObTxDataSourceType::STANDBY_UPGRADE_DATA_VERSION !=
+                    node.get_data_source_type() &&
+                ObTxDataSourceType::LS_TABLE !=
+                    node.get_data_source_type() &&
+                ObTxDataSourceType::TRANSFER_TASK !=
+                    node.get_data_source_type() &&
+                ObTxDataSourceType::SYNC_STANDBY_STATUS !=
+                  node.get_data_source_type()) {
+      // nothing
+    } else if (FALSE_IT(has_operation = true)) {
+      //can not be there;
+    } else if (OB_FAIL(check_valid_to_operator_ls_(sync_scn))) {
+      LOG_WARN("failed to check valid to operator ls", KR(ret), K(sync_scn));
+    } else if (ObTxDataSourceType::STANDBY_UPGRADE_DATA_VERSION ==
+                node.get_data_source_type()) {
+      if (OB_FAIL(process_upgrade_data_version_log_(sync_scn, node, trans))) {
+        LOG_WARN("failed to process_upgrade_data_version_log_", KR(ret), K(node));
+      }
+    } else if (ObTxDataSourceType::TRANSFER_TASK == node.get_data_source_type()) {
+      if (OB_FAIL(process_ls_transfer_task_in_trans_(node, sync_scn, trans))) {
+        LOG_WARN("failed to process ls transfer task", KR(ret), K(node));
+      }
+    } else if (ObTxDataSourceType::SYNC_STANDBY_STATUS == node.get_data_source_type()) {
+      if (OB_FAIL(process_sync_standby_status_log_(sync_scn, node, trans))) {
+        LOG_WARN("failed to process sync standby status log", KR(ret), K(node));
+      }
+    } else if (OB_FAIL(process_ls_table_in_trans_(node, sync_scn, trans))) {
+      //TODO ls recovery is too fast for ls manager, so it maybe failed, while change ls status
+      //consider how to retry
+      LOG_WARN("failed to process ls operator", KR(ret), K(node), K(sync_scn));
+    }
+  }// end for
+  return ret;
+}
+
+int ObRecoveryLSService::process_log_in_trans_(
+  ObMySQLTransaction &trans,
+  const ObTenantRole::Role &role,
+  const logservice::ObSyncModeLog &sync_mode_log,
+  const share::SCN &sync_scn,
+  bool &has_operation)
+{
+  int ret = OB_SUCCESS;
+  if (!trans.is_started()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("trans is not started", KR(ret));
+  } else if (is_invalid_tenant(role)) {
+    ret = OB_EAGAIN;
+    LOG_WARN("tenant role cache is invalid", KR(ret));
+  } else if (sync_mode_log.get_log_type() == ObSyncModeLogType::PRE_ASYNC) {
+    LOG_INFO("get pre_async log", KR(ret), K(sync_mode_log));
+    if (!sync_mode_log.get_protection_info().is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("sync_mode_log is invalid", KR(ret), K(sync_mode_log));
+    } else if (OB_FAIL(set_protection_stat_(sync_mode_log.get_protection_info(), trans))) {
+      LOG_WARN("failed to set_protection_stat_", KR(ret), K(sync_mode_log));
+    } else {
+      has_operation = true;
+    }
+  } else if (sync_mode_log.get_log_type() == ObSyncModeLogType::SYNC) {
+    LOG_INFO("get sync log", KR(ret), K(sync_mode_log));
+  } else if (sync_mode_log.get_log_type() == ObSyncModeLogType::ASYNC) {
+    LOG_INFO("get async log", KR(ret), K(sync_mode_log));
+  }
+  return ret;
+}
+
 int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SCN &sync_scn)
 {
   int ret = OB_SUCCESS;
@@ -464,79 +1180,8 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
       //TODO commit log may too large
       if (OB_FAIL(tx_log_block.deserialize_log_body(commit_log))) {
         LOG_WARN("failed to deserialize", KR(ret));
-      } else {
-        const ObTxBufferNodeArray &source_data =
-            commit_log.get_multi_source_data();
-        const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
-        ObMySQLTransaction trans;
-        ObLSRecoveryGuard guard;
-
-        share::ObTenantRole::Role tenant_role = MTL_GET_TENANT_ROLE_CACHE();
-        if (is_invalid_tenant(tenant_role)) {
-          ret = OB_EAGAIN;
-          LOG_WARN("tenant role cache is invalid", KR(ret));
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < source_data.count(); ++i) {
-          const ObTxBufferNode &node = source_data.at(i);
-          if (is_standby_tenant(tenant_role)
-              && ObTxDataSourceType::MV_UPDATE_SCN == node.get_data_source_type()) {
-            ret = OB_ITER_STOP;
-            LOG_ERROR("new mview has been create in primary tenant, stop", KR(ret), K(sync_scn));
-          } else if (OB_FAIL(try_cancel_clone_job_for_standby_tenant_(node))) {
-            LOG_WARN("fail to cancel clone job for standby tenant", KR(ret), K(node));
-          } else if (ObTxDataSourceType::STANDBY_UPGRADE == node.get_data_source_type()) {
-            if (OB_FAIL(process_upgrade_log_(sync_scn, node))) {
-              LOG_WARN("failed to process_upgrade_log_", KR(ret), K(node));
-            }
-          } else if (ObTxDataSourceType::STANDBY_UPGRADE_DATA_VERSION !=
-                         node.get_data_source_type() &&
-                     ObTxDataSourceType::LS_TABLE !=
-                         node.get_data_source_type() &&
-                     ObTxDataSourceType::TRANSFER_TASK !=
-                         node.get_data_source_type()) {
-            // nothing
-          } else if (! trans.is_started() && OB_FAIL(trans.start(proxy_, exec_tenant_id))) {
-            LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id));
-          } else if (FALSE_IT(has_operation = true)) {
-            //can not be there;
-          } else if (OB_FAIL(check_valid_to_operator_ls_(sync_scn))) {
-            LOG_WARN("failed to check valid to operator ls", KR(ret), K(sync_scn));
-          } else if (ObTxDataSourceType::STANDBY_UPGRADE_DATA_VERSION ==
-                     node.get_data_source_type()) {
-            if (OB_FAIL(process_upgrade_data_version_log_(sync_scn, node, trans))) {
-              LOG_WARN("failed to process_upgrade_data_version_log_", KR(ret), K(node));
-            }
-          } else if (ObTxDataSourceType::TRANSFER_TASK == node.get_data_source_type()) {
-            if (OB_FAIL(process_ls_transfer_task_in_trans_(node, sync_scn, trans))) {
-              LOG_WARN("failed to process ls transfer task", KR(ret), K(node));
-            }
-          } else if (OB_FAIL(process_ls_table_in_trans_(node, sync_scn, trans))) {
-            //TODO ls recovery is too fast for ls manager, so it maybe failed, while change ls status
-            //consider how to retry
-            LOG_WARN("failed to process ls operator", KR(ret), K(node), K(sync_scn));
-          }
-        }// end for
-        if (OB_FAIL(ret) || !has_operation) {
-          //if has operation, sync_scn of tenant_info must equal to sync_scn of sys_ls
-          /*
-           * 这里校验有两个目的：
-           * 1. 预期在有多源事务的情况下，tenant_info中汇报的sync_scn应该一定等于1号日志流的sync_scn
-           * 所以这里去校验tenant_info的sync_scn和1号日志流的sync_scn是一个防御性的校验
-           * 2. 日志流由create_pre到create_end的时候,前置检查并不会检查这个日志流的sync_scn，但是在汇报tenant_info的时候
-           * 这个日志流已经变成了NORMAL状态，所以可能会导致tenant_info的sync_scn小于系统日志流的sync_scn，这里增加一个校验
-           * 是为了防止这种情况
-           * */
-        } else if (OB_FAIL(guard.init(tenant_id_, SYS_LS))) {
-          LOG_WARN("failed to init guard", KR(ret), K(tenant_id_));
-
-        } else if (OB_FAIL(report_sys_ls_recovery_stat_in_trans_(sync_scn, false, trans,
-                "report recovery stat and has multi data source", true/*need_check_sync_scn*/))) {
-          LOG_WARN("failed to report sys ls recovery stat", KR(ret), K(sync_scn));
-        } else if (OB_FAIL(check_standby_tenant_not_in_cloning_(trans))) {
-          LOG_WARN("fail to check standby tenant in cloning", KR(ret));
-        }
-        ret = ERRSIM_END_TRANS_ERROR ? : ret;
-        END_TRANSACTION(trans)
+      } else if (OB_FAIL(process_log_(commit_log.get_multi_source_data(), sync_scn, true/*need_check_sync_scn*/))) {
+        LOG_WARN("failed to process log", KR(ret), K(commit_log));
       }
     }
   }  // end while for each tx_log
@@ -733,6 +1378,131 @@ int ObRecoveryLSService::process_upgrade_data_version_log_(
     }
     LOG_INFO("handle upgrade_data_version_log", KR(ret), K(tenant_id_), K(sync_scn),
              K(primary_data_version));
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::process_sync_standby_status_log_(const share::SCN &sync_scn,
+                                       const transaction::ObTxBufferNode &node,
+                                       common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (!node.is_valid() || !sync_scn.is_valid() || !trans.is_started()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(node), K(sync_scn), "trans_started",
+             trans.is_started());
+  } else {
+    share::ObSyncStandbyStatusAttr attr;
+    int64_t pos = 0;
+    if (OB_FAIL(attr.deserialize(node.get_data_buf().ptr(), node.get_data_buf().length(), pos))) {
+      LOG_WARN("failed to deserialize", KR(ret), K(node), KPHEX(node.get_data_buf().ptr(), node.get_data_buf().length()));
+    } else if (OB_UNLIKELY(pos > node.get_data_buf().length())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get attr", KR(ret), K(pos), K(node.get_data_buf().length()));
+    } else if (!attr.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("attr not valid", KR(ret), K(attr));
+    } else if (OB_FAIL(set_protection_stat_(attr, trans))) {
+      LOG_WARN("failed to set protection stat", KR(ret), K(attr));
+    }
+  }
+  return ret;
+}
+
+// ensure that when entering strong sync mode, the log_restore_source is always net standby
+int ObRecoveryLSService::set_protection_stat_(const share::ObSyncStandbyStatusAttr &attr,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const int64_t cluster_id = GCONF.cluster_id;
+  uint64_t meta_data_version = 0;
+  int64_t new_switchover_epoch = OB_INVALID_VERSION;
+  bool protection_mode_enabled = false;
+  if (OB_UNLIKELY(!attr.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(attr));
+  } else if (OB_FAIL(standby::ObProtectionModeUtils::check_tenant_data_version_for_protection_mode(
+      tenant_id_, protection_mode_enabled))) {
+  } else if (!protection_mode_enabled) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("data version is small, not supported", KR(ret), K(meta_data_version),
+      K(tenant_id_));
+  } else {
+    ObAllTenantInfo tenant_info;
+    ObProtectionStat current_protection_stat;
+    ObProtectionStat next_protection_stat = attr.get_protection_stat();
+    bool need_update = false;
+    bool semi_sync_enabled = false;
+
+    if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, &trans, true/* for_update */,
+      tenant_info))) {
+      LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(current_protection_stat.init(tenant_info))) {
+      LOG_WARN("failed to init protection stat", KR(ret), K(tenant_info));
+    } else if (OB_FAIL(standby::ObProtectionModeUtils::check_tenant_data_version_for_semi_sync(
+        tenant_id_, semi_sync_enabled))) {
+      LOG_WARN("failed to check tenant data version for semi sync", KR(ret), K_(tenant_id));
+    } else if (!semi_sync_enabled) {
+      LOG_INFO("tenant data version does not support semi sync, skip PRE_MPT intercept",
+          K_(tenant_id));
+    } else {
+      // Semi-sync intercept: Thread1 does not decide from local TENANT_CONF, because
+      // cfg reload is distributed and asynchronous. When replay reaches an MPT/MA
+      // steady target, write PRE_MPT first unless the table is already at that
+      // steady state. Thread0 is the single owner that verifies all servers have
+      // refreshed cfg and tenant_info before promoting PRE_MPT to MPT/MA.
+      const ObProtectionLevel next_level = next_protection_stat.get_protection_level();
+      const ObProtectionLevel current_level = current_protection_stat.get_protection_level();
+      const ObProtectionMode next_mode = next_protection_stat.get_protection_mode();
+      const int64_t next_epoch = next_protection_stat.get_switchover_epoch();
+      if ((next_level.is_maximum_protection() || next_level.is_maximum_availability())
+          && !current_level.is_maximum_protection()
+          && !current_level.is_maximum_availability()) {
+        const ObProtectionLevel pre_mpt_level(ObProtectionLevel::PRE_MAXIMUM_PROTECTION_LEVEL);
+        next_protection_stat.reset();
+        if (OB_FAIL(next_protection_stat.init(next_mode, pre_mpt_level, next_epoch))) {
+          LOG_WARN("failed to re-init after PRE_MPT intercept",
+                   KR(ret), K(next_mode), K(pre_mpt_level), K(next_epoch));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (current_protection_stat.get_protection_mode() == next_protection_stat.get_protection_mode()
+        && current_protection_stat.get_protection_level() == next_protection_stat.get_protection_level()) {
+      LOG_INFO("protection mode and level is same, no need to update", KR(ret), K(tenant_info),
+          K(current_protection_stat));
+    // TODO(ziqi): 补充卡住thread0 线程，然后升降级的场景
+    } else if (current_protection_stat.is_sync_to_async()) {
+      // strong sync accept pre-async log will be pre-mpf
+      // pre-mpf should process sync standby status
+      need_update = true;
+    } else if (current_protection_stat.get_protection_mode().is_sync_mode()) {
+      // self is strong sync standby tenant, update meta tenant by user tenant
+      need_update = true;
+    } else if (next_protection_stat.get_protection_mode().is_sync_mode() &&
+      cluster_id == attr.get_cluster_id() && tenant_id_ == attr.get_tenant_id()) {
+      need_update = true;
+    } else {
+      LOG_INFO("no need to process sync standby status", KR(ret), K(tenant_id_),
+            K(current_protection_stat), K(next_protection_stat));
+    }
+    if (need_update && OB_SUCC(ret)) {
+      if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_protection_mode_and_level(
+        tenant_id_, tenant_info.get_tenant_role(), &trans, tenant_info.get_switchover_epoch(),
+        next_protection_stat.get_protection_mode(),
+        next_protection_stat.get_protection_level(),
+        next_protection_stat.get_switchover_epoch(), new_switchover_epoch,
+        true/* force_inc_switchover_epoch */))) {
+        LOG_WARN("failed to update tenant protection mode and level", KR(ret), K(tenant_id_), K(next_protection_stat),
+          K(tenant_info.get_switchover_epoch()), K(new_switchover_epoch));
+      } else {
+        if (next_protection_stat.get_protection_level().is_pre_maximum_protection()) {
+          wakeup();
+        }
+        LOG_INFO("finish to process sync standby status log", KR(ret), K(tenant_id_), K(next_protection_stat));
+      }
+    }
   }
   return ret;
 }
@@ -1126,14 +1896,24 @@ int ObRecoveryLSService::check_valid_to_operator_ls_(const SCN &sync_scn)
   } else {
     SCN user_scn;
     ObLSRecoveryStatOperator ls_recovery;
+    ObTenantInfoLoader *tenant_info_loader = MTL(ObTenantInfoLoader *);
+    ObAllTenantInfo tenant_info;
     if (OB_FAIL(ls_recovery.get_user_ls_sync_scn(tenant_id_, *proxy_, user_scn))) {
       LOG_WARN("failed to get user scn", KR(ret), K(tenant_id_));
     } else if (user_scn >= sync_scn) {
       //other ls has larger sync scn, ls can operator
+    } else if (OB_ISNULL(tenant_info_loader)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("pointer is null", KR(ret), KP(tenant_info_loader));
+    } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
+      LOG_WARN("failed to get tenant info", KR(ret));
+    } else if (tenant_info.is_prepare_flashback_for_lossless_failover_to_primary_status()) {
+      LOG_INFO("tenant is in prepare flashback for lossless failover to primary, can operate ls",
+          KR(ret), K(tenant_info), K(sync_scn));
     } else {
       ret = OB_NEED_WAIT;
       LOG_WARN("can not process ls operator, need wait other ls sync", KR(ret),
-          K(user_scn), K(sync_scn));
+          K(user_scn), K(sync_scn), K(tenant_info));
       restore_status_.reset();
     }
   }
@@ -1324,6 +2104,7 @@ int ObRecoveryLSService::report_sys_ls_recovery_stat_in_trans_(
 {
   int ret = OB_SUCCESS;
   TIMEGUARD_INIT(RECOVERY_LS, 100_ms, 10_s);
+  bool real_need_check_sync_scn = need_check_sync_scn;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(inited_));
@@ -1338,6 +2119,7 @@ int ObRecoveryLSService::report_sys_ls_recovery_stat_in_trans_(
     ObLSRecoveryStatOperator ls_recovery;
     ObLSRecoveryStat ls_recovery_stat;
     ObAllTenantInfo tenant_info;
+    ObAllTenantInfo old_tenant_info;
     rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
     //two thread for seed log and recovery_ls_manager
     if (OB_ISNULL(tenant_info_loader)) {
@@ -1351,15 +2133,33 @@ int ObRecoveryLSService::report_sys_ls_recovery_stat_in_trans_(
     } else if (OB_FAIL(construct_sys_ls_recovery_stat_based_on_sync_scn_(sync_scn, ls_recovery_stat,
         tenant_info))) {
       LOG_WARN("failed to construct ls recovery stat", KR(ret), K(sync_scn), K(tenant_info));
+    } else if (tenant_info.is_prepare_flashback_for_lossless_failover_to_primary_status()) {
+      // for lossless failover, sys_ls sync_scn may larger than other ls, so we do not need to check sync_scn equal to sys_ls_sync_scn
+      real_need_check_sync_scn = false;
     }
     CLICK();
 
-    if (FAILEDx(ObLSRecoveryReportor::update_sys_ls_recovery_stat_and_tenant_info(
-            ls_recovery_stat, tenant_info.get_tenant_role(), only_update_readable_scn,
-            need_check_sync_scn, trans))) {
-      LOG_WARN("failed to update sys ls recovery stat", KR(ret),
-          K(ls_recovery_stat), K(tenant_info), K(need_check_sync_scn));
-    } else {
+    // A readable_scn-only report must not affect Verify state; only a full sync_scn report
+    // needs the pre-report snapshot and may trigger PRE_MPT restoration.
+    if (OB_SUCC(ret)) {
+      // Lock the pre-report sync_scn so the post-report comparison uses one transaction snapshot.
+      if (!only_update_readable_scn && OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
+          tenant_id_, &trans, true/* for_update */, old_tenant_info))) {
+        LOG_WARN("failed to load tenant info before reporting sys ls recovery stat",
+            KR(ret), K_(tenant_id));
+      } else if (OB_FAIL(ObLSRecoveryReportor::update_sys_ls_recovery_stat_and_tenant_info(
+          ls_recovery_stat, tenant_info.get_tenant_role(), only_update_readable_scn,
+          real_need_check_sync_scn, trans))) {
+        LOG_WARN("failed to update sys ls recovery stat", KR(ret),
+            K(ls_recovery_stat), K(tenant_info), K(real_need_check_sync_scn));
+      // A sync_scn advance means new source logs arrived after Verify and invalidates its steady level.
+      } else if (!only_update_readable_scn && OB_FAIL(try_restore_pre_mpt_level_on_new_source_log_(
+          old_tenant_info, trans))) {
+        LOG_WARN("failed to restore PRE_MPT level after reporting sys ls recovery stat",
+            KR(ret), K_(tenant_id), K(old_tenant_info));
+      }
+    }
+    if (OB_SUCC(ret)) {
       last_report_ts_ = ObTimeUtility::current_time();
       if (!only_update_readable_scn && sync_scn >= restore_status_.sync_scn_) {
         //如果汇报了sync_scn，需要把restore_status重置掉
@@ -1488,156 +2288,63 @@ int ObRecoveryLSService::do_ls_balance_task_()
   } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
     LOG_WARN("get_tenant_info failed", K(ret));
   } else if (OB_FAIL(ObBalanceTaskHelperTableOperator::load_tasks_order_by_scn(
-          tenant_id_, *proxy_, tenant_info.get_readable_scn(),
+          tenant_id_, *proxy_,
+          tenant_info.is_prepare_flashback_for_lossless_failover_to_primary_status() ?
+            SCN::max_scn() : tenant_info.get_readable_scn(),
           ls_balance_tasks))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
-      LOG_INFO("no need process balance task", K(tenant_info));
+      ls_balance_tasks.reset();
     } else {
       LOG_WARN("failed to load task", KR(ret), K(tenant_id_), K(tenant_info));
     }
-  } else {
-    //使用接口保证获取到的ls_balance_task都是可读点越过，可以处理的task,task是按照顺序删除的，
-    //这个是必须要保证的
-    for (int64_t i = 0; OB_SUCC(ret) && i < ls_balance_tasks.count() && !has_set_stop(); ++i) {
-      const ObBalanceTaskHelper &ls_balance_task = ls_balance_tasks.at(i);
-      //按顺序梳理task，不能如果一个task处理失败就失败掉
-      if (OB_FAIL(try_do_ls_balance_task_(ls_balance_task, tenant_info))) {
-        LOG_WARN("failed to ls balance task", KR(ret), K(ls_balance_task), K(tenant_info));
-      }
-    }
   }
-  return ret;
-}
 
-int ObRecoveryLSService::try_do_ls_balance_task_(
-    const share::ObBalanceTaskHelper &ls_balance_task,
-    const share::ObAllTenantInfo &tenant_info)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret), K(inited_));
-  } else if (OB_UNLIKELY(!ls_balance_task.is_valid() || !tenant_info.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(ls_balance_task), K(tenant_info));
-  } else if (OB_ISNULL(proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql is null", KR(ret), KP(proxy_));
+  // Process LS_ALTER tasks in transaction
+  if (OB_FAIL(ret)) {
   } else {
     const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
-    bool can_remove = false;
-    START_TRANSACTION(proxy_, exec_tenant_id)
-    if (OB_FAIL(ret)) {
-      LOG_WARN("failed to start trans", KR(ret));
-    } else if (ls_balance_task.get_task_op().is_ls_alter()) {
-      can_remove = true;
-      if (OB_FAIL(do_ls_balance_alter_task_(ls_balance_task, trans))) {
-        LOG_WARN("failed to do ls alter task", KR(ret), K(ls_balance_task));
-      } else if (OB_FAIL(DisasterRecoveryUtils::wakeup_local_service(gen_meta_tenant_id(tenant_id_)))) {
-        // dr service on leader of meta tenant 1 LS. it may not be local at the moment.
-        // to save resources, try to wake it up local, not guarante success.
-        LOG_WARN("fail to wake up", KR(ret));
-      }
-    } else if (ls_balance_task.get_task_op().is_transfer_end()) {
-      if (OB_FAIL(ObLSServiceHelper::check_transfer_task_replay(
-              tenant_id_, ls_balance_task.get_src_ls(),
-              ls_balance_task.get_dest_ls(), ls_balance_task.get_operation_scn(),
-              can_remove))) {
-        LOG_WARN("failed to check transfer task replay", KR(ret), K(tenant_id_),
-            K(ls_balance_task), K(tenant_info));
-      }
-    } else if (ls_balance_task.get_task_op().is_transfer_begin()) {
-      if (OB_FAIL(check_transfer_begin_can_remove_(ls_balance_task, tenant_info, can_remove))) {
-        LOG_WARN("failed to check transfer begin can remove", KR(ret),
-            K(ls_balance_task), K(tenant_info));
-      }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls balance task op is unexpected", KR(ret), K(ls_balance_task));
-    }
-    if (OB_FAIL(ret)) {
-    } else if (!can_remove) {
-      LOG_INFO("balance task helper can not remove", K(ls_balance_task), K(tenant_info));
-    } else if (OB_FAIL(ObBalanceTaskHelperTableOperator::remove_task(tenant_id_,
-            ls_balance_task.get_operation_scn(), trans))) {
-      LOG_WARN("failed to remove task", KR(ret), K(tenant_id_), K(ls_balance_task));
-    } else {
-      LOG_INFO("task can be remove", KR(ret), K(ls_balance_task));
-      ROOTSERVICE_EVENT_ADD("standby_tenant", "remove_balance_task",
-          K_(tenant_id), "task_type", ls_balance_task.get_task_op(),
-          "task_scn", ls_balance_task.get_operation_scn().get_val_for_inner_table_field(),
-          "switchover_status", tenant_info.get_switchover_status(),
-          "src_ls", ls_balance_task.get_src_ls().id(),
-          "dest_ls", ls_balance_task.get_dest_ls().id());
-    }
-    END_TRANSACTION(trans)
-  }
-  return ret;
-}
-
-int ObRecoveryLSService::check_transfer_begin_can_remove_(
-    const share::ObBalanceTaskHelper &ls_balance_task,
-    const share::ObAllTenantInfo &tenant_info,
-    bool &can_remove)
-{
-  int ret = OB_SUCCESS;
-  can_remove = true;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret), K(inited_));
-  } else if (OB_UNLIKELY(!ls_balance_task.is_valid()
-        || !ls_balance_task.get_task_op().is_transfer_begin())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(ls_balance_task));
-  } else if (OB_ISNULL(proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql can't null", K(ret), K(proxy_));
-  } else {
-    //find transfer end, or tenant is in flashback
-    ObBalanceTaskHelper transfer_end_task;
-    SCN transfer_scn;
-    ret = ObBalanceTaskHelperTableOperator::try_find_transfer_end(tenant_id_,
-        ls_balance_task.get_operation_scn(), ls_balance_task.get_src_ls(),
-        ls_balance_task.get_dest_ls(), *proxy_, transfer_end_task);
-    if (OB_SUCC(ret)) {
-      //if has transfer end, can remove transfer begin
-      transfer_scn = ls_balance_task.get_operation_scn();
-      LOG_INFO("has transfer end task, can remove transfer begin", KR(ret),
-          K(ls_balance_task), K(transfer_end_task));
-    } else if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("failed to find transfer end task", KR(ret), K(tenant_id_), K(ls_balance_task));
-    } else if (tenant_info.is_prepare_flashback_for_switch_to_primary_status()
-        || tenant_info.is_prepare_flashback_for_failover_to_primary_status()) {
-      //check tenant_info status and check wait readable_scn is equal to sync_scn
-      ret = OB_SUCCESS;
-      transfer_scn = tenant_info.get_sync_scn();
-      if (tenant_info.get_sync_scn() != tenant_info.get_readable_scn()) {
-        can_remove = false;
-        LOG_WARN("There are transfer tasks in progress. Must wait for replay to newest",
-KR(ret), K(tenant_id_), K(tenant_info), K(ls_balance_task));
+    for (int64_t i = 0; OB_SUCC(ret) && i < ls_balance_tasks.count() && !has_set_stop(); ++i) {
+      const ObBalanceTaskHelper &ls_balance_task = ls_balance_tasks.at(i);
+      if (!ls_balance_task.get_task_op().is_ls_alter()) {
       } else {
-        LOG_INFO("replay to newest, can remove transfer begin before switchover/failover to primary",
-            K(tenant_info), K(ls_balance_task));
+        START_TRANSACTION(proxy_, exec_tenant_id)
+        if (FAILEDx(do_ls_balance_alter_task_(ls_balance_task, trans))) {
+          LOG_WARN("failed to do ls alter task", KR(ret), K(ls_balance_task));
+        } else if (OB_FAIL(ObBalanceTaskHelperTableOperator::remove_task(tenant_id_,
+                ls_balance_task.get_operation_scn(), trans))) {
+          LOG_WARN("failed to remove alter task", KR(ret), K(tenant_id_), K(ls_balance_task));
+        } else if (OB_FAIL(DisasterRecoveryUtils::wakeup_local_service(gen_meta_tenant_id(tenant_id_)))) {
+          LOG_WARN("fail to wake up", KR(ret));
+        } else {
+          ROOTSERVICE_EVENT_ADD("standby_tenant", "remove_balance_task",
+              K_(tenant_id), "task_type", ls_balance_task.get_task_op(),
+              "task_scn", ls_balance_task.get_operation_scn().get_val_for_inner_table_field(),
+              "switchover_status", tenant_info.get_switchover_status(),
+              "src_ls", ls_balance_task.get_src_ls().id(),
+              "dest_ls", ls_balance_task.get_dest_ls().id());
+        }
+        END_TRANSACTION(trans)
+        if (OB_FAIL(ret)) {
+          LOG_WARN("failed to process ls alter task", KR(ret), K(ls_balance_task), K(tenant_info));
+        }
       }
-    } else {
-      can_remove = false;
-      LOG_WARN("can not find transfer end task, can not end transfer begin task", KR(ret), K(tenant_info), K(ls_balance_task));
-      ret = OB_SUCCESS;
     }
-    if (OB_SUCC(ret) && can_remove) {
-      if (OB_FAIL(ObLSServiceHelper::check_transfer_task_replay(
-              tenant_id_, ls_balance_task.get_src_ls(),
-              ls_balance_task.get_dest_ls(), transfer_scn, can_remove))) {
-        LOG_WARN("failed to check transfer task replay", KR(ret), K(tenant_id_),
-            K(ls_balance_task), K(transfer_scn));
-      } else if (can_remove) {
-        FLOG_INFO("ls all replica replay to newest, can remove", K(ls_balance_task));
-      } else if (REACH_THREAD_TIME_INTERVAL(10 * 1000 * 1000)) {
-        // ignore ret
-        // 10s
-        LOG_WARN("can not remove ls balance task helper", K(ls_balance_task), K(tenant_info));
-      }
+  }
+
+  // Process transfer tasks via unified utility (reuses preloaded tasks, single scan)
+  if (OB_FAIL(ret)) {
+  } else if (has_set_stop()) {
+    LOG_INFO("thread stopped, skip transfer tick", K(tenant_id_));
+  } else {
+    ObTransferTickResult tick_result;
+    ObRecoveryTickShouldStop should_stop(*this);
+    if (OB_FAIL(ObStandbyTransferTaskUtil::run_transfer_tick(
+            *proxy_, tenant_info,
+            true /* do_gc */, tick_result,
+            &ls_balance_tasks, true /*skip_balance_task_load*/,
+            should_stop))) {
+      LOG_WARN("failed to run transfer tick", KR(ret), K(tenant_id_));
     }
   }
   return ret;
@@ -1739,6 +2446,71 @@ int ObRecoveryLSService::decompress_log_payload_(const char *in_buf, const int64
   return ret;
 }
 #endif
+int ObRecoveryLSService::compute_effective_upper_scn_(
+    const ObAllTenantInfo &tenant_info,
+    SCN &effective_upper_scn)
+{
+  int ret = OB_SUCCESS;
+  int64_t recover_delay_us = 0;
+  effective_upper_scn = tenant_info.get_recovery_until_scn();
+  if (!tenant_info.get_protection_mode().is_maximum_performance()) {
+    // delay only takes effect under MAXIMUM PERFORMANCE mode
+  } else if (OB_FAIL(refresh_restore_source_())) {
+    LOG_WARN("failed to refresh restore source", KR(ret), K_(tenant_id));
+  } else {
+    recover_delay_us = cached_restore_source_.recover_delay_us_;
+    if (recover_delay_us > 0) {
+      const int64_t current_time_us = ObTimeUtility::current_time();
+      const int64_t delay_cap_ts_us = current_time_us - recover_delay_us;
+      if (delay_cap_ts_us > 0) {
+        SCN delay_cap_scn;
+        if (OB_FAIL(delay_cap_scn.convert_from_ts(static_cast<uint64_t>(delay_cap_ts_us)))) {
+          LOG_WARN("failed to convert delay cap timestamp to scn", KR(ret), K(delay_cap_ts_us));
+        } else if (delay_cap_scn < effective_upper_scn) {
+          effective_upper_scn = delay_cap_scn;
+        }
+      } else {
+        effective_upper_scn = SCN::min_scn();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::refresh_restore_source_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t REFRESH_INTERVAL_US = 100 * 1000; // 100ms
+  const int64_t now = ObTimeUtility::current_time();
+  if (OB_INVALID_TIMESTAMP == last_refresh_restore_source_ts_
+      || now - last_refresh_restore_source_ts_ >= REFRESH_INTERVAL_US) {
+    ObLogRestoreSourceMgr restore_source_mgr;
+    ObLogRestoreSourceItem item;
+    if (OB_FAIL(restore_source_mgr.init(tenant_id_, proxy_))) {
+      LOG_WARN("failed to init restore_source_mgr", KR(ret), K_(tenant_id));
+    } else if (OB_FAIL(restore_source_mgr.get_source(item))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        cached_restore_source_.reset();
+        last_refresh_restore_source_ts_ = now;
+      } else {
+        LOG_WARN("failed to get source", KR(ret), K_(tenant_id));
+      }
+    } else {
+      cached_restore_source_.reset();
+      if (OB_FAIL(cached_restore_source_.deep_copy(item))) {
+        LOG_WARN("failed to deep copy restore source item", KR(ret), K(item));
+      } else {
+        last_refresh_restore_source_ts_ = now;
+        if (REACH_TIME_INTERVAL(1_s)) {
+          LOG_INFO("[LS_RECOVERY] cached restore source updated", KR(ret), "delay", cached_restore_source_.recover_delay_us_);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+
 }//end of namespace rootserver
 }//end of namespace oceanbase
-

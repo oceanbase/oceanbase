@@ -143,6 +143,7 @@ enable_rpc_authentication_bypass
 enable_sql_audit
 enable_sql_extension
 enable_sql_operator_dump
+enable_standby_semi_sync
 enable_syslog_recycle
 enable_syslog_wf
 enable_sys_table_ddl

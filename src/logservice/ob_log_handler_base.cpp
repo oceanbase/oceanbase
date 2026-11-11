@@ -14,6 +14,7 @@ ObLogHandlerBase::ObLogHandlerBase() :
   role_(common::FOLLOWER),
   proposal_id_(palf::INVALID_PROPOSAL_ID),
   id_(-1),
+  sync_mode_(palf::SyncMode::INVALID_SYNC_MODE),
   palf_handle_(NULL),
   palf_env_(NULL),
   enable_logservice_(false),
@@ -40,6 +41,31 @@ int ObLogHandlerBase::prepare_switch_role(common::ObRole &curr_role,
     curr_proposal_id = proposal_id_;
     PALF_LOG(TRACE, "prepare_switch_role success", K(ret), K_(id), K(curr_role), K(curr_proposal_id),
         K(new_role), K(new_proposal_id));
+  }
+  return ret;
+}
+
+int ObLogHandlerBase::prepare_switch_role(int64_t &curr_proposal_id,
+                                          int64_t &new_proposal_id,
+                                          common::ObRole &curr_role,
+                                          bool &is_pending_state,
+                                          palf::SyncMode &curr_sync_mode,
+                                          palf::SyncMode &new_sync_mode) const
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else if (OB_FAIL(palf_handle_->get_proposal_id_and_sync_mode(new_proposal_id, new_sync_mode, is_pending_state))) {
+    PALF_LOG(WARN, "PalfHandle get_proposal_id_and_sync_mode failed", K(ret), K_(id), K(curr_proposal_id));
+  } else {
+    curr_proposal_id = proposal_id_;
+    curr_sync_mode = sync_mode_;
+    curr_role = role_;
+    PALF_LOG(INFO, "prepare_switch_role with sync_mode success", K(ret), K_(id), K(curr_proposal_id),
+        K(new_proposal_id), K(new_sync_mode));
   }
   return ret;
 }

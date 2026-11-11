@@ -6,19 +6,24 @@
 #ifndef OCEANBASE_ROOTSERVER_OB_RECCOVERY_LS_SERVICE_H
 #define OCEANBASE_ROOTSERVER_OB_RECCOVERY_LS_SERVICE_H
 #include "lib/thread/ob_reentrant_thread.h"//ObRsReentrantThread
+#include "lib/container/ob_iarray.h"//ObIArray
+#include "lib/net/ob_addr.h"//ObAddr
 #include "logservice/ob_log_base_type.h"//ObIRoleChangeSubHandler ObICheckpointSubHandler ObIReplaySubHandler
 #include "logservice/palf/lsn.h"//palf::LSN
 #include "logservice/restoreservice/ob_log_restore_handler.h"//RestoreStatusInfo
 #include "rootserver/ob_primary_ls_service.h" //ObTenantThreadHelper
 #include "lib/lock/ob_spin_lock.h" //ObSpinLock
+#include "share/restore/ob_log_restore_source.h" //ObLogRestoreSourceItem
 #include "storage/tx/ob_multi_data_source.h" //ObTxBufferNode
 #include "logservice/ipalf/ipalf_iterator.h" // IPalfIterator
+#include "share/ob_tenant_role.h" //ObProtectionStat
 
 namespace oceanbase
 {
 namespace obrpc
 {
 class  ObSrvRpcProxy;
+struct ObCheckTenantConfigAndInfoResult;
 }
 namespace common
 {
@@ -38,6 +43,7 @@ struct ObLSAttr;
 struct ObLSRecoveryStat;
 class SCN;
 class ObBalanceTaskHelper;
+class ObSyncStandbyStatusAttr;
 namespace schema
 {
 class ObMultiVersionSchemaService;
@@ -53,6 +59,7 @@ namespace logservice
 {
 class ObLogHandler;
 class ObGCLSLog;
+class ObSyncModeLog;
 }
 namespace palf
 {
@@ -70,7 +77,8 @@ class ObRecoveryLSService : public ObTenantThreadHelper
 {
 public:
   ObRecoveryLSService() : inited_(false), tenant_id_(OB_INVALID_TENANT_ID), proxy_(NULL),
-  last_report_ts_(OB_INVALID_TIMESTAMP), restore_status_() {}
+  last_report_ts_(OB_INVALID_TIMESTAMP), restore_status_(), cached_restore_source_(),
+  last_refresh_restore_source_ts_(OB_INVALID_TIMESTAMP), semi_sync_disable_barrier_() {}
   virtual ~ObRecoveryLSService() {}
   int init();
   void destroy();
@@ -78,7 +86,51 @@ public:
   virtual void do_work() override;
   DEFINE_MTL_FUNC(ObRecoveryLSService)
 private:
+ struct ObSemiSyncDisableBarrier
+ {
+   ObSemiSyncDisableBarrier() : switchover_epoch_(OB_INVALID_VERSION), target_scn_() {}
+   bool is_cfg_checked_in_epoch(const int64_t switchover_epoch) const;
+   bool has_target_scn_in_epoch(const int64_t switchover_epoch) const;
+   void mark_cfg_checked(const int64_t switchover_epoch);
+   int set_target_scn(const int64_t switchover_epoch, const share::SCN &target_scn);
+   void reset();
+
+   int64_t switchover_epoch_;
+   share::SCN target_scn_;
+ };
+
  int process_thread0_(const ObAllTenantInfo &tenant_info);
+ // PRE_MPT promotion: promote PRE_MPT_LEVEL to MPT/MA after all-server cfg convergence.
+ int promote_pre_mpt_level_();
+ int do_promote_to_steady_level_(const share::ObAllTenantInfo &expected_tenant_info);
+ int check_semi_sync_disable_cfg_converged_(const share::ObAllTenantInfo &tenant_info,
+     const int64_t tenant_info_ora_rowscn,
+     bool &cfg_converged,
+     bool &barrier_satisfied);
+ int check_semi_sync_disable_barrier_if_needed_(const share::ObAllTenantInfo &tenant_info,
+     const bool cfg_converged,
+     bool &barrier_satisfied);
+ // Restore PRE_MPT in the reporting transaction after a source-log sync_scn advance.
+ int try_restore_pre_mpt_level_on_new_source_log_(
+     const share::ObAllTenantInfo &old_tenant_info,
+     common::ObMySQLTransaction &trans);
+ int get_all_servers_for_cfg_convergence_(common::ObIArray<common::ObAddr> &servers);
+ int check_server_cfg_converged_result_(const common::ObAddr &server,
+     const int64_t target_ver,
+     const obrpc::ObCheckTenantConfigAndInfoResult &result,
+     bool &converged);
+ int check_all_server_cfg_converged_(const int64_t target_ver,
+     const share::ObAllTenantInfo &expected_tenant_info,
+     const int64_t expected_tenant_info_ora_rowscn,
+     bool &converged);
+ int check_semi_sync_disable_barrier_(const share::ObAllTenantInfo &tenant_info, bool &passed);
+ int get_primary_max_end_scn_(share::SCN &max_end_scn);
+ int get_ls_id_array_from_status_(common::ObIArray<share::ObLSID> &ls_id_array);
+ int get_restore_source_(share::ObLogRestoreSourceItem &restore_source);
+ int get_restore_source_service_attr_(share::ObRestoreSourceServiceAttr &service_attr);
+ int query_primary_max_end_scn_(const share::ObRestoreSourceServiceAttr &service_attr,
+     const common::ObIArray<share::ObLSID> &ls_id_array,
+     share::SCN &max_end_scn);
  int process_thread1_(const ObAllTenantInfo &tenant_info,
      share::SCN &start_scn,
      ipalf::IPalfIterator<ipalf::ILogEntry> &iterator);
@@ -90,11 +142,31 @@ private:
  int process_ls_log_(const ObAllTenantInfo &tenant_info,
                      share::SCN &start_scn,
                      ipalf::IPalfIterator<ipalf::ILogEntry> &iterator);
+
+  template <typename LOG>
+ int process_log_(const LOG &log, const share::SCN &sync_scn, const bool need_check_sync_scn);
+ int process_log_in_trans_(ObMySQLTransaction &trans,
+    const ObTenantRole::Role &role,
+    const transaction::ObTxBufferNodeArray &source_data,
+    const share::SCN &sync_scn,
+    bool &has_operation);
+
+ int process_log_in_trans_(ObMySQLTransaction &trans,
+    const ObTenantRole::Role &role,
+    const logservice::ObSyncModeLog &sync_mode_log,
+     const share::SCN &sync_scn,
+     bool &has_operation);
+
  int process_upgrade_log_(const share::SCN &sync_scn,
      const transaction::ObTxBufferNode &node);
  int process_upgrade_data_version_log_(const share::SCN &sync_scn,
                                        const transaction::ObTxBufferNode &node,
                                        common::ObMySQLTransaction &trans);
+ int process_sync_standby_status_log_(const share::SCN &sync_scn,
+                                       const transaction::ObTxBufferNode &node,
+                                       common::ObMySQLTransaction &trans);
+ int set_protection_stat_(const share::ObSyncStandbyStatusAttr &attr,
+    common::ObMySQLTransaction &trans);
  int process_ls_tx_log_(transaction::ObTxLogBlock &tx_log,
                         const share::SCN &syn_scn);
  int process_ls_table_in_trans_(const transaction::ObTxBufferNode &node,
@@ -126,6 +198,7 @@ private:
                             common::ObMySQLTransaction &trans);
  int report_sys_ls_recovery_stat_(const share::SCN &sync_scn, const bool only_update_readable_scn,
                                   const char* comment);
+ // Report SYS_LS and restore PRE_MPT atomically.
  int report_sys_ls_recovery_stat_in_trans_(const share::SCN &sync_scn,
                                            const bool only_update_readable_scn,
                                            common::ObMySQLTransaction &trans,
@@ -138,14 +211,11 @@ private:
  //thread1
  int do_standby_balance_();
  int do_ls_balance_task_();
- int try_do_ls_balance_task_(const share::ObBalanceTaskHelper &ls_balance_task,
-     const share::ObAllTenantInfo &tenant_info);
- int check_transfer_begin_can_remove_(const share::ObBalanceTaskHelper &ls_balance_task,
-     const share::ObAllTenantInfo &tenant_info,
-     bool &can_remove);
  int do_ls_balance_alter_task_(const share::ObBalanceTaskHelper &ls_balance_task,
                                common::ObMySQLTransaction &trans);
  int get_ls_(storage::ObLSHandle &ls_handle, storage::ObLS *&ls);
+ int compute_effective_upper_scn_(const ObAllTenantInfo &tenant_info, share::SCN &effective_upper_scn);
+ int refresh_restore_source_();
  int reset_restore_proxy_(ObRestoreSourceServiceAttr &service_attr);
  int get_ls_all_replica_readable_scn_(const share::ObLSID &ls_id, share::SCN &reabable_scn);
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
@@ -161,6 +231,9 @@ private:
   common::ObMySQLProxy *proxy_;
   int64_t last_report_ts_;
   logservice::RestoreStatusInfo restore_status_;
+  share::ObLogRestoreSourceItem cached_restore_source_;
+  int64_t last_refresh_restore_source_ts_;
+  ObSemiSyncDisableBarrier semi_sync_disable_barrier_;
 };
 }
 }

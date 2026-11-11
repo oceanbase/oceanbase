@@ -500,6 +500,7 @@ protected:
                                   const LogReplicaType replica_type,
                                   IPalfHandleImpl *&palf_handle_impl);
   int init_log_kv_cache_();
+  int destroy_uniq_task_queue_();
 
 private:
   int64_t cluster_id_;

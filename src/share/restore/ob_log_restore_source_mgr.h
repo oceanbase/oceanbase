@@ -32,14 +32,16 @@ public:
   int init(const uint64_t tenant_id, ObISQLClient *proxy);
 public:
   // add source with net service
-  int add_service_source(const SCN &recovery_until_scn, const ObString &service_source);
+  int add_service_source(const SCN &recovery_until_scn, const ObString &service_source,
+                         const int64_t recover_delay_us = 0);
   // add source with archive dest
   // 1. nfs example
   // file:///data/1/
   // 2. oss example
   // oss://backup_dir/?host=xxx.com&access_id=111&access_key=222
   // 3. cos example
-  int add_location_source(const SCN &recovery_until_scn, const ObString &archive_dest);
+  int add_location_source(const SCN &recovery_until_scn, const ObString &archive_dest,
+                          const int64_t recover_delay_us = 0);
   // add source with raw pieces
   int add_rawpath_source(const SCN &recovery_until_scn, const DirArray &array);
 
@@ -55,8 +57,9 @@ public:
   int get_source_for_update(ObLogRestoreSourceItem &item, common::ObMySQLTransaction &trans);
 
   static int get_backup_dest(const ObLogRestoreSourceItem &item, ObBackupDest& dest);
+  static int64_t get_default_log_restore_source_id() { return OB_DEFAULT_LOG_RESTORE_SOURCE_ID; }
 private:
-  const int64_t OB_DEFAULT_LOG_RESTORE_SOURCE_ID = 1;
+  static const int64_t OB_DEFAULT_LOG_RESTORE_SOURCE_ID;
 private:
   bool is_inited_;
   uint64_t tenant_id_;       // user tenant id

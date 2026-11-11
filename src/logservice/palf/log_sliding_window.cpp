@@ -710,6 +710,7 @@ int LogSlidingWindow::generate_new_group_log_(const LSN &lsn,
     LogGroupEntryHeader header;
     const int64_t proposal_id = state_mgr_->get_proposal_id();
     const bool is_padding_log = (LOG_PADDING == log_type);
+    const bool is_sync_mode = is_sync_mode_();
 
     LogTaskHeaderInfo header_info;
     header_info.begin_lsn_ = lsn;
@@ -719,7 +720,9 @@ int LogSlidingWindow::generate_new_group_log_(const LSN &lsn,
     header_info.max_scn_ = scn;
     header_info.data_len_ = log_body_size;
     header_info.proposal_id_ = proposal_id;
-    header_info.is_raw_write_ = false;
+    // in append access_mode, is_raw_write_ is true if in sync mode
+    // in raw_write access_mode, is_raw_write_ will be set true when receiving group log
+    header_info.is_raw_write_ = is_sync_mode;
 
     log_task->lock();
     if (log_task->is_valid()) {
@@ -1145,7 +1148,7 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
             PALF_LOG(WARN, "submit log failed", K(ret), K_(palf_id), K_(self), KPC(log_task), K(is_accum_checksum_acquired));
           }
           PALF_LOG(TRACE, "handle one submit log", K(ret), K_(palf_id), K_(self), K(tmp_log_id), K(is_committed_lsn_updated),
-              K(is_need_submit), K(is_submitted));
+              K(is_need_submit), K(is_submitted), KPC(log_task));
         }
         is_lease_expired = is_handle_thread_lease_expired(thread_lease_begin_ts);
       }
@@ -1227,7 +1230,7 @@ int LogSlidingWindow::generate_group_entry_header_(const int64_t log_id,
       (void) group_header.update_accumulated_checksum(accum_checksum);
       (void) group_header.update_header_checksum();
       PALF_LOG(TRACE, "generate_group_entry_header_ success", K(ret), K_(palf_id), K_(self), K(is_padding_log),
-          K(is_raw_write), K(group_log_data_checksum), K(group_header), KPC(log_task));
+          K(is_raw_write), K(group_log_data_checksum), K(accum_checksum), K(group_header), KPC(log_task));
     }
   }
   return ret;
@@ -1979,6 +1982,21 @@ bool LogSlidingWindow::need_use_batch_rpc_(const int64_t buf_size,
   return need_batch_push_for_raw_write || need_batch_push_for_fetch_log;
 }
 
+bool LogSlidingWindow::is_sync_mode_() const
+{
+  int ret = OB_SUCCESS;
+  SyncMode sync_mode = SyncMode::INVALID_SYNC_MODE;
+  bool is_sync = false;
+  if (OB_ISNULL(mode_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(WARN, "mode_mgr_ is null, is_sync will be false", K_(palf_id), K_(self));
+  } else if (OB_FAIL(mode_mgr_->get_sync_mode(sync_mode))) {
+    PALF_LOG(WARN, "get_sync_mode failed, is_sync will be false", K(ret), K_(palf_id), K_(self));
+  } else {
+    is_sync = (SyncMode::SYNC == sync_mode);
+  }
+  return is_sync;
+}
 int LogSlidingWindow::try_fetch_log(const FetchTriggerType &fetch_log_type,
                                     const LSN prev_lsn,
                                     const LSN fetch_start_lsn,

@@ -240,6 +240,7 @@ int ObRestoreCommonUtil::try_update_tenant_role(common::ObMySQLProxy *sql_proxy,
         tenant_id,
         obrpc::ObSwitchTenantArg::OpType::INVALID,
         false, /* is_verify */
+        false, /* is_verify_nowait */
         sql_proxy,
         GCTX.srv_rpc_proxy_,
         &cost_detail,

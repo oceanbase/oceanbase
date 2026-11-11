@@ -569,6 +569,7 @@ GLOBAL_ALIAS SESSION_ALIAS WITH_COLUMN_GROUP
 %type <node> method_opt method_list method extension mvt_param
 %type <node> opt_storage_name opt_calibration_list calibration_info_list
 %type <node> switchover_tenant_stmt switchover_clause opt_verify
+%type <node> protection_mode_stmt protection_mode_type
 %type <node> recover_tenant_stmt recover_point_clause
 %type <node> external_file_format_list external_file_format byte_order_mark_option external_properties_list external_properties external_table_partition_option opt_pattern opt_as_alias pattern_expr format_expr url_expr url_table_function_expr location_expr load_export_location_expr
 %type <node> storage_cache_policy_attribute_list storage_cache_time_policy_attribute_list storage_cache_time_policy_attribute retention_time_unit opt_storage_cache_policy
@@ -796,6 +797,7 @@ stmt:
   | pl_expr_stmt            { $$ = $1; question_mark_issue($$, result); }
   | method_opt              { $$ = $1; check_question_mark($$, result); }
   | switchover_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
+  | protection_mode_stmt   { $$ = $1; check_question_mark($$, result); }
   | recover_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
   | create_tenant_snapshot_stmt   { $$ = $1; check_question_mark($$, result); }
   | drop_tenant_snapshot_stmt   { $$ = $1; check_question_mark($$, result); }
@@ -26223,7 +26225,10 @@ ACTIVATE STANDBY opt_tenant_name
 ;
 
 opt_verify:
-VERIFY
+VERIFY NOWAIT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_VERIFY_NOWAIT); }
+| VERIFY
 {
   malloc_terminal_node($$, result->malloc_pool_, T_VERIFY); }
 | /* EMPTY */
@@ -26250,6 +26255,42 @@ opt_restore_until
 | CANCEL
 {
   malloc_terminal_node($$, result->malloc_pool_, T_RECOVER_CANCEL);
+};
+/*===========================================================
+ *
+ * 设置保护模式命令
+ *
+ *===========================================================*/
+protection_mode_stmt:
+alter_with_opt_hint SYSTEM SET STANDBY TENANT TO protection_mode_type opt_tenant_name
+{
+  (void)($1);
+  (void)($2);
+  (void)($3);
+  (void)($4);
+  (void)($5);
+  (void)($6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PROTECTION_MODE, 2, $7, $8);
+};
+
+// change src/sql/resolver/cmd/ob_set_protection_mode_resolver.cpp when change the result->value
+protection_mode_type:
+MAXIMIZE PERFORMANCE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+}
+|
+MAXIMIZE AVAILABILITY
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 2;
+}
+|
+MAXIMIZE PROTECTION
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 3;
 };
 /*===========================================================
  *

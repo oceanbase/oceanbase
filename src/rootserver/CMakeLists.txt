@@ -284,7 +284,11 @@ ob_set_subtarget(ob_rootserver standby
   standby/ob_standby_service.cpp
   standby/ob_recovery_ls_service.cpp
   standby/ob_tenant_role_transition_service.cpp
+  standby/ob_ls_log_mode_modifier.cpp
   standby/ob_flashback_standby_log_command.cpp
+  standby/ob_protection_mode_utils.cpp
+  standby/ob_protection_mode_mgr.cpp
+  standby/ob_standby_transfer_task_util.cpp
 )
 
 ob_set_subtarget(ob_rootserver truncate_info

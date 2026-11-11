@@ -406,7 +406,6 @@ LATCH_DEF(DEFAULT_RWLOCK, 377, "default latch", LATCH_FIFO, 2000, 0, false)
 
 LATCH_DEF(EXT_DISK_CACHE_LOCK, 378, "external table disk cache lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(FD_SIMULATOR_LOCK, 379, "fd simulator lock", LATCH_FIFO, 2000, 0, true)
-
 LATCH_DEF(SS_ATOMIC_FILE_LOCK, 380, "atomic procotol file lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(DTL_INTERM_RESULT_INFO_LOCK, 381, "dtl interm result info lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(MAX_ID_CACHE_LOCK, 382, "max id cache lock", LATCH_FIFO, 2000, 0, true)
@@ -418,7 +417,6 @@ LATCH_DEF(CONNECT_RESOURCE_MGR_LOCK, 387, "connect resource manager lock", LATCH
 LATCH_DEF(OB_DIAG_LOCK, 388, "ob diag lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(TRANSPORT_SERVICE_TASK_LOCK, 389, "transport status task lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(STANDBY_ACK_STATUS_LOCK, 390, "standby ack status lock", LATCH_FIFO, 2000, 0, true)
-
 LATCH_DEF(VECTOR_MEM_DATA, 391, "vector mem data lock", LATCH_READ_PREFER, 200, 0, true)
 LATCH_DEF(VECTOR_BITMAP_LOCK, 392, "vector bitmap lock", LATCH_READ_PREFER, 2000, 0, true)
 LATCH_DEF(VECTOR_RELOAD_LOCK, 393, "vector reload lock", LATCH_FIFO, 200, 0, true)

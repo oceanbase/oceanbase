@@ -62,6 +62,7 @@ RPC_F(obrpc::OB_BATCH_DETECT_SESSION_ALIVE, obrpc::ObBatchDetectSessionAliveArg,
 RPC_F(obrpc::OB_DETECT_CLIENT_SESSION_ALIVE, obrpc::UInt64, obrpc::Bool, ObDetectClientSessionAliveProxy);
 RPC_F(obrpc::OB_GET_LS_ACCESS_MODE, obrpc::ObGetLSAccessModeInfoArg, obrpc::ObLSAccessModeInfo, ObGetLSAccessModeProxy);
 RPC_F(obrpc::OB_CHANGE_LS_ACCESS_MODE, obrpc::ObLSAccessModeInfo, obrpc::ObChangeLSAccessModeRes, ObChangeLSAccessModeProxy);
+RPC_F(obrpc::OB_CHANGE_LS_SYNC_MODE, obrpc::ObChangeLSSyncModeArg, obrpc::ObChangeLSSyncModeRes, ObChangeLSSyncModeProxy);
 RPC_F(obrpc::OB_BATCH_GET_TABLET_AUTOINC_SEQ, obrpc::ObBatchGetTabletAutoincSeqArg,
     obrpc::ObBatchGetTabletAutoincSeqRes, ObBatchGetTabletAutoincSeqProxy);
 RPC_F(obrpc::OB_BATCH_SET_TABLET_AUTOINC_SEQ, obrpc::ObBatchSetTabletAutoincSeqArg,
@@ -69,6 +70,8 @@ RPC_F(obrpc::OB_BATCH_SET_TABLET_AUTOINC_SEQ, obrpc::ObBatchSetTabletAutoincSeqA
 RPC_F(obrpc::OB_CLEAR_TABLET_AUTOINC_SEQ_CACHE, obrpc::ObClearTabletAutoincSeqCacheArg,
     obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_CLEAR_TABLET_AUTOINC_SEQ_CACHE>::Response, ObClearTabletAutoincSeqCacheProxy);
 RPC_F(obrpc::OB_GET_LS_SYNC_SCN, obrpc::ObGetLSSyncScnArg, obrpc::ObGetLSSyncScnRes, ObGetLSSyncScnProxy);
+RPC_F(obrpc::OB_GET_LS_STANDBY_SYNC_SCN, obrpc::ObGetLSStandbySyncScnArg,
+    obrpc::ObGetLSStandbySyncScnRes, ObGetLSStandbySyncScnProxy);
 RPC_F(obrpc::OB_INIT_TENANT_CONFIG, obrpc::ObInitTenantConfigArg,
     obrpc::ObInitTenantConfigRes, ObInitTenantConfigProxy);
 RPC_F(obrpc::OB_GET_LEADER_LOCATIONS, obrpc::ObGetLeaderLocationsArg,
@@ -102,6 +105,7 @@ RPC_F(obrpc::OB_KILL_QUERY_CLIENT_SESSION, obrpc::ObKillQueryClientSessionArg, o
 RPC_RS(obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT, obrpc::ObParallelCreateNormalTenantArg, obrpc::ObRpcProxy::NoneT, ObParallelCreateNormalTenantProxy);
 RPC_F(obrpc::OB_LOAD_TENANT_TABLE_SCHEMA, obrpc::ObLoadTenantTableSchemaArg, obrpc::ObRpcProxy::NoneT, ObLoadTenantTableSchemaProxy);
 RPC_F(obrpc::OB_ALL_SERVER_TRACER_BROADCAST, obrpc::ObRefreshTenantInfoArg, obrpc::Int64, ObAllServerTracerProxy);
+RPC_F(obrpc::OB_CHECK_TENANT_CONFIG_AND_INFO, obrpc::ObCheckTenantConfigAndInfoArg, obrpc::ObCheckTenantConfigAndInfoResult, ObCheckTenantConfigAndInfoProxy);
 RPC_F(obrpc::OB_CLEAR_FETCHED_LOG_CACHE, share::ObClearFetchedLogCacheArg, share::ObClearFetchedLogCacheRes, ObClearFetchedLogCacheProxy);
 RPC_F(obrpc::OB_CHECK_BACKUP_DEST_RW_CONSISTENCY, obrpc::ObCheckBackupDestRWConsistencyArg, obrpc::Int64, ObCheckBackupDestRWConsistencyProxy);
 RPC_F(obrpc::OB_CHECK_SYS_TABLE_SCHEMA, obrpc::ObCheckSysTableSchemaArg, obrpc::ObCheckSysTableSchemaResult, ObCheckSysTableSchemaProxy);

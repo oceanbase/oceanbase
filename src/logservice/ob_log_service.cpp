@@ -39,6 +39,8 @@ ObLogService::ObLogService() :
   alloc_mgr_(NULL),
   apply_service_(),
   replay_service_(),
+  transport_service_(),
+  standby_ack_service_(),
   role_change_service_(),
   location_adapter_(),
   ls_adapter_(),
@@ -141,12 +143,16 @@ int ObLogService::start()
     CLOG_LOG(WARN, "failed to start apply_service_", K(ret));
   } else if (OB_FAIL(replay_service_.start())) {
     CLOG_LOG(WARN, "failed to start replay_service_", K(ret));
+  } else if (OB_FAIL(transport_service_.start())) {
+    CLOG_LOG(WARN, "failed to start transport_service_", K(ret));
   } else if (OB_FAIL(role_change_service_.start())) {
     CLOG_LOG(WARN, "failed to start role_change_service_", K(ret));
   } else if (OB_FAIL(cdc_service_.start())) {
     CLOG_LOG(WARN, "failed to start cdc_service_", K(ret));
   } else if (OB_FAIL(restore_service_.start())) {
     CLOG_LOG(WARN, "failed to start restore_service_", K(ret));
+  } else if (OB_FAIL(standby_ack_service_.start())) {
+    CLOG_LOG(WARN, "failed to start standby_ack_service_", K(ret));
 #ifdef OB_BUILD_ARBITRATION
   } else if (!enable_logservice_ && OB_FAIL(arb_service_.start())) {
     CLOG_LOG(WARN, "failed to start arb_service_", K(ret));
@@ -168,9 +174,11 @@ void ObLogService::stop()
   CLOG_LOG(INFO, "begin to stop ObLogService");
   (void)apply_service_.stop();
   (void)replay_service_.stop();
+  (void)transport_service_.stop();
   (void)role_change_service_.stop();
   (void)cdc_service_.stop();
   (void)restore_service_.stop();
+  (void)standby_ack_service_.stop();
 #ifdef OB_BUILD_ARBITRATION
   (void)arb_service_.stop();
 #endif
@@ -189,6 +197,8 @@ void ObLogService::wait()
   role_change_service_.wait();
   cdc_service_.wait();
   restore_service_.wait();
+  transport_service_.wait();
+  standby_ack_service_.wait();
 #ifdef OB_BUILD_ARBITRATION
   arb_service_.wait();
 #endif
@@ -205,12 +215,14 @@ void ObLogService::destroy()
   self_.reset();
   apply_service_.destroy();
   replay_service_.destroy();
+  transport_service_.destroy();
   role_change_service_.destroy();
   location_adapter_.destroy();
   ls_adapter_.destroy();
   rpc_proxy_.destroy();
   reporter_.destroy();
   restore_service_.destroy();
+  standby_ack_service_.destroy();
 #ifdef OB_BUILD_ARBITRATION
   arb_service_.destroy();
 #endif
@@ -361,7 +373,9 @@ int ObLogService::init(const PalfOptions &options,
     CLOG_LOG(WARN, "failed to init apply_service", K(ret));
   } else if (OB_FAIL(replay_service_.init(palf_env_, &rpc_proxy_, &ls_adapter_, alloc_mgr))) {
     CLOG_LOG(WARN, "failed to init replay_service", K(ret));
-  } else if (OB_FAIL(role_change_service_.init(ls_service, &apply_service_, &replay_service_))) {
+  } else if (OB_FAIL(transport_service_.init(palf_env_, &apply_service_, &replay_service_, transport))) {
+    CLOG_LOG(WARN, "failed to init transport_service", K(ret));
+  } else if (OB_FAIL(role_change_service_.init(ls_service, &apply_service_, &replay_service_, &transport_service_))) {
     CLOG_LOG(WARN, "failed to init role_change_service_", K(ret));
   } else if (OB_FAIL(location_adapter_.init(location_service))) {
     CLOG_LOG(WARN, "failed to init location_adapter_", K(ret));
@@ -371,6 +385,8 @@ int ObLogService::init(const PalfOptions &options,
     CLOG_LOG(WARN, "failed to init cdc_service_", K(ret));
   } else if (OB_FAIL(restore_service_.init(transport, ls_service, this))) {
     CLOG_LOG(WARN, "failed to init restore_service_", K(ret));
+  } else if (OB_FAIL(standby_ack_service_.init(palf_env_, transport))) {
+    CLOG_LOG(WARN, "failed to init standby_ack_service", K(ret));
 #ifdef OB_BUILD_ARBITRATION
   } else if (!enable_logservice_ &&
              (palf_env = static_cast<palf::PalfEnv*>(palf_env_)) &&
@@ -463,6 +479,10 @@ int ObLogService::remove_ls(const ObLSID &id,
     CLOG_LOG(WARN, "failed to remove from apply_service", K(ret), K(id));
   } else if (OB_FAIL(replay_service_.remove_ls(id))) {
     CLOG_LOG(WARN, "failed to remove from replay_service", K(ret), K(id));
+  } else if (OB_FAIL(transport_service_.remove_ls(id))) {
+    CLOG_LOG(WARN, "failed to remove from transport_service", K(ret), K(id));
+  } else if (OB_FAIL(standby_ack_service_.remove_ls(id))) {
+    CLOG_LOG(WARN, "failed to remove from standby_ack_service", K(ret), K(id));
   } else {
     // NB: can not execute destroy, otherwise, each interface in log_handler or restore_handler
     // may return OB_NOT_INIT.
@@ -537,8 +557,10 @@ int ObLogService::add_ls(const ObLSID &id,
   } else if (enable_logservice_ && OB_FAIL(shared_log_rto_keeper_.get_ls_submit_log_rate_limiter(id, ls_submit_log_rate_limiter))) {
     CLOG_LOG(WARN, "failed to get ls_submit_log_rate_limiter", K(ret), K(id));
 #endif // OB_BUILD_SHARED_LOG_SERVICE
+  } else if (OB_FAIL(transport_service_.add_ls(id))) {
+    CLOG_LOG(WARN, "failed to add_ls for transport_service", K(ret), K(id));
   } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_,
-          &role_change_service_, palf_env_, loc_cache_cb,
+          &transport_service_, &role_change_service_, palf_env_, loc_cache_cb,
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
           ls_submit_log_rate_limiter,
 #endif // OB_BUILD_SHARED_LOG_SERVICE
@@ -553,6 +575,8 @@ int ObLogService::add_ls(const ObLSID &id,
 #endif // OB_BUILD_SHARED_LOG_SERVICE
                                             ))) {
     CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));
+  } else if (OB_FAIL(standby_ack_service_.add_ls(id))) {
+    CLOG_LOG(WARN, "failed to add_ls for standby_ack_service", K(ret), K(id));
   } else if (OB_FAIL(log_handler_palf_handle->register_role_change_cb(rc_cb))) {
     CLOG_LOG(WARN, "register_role_change_cb failed", K(ret));
   } else if (OB_FAIL(log_handler_palf_handle->set_location_cache_cb(loc_cache_cb))) {
@@ -833,6 +857,17 @@ int ObLogService::iterate_replay(const ObFunction<int(const ObReplayStatus&)> &f
   return ret;
 }
 
+int ObLogService::iterate_transport(const ObFunction<int(const LogTransportStatus&)> &func)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    ret = transport_service_.stat_for_each(func);
+  }
+  return ret;
+}
+
 int ObLogService::create_ls_(const share::ObLSID &id,
                              const common::ObReplicaType &replica_type,
                              const share::ObTenantRole &tenant_role,
@@ -882,8 +917,10 @@ int ObLogService::create_ls_(const share::ObLSID &id,
     } else if (enable_logservice_ && OB_FAIL(shared_log_rto_keeper_.get_ls_submit_log_rate_limiter(id, ls_submit_log_rate_limiter))) {
       CLOG_LOG(WARN, "failed to get ls_submit_log_rate_limiter", K(ret), K(id));
 #endif // OB_BUILD_SHARED_LOG_SERVICE
+    } else if (OB_FAIL(transport_service_.add_ls(id))) {
+      CLOG_LOG(WARN, "failed to add_ls for transport_service", K(ret), K(id));
     } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_,
-          &role_change_service_, palf_env_, loc_cache_cb,
+          &transport_service_, &role_change_service_, palf_env_, loc_cache_cb,
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
           ls_submit_log_rate_limiter,
 #endif // OB_BUILD_SHARED_LOG_SERVICE
@@ -898,6 +935,8 @@ int ObLogService::create_ls_(const share::ObLSID &id,
 #endif // OB_BUILD_SHARED_LOG_SERVICE
                                             ))) {
       CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));
+    } else if (OB_FAIL(standby_ack_service_.add_ls(id))) {
+      CLOG_LOG(WARN, "failed to add_ls for standby_ack_service", K(ret), K(id));
     } else if (OB_FAIL(log_handler_palf_handle->register_role_change_cb(rc_cb))) {
       CLOG_LOG(WARN, "register_role_change_cb failed", K(ret), K(id));
     } else if (OB_FAIL(log_handler_palf_handle->set_location_cache_cb(loc_cache_cb))) {
@@ -915,6 +954,8 @@ int ObLogService::create_ls_(const share::ObLSID &id,
       restore_handler.destroy();
       replay_service_.remove_ls(id);
       apply_service_.remove_ls(id);
+      transport_service_.remove_ls(id);
+      standby_ack_service_.remove_ls(id);
       log_handler.destroy();
       if (OB_NOT_NULL(palf_handle)) {
         palf_env_->close(palf_handle);

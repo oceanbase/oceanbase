@@ -367,6 +367,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 577	__all_tablet_to_global_temporary_table	0	201001	1
 579	__wr_sqlstat_v2	0	201001	1
 580	__all_lob_check_exception_result	0	201001	1
+581	__all_sync_standby_dest	0	201001	1
+582	__all_sync_standby_status	0	201001	1
 583	__all_routine_load_job	0	201001	1
 584	__all_ss_gc_reserved_snapshot	0	201001	1
 585	__all_table_archive_history	0	201001	1
@@ -945,6 +947,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12581	__all_virtual_external_catalog_client_pool_stat	2	201001	1
 12582	__all_virtual_wr_sqlstat_v2	2	201001	1
 12583	__all_virtual_lob_check_exception_result	2	201001	1
+12584	__all_virtual_sync_standby_dest	2	201001	1
+12585	__all_virtual_sync_standby_status	2	201001	1
 12586	__all_virtual_tablet_window_loop_info	2	201001	1
 12587	__all_virtual_tablet_replica_info	2	201001	1
 12588	__all_virtual_routine_load_job	2	201001	1
@@ -961,6 +965,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12602	__all_virtual_optstat_catalog_global_prefs	2	201001	1
 12603	__all_virtual_tenant_worker_group	2	201001	1
 12604	__all_virtual_keyword	2	201001	1
+12607	__all_virtual_log_transport_stat	2	201001	1
 12608	__all_virtual_table_opt_stat_invalidate_plan	2	201001	1
 12616	__all_virtual_mview_dep	2	201001	1
 12617	__all_virtual_mview_refresh_pending_task	2	201001	1
@@ -1559,6 +1564,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21703	DBA_OB_TTL_TASK_HISTORY	1	201001	1
 21704	CDB_OB_TTL_TASKS	1	201001	1
 21705	CDB_OB_TTL_TASK_HISTORY	1	201001	1
+21706	CDB_OB_SYNC_STANDBY_DEST	1	201001	1
+21707	DBA_OB_SYNC_STANDBY_DEST	1	201001	1
 21708	GV$OB_TABLET_REPLICA_INFO	1	201001	1
 21709	V$OB_TABLET_REPLICA_INFO	1	201001	1
 21710	DBA_OB_ROUTINE_LOAD_JOBS	1	201001	1
@@ -1579,6 +1586,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21725	DBA_OB_EXTERNAL_TAB_STATISTICS	1	201001	1
 21726	DBA_OB_EXTERNAL_TAB_COL_STATISTICS	1	201001	1
 21727	DBA_OB_EXTERNAL_PART_COL_STATISTICS	1	201001	1
+21728	GV$OB_LS_LOG_REPLAY_STAT	1	201001	1
+21729	V$OB_LS_LOG_REPLAY_STAT	1	201001	1
+21730	GV$OB_LS_LOG_TRANSPORT_STAT	1	201001	1
+21731	V$OB_LS_LOG_TRANSPORT_STAT	1	201001	1
 21744	DBA_OB_SYS_VARIABLE_HISTORY	1	201001	1
 21745	CDB_OB_SYS_VARIABLE_HISTORY	1	201001	1
 21746	CDB_MVIEW_DEPS	1	201001	1

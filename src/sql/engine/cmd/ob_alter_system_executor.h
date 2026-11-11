@@ -10,6 +10,7 @@
 #include "sql/resolver/cmd/ob_alter_system_stmt.h"
 #include "sql/resolver/cmd/ob_switch_tenant_stmt.h"
 #include "sql/resolver/cmd/ob_clear_balance_task_stmt.h"
+#include "sql/resolver/cmd/ob_set_protection_mode_stmt.h"
 
 namespace oceanbase
 {
@@ -115,6 +116,7 @@ DEF_SIMPLE_EXECUTOR(ObDisableSqlThrottle);
 DEF_SIMPLE_EXECUTOR(ObSetDiskValid);
 DEF_SIMPLE_EXECUTOR(ObClearBalanceTask);
 DEF_SIMPLE_EXECUTOR(ObSwitchTenant);
+DEF_SIMPLE_EXECUTOR(ObSetProtectionMode);
 DEF_SIMPLE_EXECUTOR(ObRecoverTenant);
 DEF_SIMPLE_EXECUTOR(ObAddDisk);
 DEF_SIMPLE_EXECUTOR(ObDropDisk);

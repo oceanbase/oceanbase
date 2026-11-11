@@ -64,6 +64,8 @@ struct LSReplayStat
   palf::LSN unsubmitted_lsn_;
   share::SCN unsubmitted_scn_;
   int64_t pending_cnt_;
+  palf::LSN min_unreplayed_lsn_;
+  share::SCN min_unreplayed_scn_;
 
   TO_STRING_KV(K(ls_id_),
                K(role_),
@@ -71,7 +73,9 @@ struct LSReplayStat
                K(enabled_),
                K(unsubmitted_lsn_),
                K(unsubmitted_scn_),
-               K(pending_cnt_));
+               K(pending_cnt_),
+               K(min_unreplayed_lsn_),
+               K(min_unreplayed_scn_));
 };
 
 struct ReplayDiagnoseInfo
@@ -358,7 +362,7 @@ public:
   void destroy() override;
 public:
   int64_t idx() const;
-  Link *top()
+  Link *top() const
   {
     return queue_.top();
   }
@@ -371,7 +375,7 @@ public:
                                   int64_t &first_handle_ts,
                                   int64_t &replay_cost,
                                   int64_t &retry_cost,
-                                  bool &is_queue_empty);
+                                  bool &is_queue_empty) const;
   bool need_batch_push();
   void set_batch_push_finish();
   INHERIT_TO_STRING_KV("ObReplayServiceReplayTask", ObReplayServiceTask,
@@ -522,7 +526,7 @@ public:
                                   ObLogBaseType &log_type,
                                   int64_t &first_handle_ts,
                                   int64_t &replay_cost,
-                                  int64_t &retry_cost);
+                                  int64_t &retry_cost) const;
   int get_replay_process(int64_t &submitted_log_size,
                          int64_t &unsubmitted_log_size,
                          int64_t &replayed_log_size,

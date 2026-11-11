@@ -26,9 +26,11 @@ LogMeta::LogMeta(const LogMeta &rmeta) { *this = rmeta; }
 
 int LogMeta::generate_by_palf_base_info(const PalfBaseInfo &palf_base_info,
                                         const AccessMode &access_mode,
+                                        const SyncMode &sync_mode,
                                         const LogReplicaType &replica_type)
 {
   int ret = OB_SUCCESS;
+  // No need check sync mode，sync mode would be invalid for arbitration replica
   if (false == is_valid_access_mode(access_mode) || false == palf_base_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(INFO, "invalid argument", KPC(this), K(access_mode), K(palf_base_info));
@@ -47,7 +49,7 @@ int LogMeta::generate_by_palf_base_info(const PalfBaseInfo &palf_base_info,
     version_ = LOG_META_VERSION;
     log_prepare_meta_.generate(LogVotedFor(), init_log_proposal_id);
     log_config_meta_.generate_for_default(init_log_proposal_id, init_config_info, init_config_info);
-    log_mode_meta_.generate(init_log_proposal_id, init_log_proposal_id, access_mode, init_ref_scn);
+    log_mode_meta_.generate(init_log_proposal_id, init_log_proposal_id, access_mode, sync_mode, init_ref_scn);
     // allow_vote_ gates log ack (majority confirmation) and rebuild election priority, not election voting.
     // Logonly replicas ack logs like normal replicas; arbitration replicas do not.
     const bool allow_vote = (replica_type != ARBITRATION_REPLICA);

@@ -9072,8 +9072,40 @@ def_table_schema(
     ('tablet_ids', 'longtext', 'true'),
   ],
 )
-# 581: __all_sync_standby_dest
-# 582: __all_sync_standby_status
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = '__all_sync_standby_dest',
+  table_id = '581',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('dest_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('value', 'longtext'),
+  ],
+)
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = '__all_sync_standby_status',
+  table_id = '582',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+  normal_columns = [
+    ('protection_mode', 'varchar:128'),
+    ('protection_level', 'varchar:128'),
+    ('switchover_epoch', 'int'),
+  ],
+)
 def_table_schema(
   owner = 'wuyuefei.wyf',
   table_name    = '__all_routine_load_job',
@@ -18437,8 +18469,15 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   keywords = all_def_keywords['__all_lob_check_exception_result'],
   in_tenant_space=True))
 
-# 12584: __all_virtual_sync_standby_dest
-# 12585: __all_virtual_sync_standby_status
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12584',
+  table_name = '__all_virtual_sync_standby_dest',
+  keywords = all_def_keywords['__all_sync_standby_dest'],
+  in_tenant_space = True))
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12585',
+  table_name = '__all_virtual_sync_standby_status',
+  keywords = all_def_keywords['__all_sync_standby_status']))
 
 def_table_schema(
   owner = 'ouyanghongrong.oyh',
@@ -18739,7 +18778,36 @@ def_table_schema(
 )
 # 12605: __all_virtual_ss_gc_history
 # 12606: __all_virtual_table_archive_history
-# 12607: __all_virtual_log_transport_stat
+
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = '__all_virtual_log_transport_stat',
+  table_id = '12607',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+  ],
+
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('role', 'varchar:32'),
+    ('enabled', 'bool'),
+    ('end_lsn', 'uint'),
+    ('end_scn', 'uint'),
+    ('last_sent_lsn', 'uint'),
+    ('last_sent_scn', 'uint'),
+    ('standby_end_lsn', 'uint'),
+    ('standby_end_scn', 'uint'),
+    ('standby_addr', 'varchar:MAX_IP_PORT_LENGTH'),
+  ],
+
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12608',
@@ -19393,8 +19461,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15537', all_def_keyword
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15538', all_def_keywords['__all_sensitive_rule']))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15539', all_def_keywords['__all_sensitive_column']))
 
-# 15540: __all_sync_standby_dest
-# 15541: __all_sync_standby_status
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15540', all_def_keywords['__all_virtual_sync_standby_dest']))
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15541', all_def_keywords['__all_sync_standby_status']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15542', all_def_keywords['__all_virtual_tablet_window_loop_info']))
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15543', all_def_keywords['__all_virtual_macro_block_ha_task'])))
@@ -19411,7 +19479,8 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15551', all_def_ke
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15552', all_def_keywords['__all_virtual_tenant_worker_group']))
 
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15553', all_def_keywords['__all_virtual_keyword']))
-# 15554: ALL_VIRTUAL_LOG_TRANSPORT_STAT
+
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15554', all_def_keywords['__all_virtual_log_transport_stat']))
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15555', all_def_keywords['__all_table_opt_stat_invalidate_plan']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15556', all_def_keywords['__all_virtual_sys_variable_history']))
@@ -24076,7 +24145,15 @@ SELECT A.TENANT_ID,
         END) AS FLASHBACK_LOG_SCN,
         A.INFO AS COMMENT,
         B.PROTECTION_MODE AS PROTECTION_MODE,
-        B.PROTECTION_LEVEL AS PROTECTION_LEVEL,
+        (CASE
+            WHEN B.PROTECTION_LEVEL IS NULL THEN NULL
+            WHEN B.PROTECTION_MODE = 'MAXIMUM PERFORMANCE' AND B.PROTECTION_LEVEL = 'PRE MAXIMUM PERFORMANCE' THEN 'MAXIMUM PERFORMANCE'
+            WHEN B.PROTECTION_MODE = 'MAXIMUM PROTECTION' AND B.PROTECTION_LEVEL = 'PRE MAXIMUM PROTECTION' THEN 'MAXIMUM PERFORMANCE'
+            WHEN B.PROTECTION_MODE = 'MAXIMUM AVAILABILITY' AND B.PROTECTION_LEVEL = 'PRE MAXIMUM PROTECTION' THEN 'RESYNCHRONIZATION'
+            WHEN B.PROTECTION_MODE = 'MAXIMUM AVAILABILITY' AND B.PROTECTION_LEVEL = 'MAXIMUM PERFORMANCE' THEN 'RESYNCHRONIZATION'
+            WHEN B.PROTECTION_MODE = 'MAXIMUM AVAILABILITY' AND B.PROTECTION_LEVEL = 'PRE MAXIMUM PERFORMANCE' THEN 'RESYNCHRONIZATION'
+            ELSE B.PROTECTION_LEVEL END
+        ) AS PROTECTION_LEVEL,
         (SELECT TS.TABLESPACE_NAME
            FROM OCEANBASE.__ALL_VIRTUAL_TENANT_TABLESPACE AS TS
           WHERE TS.TENANT_ID = A.TENANT_ID
@@ -33176,6 +33253,7 @@ def_table_schema(
     PROPOSAL_ID,
     CONFIG_VERSION,
     ACCESS_MODE,
+    SYNC_MODE,
     PAXOS_MEMBER_LIST,
     PAXOS_REPLICA_NUM,
     CASE in_sync
@@ -33214,6 +33292,7 @@ def_table_schema(
     PROPOSAL_ID,
     CONFIG_VERSION,
     ACCESS_MODE,
+    SYNC_MODE,
     PAXOS_MEMBER_LIST,
     PAXOS_REPLICA_NUM,
     IN_SYNC,
@@ -36537,7 +36616,8 @@ def_table_schema(
   SELECT a.TENANT_ID,
         TENANT_NAME,
         SVR_IP,
-        SQL_PORT
+        SQL_PORT,
+        SVR_PORT
   FROM OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE a, OCEANBASE.DBA_OB_TENANTS b
   WHERE LS_ID=1 and a.TENANT_ID = b.TENANT_ID and b.TENANT_ID = EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
@@ -36556,7 +36636,8 @@ def_table_schema(
   SELECT a.TENANT_ID,
         TENANT_NAME,
         SVR_IP,
-        SQL_PORT
+        SQL_PORT,
+        SVR_PORT
   FROM OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE a, OCEANBASE.DBA_OB_TENANTS b
   WHERE LS_ID=1 and a.TENANT_ID = b.TENANT_ID;
   """.replace("\n", " ")
@@ -37514,7 +37595,8 @@ def_table_schema(
     ID,
     TYPE,
     VALUE,
-    RECOVERY_UNTIL_SCN
+    RECOVERY_UNTIL_SCN,
+    RECOVERY_DELAY
   FROM OCEANBASE.__ALL_VIRTUAL_LOG_RESTORE_SOURCE;
   """.replace("\n", " ")
 )
@@ -37534,7 +37616,8 @@ def_table_schema(
     ID,
     TYPE,
     VALUE,
-    RECOVERY_UNTIL_SCN
+    RECOVERY_UNTIL_SCN,
+    RECOVERY_DELAY
   FROM OCEANBASE.__ALL_VIRTUAL_LOG_RESTORE_SOURCE
   WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
@@ -47529,8 +47612,38 @@ def_table_schema(
           where a.task_type=4
 """.replace("\n", " ")
 )
-# 21706: CDB_OB_SYNC_STANDBY_DEST
-# 21707: DBA_OB_SYNC_STANDBY_DEST
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'CDB_OB_SYNC_STANDBY_DEST',
+  table_id = '21706',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  view_definition = """
+  SELECT TENANT_ID,
+    DEST_ID,
+    VALUE
+  FROM OCEANBASE.__ALL_VIRTUAL_SYNC_STANDBY_DEST;
+  """.replace("\n", " ")
+)
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'DBA_OB_SYNC_STANDBY_DEST',
+  table_id = '21707',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT TENANT_ID,
+    DEST_ID,
+    VALUE
+  FROM OCEANBASE.__ALL_VIRTUAL_SYNC_STANDBY_DEST
+  WHERE TENANT_ID = EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
 
 def_table_schema(
   owner           = 'zhaoziqian.zzq',
@@ -48267,10 +48380,81 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21728: GV$OB_LS_LOG_REPLAY_STAT
-# 21729: V$OB_LS_LOG_REPLAY_STAT
-# 21730: GV$OB_LS_LOG_TRANSPORT_STAT
-# 21731: V$OB_LS_LOG_TRANSPORT_STAT
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'GV$OB_LS_LOG_REPLAY_STAT',
+  table_id = '21728',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT TENANT_ID, SVR_IP, SVR_PORT, LS_ID, ROLE,
+           ENABLED, END_LSN,
+           UNSUBMITTED_LSN, UNSUBMITTED_LOG_SCN AS UNSUBMITTED_SCN,
+           MIN_UNREPLAYED_LSN, MIN_UNREPLAYED_SCN,
+           PENDING_CNT
+    FROM OCEANBASE.__all_virtual_replay_stat
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'V$OB_LS_LOG_REPLAY_STAT',
+  table_id = '21729',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT TENANT_ID, SVR_IP, SVR_PORT, LS_ID, ROLE,
+           ENABLED, END_LSN,
+           UNSUBMITTED_LSN, UNSUBMITTED_SCN,
+           MIN_UNREPLAYED_LSN, MIN_UNREPLAYED_SCN,
+           PENDING_CNT
+    FROM OCEANBASE.GV$OB_LS_LOG_REPLAY_STAT
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'GV$OB_LS_LOG_TRANSPORT_STAT',
+  table_id = '21730',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT TENANT_ID, LS_ID, SVR_IP, SVR_PORT, ROLE, ENABLED,
+           END_LSN, END_SCN, LAST_SENT_LSN, LAST_SENT_SCN,
+           STANDBY_END_LSN, STANDBY_END_SCN, STANDBY_ADDR
+    FROM OCEANBASE.__all_virtual_log_transport_stat
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'V$OB_LS_LOG_TRANSPORT_STAT',
+  table_id = '21731',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT TENANT_ID, LS_ID, SVR_IP, SVR_PORT, ROLE, ENABLED,
+           END_LSN, END_SCN, LAST_SENT_LSN, LAST_SENT_SCN,
+           STANDBY_END_LSN, STANDBY_END_SCN, STANDBY_ADDR
+    FROM OCEANBASE.GV$OB_LS_LOG_TRANSPORT_STAT
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+  """.replace("\n", " "),
+)
 
 # 21732: DBA_OB_AI_MODEL_PROVIDERS
 # 21733: CDB_OB_AI_MODEL_PROVIDERS
@@ -67022,7 +67206,15 @@ SELECT A.TENANT_ID,
           ELSE E.LATEST_FLASHBACK_LOG_SCN END) AS FLASHBACK_LOG_SCN,
         A.INFO AS "COMMENT",
         B.PROTECTION_MODE AS PROTECTION_MODE,
-        B.PROTECTION_LEVEL AS PROTECTION_LEVEL,
+        (CASE
+            WHEN B.PROTECTION_LEVEL IS NULL THEN NULL
+            WHEN B.PROTECTION_MODE = 'MAXIMUM PERFORMANCE' AND B.PROTECTION_LEVEL = 'PRE MAXIMUM PERFORMANCE' THEN 'MAXIMUM PERFORMANCE'
+            WHEN B.PROTECTION_MODE = 'MAXIMUM PROTECTION' AND B.PROTECTION_LEVEL = 'PRE MAXIMUM PROTECTION' THEN 'MAXIMUM PERFORMANCE'
+            WHEN B.PROTECTION_MODE = 'MAXIMUM AVAILABILITY' AND B.PROTECTION_LEVEL = 'PRE MAXIMUM PROTECTION' THEN 'RESYNCHRONIZATION'
+            WHEN B.PROTECTION_MODE = 'MAXIMUM AVAILABILITY' AND B.PROTECTION_LEVEL = 'MAXIMUM PERFORMANCE' THEN 'RESYNCHRONIZATION'
+            WHEN B.PROTECTION_MODE = 'MAXIMUM AVAILABILITY' AND B.PROTECTION_LEVEL = 'PRE MAXIMUM PERFORMANCE' THEN 'RESYNCHRONIZATION'
+            ELSE B.PROTECTION_LEVEL END
+        ) AS PROTECTION_LEVEL,
         (SELECT TS.TABLESPACE_NAME
            FROM SYS.ALL_VIRTUAL_TENANT_TABLESPACE_REAL_AGENT TS
           WHERE TS.TENANT_ID = A.TENANT_ID
@@ -68097,7 +68289,8 @@ def_table_schema(
     ID,
     TYPE,
     VALUE,
-    RECOVERY_UNTIL_SCN
+    RECOVERY_UNTIL_SCN,
+    RECOVERY_DELAY
   FROM SYS.ALL_VIRTUAL_LOG_RESTORE_SOURCE
   WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
@@ -77774,6 +77967,7 @@ def_table_schema(
     PROPOSAL_ID,
     CONFIG_VERSION,
     ACCESS_MODE,
+    SYNC_MODE,
     PAXOS_MEMBER_LIST,
     PAXOS_REPLICA_NUM,
     CASE in_sync
@@ -77814,6 +78008,7 @@ def_table_schema(
     PROPOSAL_ID,
     CONFIG_VERSION,
     ACCESS_MODE,
+    SYNC_MODE,
     PAXOS_MEMBER_LIST,
     PAXOS_REPLICA_NUM,
     IN_SYNC,
@@ -78767,7 +78962,8 @@ def_table_schema(
   SELECT a.TENANT_ID,
         TENANT_NAME,
         SVR_IP,
-        SQL_PORT
+        SQL_PORT,
+        SVR_PORT
   FROM SYS.ALL_VIRTUAL_LS_META_TABLE a, SYS.DBA_OB_TENANTS b
   WHERE LS_ID=1 and a.TENANT_ID = b.TENANT_ID;
   """.replace("\n", " ")
@@ -83963,7 +84159,25 @@ def_table_schema(
           where a.task_type=4 and a.tenant_id = effective_tenant_id()
 """.replace("\n", " ")
 )
-# 28294: DBA_OB_SYNC_STANDBY_DEST
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'DBA_OB_SYNC_STANDBY_DEST',
+  name_postfix = '_ORA',
+  database_id = 'OB_ORA_SYS_DATABASE_ID',
+  table_id = '28294',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT TENANT_ID,
+    DEST_ID,
+    VALUE
+  FROM SYS.ALL_VIRTUAL_SYNC_STANDBY_DEST
+  WHERE TENANT_ID = EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
 
 def_table_schema(
     owner = 'wuyuefei.wyf',
@@ -84031,10 +84245,90 @@ FROM
     SYS.ALL_VIRTUAL_TENANT_WORKER_GROUP
 """.replace("\n", " ")
 )
-# 28297: GV$OB_LS_LOG_REPLAY_STAT
-# 28298: V$OB_LS_LOG_REPLAY_STAT
-# 28299: GV$OB_LS_LOG_TRANSPORT_STAT
-# 28300: V$OB_LS_LOG_TRANSPORT_STAT
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'GV$OB_LS_LOG_REPLAY_STAT',
+  name_postfix = '_ORA',
+  database_id = 'OB_ORA_SYS_DATABASE_ID',
+  table_id = '28297',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT TENANT_ID, SVR_IP, SVR_PORT, LS_ID, ROLE,
+           ENABLED, END_LSN,
+           UNSUBMITTED_LSN, UNSUBMITTED_LOG_SCN AS UNSUBMITTED_SCN,
+           MIN_UNREPLAYED_LSN, MIN_UNREPLAYED_SCN,
+           PENDING_CNT
+    FROM SYS.ALL_VIRTUAL_REPLAY_STAT
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'V$OB_LS_LOG_REPLAY_STAT',
+  name_postfix = '_ORA',
+  database_id = 'OB_ORA_SYS_DATABASE_ID',
+  table_id = '28298',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT TENANT_ID, SVR_IP, SVR_PORT, LS_ID, ROLE,
+           ENABLED, END_LSN,
+           UNSUBMITTED_LSN, UNSUBMITTED_SCN,
+           MIN_UNREPLAYED_LSN, MIN_UNREPLAYED_SCN,
+           PENDING_CNT
+    FROM SYS.GV$OB_LS_LOG_REPLAY_STAT
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'GV$OB_LS_LOG_TRANSPORT_STAT',
+  name_postfix = '_ORA',
+  database_id = 'OB_ORA_SYS_DATABASE_ID',
+  table_id = '28299',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT TENANT_ID, LS_ID, SVR_IP, SVR_PORT, ROLE, ENABLED,
+           END_LSN, END_SCN, LAST_SENT_LSN, LAST_SENT_SCN,
+           STANDBY_END_LSN, STANDBY_END_SCN, STANDBY_ADDR
+    FROM SYS.ALL_VIRTUAL_LOG_TRANSPORT_STAT
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'V$OB_LS_LOG_TRANSPORT_STAT',
+  name_postfix = '_ORA',
+  database_id = 'OB_ORA_SYS_DATABASE_ID',
+  table_id = '28300',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT TENANT_ID, LS_ID, SVR_IP, SVR_PORT, ROLE, ENABLED,
+           END_LSN, END_SCN, LAST_SENT_LSN, LAST_SENT_SCN,
+           STANDBY_END_LSN, STANDBY_END_SCN, STANDBY_ADDR
+    FROM SYS.GV$OB_LS_LOG_TRANSPORT_STAT
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+  """.replace("\n", " "),
+)
+
 def_table_schema(
   owner           = 'zhangrenzhong.zrz',
   table_name      = 'DBA_OB_SYS_VARIABLE_HISTORY',

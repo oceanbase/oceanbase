@@ -8,6 +8,8 @@
 #include <cstdint>
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/lock/ob_tc_rwlock.h"
+#include "lib/lock/ob_spin_lock.h"
+#include "lib/lock/ob_scond.h"
 #include "common/ob_role.h"
 #include "common/ob_member_list.h"
 #include "share/ob_delegate.h"
@@ -19,6 +21,7 @@
 #include "logrpc/ob_log_rpc_proxy.h"
 #include "logrpc/ob_log_request_handler.h"
 #include "ob_log_handler_base.h"
+#include "palf/log_sync_mode_mgr.h"
 
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
 #include "logservice/ob_log_compression.h"
@@ -55,6 +58,7 @@ namespace logservice
 class ObLogApplyService;
 class ObApplyStatus;
 class ObLogReplayService;
+class ObLogTransportService;
 class AppendCb;
 struct LogHandlerDiagnoseInfo {
   LogHandlerDiagnoseInfo() { reset(); }
@@ -82,7 +86,8 @@ public:
                      const bool allow_compress,
                      AppendCb *cb,
                      palf::LSN &lsn,
-                     share::SCN &scn) = 0;
+                     share::SCN &scn,
+                     const bool skip_pre_async_wait = false) = 0;
 
   virtual int append_big_log(const void *buffer,
                              const int64_t nbytes,
@@ -91,7 +96,8 @@ public:
                              const bool allow_compress,
                              AppendCb *cb,
                              palf::LSN &lsn,
-                             share::SCN &scn) = 0;
+                             share::SCN &scn,
+                             const bool skip_pre_async_wait = false) = 0;
 
   virtual int get_role(common::ObRole &role, int64_t &proposal_id) const = 0;
 
@@ -100,6 +106,11 @@ public:
                                  const share::SCN &ref_scn) = 0;
   virtual int get_access_mode(int64_t &mode_version, palf::AccessMode &access_mode) const = 0;
   virtual int get_append_mode_initial_scn(SCN &ref_scn) const = 0;
+  virtual int change_sync_mode(const int64_t mode_version,
+                               const palf::SyncMode &sync_mode,
+                               int64_t &new_mode_version,
+                               int64_t &new_proposal_id) = 0;
+  virtual int get_sync_mode(int64_t &mode_version, palf::SyncMode &sync_mode) const = 0;
   virtual int seek(const palf::LSN &lsn, palf::PalfBufferIterator &iter) = 0;
   virtual int seek(const palf::LSN &lsn, palf::PalfGroupBufferIterator &iter) = 0;
   virtual int set_initial_member_list(const common::ObMemberList &member_list,
@@ -222,6 +233,7 @@ public:
            const common::ObAddr &self,
            ObLogApplyService *apply_service,
            ObLogReplayService *replay_service,
+           ObLogTransportService *transport_service,
            ObRoleChangeService *rc_service,
            ipalf::IPalfEnv *palf_env,
            palf::PalfLocationCacheCb *lc_cb,
@@ -258,7 +270,8 @@ public:
              const bool allow_compress,
              AppendCb *cb,
              palf::LSN &lsn,
-             share::SCN &scn) override final;
+             share::SCN &scn,
+             const bool skip_pre_async_wait = false) override final;
 
   // @brief append count bytes(which is bigger than MAX_NORMAL_LOG_BODY_SIZE) from the buffer starting at buf to the palf handle, return the LSN and timestamp
   // @param[in] const void *, the data buffer.
@@ -281,12 +294,27 @@ public:
                      const bool allow_compress,
                      AppendCb *cb,
                      palf::LSN &lsn,
-                     share::SCN &scn) override final;
+                     share::SCN &scn,
+                     const bool skip_pre_async_wait = false) override final;
 
   // @brief switch log_handle role, to LEADER or FOLLOWER
   // @param[in], role, LEADER or FOLLOWER
   // @param[in], proposal_id, global monotonically increasing id
   virtual void switch_role(const common::ObRole &role, const int64_t proposal_id) override;
+
+  // @brief switch log_handle sync_mode, to SYNC or ASYNC or PRE_ASYNC
+  // @param[in], sync_mode, SYNC or ASYNC or PRE_ASYNC
+  // @param[in], proposal_id, global monotonically increasing id
+  virtual void switch_sync_mode(const palf::SyncMode &sync_mode, const int64_t proposal_id) override;
+
+  // NB: only called by ObRoleChangeService
+  // @brief switch role and proposal_id
+  // @brief update sync_mode when new role is leader
+  virtual void switch_role_and_sync_mode(const common::ObRole &role,
+                                         const int64_t proposal_id,
+                                         const palf::SyncMode &sync_mode) override;
+
+
   // @brief query role and proposal_id from ObLogHandler.
   // @param[out], role:
   //    LEADER, if 'role_' of ObLogHandler is LEADER and 'proposal_id' is same with PalfHandle.
@@ -327,7 +355,28 @@ public:
   int change_access_mode(const int64_t mode_version,
                          const palf::AccessMode &access_mode,
                          const share::SCN &ref_scn) override final;
+  int change_sync_mode(const int64_t mode_version,
+                       const palf::SyncMode &sync_mode,
+                       int64_t &new_mode_version,
+                       int64_t &new_proposal_id) override final;
+  int get_sync_mode(int64_t &mode_version, palf::SyncMode &sync_mode) const override final;
+  // MPT functions
+  void set_pre_async_blocked();
+  void clear_pre_async_blocked();
+  void mark_sync_mode_degrading();
+  void clear_sync_mode_degrading_mark();
+  bool has_degrading_sync_mode() const;
 
+  // sys_ls_pre_async_log_scn: sys ls pre_async log scn, only consumed by the async path;
+  // callers pass min scn for sync/pre_async or when tenant data version < DATA_VERSION_4_4_2_2.
+  int process_change_sync_mode(const int64_t mode_version,
+                                const palf::SyncMode &sync_mode,
+                                const share::SCN &ref_scn,
+                                const share::ObSyncStandbyStatusAttr &protection_info,
+                                const share::SCN &sys_ls_pre_async_log_scn,
+                                share::SCN &end_scn,
+                                int64_t &new_mode_version,
+                                const int64_t abs_timeout_us = 0);
   // @desc: seek a log buffer iterator by lsn, the first log A in iterator must meet
   //        the start lsn of log A must equal to 'start_lsn'.
   // @params [in] start_lsn:
@@ -854,10 +903,13 @@ public:
   int unregister_rebuild_cb() override final;
   int diagnose(LogHandlerDiagnoseInfo &diagnose_info) const;
   int diagnose_palf(palf::PalfDiagnoseInfo &diagnose_info) const;
-  TO_STRING_KV(K_(role), K_(proposal_id), KP(palf_handle_), KP(palf_env_), K(is_in_stop_state_), K(is_inited_), K(id_));
+  TO_STRING_KV(K_(role), K_(proposal_id), KP(palf_handle_), KP(palf_env_), K(is_in_stop_state_), K(is_inited_), K(id_), K_(sync_mode),
+      K_(is_pre_async_blocked));
   int offline() override final;
   int online(const palf::LSN &lsn, const share::SCN &scn, const bool is_logonly_replica = false) override final;
   bool is_offline() const override final;
+  // Mark apply status and transport status as ls_gc_state
+  int mark_ls_gc_state();
   // @brief: check there's a fatal error in replay service.
   // @param[out] has_fatal_error.
   // @return:
@@ -869,6 +921,25 @@ public:
       const LogConfigChangeCmd &req,
       LogConfigChangeCmdResp &resp);
   int stat(palf::PalfStat &palf_stat) const;
+  // @brief: append log in emergency mode, bypass PRE_ASYNC blocking.
+  // @param[in] const void *buffer: the data buffer.
+  // @param[in] const int64_t nbytes: the length of data buffer.
+  // @param[in] const share::SCN &ref_scn: the base timestamp(ns), palf will ensure that the return timestamp will be greater
+  //            or equal than this field.
+  // @param[in] const bool need_nonblock: decide this append option whether need block thread.
+  // @param[in] const bool allow_compress: decide this append option whether compress buffer.
+  // @param[in] const ObLogBaseType log_type: log type, must be SYNC_MODE_LOG_BASE_TYPE.
+  // @param[in] const bool need_push_cb: whether to push callback to apply queue. Should be set to false only for PRE_ASYNC or ASYNC log types.
+  int emergency_append(const void *buffer,
+                       const int64_t nbytes,
+                       const share::SCN &ref_scn,
+                       const bool allow_compress,
+                       AppendCb *cb,
+                       palf::LSN &lsn,
+                       share::SCN &scn,
+                       const ObLogBaseType log_type,
+                       const int64_t expected_proposal_id,
+                       const bool need_push_cb = true);
   template<typename StartPoint, typename IteratorType>
   friend int init_log_iterator(
     ObLogHandler *log_handler,
@@ -878,6 +949,7 @@ public:
 
   static constexpr int64_t MIN_CONN_TIMEOUT_US = 5 * 1000 * 1000;     // 5s
   const int64_t MAX_APPEND_RETRY_INTERNAL = 500 * 1000L;
+  const int64_t MAX_APPEND_NONBLOCK_RETRY_INTERNAL = 100 * 1000L;
   typedef common::TCRWLock::RLockGuardWithTimeout RLockGuardWithTimeout;
   typedef common::TCRWLock::RLockGuard RLockGuard;
   typedef common::TCRWLock::WLockGuardWithTimeout WLockGuardWithTimeout;
@@ -896,7 +968,8 @@ private:
               const bool allow_compress,
               AppendCb *cb,
               palf::LSN &lsn,
-              share::SCN &scn);
+              share::SCN &scn,
+              const bool skip_pre_async_wait);
 
 #ifdef OB_BUILD_ARBITRATION
   int create_arb_member_(const common::ObMember &arb_member, const int64_t timeout_us);
@@ -911,13 +984,20 @@ private:
                                   const int64_t suggested_read_buf_size,
                                   ipalf::IPalfIterator<ipalf::ILogEntry> &iterator);
   int advance_base_lsn_impl_(const palf::LSN &lsn);
+  int wait_pre_async_unblocked_();
+
   DISALLOW_COPY_AND_ASSIGN(ObLogHandler);
+
+// Friend class for sync mode management
+friend class ObSyncModeManager;
+
 private:
   common::ObAddr self_;
   //log_handler会高频调用apply_status, 减少通过applyservice哈希的开销
   ObApplyStatus *apply_status_;
   ObLogApplyService *apply_service_;
   ObLogReplayService *replay_service_;
+  ObLogTransportService *transport_service_;
   ObRoleChangeService *rc_service_;
   // Note: using TCRWLock for using WLockGuardWithTimeout
   //
@@ -938,6 +1018,8 @@ private:
   common::ObQSync ls_qs_;
   ObMiniStat::ObStatItem append_cost_stat_;
   bool is_offline_;
+  bool is_pre_async_blocked_;
+  bool has_sync_mode_degrading_mark_;
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
   ObLogCompressorWrapper compressor_wrapper_;
 #endif
@@ -956,8 +1038,10 @@ private:
   libpalf::LibPalfProposerConfigMgr libpalf_proposer_config_mgr_;
   ObLogLSSubmitLogRateLimiter *shared_log_submit_log_rate_limiter_;
 #endif // OB_BUILD_SHARED_LOG_SERVICE
-mutable int64_t get_max_decided_scn_debug_time_;
-mutable SCN max_decided_scn_snapshot_;
+  mutable int64_t get_max_decided_scn_debug_time_;
+  mutable SCN max_decided_scn_snapshot_;
+  // Sync mode manager for encapsulating sync mode operations
+  ObSyncModeManager sync_mode_manager_;
 };
 
 struct ObLogStat

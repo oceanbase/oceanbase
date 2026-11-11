@@ -182,6 +182,7 @@ int ObSimpleLogServer::simple_init(
     guard.click("init_log_service_");
     SERVER_LOG(INFO, "simple_log_server init success", KPC(this), K(guard));
   }
+  SERVER_LOG(INFO, "print uniq task init", K(log_service_.standby_ack_service_.ack_task_queue_.inited_));
   return ret;
 }
 
@@ -308,6 +309,8 @@ int ObSimpleLogServer::start_log_service_for_role_change_()
     CLOG_LOG(WARN, "failed to start apply_service_", K(ret));
   } else if (OB_FAIL(log_service_.replay_service_.start())) {
     CLOG_LOG(WARN, "failed to start replay_service_", K(ret));
+  } else if (OB_FAIL(log_service_.transport_service_.start())) {
+    CLOG_LOG(WARN, "failed to start transport_service_", K(ret));
   } else if (OB_FAIL(log_service_.role_change_service_.start())) {
     CLOG_LOG(WARN, "failed to start role_change_service_", K(ret));
   } else if (OB_FAIL(log_service_.cdc_service_.start())) {
@@ -631,6 +634,8 @@ int ObSimpleLogServer::simple_close(const bool is_shutdown = false)
   log_service_.stop();
   log_service_.wait();
   log_service_.destroy();
+  destroy_uniq_task_queue_();
+  SERVER_LOG(INFO, "simple_close success", K(log_service_.standby_ack_service_.ack_task_queue_.inited_));
   // don't destroy ls_service_, otherwise the destroy function of ObLS may be executed.
   //ls_service_->destroy();
   log_block_pool_.destroy();
@@ -699,6 +704,22 @@ int ObSimpleLogServer::init_log_kv_cache_()
       PALF_LOG(WARN, "OB_LOG_KV_CACHE init failed", KR(ret));
     }
   }
+  return ret;
+}
+
+int ObSimpleLogServer::destroy_uniq_task_queue_()
+{
+  int ret = OB_SUCCESS;
+  log_service_.standby_ack_service_.ack_task_queue_.inited_ = false;
+  log_service_.standby_ack_service_.ack_task_queue_.cond_.destroy();
+  log_service_.standby_ack_service_.ack_task_queue_.task_set_.destroy();
+  log_service_.standby_ack_service_.ack_task_queue_.group_map_.destroy();
+  log_service_.standby_ack_service_.ack_task_queue_.processing_task_set_.destroy();
+  log_service_.standby_ack_service_.ack_task_queue_.groups_.clear();
+  log_service_.standby_ack_service_.ack_task_queue_.cur_group_ = nullptr;
+  log_service_.standby_ack_service_.ack_task_queue_.processing_thread_count_ = 0;
+  log_service_.standby_ack_service_.ack_task_queue_.barrier_task_count_ = 0;
+  log_service_.standby_ack_service_.ack_task_queue_.updater_ = nullptr;
   return ret;
 }
 

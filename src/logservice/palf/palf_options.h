@@ -103,6 +103,30 @@ inline bool can_switch_access_mode_(const AccessMode &src_access_mode, const Acc
   return bool_ret;
 }
 
+inline int sync_mode_to_string(const SyncMode sync_mode, char *str_buf_, const int64_t str_len)
+{
+  int ret = OB_SUCCESS;
+  if (SyncMode::INVALID_SYNC_MODE == sync_mode) {
+    strncpy(str_buf_, "INVALID", str_len);
+  } else if (SyncMode::SYNC == sync_mode) {
+    strncpy(str_buf_, "SYNC", str_len);
+  } else if (SyncMode::ASYNC == sync_mode) {
+    strncpy(str_buf_, "ASYNC", str_len);
+  } else if (SyncMode::PRE_ASYNC == sync_mode) {
+    strncpy(str_buf_, "PRE_ASYNC", str_len);
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+  }
+  return ret;
+}
+
+inline bool is_valid_sync_mode(const SyncMode &sync_mode)
+{
+  return SyncMode::SYNC == sync_mode
+    || SyncMode::ASYNC == sync_mode
+    || SyncMode::PRE_ASYNC == sync_mode;
+}
+
 struct PalfTransportCompressOptions
 {
 public:

@@ -434,6 +434,8 @@
 # 577: __all_tablet_to_global_temporary_table
 # 579: __wr_sqlstat_v2
 # 580: __all_lob_check_exception_result
+# 581: __all_sync_standby_dest
+# 582: __all_sync_standby_status
 # 583: __all_routine_load_job
 # 584: __all_ss_gc_reserved_snapshot
 # 585: __all_table_archive_history
@@ -1401,6 +1403,10 @@
 # 12582: __wr_sqlstat_v2  # BASE_TABLE_NAME
 # 12583: __all_virtual_lob_check_exception_result
 # 12583: __all_lob_check_exception_result  # BASE_TABLE_NAME
+# 12584: __all_virtual_sync_standby_dest
+# 12584: __all_sync_standby_dest  # BASE_TABLE_NAME
+# 12585: __all_virtual_sync_standby_status
+# 12585: __all_sync_standby_status  # BASE_TABLE_NAME
 # 12586: __all_virtual_tablet_window_loop_info
 # 12587: __all_virtual_tablet_replica_info
 # 12588: __all_virtual_routine_load_job
@@ -1425,6 +1431,7 @@
 # 12602: __all_optstat_catalog_global_prefs  # BASE_TABLE_NAME
 # 12603: __all_virtual_tenant_worker_group
 # 12604: __all_virtual_keyword
+# 12607: __all_virtual_log_transport_stat
 # 12608: __all_virtual_table_opt_stat_invalidate_plan
 # 12608: __all_table_opt_stat_invalidate_plan  # BASE_TABLE_NAME
 # 12616: __all_virtual_mview_dep
@@ -2204,6 +2211,11 @@
 # 15538: __all_sensitive_rule  # BASE_TABLE_NAME
 # 15539: ALL_VIRTUAL_SENSITIVE_COLUMN_REAL_AGENT
 # 15539: __all_sensitive_column  # BASE_TABLE_NAME
+# 15540: ALL_VIRTUAL_SYNC_STANDBY_DEST
+# 15540: __all_sync_standby_dest  # BASE_TABLE_NAME
+# 15540: __all_virtual_sync_standby_dest  # BASE_TABLE_NAME1
+# 15541: ALL_VIRTUAL_SYNC_STANDBY_STATUS_REAL_AGENT
+# 15541: __all_sync_standby_status  # BASE_TABLE_NAME
 # 15542: ALL_VIRTUAL_TABLET_WINDOW_LOOP_INFO
 # 15542: __all_virtual_tablet_window_loop_info  # BASE_TABLE_NAME
 # 15543: ALL_VIRTUAL_MACRO_BLOCK_HA_TASK
@@ -2225,6 +2237,8 @@
 # 15552: __all_virtual_tenant_worker_group  # BASE_TABLE_NAME
 # 15553: ALL_VIRTUAL_KEYWORD
 # 15553: __all_virtual_keyword  # BASE_TABLE_NAME
+# 15554: ALL_VIRTUAL_LOG_TRANSPORT_STAT
+# 15554: __all_virtual_log_transport_stat  # BASE_TABLE_NAME
 # 15555: ALL_VIRTUAL_TABLE_OPT_STAT_INVALIDATE_PLAN_REAL_AGENT
 # 15555: __all_table_opt_stat_invalidate_plan  # BASE_TABLE_NAME
 # 15556: ALL_VIRTUAL_SYS_VARIABLE_HISTORY
@@ -2825,6 +2839,8 @@
 # 21703: DBA_OB_TTL_TASK_HISTORY
 # 21704: CDB_OB_TTL_TASKS
 # 21705: CDB_OB_TTL_TASK_HISTORY
+# 21706: CDB_OB_SYNC_STANDBY_DEST
+# 21707: DBA_OB_SYNC_STANDBY_DEST
 # 21708: GV$OB_TABLET_REPLICA_INFO
 # 21709: V$OB_TABLET_REPLICA_INFO
 # 21710: DBA_OB_ROUTINE_LOAD_JOBS
@@ -2845,6 +2861,10 @@
 # 21725: DBA_OB_EXTERNAL_TAB_STATISTICS
 # 21726: DBA_OB_EXTERNAL_TAB_COL_STATISTICS
 # 21727: DBA_OB_EXTERNAL_PART_COL_STATISTICS
+# 21728: GV$OB_LS_LOG_REPLAY_STAT
+# 21729: V$OB_LS_LOG_REPLAY_STAT
+# 21730: GV$OB_LS_LOG_TRANSPORT_STAT
+# 21731: V$OB_LS_LOG_TRANSPORT_STAT
 # 21744: DBA_OB_SYS_VARIABLE_HISTORY
 # 21745: CDB_OB_SYS_VARIABLE_HISTORY
 # 21746: CDB_MVIEW_DEPS
@@ -3399,8 +3419,13 @@
 # 28291: DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS
 # 28292: DBA_OB_TTL_TASKS
 # 28293: DBA_OB_TTL_TASK_HISTORY
+# 28294: DBA_OB_SYNC_STANDBY_DEST
 # 28295: DBA_OB_ROUTINE_LOAD_JOBS
 # 28296: GV$OB_TENANT_WORKER_GROUPS
+# 28297: GV$OB_LS_LOG_REPLAY_STAT
+# 28298: V$OB_LS_LOG_REPLAY_STAT
+# 28299: GV$OB_LS_LOG_TRANSPORT_STAT
+# 28300: V$OB_LS_LOG_TRANSPORT_STAT
 # 28301: DBA_OB_SYS_VARIABLE_HISTORY
 # 14999: __idx_11003_all_virtual_plan_cache_stat_i1
 # 14999: all_virtual_plan_cache_stat_i1  # INDEX_NAME

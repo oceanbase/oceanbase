@@ -32,7 +32,8 @@ public:
                      const bool allow_compress,
                      logservice::AppendCb *cb,
                      palf::LSN &lsn,
-                     share::SCN &scn)
+                     share::SCN &scn,
+                     const bool skip_pre_async_wait = false)
   {
     UNUSED(need_nonblock);
     UNUSED(allow_compress);
@@ -42,6 +43,7 @@ public:
     UNUSED(cb);
     UNUSED(lsn);
     UNUSED(scn);
+    UNUSED(skip_pre_async_wait);
     return OB_SUCCESS;
   }
 
@@ -52,7 +54,8 @@ public:
                              const bool allow_compress,
                              logservice::AppendCb *cb,
                              palf::LSN &lsn,
-                             share::SCN &scn)
+                             share::SCN &scn,
+                             const bool skip_pre_async_wait = false)
   {
     UNUSED(need_nonblock);
     UNUSED(allow_compress);
@@ -62,6 +65,7 @@ public:
     UNUSED(cb);
     UNUSED(lsn);
     UNUSED(scn);
+    UNUSED(skip_pre_async_wait);
     return OB_SUCCESS;
   }
 
@@ -119,6 +123,24 @@ public:
     UNUSED(mode_version);
     UNUSED(access_mode);
     UNUSED(ref_ts_ns);
+    return OB_SUCCESS;
+  }
+  virtual int change_sync_mode(const int64_t mode_version,
+                               const SyncMode &sync_mode,
+                               int64_t &new_mode_version,
+                               int64_t &new_proposal_id)
+  {
+    UNUSED(mode_version);
+    UNUSED(sync_mode);
+    UNUSED(new_mode_version);
+    UNUSED(new_proposal_id);
+    return OB_SUCCESS;
+  }
+
+  virtual int get_sync_mode(int64_t &mode_version, SyncMode &sync_mode) const
+  {
+    UNUSED(mode_version);
+    UNUSED(sync_mode);
     return OB_SUCCESS;
   }
   virtual int get_pending_end_lsn(palf::LSN &pending_end_lsn) const

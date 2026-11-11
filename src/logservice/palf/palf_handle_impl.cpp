@@ -105,6 +105,7 @@ int PalfHandleImpl::init(const int64_t palf_id,
   int pret = 0;
   LogMeta log_meta;
   LogSnapshotMeta snapshot_meta;
+  const SyncMode sync_mode = SyncMode::ASYNC; // Normal replica uses ASYNC by default
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     PALF_LOG(ERROR, "LogServer has inited", K(ret), K(palf_id));
@@ -127,8 +128,8 @@ int PalfHandleImpl::init(const int64_t palf_id,
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(palf_base_info), K(replica_type),
         K(access_mode), K(log_dir), K(alloc_mgr), K(log_block_pool), K(log_rpc),
         K(log_io_worker), K(log_shared_queue_th), K(palf_env_impl), K(self), K(election_timer), K(palf_epoch));
-  } else if (OB_FAIL(log_meta.generate_by_palf_base_info(palf_base_info, access_mode, replica_type))) {
-    PALF_LOG(WARN, "generate_by_palf_base_info failed", K(ret), K(palf_id), K(palf_base_info), K(access_mode), K(replica_type));
+  } else if (OB_FAIL(log_meta.generate_by_palf_base_info(palf_base_info, access_mode, sync_mode, replica_type))) {
+    PALF_LOG(WARN, "generate_by_palf_base_info failed", K(ret), K(palf_id), K(palf_base_info), K(access_mode), K(sync_mode), K(replica_type));
   } else if ((pret = snprintf(log_dir_, MAX_PATH_SIZE, "%s", log_dir)) && false) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "error unexpected", K(ret), K(palf_id));
@@ -145,7 +146,7 @@ int PalfHandleImpl::init(const int64_t palf_id,
     flush_cb_cost_stat_.set_extra_info(EXTRA_INFOS);
     last_accum_write_statistic_time_ = ObTimeUtility::current_time();
     last_accum_fetch_statistic_time_ = ObTimeUtility::current_time();
-    PALF_EVENT("PalfHandleImpl init success", palf_id_, K(ret), K(self), K(access_mode), K(palf_base_info),
+    PALF_EVENT("PalfHandleImpl init success", palf_id_, K(ret), K(self), K(access_mode), K(sync_mode), K(palf_base_info),
         K(replica_type), K(log_dir), K(log_meta), K(palf_epoch));
   }
   return ret;
@@ -257,6 +258,36 @@ int PalfHandleImpl::start()
   return ret;
 }
 
+int PalfHandleImpl::precheck_before_set_initial_member_list_(
+    const int64_t proposal_id,
+    bool &can_set_initial_member_list)
+{
+  // caller holds lock_
+  // caller make sure is_inited_ is true
+  int ret = OB_SUCCESS;
+  const int64_t config_proposal_id = config_mgr_.get_accept_proposal_id();
+  bool is_initial_config_version = false;
+  can_set_initial_member_list = false;
+  if (OB_FAIL(config_mgr_.is_initial_config_version(is_initial_config_version))) {
+    PALF_LOG(WARN, "get is_initial_config_version failed", K(ret), KPC(this));
+  // NOTE: Only flush the initial config meta when the proposal_id is accepted by the config mgr.
+  // If we flush the initial config meta with such an intermediate proposal_id, the follower may
+  // persist a proposal_id that is newer than the leader's stable view,
+  // making mode_mgr_ state transition failed.
+  } else if (false == is_initial_config_version) {
+    // config is already set, make set_initial_member_list success without calling LogConfigMgr::set_initial_member_list()
+    PALF_LOG(INFO, "config is already initialized, make set_initial_member_list success", KPC(this),
+        K(config_proposal_id), K(proposal_id), K(is_initial_config_version), K(can_set_initial_member_list));
+  } else if (config_proposal_id < proposal_id) {
+    ret = OB_STATE_NOT_MATCH;
+    PALF_LOG(WARN, "config is not initialized, but proposal_id is in-flight, refuse to avoid racing with change sync/access mode",
+        K(ret), KPC(this), K(config_proposal_id), K(proposal_id), K(is_initial_config_version));
+  } else {
+    can_set_initial_member_list = true;
+  }
+  return ret;
+}
+
 int PalfHandleImpl::set_initial_member_list(
     const common::ObMemberList &member_list,
     const int64_t paxos_replica_num,
@@ -271,7 +302,12 @@ int PalfHandleImpl::set_initial_member_list(
     {
       WLockGuard guard(lock_);
       const int64_t proposal_id = state_mgr_.get_proposal_id();
-      if (OB_FAIL(config_mgr_.set_initial_member_list(member_list, paxos_replica_num, learner_list,
+      bool can_set_initial_member_list = false;
+      if (OB_FAIL(precheck_before_set_initial_member_list_(proposal_id, can_set_initial_member_list))) {
+        PALF_LOG(WARN, "precheck_before_set_initial_member_list_ failed", K(ret), KPC(this));
+      } else if (false == can_set_initial_member_list) {
+        // already set initial config, make set_initial_member_list success
+      } else if (OB_FAIL(config_mgr_.set_initial_member_list(member_list, paxos_replica_num, learner_list,
           proposal_id, config_version))) {
         PALF_LOG(WARN, "LogConfigMgr set_initial_member_list failed", K(ret), KPC(this));
       }
@@ -304,7 +340,12 @@ int PalfHandleImpl::set_initial_member_list(
     {
       WLockGuard guard(lock_);
       const int64_t proposal_id = state_mgr_.get_proposal_id();
-      if (OB_FAIL(config_mgr_.set_initial_member_list(member_list, arb_member, paxos_replica_num, \
+      bool can_set_initial_member_list = false;
+      if (OB_FAIL(precheck_before_set_initial_member_list_(proposal_id, can_set_initial_member_list))) {
+        PALF_LOG(WARN, "precheck_before_set_initial_member_list_ failed", K(ret), KPC(this));
+      } else if (false == can_set_initial_member_list) {
+        // already set initial config, make set_initial_member_list success
+      } else if (OB_FAIL(config_mgr_.set_initial_member_list(member_list, arb_member, paxos_replica_num, \
           learner_list, proposal_id, config_version))) {
         PALF_LOG(WARN, "LogConfigMgr set_initial_member_list failed", K(ret), KPC(this));
       }
@@ -503,6 +544,24 @@ int PalfHandleImpl::get_role(common::ObRole &role,
         // proposal_id has changed, need retry
       }
     } while(true);
+  }
+  return ret;
+}
+
+int PalfHandleImpl::get_proposal_id_and_sync_mode(int64_t &proposal_id,
+                                                  SyncMode &sync_mode,
+                                                  bool &is_pending_state) const
+{
+  int ret = OB_SUCCESS;
+  common::ObRole unsed_role;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "PalfHandleImpl has not inited", K(ret));
+  } else if (OB_FAIL(get_role(unsed_role, proposal_id, is_pending_state))) {
+    PALF_LOG(WARN, "get_role failed", K(ret), KPC(this));
+  } else if (OB_FAIL(mode_mgr_.get_sync_mode(sync_mode))) {
+    PALF_LOG(WARN, "get_sync_mode failed", K(ret), KPC(this));
   }
   return ret;
 }
@@ -1265,10 +1324,10 @@ int PalfHandleImpl::change_access_mode(const int64_t proposal_id,
         }
         PALF_EVENT("change_access_mode success", palf_id_, K(ret), KPC(this),
             K(proposal_id), K(access_mode), K(ref_scn), K(time_guard), K_(sw));
-        int64_t curr_mode_version;
-        mode_mgr_.get_mode_version(curr_mode_version);
         PALF_REPORT_INFO_KV(K(proposal_id), K(ref_scn));
-        plugins_.record_access_mode_change_event(palf_id_, mode_version, curr_mode_version, prev_access_mode, access_mode, EXTRA_INFOS);
+        int64_t new_mode_version = INVALID_PROPOSAL_ID;
+        mode_mgr_.get_mode_version(new_mode_version);
+        plugins_.record_access_mode_change_event(palf_id_, mode_version, new_mode_version, prev_access_mode, access_mode, EXTRA_INFOS);
       }
       if (OB_EAGAIN == ret) {
         ob_usleep(1000);
@@ -2360,6 +2419,200 @@ int PalfHandleImpl::get_access_mode_ref_scn(int64_t &mode_version,
     PALF_LOG(WARN, "PalfHandleImpl is not inited", K(ret), KPC(this));
   } else if (OB_FAIL(mode_mgr_.get_access_mode_ref_scn(mode_version, access_mode, ref_scn))) {
     PALF_LOG(WARN, "get_access_mode_ref_scn failed", K(ret), KPC(this));
+  }
+  return ret;
+}
+
+int PalfHandleImpl::change_sync_mode(const int64_t proposal_id,
+                                     const int64_t mode_version,
+                                     const SyncMode &sync_mode,
+                                     int64_t &new_mode_version,
+                                     int64_t &new_proposal_id)
+{
+  int ret = OB_SUCCESS;
+  new_proposal_id = INVALID_PROPOSAL_ID;
+  bool is_initial_config_version = false;
+  ObRole curr_role = common::FOLLOWER;
+  int64_t curr_election_epoch = OB_INVALID_TIMESTAMP;
+  int64_t curr_mode_version = INVALID_PROPOSAL_ID;
+  int64_t curr_proposal_id = INVALID_PROPOSAL_ID;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (INVALID_PROPOSAL_ID == proposal_id ||
+             INVALID_PROPOSAL_ID == mode_version ||
+             false == is_valid_sync_mode(sync_mode)) {
+    // ref_scn is not used in change_sync_mode, it will be preserved from current mode_meta
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), K_(palf_id), K_(self),
+        K(proposal_id), K(mode_version), K(sync_mode));
+  } else if (OB_FAIL(config_mgr_.is_initial_config_version(is_initial_config_version))) {
+    PALF_LOG(WARN, "failed to check if initial config version", K(ret), K_(palf_id), K(proposal_id), K(mode_version), K(sync_mode));
+  } else if (is_initial_config_version) {
+    ret = OB_STATE_NOT_MATCH;
+    PALF_LOG(WARN, "not set initial_member_list yet, cannot change sync_mode", K(ret), K_(palf_id), K(proposal_id), K(mode_version), K(sync_mode));
+  } else if (OB_FAIL(state_mgr_.get_election_role(curr_role, curr_election_epoch))) {
+    PALF_LOG(WARN, "get election role failed", K(ret), K_(palf_id), K_(self), K(proposal_id), K(sync_mode));
+  } else if (false == is_strong_leader(curr_role)) {
+    ret = OB_NOT_MASTER;
+    PALF_LOG(WARN, "not leader, cannot change sync mode", K(ret), K_(palf_id), K_(self), K(proposal_id), K(sync_mode));
+  } else if (OB_FAIL(mode_change_lock_.trylock())) {
+    // require lock to protect status from concurrent change_sync_mode
+    ret = OB_EAGAIN;
+    PALF_LOG(WARN, "another change_sync_mode is running, try again", K(ret), K_(palf_id),
+        K_(self), K(proposal_id), K(sync_mode));
+  } else {
+    PALF_EVENT("start change_sync_mode", palf_id_, K(ret), KPC(this), K(proposal_id), K(sync_mode), K_(sw));
+    common::ObTimeGuard time_guard("change_sync_mode", 10 * 1000);
+    int tmp_ret = OB_SUCCESS;
+    curr_proposal_id = proposal_id;
+    curr_mode_version = mode_version;
+    do {
+      if (false == state_mgr_.check_epoch_is_same_with_election(curr_election_epoch)) {
+        ret = OB_NOT_MASTER;
+        PALF_LOG(WARN, "election epoch changed, cannot change sync mode", K(ret), K_(palf_id), K_(self), K(curr_proposal_id), K(sync_mode));
+      } else if (OB_TMP_FAIL(config_change_lock_.trylock())) {
+        if (OB_EAGAIN == tmp_ret) {
+          ret = OB_NEED_RETRY;
+          PALF_LOG(TRACE, "reconfiguration is running", KR(tmp_ret), K_(palf_id), K_(self), K(curr_proposal_id), K(sync_mode));
+        } else {
+          ret = tmp_ret;
+          PALF_LOG(ERROR, "trylock config_change_lock_ failed", KR(tmp_ret), K_(palf_id), K_(self), K(curr_proposal_id), K(sync_mode));
+        }
+      } else {
+        time_guard.click("do_once_change");
+        ret = change_sync_mode_inner_(curr_proposal_id, curr_election_epoch, curr_mode_version, sync_mode, new_mode_version, new_proposal_id);
+        config_change_lock_.unlock();
+        PALF_LOG(INFO, "change_sync_mode_inner_ finish", K(ret), K_(palf_id), K_(self), K(curr_proposal_id), K(sync_mode), K(curr_mode_version));
+      }
+      if (OB_NEED_RETRY == ret) {
+        time_guard.click("wait_for_higher_prio_config_change");
+        ob_usleep(50_ms);
+        if (OB_TMP_FAIL(mode_mgr_.get_mode_version(curr_mode_version))) {
+          ret = tmp_ret;
+          PALF_LOG(WARN, "get mode_version failed", K(ret), K_(palf_id), K_(self), K(curr_proposal_id), K(sync_mode));
+        } else {
+          curr_proposal_id = state_mgr_.get_proposal_id();
+          PALF_LOG(INFO, "retry change_sync_mode_inner_", K(ret), K_(palf_id), K_(self), K(curr_proposal_id), K(sync_mode), K(curr_mode_version));
+        }
+      }
+    } while (OB_NEED_RETRY == ret);
+    time_guard.click("change_sync_mode finish");
+    PALF_LOG(INFO, "change_sync_mode finish", K(ret), K_(palf_id), K_(self), K(curr_proposal_id), K(sync_mode), K(curr_mode_version),
+        K_(mode_mgr), K(time_guard));
+    mode_change_lock_.unlock();
+  }
+  return ret;
+}
+
+int PalfHandleImpl::change_sync_mode_inner_(const int64_t proposal_id,
+                                            const int64_t election_epoch,
+                                            const int64_t mode_version,
+                                            const SyncMode &sync_mode,
+                                            int64_t &new_mode_version,
+                                            int64_t &new_proposal_id)
+{
+  // caller holds mode_change_lock_ and config_change_lock_
+  int ret = OB_SUCCESS;
+  SyncMode prev_sync_mode;
+  bool first_run = true;
+  int64_t out_proposal_id = INVALID_PROPOSAL_ID;
+  common::ObTimeGuard time_guard("change_sync_mode_inner", 10 * 1000);
+  if (OB_FAIL(mode_mgr_.get_sync_mode(prev_sync_mode))) {
+    PALF_LOG(WARN, "get old sync_mode failed", K(ret), K_(palf_id),
+        K_(self), K(proposal_id), K(sync_mode));
+  } else {
+    ret = OB_EAGAIN;
+  }
+  while (OB_EAGAIN == ret) {
+    bool is_state_changed = false;
+    if (true == ATOMIC_LOAD(&has_higher_prio_config_change_)) {
+      WLockGuard guard(lock_);
+      if (false == state_mgr_.check_epoch_is_same_with_election(election_epoch)) {
+        ret = OB_NOT_MASTER;
+        PALF_LOG(WARN, "election epoch changed, cannot change sync mode", K(ret), K_(palf_id), K_(self), K(proposal_id), K(sync_mode),
+            K(first_run), K_(mode_mgr), K(election_epoch));
+      } else {
+        ret = OB_NEED_RETRY;
+        PALF_LOG(WARN, "higher priority config change is waiting", K(ret), K_(palf_id), K_(self), K(proposal_id), K(sync_mode),
+            K(first_run), K_(mode_mgr));
+        mode_mgr_.reset_status();
+      }
+    } else {
+      RLockGuard guard(lock_);
+      is_state_changed = mode_mgr_.is_state_changed();
+    }
+    if (is_state_changed) {
+      WLockGuard guard(lock_);
+      if (first_run && proposal_id != state_mgr_.get_proposal_id()) {
+        ret = OB_STATE_NOT_MATCH;
+        PALF_LOG(WARN, "can not change_sync_mode", K(ret), K_(palf_id),
+            K_(self), K(proposal_id), "palf proposal_id", state_mgr_.get_proposal_id(), K(election_epoch));
+      } else if (OB_SUCC(mode_mgr_.change_sync_mode(mode_version, sync_mode, out_proposal_id))) {
+        // ref_scn parameter is ignored, current ref_scn will be preserved
+        PALF_LOG(INFO, "change_sync_mode success", K(ret), K_(palf_id), K_(self), K(proposal_id),
+            K(mode_version), K(sync_mode), K(out_proposal_id));
+      } else if (OB_EAGAIN != ret) {
+        PALF_LOG(WARN, "change_sync_mode failed", K(ret), K_(palf_id), K_(self), K(proposal_id),
+            K(mode_version), K(sync_mode));
+      }
+      first_run = false;
+      time_guard.click("do_once_change");
+    }
+    // do role_change after change_sync_mode success
+    if (OB_SUCC(ret)) {
+      RLockGuard guard(lock_);
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(role_change_cb_wrpper_.on_sync_mode_change(palf_id_))) {
+        PALF_LOG(WARN, "on_sync_mode_change failed", K(tmp_ret), K_(palf_id), K_(self));
+      }
+      PALF_EVENT("change_sync_mode success", palf_id_, K(ret), KPC(this),
+          K(proposal_id), K(sync_mode), K(time_guard), K_(sw));
+      mode_mgr_.get_sync_mode_version(new_mode_version);
+      new_proposal_id = out_proposal_id;
+      PALF_REPORT_INFO_KV(K(proposal_id));
+      plugins_.record_sync_mode_change_event(palf_id_, mode_version, new_mode_version, prev_sync_mode, sync_mode, EXTRA_INFOS);
+    }
+    if (OB_EAGAIN == ret) {
+      ob_usleep(1000);
+    }
+  }
+  PALF_EVENT("change_sync_mode_inner finish", palf_id_, K(ret), KPC(this),
+      K(proposal_id), K(sync_mode), K(time_guard), K_(sw));
+  return ret;
+};
+
+int PalfHandleImpl::get_sync_mode(int64_t &mode_version, SyncMode &sync_mode) const
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImpl is not inited", K(ret), KPC(this));
+  } else if (OB_FAIL(mode_mgr_.get_sync_mode(mode_version, sync_mode))) {
+    PALF_LOG(WARN, "get_sync_mode failed", K(ret), KPC(this));
+  }
+  return ret;
+}
+int PalfHandleImpl::get_sync_mode_version(int64_t &mode_version) const
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImpl is not inited", K(ret), KPC(this));
+  } else if (OB_FAIL(mode_mgr_.get_sync_mode_version(mode_version))) {
+    PALF_LOG(WARN, "get_sync_mode_version failed", K(ret), KPC(this));
+  }
+  return ret;
+}
+int PalfHandleImpl::get_sync_mode(SyncMode &sync_mode) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImpl is not inited", K(ret), KPC(this));
+  } else if (OB_FAIL(mode_mgr_.get_sync_mode(sync_mode))) {
+    PALF_LOG(WARN, "get_sync_mode failed", K(ret), KPC(this));
   }
   return ret;
 }
@@ -4753,7 +5006,7 @@ int PalfHandleImpl::advance_election_epoch_and_downgrade_priority(const int64_t 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfHandleImpl not inited", K(ret), K_(palf_id), K(reason));
-  } else if (false == state_mgr_.can_revoke(proposal_id)) {
+  } else if (false == state_mgr_.can_revoke(state_mgr_.get_leader_epoch())) {
     ret = OB_NOT_MASTER;
     PALF_LOG(WARN, "advance election epoch failed, not master", K(ret), K_(palf_id), K(proposal_id), K(reason));
   } else if (OB_FAIL(election_.change_leader_to(GCTX.self_addr()))) {
@@ -5201,7 +5454,9 @@ int PalfHandleImpl::stat(PalfStat &palf_stat)
     palf_stat.role_ = (LEADER == curr_role && curr_state == ACTIVE)? LEADER: FOLLOWER;
     palf_stat.log_proposal_id_ = state_mgr_.get_proposal_id();
     (void)config_mgr_.get_config_version(palf_stat.config_version_);
+    // TODO(ziqi): change here to get_sync_and_access_mode
     (void)mode_mgr_.get_access_mode(palf_stat.mode_version_, palf_stat.access_mode_);
+    (void)mode_mgr_.get_sync_mode(palf_stat.mode_version_, palf_stat.sync_mode_);
     (void)config_mgr_.get_curr_member_list(palf_stat.paxos_member_list_, palf_stat.paxos_replica_num_);
     (void)config_mgr_.get_arbitration_member(palf_stat.arbitration_member_);
     (void)config_mgr_.get_degraded_learner_list(palf_stat.degraded_list_);

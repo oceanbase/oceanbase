@@ -471,11 +471,13 @@ public:
   virtual ~ObUpgradeFor5020Processor() {}
   virtual int pre_upgrade() override { return common::OB_SUCCESS; }
   virtual int post_upgrade() override;
-  virtual int finish_upgrade() override { return common::OB_SUCCESS; }
+  virtual int finish_upgrade() override;
 private:
   int check_sys_tenant_work_area_percentage_is_initial_value_(
       bool &is_initial_value);
   int post_upgrade_for_sys_tenant_work_area_percentage_();
+  int post_upgrade_for_grant_standby_replication_role_privs_in_oracle_();
+  int finish_upgrade_for_sync_standby_status_();
 };
 
 /* =========== special upgrade processor end   ============= */

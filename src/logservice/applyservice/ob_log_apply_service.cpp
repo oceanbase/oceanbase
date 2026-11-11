@@ -241,6 +241,7 @@ int64_t ObApplyServiceQueueTask::idx() const
 ObApplyStatus::ObApplyStatus()
     : is_inited_(false),
       is_in_stop_state_(true),
+      is_ls_gc_state_(false),
       ref_cnt_(0),
       ls_id_(),
       role_(FOLLOWER),
@@ -248,6 +249,10 @@ ObApplyStatus::ObApplyStatus()
       ap_sv_(NULL),
       palf_committed_end_lsn_(0),
       palf_committed_end_scn_(),
+      standby_committed_end_lsn_(0),
+      standby_committed_end_scn_(),
+      is_sync_mode_(false),
+      min_committed_end_lsn_(palf::PALF_INITIAL_LSN_VAL),
       last_check_scn_(),
       max_applied_cb_scn_(),
       submit_task_(),
@@ -325,11 +330,16 @@ void ObApplyStatus::destroy()
   close_palf_handle();
   is_inited_ = false;
   is_in_stop_state_ = true;
+  ATOMIC_STORE(&is_ls_gc_state_, false);
   proposal_id_ = -1;
   role_ = FOLLOWER;
   fs_cb_.destroy();
   palf_committed_end_scn_.reset();
   palf_committed_end_lsn_.reset();
+  standby_committed_end_lsn_.val_ = 0;
+  standby_committed_end_scn_.reset();
+  ATOMIC_STORE(&is_sync_mode_, false);
+  min_committed_end_lsn_.val_ = PALF_INITIAL_LSN_VAL;
   last_check_scn_.reset();
   max_applied_cb_scn_.reset();
   get_info_debug_time_ = OB_INVALID_TIMESTAMP;
@@ -384,6 +394,7 @@ int ObApplyStatus::push_append_cb(AppendCb *cb)
   } else {
     const int64_t start_ts = ObClockGenerator::getClock();
     LSN palf_committed_end_lsn;
+    LSN min_committed_end_lsn;
     const LSN cb_lsn = cb->__get_lsn();
     const SCN cb_scn = cb->__get_scn();
     const uint64_t cb_sign = cb_scn.get_val_for_logservice();
@@ -396,15 +407,45 @@ int ObApplyStatus::push_append_cb(AppendCb *cb)
                K(cb_queues_[thread_index]), KPC(this));
     } else {
       CLOG_LOG(TRACE, "push_append_cb", K(thread_index), K(cb_lsn), K(cb_sign), K(cb_queues_[thread_index]), KPC(this));
-      palf_committed_end_lsn.val_ = ATOMIC_LOAD(&palf_committed_end_lsn_.val_);
-      if (cb_lsn < palf_committed_end_lsn) {
-        // 需要调用on_success的cb进入队列时需要主动触发推入线程池
-        if (OB_FAIL(submit_task_to_apply_service_(cb_queues_[thread_index]))) {
-          CLOG_LOG(ERROR, "apply service push_task failed", K(thread_index), K(cb_lsn), K(cb_sign), KPC(this));
+      // Double check: 先无锁检查 is_sync_mode_，如果是 sync_mode 再加锁检查
+      if (!ATOMIC_LOAD(&is_sync_mode_)) {
+        // 非 sync_mode 场景，不需要加锁
+        palf_committed_end_lsn.val_ = ATOMIC_LOAD(&palf_committed_end_lsn_.val_);
+        if (cb_lsn < palf_committed_end_lsn) {
+          // 需要调用on_success的cb进入队列时需要主动触发推入线程池
+          if (OB_FAIL(submit_task_to_apply_service_(cb_queues_[thread_index]))) {
+            CLOG_LOG(ERROR, "apply service push_task failed", K(thread_index), K(cb_lsn), K(cb_sign), KPC(this));
+          } else {
+            CLOG_LOG(TRACE, "apply service push_task success", K(thread_index), K(cb_lsn), K(cb_sign), KPC(this));
+          }
+        }
+      } else {
+        // sync_mode 场景，加锁再次检查
+        RLockGuard guard(lock_);
+        if (ATOMIC_LOAD(&is_sync_mode_)) {
+          min_committed_end_lsn.val_ = ATOMIC_LOAD(&min_committed_end_lsn_.val_);
+          if (cb_lsn < min_committed_end_lsn) {
+            // 需要调用on_success的cb进入队列时需要主动触发推入线程池
+            if (OB_FAIL(submit_task_to_apply_service_(cb_queues_[thread_index]))) {
+              CLOG_LOG(ERROR, "apply service push_task failed", K(thread_index), K(cb_lsn), K(cb_sign), KPC(this));
+            } else {
+              CLOG_LOG(TRACE, "apply service push_task success", K(thread_index), K(cb_lsn), K(cb_sign), KPC(this));
+            }
+          }
         } else {
-          CLOG_LOG(TRACE, "apply service push_task success", K(thread_index), K(cb_lsn), K(cb_sign), KPC(this));
+          // 在加锁期间 is_sync_mode_ 变为 false，使用非 sync_mode 逻辑
+          palf_committed_end_lsn.val_ = ATOMIC_LOAD(&palf_committed_end_lsn_.val_);
+          if (cb_lsn < palf_committed_end_lsn) {
+            // 需要调用on_success的cb进入队列时需要主动触发推入线程池
+            if (OB_FAIL(submit_task_to_apply_service_(cb_queues_[thread_index]))) {
+              CLOG_LOG(ERROR, "apply service push_task failed", K(thread_index), K(cb_lsn), K(cb_sign), KPC(this));
+            } else {
+              CLOG_LOG(TRACE, "apply service push_task success", K(thread_index), K(cb_lsn), K(cb_sign), KPC(this));
+            }
+          }
         }
       }
+
     }
     const int64_t push_cost = ObClockGenerator::getClock() - start_ts;
     if (push_cost > 1 * 1000) { //1ms
@@ -467,45 +508,62 @@ int ObApplyStatus::try_handle_cb_queue(ObApplyServiceQueueTask *cb_queue,
       } else if (OB_ISNULL(cb = AppendCb::__get_class_address(link))) {
         ret = OB_ERR_UNEXPECTED;
         CLOG_LOG(ERROR, "cb is NULL", KPC(cb_queue), KPC(this), K(ret));
-      } else if ((lsn = cb->__get_lsn()).val_ < ATOMIC_LOAD(&palf_committed_end_lsn_.val_)) {
-        // 小于确认日志位点的cb可以回调on_success
-        ObDIActionGuard di_action_guard(cb->get_cb_name());
-        if (OB_FAIL(cb_queue->pop())) {
-          CLOG_LOG(ERROR, "cb_queue pop failed", KPC(cb_queue), KPC(this), K(ret));
-        } else {
-          scn = cb->__get_scn();
-          get_cb_trace_(cb, append_start_time, append_finish_time, cb_first_handle_time, cb_start_time);
-          CLOG_LOG(TRACE, "cb on_success", K(lsn), K(scn), KP(link->next_), KPC(cb_queue), KPC(this));
-          if (OB_FAIL(cb->on_success())) {
-            // 不处理此类失败情况
-            CLOG_LOG(ERROR, "cb on_success failed", KP(cb), K(ret), KPC(this));
-            ret = OB_SUCCESS;
-          }
-          statistics_cb_cost_(lsn, scn, append_start_time, append_finish_time,
-                              cb_first_handle_time, cb_start_time, idx);
-          cb_queue->inc_total_apply_cb_cnt();
-        }
-      } else if (FOLLOWER == role_) {
-        // 大于确认日志位点的cb在applystatus切为follower应该回调on_failure
-        if (OB_FAIL(cb_queue->pop())) {
-          CLOG_LOG(ERROR, "cb_queue pop failed", KPC(cb_queue), KPC(this), K(ret));
-        } else {
-          scn = cb->__get_scn();
-          get_cb_trace_(cb, append_start_time, append_finish_time, cb_first_handle_time, cb_start_time);
-          CLOG_LOG(INFO, "cb on_failure", K(lsn), K(scn), KP(link->next_), KPC(cb_queue), KPC(this));
-          if (OB_FAIL(cb->on_failure())) {
-            CLOG_LOG(ERROR, "cb on_failure failed", KP(cb), K(ret), KPC(this));
-            ret = OB_SUCCESS;
-          }
-          statistics_cb_cost_(lsn, scn, append_start_time, append_finish_time,
-                              cb_first_handle_time, cb_start_time, idx);
-          cb_queue->inc_total_apply_cb_cnt();
-        }
       } else {
-        cb->set_cb_first_handle_ts(ObTimeUtility::fast_current_time());
-        CLOG_LOG(TRACE, "cb on_wait", K(lsn), K(cb->__get_scn()), KPC(cb_queue), KPC(this));
-        // 等待确认日志位点推进或者角色切换
-        ret = OB_EAGAIN;
+        const bool is_sync_mode = ATOMIC_LOAD(&is_sync_mode_);
+        const bool need_ref_standby = is_sync_mode && !ATOMIC_LOAD(&is_ls_gc_state_);
+        const int64_t palf_committed_end_lsn_val = ATOMIC_LOAD(&palf_committed_end_lsn_.val_);
+        const int64_t min_committed_end_lsn_val = ATOMIC_LOAD(&min_committed_end_lsn_.val_);
+        lsn = cb->__get_lsn();
+        // 非强同步(或已offline)模式下，小于palf_committed_end_lsn_的cb可以回调on_success
+        // 仅在强同步且未offline时，小于min_committed_end_lsn_的cb可以回调on_success
+        const int64_t on_success_end_lsn_val = need_ref_standby ? min_committed_end_lsn_val : palf_committed_end_lsn_val;
+        if (lsn.val_ < on_success_end_lsn_val) {
+          // 小于确认日志位点的cb可以回调on_success
+          ObDIActionGuard di_action_guard(cb->get_cb_name());
+	    if (OB_FAIL(cb_queue->pop())) {
+            CLOG_LOG(ERROR, "cb_queue pop failed", KPC(cb_queue), KPC(this), K(ret));
+          } else {
+            scn = cb->__get_scn();
+            get_cb_trace_(cb, append_start_time, append_finish_time, cb_first_handle_time, cb_start_time);
+            CLOG_LOG(TRACE, "cb on_success", K(lsn), K(scn), KP(link->next_), KPC(cb_queue), KPC(this));
+            if (OB_FAIL(cb->on_success())) {
+              // 不处理此类失败情况
+              CLOG_LOG(ERROR, "cb on_success failed", KP(cb), K(ret), KPC(this));
+              ret = OB_SUCCESS;
+            }
+            statistics_cb_cost_(lsn, scn, append_start_time, append_finish_time,
+                                cb_first_handle_time, cb_start_time, idx);
+            cb_queue->inc_total_apply_cb_cnt();
+          }
+        } else if (need_ref_standby && lsn.val_ < palf_committed_end_lsn_val) {
+          // 强同步模式下，必须等待备库确认位点推进，不能提前 on_success。
+          // apply_status may has been switched to follower, but standby_committed_end_lsn is lagged behind local palf_committed_end_lsn.
+          cb->set_cb_first_handle_ts(ObTimeUtility::fast_current_time());
+          CLOG_LOG(WARN, "cb on_wait due to sync mode and min_committed_end_lsn lag", K(lsn), K(cb->__get_scn()),
+                   K_(role), K(palf_committed_end_lsn_val), K(min_committed_end_lsn_val), KPC(cb_queue), KPC(this));
+          ret = OB_EAGAIN;
+        } else if (FOLLOWER == role_) {
+          // 大于确认日志位点的cb在applystatus切为follower应该回调on_failure
+          if (OB_FAIL(cb_queue->pop())) {
+            CLOG_LOG(ERROR, "cb_queue pop failed", KPC(cb_queue), KPC(this), K(ret));
+          } else {
+            scn = cb->__get_scn();
+            get_cb_trace_(cb, append_start_time, append_finish_time, cb_first_handle_time, cb_start_time);
+            CLOG_LOG(INFO, "cb on_failure", K(lsn), K(scn), KP(link->next_), KPC(cb_queue), KPC(this));
+            if (OB_FAIL(cb->on_failure())) {
+              CLOG_LOG(ERROR, "cb on_failure failed", KP(cb), K(ret), KPC(this));
+              ret = OB_SUCCESS;
+            }
+            statistics_cb_cost_(lsn, scn, append_start_time, append_finish_time,
+                                cb_first_handle_time, cb_start_time, idx);
+            cb_queue->inc_total_apply_cb_cnt();
+          }
+        } else {
+          cb->set_cb_first_handle_ts(ObTimeUtility::fast_current_time());
+          CLOG_LOG(TRACE, "cb on_wait", K(lsn), K(cb->__get_scn()), KPC(cb_queue), KPC(this));
+          // 等待确认日志位点推进或者角色切换
+          ret = OB_EAGAIN;
+        }
       }
       if (OB_SUCC(ret) && !is_queue_empty) {
         int64_t used_time = ObTimeUtility::current_time() - start_time;
@@ -538,13 +596,13 @@ int ObApplyStatus::is_apply_done(bool &is_done,
       }
     }
     if (is_done) {
-      end_lsn.val_ = ATOMIC_LOAD(&palf_committed_end_lsn_.val_);
+      end_lsn.val_ = ATOMIC_LOAD(&palf_committed_end_lsn_.val_); //保持end_lsn为palf_committed_end_lsn_
     }
   }
   return ret;
 }
 
-int ObApplyStatus::switch_to_leader(const int64_t new_proposal_id)
+int ObApplyStatus::switch_to_leader(const int64_t new_proposal_id, const palf::SyncMode &sync_mode)
 {
   int ret = OB_SUCCESS;
   WLockGuardWithRetryInterval guard(lock_, WRLOCK_RETRY_INTERVAL_US, WRLOCK_RETRY_INTERVAL_US);
@@ -562,8 +620,9 @@ int ObApplyStatus::switch_to_leader(const int64_t new_proposal_id)
     CLOG_LOG(WARN, "apply status has already been leader", KPC(this));
   } else {
     ATOMIC_STORE(&proposal_id_, new_proposal_id);
+    ATOMIC_STORE(&is_sync_mode_, sync_mode == palf::SyncMode::SYNC ? true : false);
     role_ = LEADER;
-    CLOG_LOG(INFO, "apply status switch_to_leader success", KPC(this));
+    CLOG_LOG(INFO, "apply status switch_to_leader success", KPC(this), K(new_proposal_id), K(sync_mode));
   }
   return ret;
 }
@@ -574,6 +633,35 @@ int ObApplyStatus::switch_to_follower()
   WLockGuardWithRetryInterval guard(lock_, WRLOCK_RETRY_INTERVAL_US, WRLOCK_RETRY_INTERVAL_US);
   if (OB_FAIL(switch_to_follower_())) {
     CLOG_LOG(WARN, "ObApplyStatus switch_to_follower_ failed", K(ret));
+  }
+  return ret;
+}
+
+// can only called by leader, only leader can advance proposal_id
+int ObApplyStatus::switch_sync_mode(const int64_t new_proposal_id, const palf::SyncMode &sync_mode)
+{
+  int ret = OB_SUCCESS;
+  WLockGuardWithRetryInterval guard(lock_, WRLOCK_RETRY_INTERVAL_US, WRLOCK_RETRY_INTERVAL_US);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(ERROR, "apply status has not been inited");
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(INFO, "apply status has been stopped");
+  } else if (LEADER != role_) {
+    ret = OB_STATE_NOT_MATCH;
+    CLOG_LOG(WARN, "apply status is not leader", K(new_proposal_id), K(sync_mode), KPC(this));
+  } else if (new_proposal_id < ATOMIC_LOAD(&proposal_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid proposal id", K(ret), K(new_proposal_id), KPC(this));
+  } else {
+    ATOMIC_STORE(&proposal_id_, new_proposal_id);
+    if (sync_mode == palf::SyncMode::SYNC) {
+      ATOMIC_STORE(&is_sync_mode_, true);
+    } else if (OB_FAIL(disable_sync_())) {
+      CLOG_LOG(ERROR, "disable_sync_ failed", KPC(this), K(ret));
+    }
+    CLOG_LOG(INFO, "apply status switch_sync_mode success", K(ret), KPC(this), K(new_proposal_id), K(sync_mode));
   }
   return ret;
 }
@@ -592,7 +680,14 @@ int ObApplyStatus::switch_to_follower_()
     // truancate场景旧主的max_scn可能回退
     last_check_scn_.reset();
     role_ = FOLLOWER;
-    if (OB_FAIL(submit_task_to_apply_service_(submit_task_))) {
+    // follower no need to consider standby committed_end_lsn
+    // we just set is_sync_mode_ as false, no accurate and stuck problem will happen.
+    // for Append access_mode, standby_committed_end_lsn must be equal with palf_committed_end_lsn, wait_apply_done will succ.
+    // for RawWrite access_mode, when apply_service switch to follower because of raw_write mode, apply_service has no need to consider standby_committed_end_lsn
+    // otherwise, wait_apply_service_apply_done_ will be in stuck
+    if (OB_FAIL(disable_sync_())) {
+      CLOG_LOG(ERROR, "disable_sync_ failed", KPC(this), K(ret));
+    } else if (OB_FAIL(submit_task_to_apply_service_(submit_task_))) {
       CLOG_LOG(ERROR, "submit_task_to_apply_service_ failed", KPC(this), K(ret));
     } else {
       CLOG_LOG(INFO, "switch_to_follower submit_task_to_apply_service_ success", KPC(this), K(ret));
@@ -636,7 +731,11 @@ int ObApplyStatus::update_palf_committed_end_lsn(const palf::LSN &end_lsn,
         } else {
           palf_committed_end_scn_.atomic_store(end_scn);
           palf_committed_end_lsn_ = end_lsn;
-          if (OB_FAIL(submit_task_to_apply_service_(submit_task_))) {
+          // for MPT sync mode, update min_committed_end_lsn_ to trigger submit_task_
+          if (ATOMIC_LOAD(&is_sync_mode_) && !ATOMIC_LOAD(&is_ls_gc_state_) && OB_FAIL(update_min_committed_end_lsn_())) {
+            CLOG_LOG(ERROR, "submit_task_to_apply_service_ failed", KPC(this), K(ret), K(proposal_id), K(end_lsn));
+          } else if ((!ATOMIC_LOAD(&is_sync_mode_) || ATOMIC_LOAD(&is_ls_gc_state_))
+                     && OB_FAIL(submit_task_to_apply_service_(submit_task_))) {
             CLOG_LOG(ERROR, "submit_task_to_apply_service_ failed", KPC(this), K(ret), K(proposal_id), K(end_lsn));
           }
         }
@@ -658,6 +757,79 @@ share::SCN ObApplyStatus::get_palf_committed_end_scn() const
 {
   share::SCN scn = palf_committed_end_scn_.atomic_load();
   return scn;
+}
+
+int ObApplyStatus::update_standby_committed_end_lsn(const palf::LSN &end_lsn, const share::SCN &end_scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(IS_NOT_INIT)) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(ERROR, "apply status has not been inited", K(ret));
+  } else {
+    RLockGuard guard(lock_);
+    const palf::LSN standby_lsn(ATOMIC_LOAD(&standby_committed_end_lsn_.val_));
+    const share::SCN standby_scn = standby_committed_end_scn_.atomic_load();
+    if (OB_UNLIKELY(is_in_stop_state_)) {
+      // skip
+      CLOG_LOG(WARN, "apply status has been stopped", K(ret), K_(ls_id));
+    } else if (OB_UNLIKELY(!end_lsn.is_valid() || !end_scn.is_valid()
+                          || (standby_lsn.is_valid() && end_lsn < standby_lsn))
+                          || (standby_scn.is_valid() && end_scn < standby_scn)) {
+      CLOG_LOG(WARN, "invalid arguments", K(ret), K(end_lsn), K(end_scn), K(standby_lsn), K(standby_scn));
+    } else {
+      (void) standby_committed_end_lsn_.inc_update(end_lsn);
+      (void) standby_committed_end_scn_.inc_update(end_scn);
+      if (OB_FAIL(update_min_committed_end_lsn_())) {
+        CLOG_LOG(ERROR, "update_min_committed_end_lsn_ failed", K(ls_id_), K(ret), K(end_lsn), K(end_scn));
+      }
+      CLOG_LOG(TRACE, "update_standby_committed_end_lsn success", K(ls_id_), K(end_lsn), K(end_scn));
+    }
+  }
+  return ret;
+}
+
+int ObApplyStatus::update_min_committed_end_lsn_()
+{
+  int ret = OB_SUCCESS;
+  LSN tmp_lsn;
+  bool need_submit_task = false;
+  const LSN palf_lsn(ATOMIC_LOAD(&palf_committed_end_lsn_.val_));
+  const LSN standby_lsn(ATOMIC_LOAD(&standby_committed_end_lsn_.val_));
+  // const LSN min_lsn(ATOMIC_LOAD(&min_committed_end_lsn_.val_));
+
+  // 计算 tmp_lsn
+  if (!ATOMIC_LOAD(&is_sync_mode_) || ATOMIC_LOAD(&is_ls_gc_state_)) {
+    // 非强同步模式，或者强同步offline模式，不参考备库位点
+    need_submit_task = false;
+  } else if (!standby_lsn.is_valid()) {
+    // 强同步模式下，standby 位点无效时不推进
+  } else {
+    // 强同步模式，取 Min(palf_committed_lsn, standby_committed_lsn)
+    if (standby_lsn.is_valid() && palf_lsn.is_valid()) {
+      // 两者都有效，取较小值
+      tmp_lsn = (palf_lsn < standby_lsn) ? palf_lsn : standby_lsn;
+    } else if (standby_lsn.is_valid()) {
+      // 只有 standby_lsn 有效
+      tmp_lsn = standby_lsn;
+    } else {
+      // 两者都无效，保持当前 min_lsn
+      tmp_lsn.reset();
+    }
+
+    if (tmp_lsn.is_valid()) {
+      (void) min_committed_end_lsn_.inc_update(tmp_lsn, need_submit_task);
+    }
+  }
+
+  if (need_submit_task) {
+    if (OB_FAIL(submit_task_to_apply_service_(submit_task_))) {
+      CLOG_LOG(ERROR, "submit_task_to_apply_service_ failed", KPC(this), K(ret));
+    } else {
+      CLOG_LOG(TRACE, "update_min_committed_end_lsn_ submit_task_to_apply_service_ success",
+               K(tmp_lsn), KPC(this));
+    }
+  }
+  return ret;
 }
 
 int ObApplyStatus::unregister_file_size_cb()
@@ -705,11 +877,28 @@ int ObApplyStatus::get_max_applied_scn(SCN &scn)
     //transiting to a follower role, there exists a possibility that its recorded value might underestimate the actual one.
     //Upon a log stream replica's shift from the leader role to a follower role, it guarantees the
     //application of every log entry that has been confirmed. Thus, while in the follower phase, the
-    //value of max_applied_cb_scn_ can be securely incremented to match palf_committed_end_scn_.
+    //value of max_applied_cb_scn_ can be securely incremented to match the committed end scn.
+    //In sync mode, use min(palf_committed_end_scn_, standby_committed_end_scn_) to ensure consistency.
     palf::LSN apply_end_lsn;
     bool is_done = false;
     const SCN cur_palf_committed_end_scn = palf_committed_end_scn_.atomic_load();
-    if (max_applied_cb_scn_ == cur_palf_committed_end_scn) {
+    SCN cur_committed_end_scn = cur_palf_committed_end_scn;
+    bool can_push_up = true;
+    // 强同步模式下，使用 min(palf_committed_end_scn_, standby_committed_end_scn_)
+    if (ATOMIC_LOAD(&is_sync_mode_) && !ATOMIC_LOAD(&is_ls_gc_state_)) {
+      const SCN cur_standby_committed_end_scn = standby_committed_end_scn_.atomic_load();
+      if (!cur_standby_committed_end_scn.is_valid()) {
+        can_push_up = false;
+      } else if (cur_standby_committed_end_scn.is_valid() && cur_palf_committed_end_scn.is_valid()) {
+        cur_committed_end_scn = (cur_palf_committed_end_scn < cur_standby_committed_end_scn)
+                                ? cur_palf_committed_end_scn : cur_standby_committed_end_scn;
+      } else if (cur_standby_committed_end_scn.is_valid()) { // 预期走不到这里
+        cur_committed_end_scn = cur_standby_committed_end_scn;
+      }
+    }
+    if (!can_push_up) {
+      // sync mode but standby_committed_end_scn_ is invalid, do not push up
+    } else if (max_applied_cb_scn_ == cur_committed_end_scn) {
       //no need to push up
     } else if (OB_FAIL(is_apply_done(is_done, apply_end_lsn))) {
       CLOG_LOG(WARN, "check is_apply_done failed", K(ret), KPC(this));
@@ -717,9 +906,9 @@ int ObApplyStatus::get_max_applied_scn(SCN &scn)
       // follower期间cb未完全回调之前暂不做任何更新
       // 始终返回上轮作为leader时缓存的值
       // 所有cb回调完成后, 尝试推进一次最大连续回调位点
-    } else if (max_applied_cb_scn_ < cur_palf_committed_end_scn) {
-      max_applied_cb_scn_ = cur_palf_committed_end_scn;
-      CLOG_LOG(INFO, "update max_applied_cb_scn_", K(cur_palf_committed_end_scn), KPC(this));
+    } else if (max_applied_cb_scn_ < cur_committed_end_scn) {
+      max_applied_cb_scn_ = cur_committed_end_scn;
+      CLOG_LOG(INFO, "update max_applied_cb_scn_", K(cur_committed_end_scn), KPC(this));
     }
   } else {
     // LEADER == role_
@@ -822,15 +1011,26 @@ void ObApplyStatus::reset_proposal_id()
   CLOG_LOG(INFO, "reset_proposal_id success");
 }
 
+void ObApplyStatus::mark_ls_gc_state()
+{
+  ATOMIC_STORE(&is_ls_gc_state_, true);
+  CLOG_LOG(INFO, "apply status mark_ls_gc_state", KPC(this));
+}
+
 void ObApplyStatus::reset_meta()
 {
   RLockGuard rlock(lock_);
   lib::ObMutexGuard guard(mutex_);
+  ATOMIC_STORE(&is_ls_gc_state_, false);
   last_check_scn_.reset();
   max_applied_cb_scn_.reset();
   // palf_committed_end_scn_ also should be reset along with palf_committed_end_lsn_.
   palf_committed_end_lsn_.val_ = 0;
   palf_committed_end_scn_.reset();
+  standby_committed_end_lsn_.val_ = 0;
+  standby_committed_end_scn_.reset();
+  ATOMIC_STORE(&is_sync_mode_, false);
+  min_committed_end_lsn_.val_ = 0;
 }
 
 int ObApplyStatus::submit_task_to_apply_service_(ObApplyServiceTask &task)
@@ -886,6 +1086,7 @@ int ObApplyStatus::update_last_check_scn_()
   } else if (OB_FAIL(ap_sv_->wait_append_sync(ls_id_))) {
     CLOG_LOG(WARN, "wait_append_sync failed", K(ret), K(ls_id_), KPC(this));
   } else {
+    // TODO: maybe we need a more accurate way to specify the last_check_scm_ in sync_mode
     for (int64_t i = 0; i < APPLY_TASK_QUEUE_SIZE; ++i) {
       cb_queues_[i].set_snapshot_check_submit_cb_cnt();
     }
@@ -980,6 +1181,30 @@ void ObApplyStatus::statistics_cb_cost_(const LSN &lsn,
                K(cb_first_handle_time), K(cb_finish_time));
     }
   }
+}
+
+int ObApplyStatus::disable_sync()
+{
+  int ret = OB_SUCCESS;
+  WLockGuardWithRetryInterval guard(lock_, WRLOCK_RETRY_INTERVAL_US, WRLOCK_RETRY_INTERVAL_US);
+  if (OB_FAIL(disable_sync_())) {
+    CLOG_LOG(WARN, "ObApplyStatus disable_sync_ failed", K(ret));
+  }
+  return ret;
+}
+
+// caller need to hold wlock
+int ObApplyStatus::disable_sync_()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "apply status not init", K(ret));
+  } else {
+    ATOMIC_STORE(&is_sync_mode_, false);
+    CLOG_LOG(INFO, "ObApplyStatus disable_sync success", KPC(this));
+  }
+  return ret;
 }
 
 //---------------ObApplyStatusGuard---------------//
@@ -1250,7 +1475,8 @@ int ObLogApplyService::is_apply_done(const share::ObLSID &id,
 }
 
 int ObLogApplyService::switch_to_leader(const share::ObLSID &id,
-                                        const int64_t proposal_id)
+                                        const int64_t proposal_id,
+                                        const palf::SyncMode &sync_mode)
 {
   int ret = OB_SUCCESS;
   ObApplyStatus *apply_status = NULL;
@@ -1263,10 +1489,10 @@ int ObLogApplyService::switch_to_leader(const share::ObLSID &id,
   } else if (NULL == (apply_status = guard.get_apply_status())) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "apply status is not exist", K(ret), K(id));
-  } else if (OB_FAIL(apply_status->switch_to_leader(proposal_id))) {
-    CLOG_LOG(WARN, "apply status switch_to_leader failed", K(ret), K(id), K(proposal_id));
+  } else if (OB_FAIL(apply_status->switch_to_leader(proposal_id, sync_mode))) {
+    CLOG_LOG(WARN, "apply status switch_to_leader failed", K(ret), K(id), K(proposal_id), K(sync_mode));
   } else {
-    CLOG_LOG(INFO, "apply service switch_to_leader success", K(id), K(proposal_id));
+    CLOG_LOG(INFO, "apply service switch_to_leader success", K(id), K(proposal_id), K(sync_mode));
   }
   return ret;
 }
@@ -1288,6 +1514,29 @@ int ObLogApplyService::switch_to_follower(const share::ObLSID &id)
     CLOG_LOG(WARN, "apply status switch_to_follower failed", K(ret), K(id));
   } else {
     CLOG_LOG(INFO, "apply service switch_to_follower success", K(id));
+  }
+  return ret;
+}
+
+int ObLogApplyService::switch_sync_mode(const share::ObLSID &id,
+                                        const int64_t proposal_id,
+                                        const palf::SyncMode &sync_mode)
+{
+  int ret = OB_SUCCESS;
+  ObApplyStatus *apply_status = NULL;
+  ObApplyStatusGuard guard;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(ERROR, "apply service not init", K(ret));
+  } else if (OB_FAIL(get_apply_status(id, guard))) {
+    CLOG_LOG(WARN, "guard get apply status failed", K(ret), K(id));
+  } else if (NULL == (apply_status = guard.get_apply_status())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "apply status is not exist", K(ret), K(id));
+  } else if (OB_FAIL(apply_status->switch_sync_mode(proposal_id, sync_mode))) {
+    CLOG_LOG(WARN, "apply status switch_sync_mode failed", K(ret), K(id), K(proposal_id), K(sync_mode));
+  } else {
+    CLOG_LOG(INFO, "apply service switch_sync_mode success", K(id), K(proposal_id), K(sync_mode));
   }
   return ret;
 }
@@ -1557,6 +1806,25 @@ int ObLogApplyService::remove_all_ls_()
     CLOG_LOG(ERROR, "apply service remove all ls failed", K(ret));
   } else {
     CLOG_LOG(INFO, "apply service remove all ls");
+  }
+  return ret;
+}
+
+int ObLogApplyService::disable_sync(const share::ObLSID &id)
+{
+  int ret = OB_SUCCESS;
+  ObApplyStatus *apply_status = NULL;
+  ObApplyStatusGuard guard;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "apply service not init", K(ret));
+  } else if (OB_FAIL(get_apply_status(id, guard))) {
+    CLOG_LOG(WARN, "guard get apply status failed", K(ret), K(id));
+  } else if (NULL == (apply_status = guard.get_apply_status())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "apply status is not exist", K(ret), K(id));
+  } else if (OB_FAIL(apply_status->disable_sync())) {
+    CLOG_LOG(WARN, "apply status disable_sync failed", K(ret), K(id));
   }
   return ret;
 }

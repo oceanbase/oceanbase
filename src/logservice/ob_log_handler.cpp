@@ -11,7 +11,12 @@
 #endif
 #include "logservice/ob_log_service.h"
 #include "logservice/ob_reconfig_checker_adapter.h"
+#include "logservice/ob_log_base_header.h"
+#include "logservice/ob_log_base_type.h"
+#include "logservice/palf/log_sync_mode_mgr.h"
+#include "logservice/transportservice/ob_log_transport_service.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
+#include "lib/wait_event/ob_wait_event.h"
 
 #define INVOKE_PALF_HANDLE_FN(fn, args...) \
   do { \
@@ -59,12 +64,15 @@ ObLogHandler::ObLogHandler() : self_(),
                                apply_status_(NULL),
                                apply_service_(NULL),
                                replay_service_(NULL),
+                               transport_service_(NULL),
                                rc_service_(NULL),
                                deps_lock_(common::ObLatchIds::OB_LOG_HANDLER_DEPS_LOCK),
                                lc_cb_(NULL),
                                rpc_proxy_(NULL),
                                append_cost_stat_("[PALF STAT APPEND COST TIME]", 1 * 1000 * 1000),
                                is_offline_(false),
+                               is_pre_async_blocked_(false),
+                               has_sync_mode_degrading_mark_(false),
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
                                compressor_wrapper_(),
 #endif
@@ -86,6 +94,7 @@ int ObLogHandler::init(const int64_t id,
                        const common::ObAddr &self,
                        ObLogApplyService *apply_service,
                        ObLogReplayService *replay_service,
+                       ObLogTransportService *transport_service,
                        ObRoleChangeService *rc_service,
                        ipalf::IPalfEnv *palf_env,
                        PalfLocationCacheCb *lc_cb,
@@ -129,10 +138,14 @@ int ObLogHandler::init(const int64_t id,
   } else if (GCONF.enable_logservice && OB_FAIL(libpalf_proposer_config_mgr_.init(MTL_ID(), id, palf_handle_))) {
     CLOG_LOG(WARN, "failed to init libpalf_proposer_config_mgr_", K(id));
 #endif // OB_BUILD_SHARED_LOG_SERVICE
+  // Initialize sync mode manager
+  } else if (OB_FAIL(sync_mode_manager_.init(this))) {
+    CLOG_LOG(WARN, "sync_mode_manager init failed", K(ret), K(id));
   } else {
     get_max_decided_scn_debug_time_ = OB_INVALID_TIMESTAMP;
     apply_service_ = apply_service;
     replay_service_ = replay_service;
+    transport_service_ = transport_service;
     rc_service_ = rc_service;
     apply_status_->inc_ref();
     PALF_REPORT_INFO_KV(K(id));
@@ -147,7 +160,6 @@ int ObLogHandler::init(const int64_t id,
     enable_logservice_ = GCONF.enable_logservice;
     is_offline_ = true; // offline at default.
     is_inited_ = true;
-    FLOG_INFO("ObLogHandler init success", K(id));
   }
   if (OB_FAIL(ret) && OB_INIT_TWICE != ret) {
     destroy();
@@ -250,12 +262,17 @@ void ObLogHandler::destroy()
   // See deps_lock_ declaration in ob_log_handler.h for why reversing deadlocks.
   common::TCWLockGuard deps_guard(deps_lock_);
   WLockGuard guard(lock_);
+  // Clear PRE_ASYNC and sync-mode-degrading states after ongoing readers finish.
+  clear_pre_async_blocked();
+  clear_sync_mode_degrading_mark();
   if (NULL != apply_service_ && NULL != apply_status_) {
     apply_service_->revert_apply_status(apply_status_);
   }
   apply_status_ = NULL;
   apply_service_ = NULL;
   replay_service_ = NULL;
+  transport_service_ = NULL;
+  sync_mode_manager_.reset();
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
   libpalf_proposer_config_mgr_.destroy();
   if (OB_NOT_NULL(shared_log_submit_log_rate_limiter_)) {
@@ -285,13 +302,15 @@ int ObLogHandler::append(const void *buffer,
                          const bool allow_compress,
                          AppendCb *cb,
                          LSN &lsn,
-                         SCN &scn)
+                         SCN &scn,
+                         const bool skip_pre_async_wait)
 {
   int ret = OB_SUCCESS;
   if (nbytes > MAX_NORMAL_LOG_BODY_SIZE) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "nbytes is greater than expected size", K(nbytes), K(MAX_NORMAL_LOG_BODY_SIZE));
-  } else if (OB_FAIL(append_(buffer, nbytes, ref_scn, need_nonblock, allow_compress, cb, lsn, scn))) {
+  } else if (OB_FAIL(append_(buffer, nbytes, ref_scn, need_nonblock, allow_compress, cb, lsn, scn,
+                             skip_pre_async_wait))) {
     CLOG_LOG(WARN, "appending log fails", K(buffer), K(nbytes), K(ref_scn), K(need_nonblock),
              K(allow_compress), K(lsn), K(scn));
   }
@@ -305,13 +324,15 @@ int ObLogHandler::append_big_log(const void *buffer,
                                  const bool allow_compress,
                                  AppendCb *cb,
                                  LSN &lsn,
-                                 SCN &scn)
+                                 SCN &scn,
+                                 const bool skip_pre_async_wait)
 {
   int ret = OB_SUCCESS;
   if (nbytes <= MAX_NORMAL_LOG_BODY_SIZE) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "nbytes is smaller than expected size", K(nbytes), K(MAX_NORMAL_LOG_BODY_SIZE));
-  } else if (OB_FAIL(append_(buffer, nbytes, ref_scn, need_nonblock, allow_compress, cb, lsn, scn))) {
+  } else if (OB_FAIL(append_(buffer, nbytes, ref_scn, need_nonblock, allow_compress, cb, lsn, scn,
+                             skip_pre_async_wait))) {
     CLOG_LOG(WARN, "append big log to palf failed", K(buffer), K(nbytes), K(ref_scn),
              K(need_nonblock), K(allow_compress), K(lsn), K(scn));
   }
@@ -328,6 +349,25 @@ void ObLogHandler::switch_role(const common::ObRole &role, const int64_t proposa
     libpalf_proposer_config_mgr_.on_role_change(role, proposal_id);
   }
 #endif
+}
+
+void ObLogHandler::switch_sync_mode(const palf::SyncMode &sync_mode, const int64_t proposal_id)
+{
+  WLockGuard guard(lock_);
+  sync_mode_ = sync_mode;
+  proposal_id_ = proposal_id;
+}
+
+void ObLogHandler::switch_role_and_sync_mode(const common::ObRole &role,
+                                             const int64_t proposal_id,
+                                             const palf::SyncMode &sync_mode)
+{
+  WLockGuard guard(lock_);
+  role_ = role;
+  proposal_id_ = proposal_id;
+  if (common::LEADER == role_) {
+    sync_mode_ = sync_mode;
+  }
 }
 
 int ObLogHandler::get_role(common::ObRole &role, int64_t &proposal_id) const
@@ -1782,6 +1822,101 @@ int ObLogHandler::stat(palf::PalfStat &palf_stat) const
   return ret;
 }
 
+int ObLogHandler::emergency_append(const void *buffer,
+                      const int64_t nbytes,
+                      const share::SCN &ref_scn,
+                      const bool allow_compress,
+                      AppendCb *cb,
+                      palf::LSN &lsn,
+                      share::SCN &scn,
+                      const ObLogBaseType log_type,
+                      const int64_t expected_proposal_id,
+                      bool need_push_cb)
+{
+  int ret = OB_SUCCESS;
+  PalfAppendOptions opts;
+  opts.need_check_proposal_id = true;
+  ObTimeGuard tg("ObLogHandler::emergency_append", 100000);
+  const void *final_buf = buffer;
+  int64_t final_nbytes = nbytes;
+  void *compression_buf = NULL;
+  bool log_compressed = false;
+
+  int64_t proposal_id = INVALID_PROPOSAL_ID;
+  common::ObRole role = FOLLOWER;
+  bool is_pending_state = false;
+
+  // Check log type: only allow SYNC_MODE_LOG_BASE_TYPE
+  if (OB_ISNULL(buffer) || nbytes <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument for emergency_append", K(ret), KP(buffer), K(nbytes));
+  } else if (SYNC_MODE_LOG_BASE_TYPE != log_type) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(WARN, "emergency_append only supports SYNC_MODE_LOG",
+             K(ret), K(log_type), KPC(this));
+  } else if (INVALID_PROPOSAL_ID == expected_proposal_id) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid expected_proposal_id", K(ret), K(expected_proposal_id), KPC(this));
+  }
+
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+  if (OB_SUCC(ret) && allow_compress) {
+    if (OB_FAIL(compressor_wrapper_.compress_payload(buffer, nbytes, compression_buf,
+                                                     log_compressed, final_buf, final_nbytes))) {
+      //compress_payload() always return OB_SUCCESS
+    }
+  }
+#endif
+  CLOG_LOG(INFO, "emergency_append", K(ret), KPC(this), K(opts), K(buffer), K(nbytes), K(ref_scn),
+           K(allow_compress), K(cb), K(lsn), K(scn), K(log_compressed), K(final_nbytes));
+
+  if (OB_SUCC(ret)) {
+    do {
+      RLockGuard guard(lock_);
+      CriticalGuard(ls_qs_);
+      cb->set_append_start_ts(ObTimeUtility::fast_current_time());
+      if (IS_NOT_INIT) {
+        ret = OB_NOT_INIT;
+      } else if (is_in_stop_state_ || is_offline_) {
+        ret = OB_NOT_RUNNING;
+      } else {
+        // 强同步降级场景下，非leader提供写入路径
+        if (OB_FAIL(palf_handle_->get_role(role, proposal_id, is_pending_state))) {
+          CLOG_LOG(WARN, "get_role failed", K(ret), KPC(this));
+        } else if (LEADER != role || true == is_pending_state) {
+          ret = OB_NOT_MASTER;
+          CLOG_LOG(WARN, "not leader or pending state", K(ret), KPC(this), K(role), K(proposal_id), K(is_pending_state));
+        } else if (proposal_id != expected_proposal_id) {
+          ret = OB_NOT_MASTER;
+          CLOG_LOG(WARN, "proposal_id not match", K(ret), KPC(this), K(proposal_id), K(expected_proposal_id));
+        } else if (OB_FALSE_IT(opts.proposal_id = proposal_id)) {
+        } else if (OB_FAIL(palf_handle_->append(opts, final_buf, final_nbytes, ref_scn, lsn, scn))) {
+          CLOG_LOG(WARN, "emergency append to palf failed", K(ret), KPC(this));
+        } else {
+          cb->set_append_finish_ts(ObTimeUtility::fast_current_time());
+          cb->__set_lsn(lsn);
+          cb->__set_scn(scn);
+          if (need_push_cb) {
+            ret = apply_status_->push_append_cb(cb);
+          }
+          CLOG_LOG(INFO, "emergency append success", K(lsn), K(scn), K(log_compressed),
+                   K(nbytes), K(final_nbytes), K(id_), K(log_type));
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+          //add stat event
+          EVENT_ADD(LOG_STORAGE_COMPRESS_ORIGINAL_SIZE, nbytes);
+          EVENT_ADD(LOG_STORAGE_COMPRESS_COMPRESSED_SIZE, final_nbytes);
+#endif
+        }
+      }
+    } while (0);
+  }
+
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+  compressor_wrapper_.free_compression_buf(compression_buf);
+#endif
+  return ret;
+}
+
 int ObLogHandler::append_(const void *buffer,
                           const int64_t nbytes,
                           const share::SCN &ref_scn,
@@ -1789,7 +1924,8 @@ int ObLogHandler::append_(const void *buffer,
                           const bool allow_compress,
                           AppendCb *cb,
                           palf::LSN &lsn,
-                          share::SCN &scn)
+                          share::SCN &scn,
+                          const bool skip_pre_async_wait)
 {
   int ret = OB_SUCCESS;
   int64_t wait_times = 0;
@@ -1813,6 +1949,30 @@ int ObLogHandler::append_(const void *buffer,
   while (true) {
     // generate opts
     opts.proposal_id = ATOMIC_LOAD(&proposal_id_);
+    // 检查PRE_ASYNC阻塞状态
+    // 如果当前处于pre async阻塞模式，不允许提交日志，需要重试
+    if (!skip_pre_async_wait && OB_FAIL(wait_pre_async_unblocked_())) {
+      if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+        CLOG_LOG(WARN, "wait_pre_async_unblocked_ failed", K(ret), K(need_nonblock), K(skip_pre_async_wait), K(opts), KPC(this));
+      }
+      if (OB_EAGAIN == ret) {
+        if (need_nonblock) {
+          break;
+        } else {
+          int64_t cur_ts = ObClockGenerator::getClock();
+          //MPT降级场景下，非阻塞模式下，重试100ms后，如果还没有成功，则返回OB_EAGAIN
+          if (cur_ts - begin_ts > MAX_APPEND_NONBLOCK_RETRY_INTERNAL) {
+            CLOG_LOG(WARN, "wait_pre_async_unblocked_ failed, try again", K(ret), K(need_nonblock),
+                     K(skip_pre_async_wait), K(opts), KPC(this), K(begin_ts), K(cur_ts));
+            ret = OB_EAGAIN;
+            break;
+          }
+          static const int64_t SLEEP_US = 10;
+          ob_usleep(SLEEP_US);
+          continue;
+        }
+      }
+    }
     do {
       RLockGuard guard(lock_);
       CriticalGuard(ls_qs_);
@@ -1877,6 +2037,9 @@ int ObLogHandler::append_(const void *buffer,
     } else {
       // other ret code, end loop
       break;
+    }
+    if (REACH_TIME_INTERVAL(1*1000*1000)) {
+      CLOG_LOG(WARN, "append failed", K(ret), KPC(this), K(lsn), K(scn), K(opts), K(final_buf), K(final_nbytes));
     }
   }
 
@@ -2195,6 +2358,9 @@ int ObLogHandler::offline()
   } else if (OB_FAIL(disable_sync()) && OB_NOT_INIT != ret && OB_NOT_RUNNING != ret) {
     CLOG_LOG(WARN, "disable_sync failed", K(ret), KPC(this));
   } else {
+    if (OB_SUCCESS != ret) {
+      CLOG_LOG(WARN, "disable_sync failed, but not init or not running", K(ret), KPC(this));
+    } else { } // do nothing
     WLockGuard guard(lock_);
     // NB: make proposal_id_ to be invalid:
     // 1. avoid append success.
@@ -2225,6 +2391,36 @@ int ObLogHandler::offline()
     } else {
       CLOG_LOG(INFO, "LogHandler offline success", K(ret), KPC(this));
     }
+  }
+  return ret;
+}
+
+int ObLogHandler::mark_ls_gc_state()
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSID ls_id(id_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogHandler is not inited", K(ret), KPC(this));
+  } else if (enable_logservice_) {
+    // In shared-storage mode, transport_service_ is not initialized by design, skip mark it.
+    CLOG_LOG(INFO, "no need mark_ls_gc_state status success in shared-storage mode", K(ret), KPC(this));
+  } else if (OB_ISNULL(apply_status_)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "apply_status is null", K(ret), KPC(this));
+  } else if (OB_ISNULL(transport_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "transport service is not init", K(ret), KPC(this));
+  } else if (OB_FAIL(transport_service_->mark_ls_gc_state(ls_id))) {
+    CLOG_LOG(WARN, "failed to mark transport service ls_gc_state", K(ret), KPC(this));
+  } else {
+    apply_status_->mark_ls_gc_state();
+    CLOG_LOG(INFO, "mark ls_gc_state status success", K(ret), KPC(this));
+  }
+
+  if (OB_FAIL(ret)) {
+    ret = OB_EAGAIN;
+    CLOG_LOG(WARN, "mark ls_gc_state failed, need retry", K(ret), KPC(this));
   }
   return ret;
 }
@@ -2505,6 +2701,152 @@ int ObLogHandler::advance_base_lsn_impl_(const LSN &lsn)
   } else if (OB_FAIL(palf_handle_->advance_base_lsn(lsn))) {
     CLOG_LOG(WARN, "advance_base_lsn failed", KR(ret), K(lsn));
   } else {}
+  return ret;
+}
+
+void ObLogHandler::set_pre_async_blocked()
+{
+  ATOMIC_STORE(&is_pre_async_blocked_, true);
+}
+
+void ObLogHandler::clear_pre_async_blocked()
+{
+  ATOMIC_STORE(&is_pre_async_blocked_, false);
+}
+
+void ObLogHandler::mark_sync_mode_degrading()
+{
+  ATOMIC_STORE(&has_sync_mode_degrading_mark_, true);
+}
+
+void ObLogHandler::clear_sync_mode_degrading_mark()
+{
+  ATOMIC_STORE(&has_sync_mode_degrading_mark_, false);
+}
+
+bool ObLogHandler::has_degrading_sync_mode() const
+{
+  return ATOMIC_LOAD(&has_sync_mode_degrading_mark_);
+}
+
+int ObLogHandler::wait_pre_async_unblocked_()
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  // 使用原子操作读取标记，保证可见性
+  if (ATOMIC_LOAD(&is_pre_async_blocked_)) {
+    // 如果处于PRE_ASYNC阻塞状态
+    ret = OB_EAGAIN;
+    CLOG_LOG(TRACE, "append blocked, need retry", K_(id));
+  } else {
+    // 检查实际的sync_mode，防止重启/切主后状态丢失
+    // 如果实际sync_mode是PRE_ASYNC，即使内存标志是false，也应该阻塞
+    int64_t mode_version = 0;
+    palf::SyncMode sync_mode = palf::SyncMode::INVALID_SYNC_MODE;
+    if (OB_ISNULL(palf_handle_)) {
+      // palf_handle_为空，不阻塞
+    } else if (OB_SUCC(palf_handle_->get_sync_mode(mode_version, sync_mode))) {
+      if (palf::SyncMode::PRE_ASYNC == sync_mode) {
+        // 实际sync_mode是PRE_ASYNC，需要阻塞
+        // 同时恢复内存标志，避免频繁查询palf
+        ATOMIC_STORE(&is_pre_async_blocked_, true);
+        ret = OB_EAGAIN;
+        if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+          CLOG_LOG(INFO, "append blocked by PRE_ASYNC sync_mode, restore blocked state after restart/switch",
+                   K_(id), K(mode_version), K(sync_mode));
+        }
+      }
+    }
+    // 如果get_sync_mode失败，忽略错误，不阻塞（避免因为查询失败而阻塞）
+  }
+  return ret;
+}
+
+int ObLogHandler::process_change_sync_mode(const int64_t mode_version,
+                                           const palf::SyncMode &sync_mode,
+                                           const share::SCN &ref_scn,
+                                           const share::ObSyncStandbyStatusAttr &protection_info,
+                                           const share::SCN &sys_ls_pre_async_log_scn,
+                                           share::SCN &end_scn,
+                                           int64_t &new_mode_version,
+                                           const int64_t abs_timeout_us)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogHandler not init", K(ret), K_(id));
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(WARN, "ObLogHandler is in stop state", K(ret), K_(id));
+  } else {
+    ret = sync_mode_manager_.process_upgrade_and_downgrade(mode_version, sync_mode, ref_scn, protection_info,
+                                                           sys_ls_pre_async_log_scn,
+                                                           end_scn, new_mode_version, abs_timeout_us);
+  }
+  return ret;
+}
+
+int ObLogHandler::change_sync_mode(const int64_t mode_version,
+                                   const palf::SyncMode &sync_mode,
+                                   int64_t &new_mode_version,
+                                   int64_t &new_proposal_id)
+{
+  int ret = OB_SUCCESS;
+  const bool is_degrade_request = (palf::SyncMode::ASYNC == sync_mode || palf::SyncMode::PRE_ASYNC == sync_mode);
+  new_proposal_id = INVALID_PROPOSAL_ID;
+  RLockGuard guard(lock_);
+  int64_t proposal_id = ATOMIC_LOAD(&proposal_id_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogHandler not init", K(ret), K_(id));
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(WARN, "ObLogHandler is in stop state", K(ret), K_(id));
+  } else if (OB_ISNULL(palf_handle_)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "palf_handle is null", K(ret), KPC(this));
+  } else if (!is_valid_sync_mode(sync_mode)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid sync_mode", K(ret), KPC(this), K(sync_mode));
+  } else if (is_degrade_request) {
+    // a tricky way to handle a case which log_handler leader doesn't exist.
+    common::ObRole role = common::FOLLOWER;
+    bool is_pending_state = false;
+    if (OB_FAIL(palf_handle_->get_role(role, proposal_id, is_pending_state))) {
+      CLOG_LOG(WARN, "failed to get role", K(ret), K_(id), K(proposal_id));
+    } else if (LEADER != role || true == is_pending_state) {
+      ret = OB_NOT_MASTER;
+      CLOG_LOG(WARN, "not leader or pending state", K(ret), KPC(this), K(role), K(proposal_id), K(is_pending_state));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (is_degrade_request && FALSE_IT(mark_sync_mode_degrading())) {
+  } else if (OB_FAIL(palf_handle_->change_sync_mode(proposal_id, mode_version, sync_mode, new_mode_version, new_proposal_id))) {
+    CLOG_LOG(WARN, "palf change_sync_mode failed", K(ret), K_(id), K(proposal_id), K(mode_version), K(sync_mode), K(is_degrade_request));
+  } else {
+    FLOG_INFO("change_sync_mode success", K(ret), K_(id), K(proposal_id), K(mode_version), K(sync_mode),
+      K(new_proposal_id), K(is_degrade_request));
+  }
+  if (is_degrade_request) {
+    clear_sync_mode_degrading_mark();
+  }
+  return ret;
+}
+
+int ObLogHandler::get_sync_mode(int64_t &mode_version, palf::SyncMode &sync_mode) const
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else if (OB_FAIL(palf_handle_->get_sync_mode(mode_version, sync_mode))) {
+    CLOG_LOG(WARN, "palf get_sync_mode failed", K(ret), K_(id), K(mode_version));
+  } else {
+    FLOG_INFO("get_sync_mode success", K(ret), K_(id), K(mode_version), K(sync_mode));
+  }
   return ret;
 }
 

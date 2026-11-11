@@ -297,11 +297,12 @@ public:
       const int64_t proposal_id,
       const int64_t mode_version,
       const AccessMode &access_mode,
+      const SyncMode &sync_mode,
       const share::SCN &ref_scn);
   bool is_valid() const;
   void reset();
   void operator=(const LogModeMeta &mode_meta);
-  TO_STRING_KV(K_(version), K_(proposal_id), K_(mode_version), K_(access_mode), K_(ref_scn));
+  TO_STRING_KV(K_(version), K_(proposal_id), K_(mode_version), K_(access_mode), K_(ref_scn), K_(sync_mode));
   NEED_SERIALIZE_AND_DESERIALIZE;
 public:
   int64_t version_;
@@ -313,8 +314,11 @@ public:
   // scn lower bound
   // after switching over, scn of all submitted log should be bigger than ref_scn_
   share::SCN ref_scn_;
+  // V2 field: appended at the end to maintain backward compatibility with V1 layout
+  SyncMode sync_mode_;
 
   static constexpr int64_t LOG_MODE_META_VERSION = 1;
+  static constexpr int64_t LOG_MODE_META_VERSION_V2 = 2;
 };
 
 // Garbage collect controller

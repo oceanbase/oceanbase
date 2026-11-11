@@ -85,6 +85,7 @@
   #include "src/storage/direct_load/ob_direct_load_auto_inc_seq_data.h"
   #include "src/storage/tablet/ob_tablet_random_mds_helper.h"
   #include "src/storage/tablet/ob_tablet_random_mds_user_data.h"
+  #include "src/share/ob_sync_standby_status_mds_helper.h"
 #endif
 
 /**************************************************************************************************/
@@ -304,7 +305,6 @@ namespace storage
 }
 namespace share
 {
-  DEFINE_EMPTY(ObSyncStandbyStatusMDSHelper)
 }
 namespace storage
 {

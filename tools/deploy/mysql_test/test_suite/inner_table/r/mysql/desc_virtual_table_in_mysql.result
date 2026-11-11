@@ -6843,6 +6843,16 @@ tablet_ids	longtext	YES		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_lob_check_exception_result;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_sync_standby_dest;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+dest_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+value	longtext	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sync_standby_dest;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_tablet_window_loop_info;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	
@@ -7047,6 +7057,27 @@ keyword_length	bigint(20)	NO		NULL
 keyword_type	varchar(16)	NO		NULL	
 reserved	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_keyword;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_log_transport_stat;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+role	varchar(32)	NO		NULL	
+enabled	tinyint(4)	NO		NULL	
+end_lsn	bigint(20) unsigned	NO		NULL	
+end_scn	bigint(20) unsigned	NO		NULL	
+last_sent_lsn	bigint(20) unsigned	NO		NULL	
+last_sent_scn	bigint(20) unsigned	NO		NULL	
+standby_end_lsn	bigint(20) unsigned	NO		NULL	
+standby_end_scn	bigint(20) unsigned	NO		NULL	
+standby_addr	varchar(52)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_log_transport_stat;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_log_transport_stat runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.__all_virtual_table_opt_stat_invalidate_plan;

@@ -20,14 +20,25 @@
 #include "share/ob_root_addr_agent.h"//ObRootAddr
 #include "share/schema/ob_schema_struct.h"
 #include "share/ob_tenant_switchover_status.h"
+#include "share/restore/ob_log_restore_source.h"
 #include "logservice/palf/palf_options.h"
 #include <cstdint>
 
 namespace oceanbase
 {
+namespace obrpc
+{
+class ObSrvRpcProxy;
+class ObLogServiceRpcProxy;
+}
+namespace palf
+{
+struct PalfStat;
+}
 namespace share
 {
 class ObRestoreSourceServiceAttr;
+class ObSyncStandbyDestStruct;
 class ObLogRestoreMySQLProvider : public common::sqlclient::ObMySQLServerProvider
 {
 public:
@@ -129,27 +140,84 @@ public:
       const char *user_password);
 
   // get log restore source tenant_id
-  int get_tenant_id(char *tenant_name, uint64_t &tenant_id);
+  int get_tenant_id(const char *tenant_name, uint64_t &tenant_id);
   // get log restore source cluster_id
   int get_cluster_id(uint64_t tenant_id, int64_t &cluster_id);
   // get log restore source tenant_mode, oracle or mysql
   int get_compatibility_mode(const uint64_t tenant_id, ObCompatibilityMode &compat_mode);
   // get log restore source tenant access point
   int get_server_ip_list(const uint64_t tenant_id, common::ObArray<common::ObAddr> &addrs);
+  // get log restore source tenant access point with sql_port and svr_port
+  int get_server_ip_and_svr_port_list(const uint64_t tenant_id,
+      common::ObIArray<common::ObAddr> &sql_addrs,
+      common::ObIArray<int32_t> &svr_ports);
   //get tenant server ip and prot
   //param[in] tenant_id : primary tenant_id
   int get_server_addr(const uint64_t tenant_id, common::ObIArray<common::ObAddr> &addrs);
+  int get_ls_sync_scn(const ObLSID &ls_id, share::SCN &sync_scn);
   int check_begin_lsn(const uint64_t tenant_id);
   // get log restore source tenant info, includes tenant role and tennat status
-  int get_tenant_info(ObTenantRole &role, schema::ObTenantStatus &status, ObTenantSwitchoverStatus &switchover_status);
+  int get_tenant_info(ObAllTenantInfo &tenant_info, schema::ObTenantStatus &tenant_status);
+  // get log restore source from log restore source tenant, returns ObLogRestoreSourceItem containing all fields
+  int get_log_restore_source(bool &is_empty, ObLogRestoreSourceItem &item);
+  // convenience wrapper: get log restore source and parse service attr (SERVICE type only)
+  int get_log_restore_source(bool &is_empty, ObRestoreSourceServiceAttr &restore_source_service_attr);
   // get the access_mode and max_scn of the specific LS in log restore source tenant
   int get_max_log_info(const ObLSID &id, palf::AccessMode &mode, SCN &scn);
+  // get max END_SCN among specified leader LSs in log restore source tenant
+  int get_primary_max_end_scn(const uint64_t primary_tenant_id,
+                              const common::ObIArray<ObLSID> &ls_id_array,
+                              SCN &max_end_scn);
+  // RPC-based variant of get_max_log_info, bypassing SQL/transaction/GTS on the source side.
+  // Use this on switchover paths to avoid getting blocked by source-side GTS unavailability
+  // during the source tenant's primary->standby transition.
+  // @param[in] service_attr, primary service attributes (for cluster id / tenant id / svr list)
+  // @param[in] srv_rpc_proxy, ObSrvRpcProxy for primary leader address lookup
+  // @param[in] log_rpc_proxy, ObLogServiceRpcProxy for OB_LOG_GET_PALF_STAT
+  // @param[in] id, log stream id
+  // @param[out] mode, access mode of the LS leader on the source tenant
+  // @param[out] scn, max scn of the LS leader on the source tenant
+  int get_max_log_info_by_rpc(const ObRestoreSourceServiceAttr &service_attr,
+                              obrpc::ObSrvRpcProxy *srv_rpc_proxy,
+                              obrpc::ObLogServiceRpcProxy *log_rpc_proxy,
+                              const ObLSID &id,
+                              palf::AccessMode &mode,
+                              SCN &scn);
   // get ls from dba_ob_ls
   int is_ls_existing(const ObLSID &id);
+  // query primary ls leader address by rpc
+  // @param[in] service_attr, primary service attributes
+  // @param[in] rpc_proxy, log transport rpc proxy
+  // @param[in] ls_id, log stream id
+  // @param[out] leader_addr, leader address of the log stream
+  int get_primary_ls_leader_addr_by_rpc(const ObRestoreSourceServiceAttr &service_attr,
+      obrpc::ObSrvRpcProxy *rpc_proxy, const ObLSID &ls_id, common::ObAddr &leader_addr);
   // check if the source cluster has the same cluster id as current cluster, but they are actually
   // two different clusters, if so, out param `res` will be true, otherwise false
   int check_different_cluster_with_same_cluster_id(const int64_t source_cluster_id, bool &res);
+  // get tenant committed info
+  int get_tenant_committed_info(const uint64_t &tenant_id,
+                                const ObLSID &ls_id,
+                                palf::LSN &standby_committed_end_lsn,
+                                share::SCN &standby_committed_end_scn);
 private:
+  // get palf stat of the restore source LS leader by rpc, used by get_max_log_info_by_rpc.
+  // It locates the LS leader via srv_rpc_proxy and fetches palf stat via log_rpc_proxy
+  // (OB_LOG_GET_PALF_STAT), bypassing source-side SQL/transaction/GTS which may block when
+  // the source tenant is transitioning primary->standby on switchover.
+  // Callers extract the fields they need from the returned palf stat.
+  // @param[in] service_attr, restore source service attributes
+  // @param[in] srv_rpc_proxy, ObSrvRpcProxy to locate the LS leader address
+  // @param[in] log_rpc_proxy, ObLogServiceRpcProxy for OB_LOG_GET_PALF_STAT
+  // @param[in] tenant_id, restore source tenant id used as the rpc's tenant
+  // @param[in] ls_id, log stream id
+  // @param[out] palf_stat, palf stat of the LS leader on the restore source tenant
+  int get_source_ls_leader_palf_stat_by_rpc_(const ObRestoreSourceServiceAttr &service_attr,
+                                    obrpc::ObSrvRpcProxy *srv_rpc_proxy,
+                                    obrpc::ObLogServiceRpcProxy *log_rpc_proxy,
+                                    const uint64_t tenant_id,
+                                    const ObLSID &ls_id,
+                                    palf::PalfStat &palf_stat);
   // check if user or password changed
   bool is_user_changed_(const char *user_name, const char *user_password);
   void destroy_tg_();
@@ -158,8 +226,12 @@ private:
                           const char *user_password,
                           common::ObIArray<common::ObAddr> *new_server_list);
   int64_t cal_timeout_();
+  int change_mysql_error_(int mysql_error);
 private:
-  int construct_server_ip_list(const common::ObSqlString &sql, common::ObIArray<common::ObAddr> &addrs);
+  int construct_server_ip_list(const common::ObSqlString &sql,
+      common::ObIArray<common::ObAddr> &addrs,
+      common::ObIArray<int32_t> *svr_ports,
+      const bool need_svr_port);
   bool inited_;
   uint64_t tenant_id_;
   int tg_id_;

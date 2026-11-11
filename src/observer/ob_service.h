@@ -29,6 +29,7 @@ class ObIAliveServerTracer;
 struct ObTabletReplicaChecksumItem;
 class ObTenantDagScheduler;
 class ObIDag;
+class ObLSLocation;
 }
 namespace storage
 {
@@ -162,6 +163,8 @@ public:
 
   int get_ls_sync_scn(const obrpc::ObGetLSSyncScnArg &arg,
                            obrpc::ObGetLSSyncScnRes &result);
+  int get_ls_standby_sync_scn(const obrpc::ObGetLSStandbySyncScnArg &arg,
+                              obrpc::ObGetLSStandbySyncScnRes &result);
   int force_set_ls_as_single_replica(const obrpc::ObForceSetLSAsSingleReplicaArg &arg);
   int force_remove_ls_replica(const obrpc::ObForceRemoveLSReplicaArg &arg);
   int force_set_server_list(const obrpc::ObForceSetServerListArg &arg, obrpc::ObForceSetServerListResult &result);
@@ -247,6 +250,9 @@ public:
   int get_leader_locations(
       const obrpc::ObGetLeaderLocationsArg &arg,
       obrpc::ObGetLeaderLocationsResult &result);
+  int get_ls_location(
+      const obrpc::ObGetLSLocationArg &arg,
+      share::ObLSLocation &result);
   int batch_broadcast_schema(
       const obrpc::ObBatchBroadcastSchemaArg &arg,
       obrpc::ObBatchBroadcastSchemaResult &result);
@@ -268,6 +274,7 @@ public:
   int recycle_replica();
   // ObClearLocationCacheP @RS::admin to clear location cache
   int clear_location_cache();
+  int clear_sync_standby_dest_cache(const obrpc::ObClearSyncStandbyDestCacheArg &arg);
   // ObDropReplicaP @RS::admin to drop replica
   int set_ds_action(const obrpc::ObDebugSyncActionArg &arg);
   // ObRequestHeartbeatP @RS::admin to cancel delete server

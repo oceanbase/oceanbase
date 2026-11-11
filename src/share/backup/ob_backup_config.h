@@ -116,17 +116,20 @@ class ObBackupConfigParserGenerator final
 {
 public:
   ObBackupConfigParserGenerator(): is_setted_(false), restore_source_type_(share::ObLogRestoreSourceType::INVALID),
-  config_parser_(nullptr), allocator_() {}
+  recover_delay_us_(0), config_parser_(nullptr), allocator_() {}
   ~ObBackupConfigParserGenerator() { reset(); }
   int set(const ObBackupConfigType &type, const uint64_t tenant_id, const common::ObSqlString &value);
   void reset();
   ObIBackupConfigItemParser *&get_parser() { return config_parser_; }
+  int64_t get_recover_delay_us() const { return recover_delay_us_; }
 private:
   int generate_parser_(const ObBackupConfigType &type, const uint64_t tenant_id);
-  int set_restore_source_type_(const common::ObSqlString &value);
+  int set_restore_source_type_(const uint64_t tenant_id, const common::ObSqlString &value);
+  int parse_delay_with_check_(const uint64_t tenant_id, char *delay_str);
 private:
   bool is_setted_;
   share::ObLogRestoreSourceType restore_source_type_;
+  int64_t recover_delay_us_;
   ObIBackupConfigItemParser *config_parser_;
   common::ObArenaAllocator allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupConfigParserGenerator);
@@ -253,6 +256,10 @@ public:
       obrpc::ObSrvRpcProxy &rpc_proxy,
       share::schema::ObMultiVersionSchemaService &schema_service,
       const obrpc::ObAdminSetConfigArg &arg);
+  static int get_item_user_tenant_id(
+    const obrpc::ObAdminSetConfigItem &item,
+    share::schema::ObMultiVersionSchemaService &schema_service,
+    uint64_t &user_tenant_id);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupConfigUtil);
 };

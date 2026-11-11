@@ -15,6 +15,7 @@
 #include "share/backup/ob_backup_clean_util.h"
 #include "share/ob_rpc_struct.h"
 #include "share/ob_license_utils.h"
+#include "share/ob_tenant_info_proxy.h"
 #include "share/ob_server_struct.h"
 #include "share/io/ob_io_manager.h"
 #include "lib/restore/ob_object_storage_base.h"
@@ -138,7 +139,7 @@ int ObBackupConfigParserGenerator::set(const ObBackupConfigType &type, const uin
     config_parser_ = nullptr;
   }
   if (OB_SUCC(ret)) {
-    if ((ObBackupConfigType::Type::LOG_RESTORE_SOURCE == type.get_type()) && OB_FAIL(set_restore_source_type_(value))) {
+    if ((ObBackupConfigType::Type::LOG_RESTORE_SOURCE == type.get_type()) && OB_FAIL(set_restore_source_type_(tenant_id, value))) {
       LOG_WARN("fail to get restore source type");
     } else if (OB_FAIL(generate_parser_(type, tenant_id))) {
       LOG_WARN("fail to generate_parser", K(ret));
@@ -155,7 +156,7 @@ the restore_source_type_ will be parsed into SERVICE type.
 If the value is "LOCATION=file:///data/1/zhaoyongheng.zyh/archivelog";
 the restore_source_type_ will be parsed into LOCATION type.
 */
-int ObBackupConfigParserGenerator::set_restore_source_type_(const common::ObSqlString &value)
+int ObBackupConfigParserGenerator::set_restore_source_type_(const uint64_t tenant_id, const common::ObSqlString &value)
 {
   int ret = OB_SUCCESS;
   char tmp_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
@@ -184,6 +185,10 @@ int ObBackupConfigParserGenerator::set_restore_source_type_(const common::ObSqlS
         is_location = true;
       } else if (0 == STRCASECMP(tmp_token, OB_STR_SERVICE)) {
         is_service = true;
+      } else if (0 == STRCASECMP(tmp_token, OB_STR_DELAY)) {
+        if (OB_FAIL(parse_delay_with_check_(tenant_id, tmp_saveptr))) {
+          LOG_WARN("failed to parse DELAY with version and protection mode check", KR(ret), K(tenant_id));
+        }
       }
     }
     if (OB_FAIL(ret)) {
@@ -198,6 +203,36 @@ int ObBackupConfigParserGenerator::set_restore_source_type_(const common::ObSqlS
       restore_source_type_ = share::ObLogRestoreSourceType::SERVICE;
     }
     LOG_DEBUG("log restore source type", K(is_location), K(is_service));
+  }
+  return ret;
+}
+
+int ObBackupConfigParserGenerator::parse_delay_with_check_(
+    const uint64_t tenant_id,
+    char *delay_str)
+{
+  int ret = OB_SUCCESS;
+  bool delay_enabled = false;
+  if (OB_FAIL(share::ObLogRestoreSourceItem::check_delay_data_version(
+          tenant_id, delay_enabled))) {
+    LOG_WARN("delay data version check failed", KR(ret));
+  } else if (!delay_enabled) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("DELAY is not supported before version 4.4.2.2", KR(ret), K(tenant_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "set DELAY in log_restore_source before version 4.4.2.2 is");
+  } else {
+    share::ObAllTenantInfo tenant_info;
+    if (OB_FAIL(share::ObAllTenantInfoProxy::load_tenant_info(tenant_id, GCTX.sql_proxy_,
+            false/*for_update*/, tenant_info))) {
+      LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
+    } else if (!tenant_info.get_protection_mode().is_maximum_performance()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("DELAY is only supported in MAXIMUM PERFORMANCE mode", KR(ret), K(tenant_id),
+          "protection_mode", tenant_info.get_protection_mode());
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "set DELAY in non-MAXIMUM PERFORMANCE mode is");
+    } else if (OB_FAIL(share::ObLogRestoreSourceItem::parse_delay_value(delay_str, recover_delay_us_))) {
+      LOG_WARN("failed to parse delay value", KR(ret));
+    }
   }
   return ret;
 }
@@ -238,7 +273,10 @@ int ObBackupConfigParserGenerator::generate_parser_(const ObBackupConfigType &ty
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("parser generator alloc memory failed", K(ret));
         } else {
-          config_parser_ = new(tmp_ptr) ObLogRestoreSourceServiceConfigParser(ObBackupConfigType::LOG_RESTORE_SOURCE, tenant_id);
+          ObLogRestoreSourceServiceConfigParser *parser =
+              new(tmp_ptr) ObLogRestoreSourceServiceConfigParser(ObBackupConfigType::LOG_RESTORE_SOURCE, tenant_id);
+          parser->set_recover_delay_us(recover_delay_us_);
+          config_parser_ = parser;
         }
         break;
       } else if (share::ObLogRestoreSourceType::LOCATION == restore_source_type_) {
@@ -248,7 +286,10 @@ int ObBackupConfigParserGenerator::generate_parser_(const ObBackupConfigType &ty
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("parser generator alloc memory failed", K(ret));
         } else {
-          config_parser_ = new(tmp_ptr) ObLogRestoreSourceLocationConfigParser(ObBackupConfigType::LOG_RESTORE_SOURCE, tenant_id, 0);
+          ObLogRestoreSourceLocationConfigParser *parser =
+              new(tmp_ptr) ObLogRestoreSourceLocationConfigParser(ObBackupConfigType::LOG_RESTORE_SOURCE, tenant_id, 0);
+          parser->set_recover_delay_us(recover_delay_us_);
+          config_parser_ = parser;
         }
         break;
       }
@@ -1219,6 +1260,31 @@ int ObChangeExternalStorageDestMgr::set_attribute(const common::ObString &attrib
   return ret;
 }
 
+int ObBackupConfigUtil::get_item_user_tenant_id(
+  const obrpc::ObAdminSetConfigItem &item,
+  share::schema::ObMultiVersionSchemaService &schema_service,
+  uint64_t &exec_tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if ((common::is_sys_tenant(item.exec_tenant_id_) && item.tenant_name_.is_empty())
+      || (common::is_user_tenant(item.exec_tenant_id_) && !item.tenant_name_.is_empty())
+      || common::is_meta_tenant(item.exec_tenant_id_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("backup config only support user tenant", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup config only support user tenant");
+  } else if (!item.tenant_name_.is_empty()) {
+    schema::ObSchemaGetterGuard guard;
+    if (OB_FAIL(schema_service.get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+      LOG_WARN("fail to get tenant schema guard", K(ret));
+    } else if (OB_FAIL(guard.get_tenant_id(ObString(item.tenant_name_.ptr()), exec_tenant_id))) {
+      LOG_WARN("fail to get tenant id", K(ret));
+    }
+  } else {
+    exec_tenant_id = item.exec_tenant_id_;
+  }
+  return ret;
+}
+
 int ObBackupConfigUtil::admin_set_backup_config(
     common::ObMySQLProxy &sql_proxy,
     obrpc::ObSrvRpcProxy &rpc_proxy,
@@ -1240,24 +1306,8 @@ int ObBackupConfigUtil::admin_set_backup_config(
     uint64_t exec_tenant_id = OB_INVALID_TENANT_ID;
     ObMySQLTransaction trans;
     config_parser_mgr.reset();
-    if ((common::is_sys_tenant(item.exec_tenant_id_) && item.tenant_name_.is_empty())
-        || (common::is_user_tenant(item.exec_tenant_id_) && !item.tenant_name_.is_empty())
-        || common::is_meta_tenant(item.exec_tenant_id_)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("backup config only support user tenant", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup config only support user tenant");
-    } else if (!item.tenant_name_.is_empty()) {
-      schema::ObSchemaGetterGuard guard;
-      if (OB_FAIL(schema_service.get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
-        LOG_WARN("fail to get tenant schema guard", K(ret));
-      } else if (OB_FAIL(guard.get_tenant_id(ObString(item.tenant_name_.ptr()), exec_tenant_id))) {
-        LOG_WARN("fail to get tenant id", K(ret));
-      }
-    } else {
-      exec_tenant_id = item.exec_tenant_id_;
-    }
-
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(get_item_user_tenant_id(item, schema_service, exec_tenant_id))) {
+      LOG_WARN("failed to get exec tenant id from ObAdminSetConfigItem", KR(ret), K(item));
     } else if (OB_FAIL(trans.start(&sql_proxy, gen_meta_tenant_id(exec_tenant_id)))) {
       LOG_WARN("fail to start trans", K(ret));
     } else {

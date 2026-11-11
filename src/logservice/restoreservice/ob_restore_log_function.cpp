@@ -104,6 +104,22 @@ int ObRestoreLogFunction::handle_group_entry(
   return ret;
 }
 
+bool ObRestoreLogFunction::handle_restore_log_error_(int &ret)
+{
+  bool btet = true;
+  if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
+    ret = OB_SUCCESS;
+  } else if (OB_NOT_MASTER == ret
+             || OB_EAGAIN == ret
+             || OB_RESTORE_LOG_TO_END == ret
+             || OB_STATE_NOT_MATCH == ret) {
+    ret = OB_NEED_RETRY;
+  } else {
+    btet = false;
+  }
+  return btet;
+}
+
 int ObRestoreLogFunction::process_(const share::ObLSID &id,
     const int64_t proposal_id,
     const palf::LSN &lsn,
@@ -115,12 +131,16 @@ int ObRestoreLogFunction::process_(const share::ObLSID &id,
   int ret = OB_SUCCESS;
   do {
     GET_RESTORE_HANDLER_CTX(id) {
-      if (OB_FAIL(restore_handler->raw_write(proposal_id, lsn, scn, buf, buf_size))) {
-        if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
-          ret = OB_SUCCESS;
-        } else if (OB_NOT_MASTER  == ret || OB_EAGAIN == ret || OB_RESTORE_LOG_TO_END == ret) {
-          ret = OB_NEED_RETRY;
-        } else {
+      int64_t new_proposal_id = proposal_id;
+      // 与 ObRemoteLogWriter::submit_log_ 一致：仅在 SYNC/PRE_ASYNC 下解析并应用 sync mode 日志，
+      // 避免在热路径上无谓进入 change_sync_mode 与 PALF 锁竞争。
+      if (OB_FAIL(restore_handler->try_handle_sync_mode_log(
+                  proposal_id, lsn, scn, buf, buf_size, new_proposal_id))) {
+        if (!handle_restore_log_error_(ret)) {
+          LOG_WARN("try handle sync mode log failed", K(ret), K(id), K(proposal_id), K(lsn), K(scn), K(buf), K(buf_size));
+        }
+      } else if (OB_FAIL(restore_handler->raw_write(new_proposal_id, lsn, scn, buf, buf_size))) {
+        if (!handle_restore_log_error_(ret)) {
           LOG_WARN("raw write failed", K(ret), K(id), K(lsn), K(buf), K(buf_size));
         }
       }

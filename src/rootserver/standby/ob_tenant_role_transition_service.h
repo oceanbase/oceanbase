@@ -13,6 +13,7 @@
 #include "share/ls/ob_ls_status_operator.h"//ObLSStatusOperator
 #include "share/balance/ob_balance_task_helper_operator.h"//ObBalanceTaskHelper
 #include "share/balance/ob_balance_task_table_operator.h"
+#include "rootserver/standby/ob_ls_log_mode_modifier.h"
 
 namespace oceanbase
 {
@@ -108,39 +109,89 @@ public:
   ObTenantRoleTransNonSyncInfo() : is_sync_(true), not_sync_checkpoints_() {}
   ~ObTenantRoleTransNonSyncInfo() {}
   int init(const ObArray<obrpc::ObCheckpoint> &switchover_checkpoints);
+  void reset() { is_sync_ = true; not_sync_checkpoints_.reset(); }
   int64_t to_string (char *buf, const int64_t buf_len) const;
   bool is_sync() const { return is_sync_; }
+  int64_t get_not_sync_count() const { return not_sync_checkpoints_.count(); }
+  int64_t to_ls_id_string(char *buf, const int64_t buf_len) const;
 private:
   static constexpr int64_t MAX_PRINT_LS_NUM = 5;
   bool is_sync_;
   ObArray<obrpc::ObCheckpoint> not_sync_checkpoints_;
 };
 
-class ObLSAccessModeModifier {
+// Aggregated result of a single check_sync_to_latest_ observation.
+// is_valid_ tells the caller whether the other fields reflect a real
+// observation or are just default-constructed (when no inner iter ever
+// succeeded), so the outer event payload won't be self-contradictory.
+struct ObTenantRoleTransSyncResult
+{
 public:
-  ObLSAccessModeModifier(const uint64_t tenant_id, const uint64_t switchover_epoch, const SCN &ref_scn,
-    const SCN &sys_ls_sync_scn, const palf::AccessMode target_access_mode,
-    const share::ObLSStatusInfoArray *status_info_array,
-    common::ObMySQLProxy *sql_proxy, obrpc::ObSrvRpcProxy *rpc_proxy)
-    : tenant_id_(tenant_id), switchover_epoch_(switchover_epoch), ls_wait_sync_scn_max_(0),
-      ref_scn_(ref_scn), sys_ls_sync_scn_(sys_ls_sync_scn), target_access_mode_(target_access_mode),
-      status_info_array_(status_info_array), sql_proxy_(sql_proxy), rpc_proxy_(rpc_proxy) {}
-  ~ObLSAccessModeModifier() {}
-  int change_ls_access_mode();
-  int64_t get_ls_wait_sync_scn_max() const { return ls_wait_sync_scn_max_; }
+  ObTenantRoleTransSyncResult()
+    : is_sys_ls_synced_(false), is_all_ls_synced_(false),
+      non_sync_info_(), is_valid_(false) {}
+  ~ObTenantRoleTransSyncResult() {}
+  void reset()
+  {
+    is_sys_ls_synced_ = false;
+    is_all_ls_synced_ = false;
+    non_sync_info_.reset();
+    is_valid_ = false;
+  }
+  void set(const bool is_sys_ls_synced, const bool is_all_ls_synced,
+           const ObTenantRoleTransNonSyncInfo &non_sync_info)
+  {
+    is_sys_ls_synced_ = is_sys_ls_synced;
+    is_all_ls_synced_ = is_all_ls_synced;
+    non_sync_info_ = non_sync_info;
+    is_valid_ = true;
+  }
+  bool is_valid() const { return is_valid_; }
+  bool is_sys_ls_synced() const { return is_sys_ls_synced_; }
+  bool is_all_ls_synced() const { return is_all_ls_synced_; }
+  const ObTenantRoleTransNonSyncInfo &get_non_sync_info() const { return non_sync_info_; }
+  TO_STRING_KV(K_(is_valid), K_(is_sys_ls_synced), K_(is_all_ls_synced), K_(non_sync_info));
 private:
-  int get_ls_access_mode_(ObIArray<obrpc::ObLSAccessModeInfo> &ls_access_info);
-  int do_change_ls_access_mode_(const ObIArray<obrpc::ObLSAccessModeInfo> &ls_access_info);
-  int check_inner_stat_() const;
-  uint64_t tenant_id_;
-  uint64_t switchover_epoch_;
-  int64_t ls_wait_sync_scn_max_;
-  SCN ref_scn_;
-  SCN sys_ls_sync_scn_;
-  palf::AccessMode target_access_mode_;
-  const share::ObLSStatusInfoArray *status_info_array_;
-  common::ObMySQLProxy *sql_proxy_;
-  obrpc::ObSrvRpcProxy *rpc_proxy_;
+  bool is_sys_ls_synced_;
+  bool is_all_ls_synced_;
+  ObTenantRoleTransNonSyncInfo non_sync_info_;
+  bool is_valid_;
+};
+
+struct ObTenantRoleTransReadinessError
+{
+public:
+  enum Phase {
+    NONE = 0,
+    SYNC,
+    REPLAY
+  };
+  static const int64_t NOT_READY_INFO_BUF_LEN = 256;
+  ObTenantRoleTransReadinessError() : phase_(NONE), original_ret_(OB_SUCCESS), not_ready_info_() {}
+  ~ObTenantRoleTransReadinessError() {}
+  void reset()
+  {
+    phase_ = NONE;
+    original_ret_ = OB_SUCCESS;
+    not_ready_info_[0] = '\0';
+  }
+  void set(const Phase phase, const int original_ret)
+  {
+    phase_ = phase;
+    original_ret_ = original_ret;
+  }
+  bool is_valid() const { return NONE != phase_ && OB_SUCCESS != original_ret_; }
+  Phase get_phase() const { return phase_; }
+  int get_original_ret() const { return original_ret_; }
+  bool has_not_ready_info() const { return '\0' != not_ready_info_[0]; }
+  char *get_not_ready_info_buf() { return not_ready_info_; }
+  const char *get_not_ready_info() const { return not_ready_info_; }
+  int64_t get_not_ready_info_buf_len() const { return NOT_READY_INFO_BUF_LEN; }
+  TO_STRING_KV(K_(phase), K_(original_ret), KCSTRING(not_ready_info_));
+private:
+  Phase phase_;
+  int original_ret_;
+  char not_ready_info_[NOT_READY_INFO_BUF_LEN];
 };
 
 /*description:
@@ -157,24 +208,27 @@ public:
     cost_detail_(NULL),
     all_ls_info_(NULL),
     has_restore_source_(false),
-    is_verify_(false) {}
+    is_verify_(false),
+    is_verify_nowait_(false) {}
   virtual ~ObTenantRoleTransitionService() {}
   int init(
       uint64_t tenant_id,
       const obrpc::ObSwitchTenantArg::OpType &switch_optype,
       const bool is_verify,
+      const bool is_verify_nowait,
       common::ObMySQLProxy *sql_proxy,
       obrpc::ObSrvRpcProxy *rpc_proxy,
       ObTenantRoleTransCostDetail *cost_detail,
       ObTenantRoleTransAllLSInfo *all_ls_info);
   int failover_to_primary();
   int check_inner_stat();
-  int do_switch_access_mode_to_append(const share::ObAllTenantInfo &tenant_info,
+  int do_switch_access_mode_to_append(share::ObAllTenantInfo &tenant_info,
                              const share::ObTenantRole &target_tenant_role);
   int do_switch_access_mode_to_raw_rw(const share::ObAllTenantInfo &tenant_info);
   int get_tenant_ref_scn_(const share::SCN &sync_scn, share::SCN &ref_scn);
   //before primary tenant switchover to standby, must set sys LS's sync_scn to lastest
   int report_sys_ls_sync_scn_();
+  static int get_target_sync_mode_(const share::ObAllTenantInfo &tenant_info, palf::SyncMode &target_sync_mode);
   void set_switchover_epoch(const int64_t switchover_epoch)
   {
     switchover_epoch_ = switchover_epoch;
@@ -202,6 +256,8 @@ public:
       ObAllTenantInfo &new_tenant_info);
 
   int wait_sys_ls_sync_to_latest_until_timeout_(const uint64_t tenant_id, ObAllTenantInfo &tenant_info);
+  int do_check_lossless_failover_(share::ObAllTenantInfo &tenant_info);
+  int try_lossless_failover_(share::ObAllTenantInfo &tenant_info);
   /**
    * @description:
    *    wait tenant sync to switchover checkpoint until timeout
@@ -226,24 +282,17 @@ public:
 
   void broadcast_tenant_info(const char* const log_mode);
 
-  /**
-   * @description:
-   *    get specified ls list sync_scn by rpc, which is named as checkpoint
-   * @param[in] tenant_id the tenant to get switchover checkpoint
-   * @param[in] status_info_array ls list to get sync scn
-   * @param[in] get_latest_scn whether to get latest scn
-   * @param[out] checkpoints switchover checkpoint
-   * @return return code
-   */
-  static int get_checkpoints_by_rpc(
-      const uint64_t tenant_id,
-      const share::ObLSStatusInfoIArray &status_info_array,
-      const bool get_latest_scn,
-      ObIArray<obrpc::ObCheckpoint> &checkpoints
-  );
   share::SCN get_so_scn() const { return so_scn_; }
+  static int notify_thread(const uint64_t tenant_id,
+      const obrpc::ObNotifyTenantThreadArg::TenantThreadType &thread_type);
+  // Wake up ObRecoveryLSService background thread when LS_ALTER tasks remain
+  // unsettled so they get processed promptly instead of waiting up to 10s.
+  static int notify_recovery_ls_service(uint64_t tenant_id);
 
 private:
+  int clear_log_restore_source_();
+  int try_change_protection_mode_(share::ObAllTenantInfo &tenant_info);
+  int check_need_change_protection_mode_(const share::ObAllTenantInfo &tenant_info, bool &downgrade);
   int do_failover_to_primary_(const share::ObAllTenantInfo &tenant_info);
   int do_prepare_flashback_(share::ObAllTenantInfo &tenant_info);
   int do_flashback_();
@@ -286,7 +335,9 @@ private:
    */
   int check_sync_to_latest_do_while_(
     const ObAllTenantInfo &tenant_info,
-    const bool only_check_sys_ls);
+    const bool only_check_sys_ls,
+    const bool is_failover,
+    ObTenantRoleTransSyncResult *last_result_out = nullptr);
 
   /**
    * @description:
@@ -299,12 +350,28 @@ private:
   int check_sync_to_latest_(
       const uint64_t tenant_id,
       const bool only_check_sys_ls,
+      const bool is_failover,
       const ObAllTenantInfo &tenant_info,
       bool &is_sys_ls_synced,
-      bool &is_all_ls_synced);
+      bool &is_all_ls_synced,
+      ObTenantRoleTransNonSyncInfo *non_sync_info_out = nullptr);
 
+  int check_sync_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready, bool &need_retry,
+      ObTenantRoleTransReadinessError &readiness_error);
+  int check_replay_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready, bool &need_retry,
+      ObTenantRoleTransReadinessError &readiness_error);
+  int check_failover_to_primary_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready,
+      bool &need_retry, ObTenantRoleTransReadinessError &readiness_error);
+  int do_readiness_check_(share::ObAllTenantInfo &tenant_info);
+  // Promote the Verify level with the readiness snapshot epoch and broadcast it after commit.
+  int try_promote_semi_sync_verify_protection_level_(
+      const share::ObAllTenantInfo &expected_tenant_info);
+  int convert_readiness_error_to_not_allow_(const ObTenantRoleTransReadinessError &readiness_error);
   int do_prepare_flashback_for_switch_to_primary_(share::ObAllTenantInfo &tenant_info);
   int do_prepare_flashback_for_failover_to_primary_(share::ObAllTenantInfo &tenant_info);
+  int do_prepare_flashback_for_lossless_failover_to_primary_(share::ObAllTenantInfo &tenant_info);
+
+  int do_prepare_flashback_for_failover_to_primary_after_sync_(share::ObAllTenantInfo &tenant_info);
   int check_and_update_sys_ls_recovery_stat_in_switchover_(
       const uint64_t tenant_id,
       const bool switch_to_primary,
@@ -313,11 +380,9 @@ private:
       const SCN &target_tenant_sync_scn/* tenant target sync scn in switchover */);
   int wait_ls_balance_task_finish_();
   int wait_rebuild_master_key_version_finish_();
-  int check_ls_balance_task_finish_(
-      ObBalanceTaskArray &balance_task_array, ObArray<ObBalanceTaskHelper> &ls_balance_tasks,
-      share::ObAllTenantInfo &cur_tenant_info, bool &is_finish);
-  int notify_recovery_ls_service_();
+
   int get_all_ls_status_and_change_access_mode_(
+      const ObAllTenantInfo &tenant_info,
       const palf::AccessMode target_access_mode,
       const share::SCN &ref_scn,
       const share::SCN &sys_ls_sync_scn);
@@ -326,11 +391,12 @@ private:
     const share::ObAllTenantInfo &cur_tenant_info,
     const ObArray<ObBalanceTaskHelper> &ls_balance_tasks,
     const ObBalanceTaskArray &balance_task_array,
-    const char * const op_str);
+    const char * const op_str,
+    char *error_info,
+    const int64_t error_info_len);
 
 private:
   const static int64_t SEC_UNIT = 1000L * 1000L;
-  const static int64_t PRINT_INTERVAL = 1000L * 1000L;
 
 private:
   uint64_t tenant_id_;
@@ -343,6 +409,7 @@ private:
   ObTenantRoleTransAllLSInfo *all_ls_info_;
   bool has_restore_source_;
   bool is_verify_;
+  bool is_verify_nowait_;
 };
 }
 }
