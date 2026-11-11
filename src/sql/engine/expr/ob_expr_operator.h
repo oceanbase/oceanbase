@@ -1237,11 +1237,12 @@ public:
                               ObExprResType &type3,
                               common::ObExprTypeCtx &type_ctx,
                               const common::ObObjType cmp_type) const;
+  // is_bound_left indicates whether types[1] is the numerical lower bound.
   int get_cmp_result_type3(ObExprResType &type,
                            bool &need_no_cast,
                            ObExprResType *types,
                            const int64_t param_num,
-                           const bool has_lower,
+                           const bool is_bound_left,
                           common::ObExprTypeCtx &type_ctx);
 
   // vector comparison, e.g. (a,b,c) > (1,2,3)

@@ -3022,7 +3022,7 @@ int ObRelationalExprOperator::calc_calc_type3(ObExprResType &type1,
 
 int ObRelationalExprOperator::get_cmp_result_type3(ObExprResType &type, bool &need_no_cast,
                                                    ObExprResType *types,
-                                                   const int64_t param_num, const bool has_lower,
+                                                   const int64_t param_num, const bool is_bound_left,
                                                    common::ObExprTypeCtx &type_ctx)
 {
   int ret = OB_SUCCESS;
@@ -3052,9 +3052,9 @@ int ObRelationalExprOperator::get_cmp_result_type3(ObExprResType &type, bool &ne
             // cast to order type
             types[1].set_calc_type(ObDecimalIntType);
             types[1].set_calc_accuracy(types[0].get_accuracy());
-            if (has_lower) { // order_expr >= low_expr
+            if (is_bound_left) { // order_expr >= bound_expr
               types[1].add_decimal_int_cast_mode(get_const_cast_mode(T_OP_GE, true));
-            } else { // order_expr <= upper_expr
+            } else { // order_expr <= bound_expr
               types[1].add_decimal_int_cast_mode(get_const_cast_mode(T_OP_LE, true));
             }
           } else {
@@ -3073,8 +3073,9 @@ int ObRelationalExprOperator::get_cmp_result_type3(ObExprResType &type, bool &ne
       }
     } else {
       ObExprResType &type1 = types[0];
-      ObExprResType &type2 = types[1];
-      ObExprResType &type3 = types[2];
+      // Map to numerical order; references preserve the original frame slots.
+      ObExprResType &type2 = is_bound_left ? types[1] : types[2];
+      ObExprResType &type3 = is_bound_left ? types[2] : types[1];
       //a(type1) between b(type2) and c(type3) <==> b<=a && a <=c
       ObExprResType cmp_type21; // b <= a
       ObExprResType cmp_type13; // a <= c

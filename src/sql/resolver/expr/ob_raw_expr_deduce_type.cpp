@@ -3288,7 +3288,8 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
       ObOpRawExpr dummy_raw_expr;
       dummy_raw_expr.set_expr_type(T_OP_BTW);
       dummy_op.set_raw_expr(&dummy_raw_expr);
-      bool has_lower = (lower_raw_expr != NULL);
+      // types[1] is the first available frame bound: upper (start), then lower (end).
+      const bool is_bound_left = upper_raw_expr != NULL ? is_asc : !is_asc;
       if (OB_FAIL(push_back_types(order_expr, types))) {
         LOG_WARN("fail to push_back", K(ret));
       } else if (OB_NOT_NULL(upper_raw_expr)
@@ -3298,7 +3299,7 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
                  && OB_FAIL(push_back_types(lower_raw_expr, types))) {
         LOG_WARN("fail to push_back", K(ret));
       } else if (OB_FAIL(dummy_op.get_cmp_result_type3(result_type, need_no_cast,
-                                                       &types.at(0), types.count(), has_lower,
+                                                       &types.at(0), types.count(), is_bound_left,
                                                        type_ctx))) {
         LOG_WARN("fail to get_cmp_result_type3", K(ret));
       }
