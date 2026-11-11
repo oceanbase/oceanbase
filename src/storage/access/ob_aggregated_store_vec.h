@@ -160,7 +160,8 @@ public:
   int get_agg_group(const sql::ObExpr *expr, ObAggGroupVec *&agg_group);
   int do_aggregate(
       blocksstable::ObIMicroBlockReader *reader = nullptr,
-      const int64_t bound_row_id = OB_INVALID_CS_ROW_ID);
+      const int64_t bound_row_id = OB_INVALID_CS_ROW_ID,
+      const bool is_reverse = false);
   int reset_agg_row_id();
   int prepare_batch_scan();
   int reuse_for_refresh_table() override;

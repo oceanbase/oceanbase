@@ -182,9 +182,9 @@ int ObCGAggregatedScanner::inner_fetch_rows(const int64_t batch_size, uint64_t &
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null agg group", K(ret), KP(agg_group_vec));
     } else if (nullptr == filter_bitmap_) {
-      // empty row_ids
+      // Decoder intervals use ascending micro block offsets in both scan directions.
       pd_row_id_ctx.reuse();
-      pd_row_id_ctx.begin_ = current_ - data_range.start_row_id_;
+      pd_row_id_ctx.begin_ = lower_bound - data_range.start_row_id_;
       pd_row_id_ctx.end_ = upper_bound - data_range.start_row_id_;
       pd_row_id_ctx.bound_row_id_ = is_reverse_scan_ ? lower_bound : upper_bound;
       pd_row_id_ctx.is_reverse_ = is_reverse_scan_;

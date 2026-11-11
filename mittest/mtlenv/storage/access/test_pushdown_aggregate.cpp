@@ -8,6 +8,8 @@
 #define protected public
 #define USING_LOG_PREFIX STORAGE
 #include "storage/access/ob_pushdown_aggregate.h"
+#include "storage/access/ob_aggregated_store_vec.h"
+#include "storage/column_store/ob_cg_aggregated_scanner.h"
 #include "mtlenv/storage/blocksstable/ob_index_block_data_prepare.h"
 
 namespace oceanbase
@@ -288,6 +290,242 @@ void TestPushdownAggregate::prepare_agg_expr(
         if (projector.at(i) == output_cols_project_.at(j)) {
           agg_exprs_.at(i)->arg_cnt_ = 1;
           agg_exprs_.at(i)->args_ = &output_exprs_.at(j);
+        }
+      }
+    }
+  }
+}
+
+TEST(TestPushdownRowIdCtx, test_column_store_global_bound)
+{
+  for (const int64_t block_start : {0, 1000}) {
+    ObPushdownRowIdCtx ctx;
+    ctx.begin_ = 10;
+    ctx.end_ = 99;
+    ctx.bound_row_id_ = block_start + 10;
+    ctx.is_reverse_ = true;
+    ASSERT_TRUE(ctx.is_valid());
+    ASSERT_EQ(90, ctx.get_row_count());
+    ASSERT_EQ(10, ctx.get_row_id(0));
+    ASSERT_EQ(99, ctx.get_row_id(89));
+
+    ctx.bound_row_id_ = block_start + 99;
+    ctx.is_reverse_ = false;
+    ASSERT_TRUE(ctx.is_valid());
+  }
+
+  const int32_t row_ids[] = {99, 50, 10};
+  ObPushdownRowIdCtx ctx(row_ids, 3);
+  ctx.bound_row_id_ = 1010;
+  ASSERT_TRUE(ctx.is_valid());
+  ASSERT_EQ(10, ctx.get_row_id(0));
+  ASSERT_EQ(99, ctx.get_row_id(2));
+}
+
+TEST(TestPushdownRowIdCtx, test_invalid_bound_and_range)
+{
+  const int32_t row_ids[] = {99, 50, 10};
+  for (const bool is_reverse : {false, true}) {
+    for (const bool use_row_ids : {false, true}) {
+      ObPushdownRowIdCtx ctx;
+      ctx.row_ids_ = use_row_ids ? row_ids : nullptr;
+      ctx.row_cap_ = use_row_ids ? 3 : 0;
+      ctx.begin_ = 10;
+      ctx.end_ = 99;
+      ctx.is_reverse_ = is_reverse;
+      ctx.bound_row_id_ = -2;
+      ASSERT_FALSE(ctx.is_valid());
+      ctx.bound_row_id_ = OB_INVALID_CS_ROW_ID;
+      ASSERT_TRUE(ctx.is_valid());
+      ctx.bound_row_id_ = 1010;
+      ASSERT_TRUE(ctx.is_valid());
+      if (use_row_ids) {
+        ctx.row_cap_ = 0;
+        ASSERT_FALSE(ctx.is_valid());
+      } else {
+        ctx.begin_ = -1;
+        ASSERT_FALSE(ctx.is_valid());
+        ctx.begin_ = 100;
+        ASSERT_FALSE(ctx.is_valid());
+      }
+    }
+  }
+}
+
+// Record the rows submitted by the real CG scanner, without requiring an encoded micro block.
+class RowIdRecordingAggCell : public ObAggCellVec
+{
+public:
+  RowIdRecordingAggCell(
+      const ObAggCellVecBasicInfo &basic_info,
+      ObIAllocator &allocator,
+      const bool pushdown)
+    : ObAggCellVec(0, basic_info, share::ObAggrParamProperty(), allocator),
+      pushdown_(pushdown),
+      decoder_calls_(0),
+      fallback_rows_(0)
+  {}
+
+  void reuse() override
+  {
+    ObAggCellVec::reuse();
+    last_ctx_.reuse();
+    row_ids_.reuse();
+    decoder_calls_ = 0;
+    fallback_rows_ = 0;
+  }
+
+  int agg_pushdown_decoder(
+      ObIMicroBlockReader *reader,
+      const int32_t col_offset,
+      const ObPushdownRowIdCtx &ctx) override
+  {
+    UNUSEDx(reader, col_offset);
+    int ret = OB_SUCCESS;
+    last_ctx_ = ctx;
+    if (pushdown_ && !is_agg_finish(ctx)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < ctx.get_row_count(); ++i) {
+        ret = row_ids_.push_back(ctx.get_row_id(i));
+      }
+      if (OB_SUCC(ret)) {
+        agg_row_id_ = ctx.bound_row_id_;
+        ++decoder_calls_;
+      }
+    }
+    return ret;
+  }
+
+  int eval_batch(
+      ObIMicroBlockReader *reader,
+      const int32_t col_offset,
+      const int32_t *row_ids,
+      const int64_t row_count,
+      const int64_t row_offset,
+      const int64_t agg_row_idx,
+      const bool need_eval) override
+  {
+    UNUSEDx(reader, col_offset, row_offset, agg_row_idx, need_eval);
+    int ret = OB_SUCCESS;
+    for (int64_t i = 0; OB_SUCC(ret) && i < row_count; ++i) {
+      ret = row_ids_.push_back(row_ids[i]);
+    }
+    if (OB_SUCC(ret)) {
+      fallback_rows_ += row_count;
+    }
+    return ret;
+  }
+
+  const bool pushdown_;
+  int64_t decoder_calls_;
+  int64_t fallback_rows_;
+  ObPushdownRowIdCtx last_ctx_;
+  ObSEArray<int64_t, 16> row_ids_;
+};
+
+// Recording cells consume only row ids; no column values need to be projected.
+class RowIdRecordingMicroScanner : public ObMicroBlockRowScanner
+{
+public:
+  explicit RowIdRecordingMicroScanner(ObIAllocator &allocator)
+    : ObMicroBlockRowScanner(allocator)
+  {}
+
+  int get_next_rows(
+      const ObIArray<int32_t> &,
+      const ObIArray<const share::schema::ObColumnParam *> &,
+      const int32_t *,
+      const char **,
+      const int64_t,
+      ObIArray<ObSqlDatumInfo> &,
+      const int64_t,
+      uint32_t *,
+      const bool,
+      const bool,
+      const ObIArray<ObStorageDatum> *) override
+  {
+    return OB_SUCCESS;
+  }
+};
+
+TEST_F(TestPushdownAggregate, test_cg_decoder_range)
+{
+  ObPushdownAggContext agg_ctx(SQL_BATCH_SIZE, eval_ctx_, nullptr, allocator_);
+  ObAggCellVecBasicInfo basic_info(agg_ctx.agg_ctx_, agg_ctx.rows_, agg_ctx.row_meta_,
+      agg_ctx.batch_rows_, 0, nullptr, false);
+  RowIdRecordingAggCell cell(basic_info, allocator_, true);
+  RowIdRecordingAggCell fallback_cell(basic_info, allocator_, false);
+  ObAggGroupVec group;
+  ObMicroBlockReader<> reader;
+  ObTableAccessContext scan_ctx;
+  ObBlockRowStore row_store(scan_ctx);
+  scan_ctx.stmt_allocator_ = &allocator_;
+  scan_ctx.block_row_store_ = &row_store;
+  ObCGAggregatedScanner scanner;
+  scanner.access_ctx_ = &scan_ctx;
+  scanner.micro_scanner_ = OB_NEWx(RowIdRecordingMicroScanner, &allocator_, allocator_);
+  ASSERT_NE(nullptr, scanner.micro_scanner_);
+  scanner.micro_scanner_->reader_ = &reader;
+  scanner.row_ids_ = static_cast<int32_t *>(allocator_.alloc(sizeof(int32_t) * SQL_BATCH_SIZE));
+  ASSERT_NE(nullptr, scanner.row_ids_);
+  scanner.iter_param_ = &access_param_.iter_param_;
+  access_param_.iter_param_.plan_enable_rich_format_ = true;
+  access_param_.iter_param_.out_cols_project_ = &output_cols_project_;
+  scanner.agg_group_ = &group;
+  scanner.prefetcher_.cur_micro_data_fetch_idx_ = 0;
+
+  const ObCSRange local_ranges[] = {
+    ObCSRange(10, 90), ObCSRange(0, 1000), ObCSRange(0, 1), ObCSRange(999, 1)
+  };
+  for (const bool with_fallback : {false, true}) {
+    group.agg_cells_.reuse();
+    ASSERT_EQ(OB_SUCCESS, group.agg_cells_.push_back(&cell));
+    if (with_fallback) {
+      ASSERT_EQ(OB_SUCCESS, group.agg_cells_.push_back(&fallback_cell));
+    }
+    for (const int64_t block_start : {0, 1000}) {
+      scanner.prefetcher_.current_micro_info().cs_row_range_.set(block_start, block_start + 999);
+      for (const bool is_reverse : {false, true}) {
+        scanner.is_reverse_scan_ = is_reverse;
+        for (const ObCSRange &range : local_ranges) {
+          scanner.query_index_range_.set(block_start + range.start_row_id_, block_start + range.end_row_id_);
+          for (const int64_t capacity : {1, 256}) {
+            group.reuse();
+            scanner.current_ = is_reverse
+                ? scanner.query_index_range_.end_row_id_ : scanner.query_index_range_.start_row_id_;
+            const int64_t initial_current = scanner.current_;
+            const int64_t expected_count = range.get_row_count();
+            const int64_t expected_bound = is_reverse
+                ? scanner.query_index_range_.start_row_id_ : scanner.query_index_range_.end_row_id_;
+            int64_t processed = 0;
+            // Retain cell progress while the ordinary aggregate consumes successive batches.
+            while (!scanner.end_of_scan()) {
+              uint64_t count = 0;
+              ASSERT_EQ(with_fallback ? OB_SUCCESS : OB_ITER_END, scanner.inner_fetch_rows(capacity, count, 0));
+              ASSERT_EQ(with_fallback ? MIN(capacity, expected_count - processed) : expected_count, count);
+              processed += count;
+              ASSERT_EQ(initial_current + (is_reverse ? -processed : processed), scanner.current_);
+              ASSERT_EQ(1, cell.decoder_calls_);
+              ASSERT_EQ(0, cell.fallback_rows_);
+              ASSERT_EQ(expected_count, cell.row_ids_.count());
+              ASSERT_EQ(expected_bound, cell.get_agg_row_id());
+              ASSERT_EQ(with_fallback ? OB_INVALID_CS_ROW_ID : expected_bound, group.agg_row_id_);
+              if (with_fallback) {
+                ASSERT_EQ(0, fallback_cell.decoder_calls_);
+                ASSERT_EQ(processed, fallback_cell.fallback_rows_);
+                ASSERT_EQ(processed, fallback_cell.row_ids_.count());
+              }
+            }
+            ASSERT_EQ(expected_count, processed);
+            for (int64_t i = 0; i < expected_count; ++i) {
+              ASSERT_EQ(range.start_row_id_ + i, cell.row_ids_.at(i));
+              if (with_fallback) {
+                ASSERT_EQ(is_reverse ? range.end_row_id_ - i : range.start_row_id_ + i,
+                    fallback_cell.row_ids_.at(i));
+              }
+            }
+            ASSERT_EQ(is_reverse, cell.last_ctx_.is_reverse_);
+            ASSERT_EQ(expected_bound + (is_reverse ? -1 : 1), scanner.current_);
+          }
         }
       }
     }
