@@ -87,6 +87,8 @@ ObITask::ObITaskPriority ObTableLoadDagStartMergeTask::get_priority()
 int ObTableLoadDagStartMergeTask::process()
 {
   FLOG_INFO("[DIRECT_LOAD_OP] start merge");
+  // Release transaction references so temporary files can be reclaimed during merge.
+  store_ctx_->clear_committed_trans_stores();
   return OB_SUCCESS;
 }
 

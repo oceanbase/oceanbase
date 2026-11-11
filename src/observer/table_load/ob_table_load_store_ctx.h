@@ -190,6 +190,7 @@ public:
   int init_write_ctx_for_dag();
   int init_dag();
   int get_table_store_for_store_write(ObDirectLoadTableStore &table_store);
+  void clear_committed_trans_stores();
   int start_merge();
   int handle_pre_sort_success();
   int init_trans_param(storage::ObDirectLoadTransParam &trans_param);
@@ -204,7 +205,6 @@ private:
   int generate_autoinc_params(const uint64_t column_id, share::AutoincParam &autoinc_param);
   int init_sequence();
   int get_table_store_from_committed_trans_stores(ObDirectLoadTableStore &table_store);
-  void clear_committed_trans_stores();
   int start_merge_op();
   int init_collection_subschema();
 public:
