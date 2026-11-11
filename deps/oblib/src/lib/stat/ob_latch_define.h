@@ -1000,7 +1000,8 @@ LATCH_DEF(MVIEW_TASK_QUEUE_LOCK, 969, "mview task queue lock", LATCH_FIFO, 2000,
 LATCH_DEF(MVIEW_PENDING_TASK_INSPECTION_LOCK, 970, "mview pending task inspection lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_ARB_MONITOR_LOCK, 971, "ob arb monitor lock", LATCH_READ_PREFER, 2000, 0, true)
 LATCH_DEF(ID_SERVICE_LS_CACHE_LOCK, 977, "ID service LS cache lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(LATCH_END, 978, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OB_MODIFY_COLUMN_LENGTH_TASK_LOCK, 980, "ob modify column length task lock", LATCH_FIFO, 2000, 0, false)
+LATCH_DEF(LATCH_END, 981, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

@@ -93,6 +93,7 @@ enum ObDDLType
   DDL_DROP_VEC_SPIV_INDEX = 24,
   DDL_REPLACE_MLOG = 25, // placeholder of alter mlog
   DDL_CREATE_VEC_SPIV_INDEX = 26, // placeholder of spiv post build
+  DDL_MODIFY_COLUMN_LENGTH = 29,
 
   ///< @note tablet split.
   DDL_AUTO_SPLIT_BY_RANGE = 100,
@@ -168,7 +169,9 @@ enum ObDDLTaskType {
   PARTITION_SPLIT_RECOVERY_CLEANUP_GARBAGE_TASK = 14,
   SWITCH_VEC_INDEX_NAME_TASK = 15,
   SWITCH_MLOG_NAME_TASK = 16,
-  GET_SPECIFIC_TABLE_TABLETS = 17
+  GET_SPECIFIC_TABLE_TABLETS = 17,
+  UPDATE_COLUMN_LENGTH_SCHEMA = 19,
+  RESTORE_COLUMN_LENGTH_SCHEMA = 20
 };
 
 enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
@@ -227,6 +230,7 @@ enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
   BUILD_MLOG = 52,
   GENERATE_CID_VEC_SCHEMA = 53,
   WAIT_CID_VEC_TABLE_COMPLEMENT = 54,
+  CHECK_COLUMN_DATA = 61,
   FAIL = 99,
   SUCCESS = 100
 };
@@ -423,6 +427,9 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
     case ObDDLTaskStatus::WAIT_CID_VEC_TABLE_COMPLEMENT:
       str = "WAIT_CID_VEC_TABLE_COMPLEMENT";
+      break;
+    case ObDDLTaskStatus::CHECK_COLUMN_DATA:
+      str = "CHECK_COLUMN_DATA";
       break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";
