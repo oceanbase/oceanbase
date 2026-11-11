@@ -1723,7 +1723,7 @@ int ObLobManager::write_inrow_inner(ObLobAccessParam& param, ObString& data, ObS
       } else {
         MEMCPY(new_data_ptr, old_data.ptr(), offset_byte_len);
         MEMCPY(new_data_ptr + offset_byte_len, data.ptr(), amount_byte_len);
-        if (offset_byte_len + amount_byte_len < old_data.length()) {
+        if (offset_byte_len + lob_replaced_byte_len < old_data.length()) {
           MEMCPY(new_data_ptr + offset_byte_len + amount_byte_len,
                   old_data.ptr() + offset_byte_len + lob_replaced_byte_len,
                   old_data.length() - offset_byte_len - lob_replaced_byte_len);

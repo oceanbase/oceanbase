@@ -29,19 +29,23 @@ struct ObPersistLobReaderCacheKey
     ls_id_(),
     tablet_id_(),
     snapshot_(0),
+    fb_snapshot_(),
     is_get_(false)
   {}
 
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   int64_t snapshot_;
+  // Table references can share a transaction snapshot but use different flashback snapshots.
+  share::SCN fb_snapshot_;
   bool is_get_;
   bool operator==(const ObPersistLobReaderCacheKey &other) const
   {
-    return snapshot_ == other.snapshot_ && tablet_id_ == other.tablet_id_ && ls_id_ == other.ls_id_ && is_get_ == other.is_get_;
+    return snapshot_ == other.snapshot_ && fb_snapshot_ == other.fb_snapshot_
+        && tablet_id_ == other.tablet_id_ && ls_id_ == other.ls_id_ && is_get_ == other.is_get_;
   }
 
-  TO_STRING_KV(K(ls_id_), K(tablet_id_), K(snapshot_));
+  TO_STRING_KV(K(ls_id_), K(tablet_id_), K(snapshot_), K(fb_snapshot_), K(is_get_));
 };
 
 class ObPersistLobReaderCache
@@ -58,7 +62,7 @@ public:
   {}
   ~ObPersistLobReaderCache();
 
-  // If cached reader exists and param.tablet_id matches, return it; else return nullptr.
+  // If the cached reader exists and the complete cache key matches, return it; else return nullptr.
   int get(ObPersistLobReaderCacheKey key, ObLobMetaIterator *&reader);
   // Replace cached reader: reset and free old one if exists, then store (key, reader).
   int put(ObPersistLobReaderCacheKey key, ObLobMetaIterator *reader);

@@ -557,6 +557,7 @@ int ObPersistentLobApator::scan_with_ctx(
   ObPersistLobReaderCache &cache = param.access_ctx_->reader_cache_;
   key.ls_id_ = param.ls_id_;
   key.snapshot_ = param.snapshot_.core_.version_.get_val_for_tx();
+  key.fb_snapshot_ = param.fb_snapshot_;
   key.tablet_id_ = param.tablet_id_;
   key.is_get_ = param.has_single_chunk();
   if (OB_FAIL(cache.get(key, reader))) {
