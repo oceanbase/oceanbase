@@ -619,7 +619,13 @@ int ObTruncateBlackFilterExecutor::inner_filter(
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < count && 0 == cmp_ret; ++i) {
           const int64_t col_idx = nullptr == col_idxs ? i : col_idxs->at(i);
-          if (datums[col_idx].is_null()) {
+          // A RANGE COLUMNS boundary can mix ordinary values with MIN/MAXVALUE.
+          // Compare sentinels before NULLs and the type-specific datum comparator.
+          if (storage_datum_params_[i].is_max()) {
+            cmp_ret = -1;
+          } else if (storage_datum_params_[i].is_min()) {
+            cmp_ret = 1;
+          } else if (datums[col_idx].is_null()) {
             cmp_ret = lib::is_oracle_mode() ? 1 : -1;
           } else if (OB_FAIL(cmp_funcs_.at(i)(datums[col_idx], storage_datum_params_[i], cmp_ret))) {
             LOG_WARN("failed to compare", K(ret), K(i), K(col_idx), K(datums[col_idx]), K(storage_datum_params_[i]));
