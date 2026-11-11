@@ -6094,6 +6094,7 @@ int ObTransformUtils::merge_table_items(ObSelectStmt *source_stmt,
                                                    target_column_items))) {
     LOG_WARN("failed to get column items", K(ret));
   } else {
+    const int64_t source_column_count = source_stmt->get_column_size();
     uint64_t source_table_id = source_table->table_id_;
     uint64_t target_table_id = target_table->table_id_;
     for (int64_t i = 0; OB_SUCC(ret) && i < target_column_items.count(); ++i) {
@@ -6123,6 +6124,21 @@ int ObTransformUtils::merge_table_items(ObSelectStmt *source_stmt,
         } else if (OB_FAIL(new_exprs.push_back(source_col->get_expr()))) {
           LOG_WARN("failed to push back expr", K(ret));
         } else { /*do nothing*/ }
+      }
+    }
+    if (OB_SUCC(ret) && !old_exprs.empty()) {
+      // Migrated dependencies need the complete column mapping before replacement.
+      ObRawExprReplacer replacer;
+      if (OB_FAIL(replacer.add_replace_exprs(old_exprs, new_exprs))) {
+        LOG_WARN("failed to add replace exprs", K(ret));
+      }
+      for (int64_t i = source_column_count; OB_SUCC(ret) && i < source_stmt->get_column_size(); ++i) {
+        ObColumnRefRawExpr *col_expr = source_stmt->get_column_items().at(i).expr_;
+        if (NULL == col_expr->get_dependant_expr()) {
+          // do nothing
+        } else if (OB_FAIL(replacer.replace(col_expr->get_dependant_expr()))) {
+          LOG_WARN("failed to replace generated column dependant expr", K(ret));
+        }
       }
     }
   }

@@ -210,6 +210,8 @@ int ObStmtExecParamFormatter::do_formalize_exec_param(ObRawExpr *&expr, bool &is
       LOG_WARN("ref expr is null", K(ret));
     } else if (OB_FAIL(SMART_CALL(do_formalize_exec_param(ref_expr, is_happened)))) {
       LOG_WARN("failed to remove const exec param", K(ret));
+    } else if (OB_FAIL(ref_expr->extract_info())) {
+      LOG_WARN("failed to extract info", K(ret));
     } else if (ref_expr->is_const_expr() &&
                !ref_expr->has_flag(CNT_ONETIME)) {
       // if the ref expr is a const expr but is also a onetime expr
