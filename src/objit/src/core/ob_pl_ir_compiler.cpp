@@ -18,7 +18,9 @@
 #include <charconv>
 
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/ExecutionEngine/ObjectCache.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Remarks/RemarkStreamer.h"
 #include "llvm/Remarks/RemarkSerializer.h"
@@ -134,48 +136,55 @@ private:
 /// Compile a Module to an ObjectFile.
 Expected<ObPLIRCompiler::CompileResult> ObPLIRCompiler::operator()(Module &M)
 {
-  CompileResult CachedObject = tryToLoadFromObjectCache(M);
-  if (CachedObject) {
-    return std::move(CachedObject);
-  }
+  CompileResult ObjBuffer = tryToLoadFromObjectCache(M);
+  Error CompileError = Error::success();
+  if (!CompileError && !ObjBuffer) {
+    if (TM->getTargetTriple().getArch() == Triple::x86_64) {
+      // libunwind needs a frame chain while JIT EH frames are not registered.
+      // Apply this after IR optimization so every emitted definition is covered.
+      for (Function &F : M) {
+        if (!F.isDeclaration()) {
+          F.addFnAttr("frame-pointer", "all");
+        }
+      }
+    }
 
-  SmallVector<char, 0> ObjBufferSV;
+    SmallVector<char, 0> ObjBufferSV;
+    {
+      raw_svector_ostream ObjStream(ObjBufferSV);
+      legacy::PassManager PM;
+      MCContext *Ctx;
+      if (TM->addPassesToEmitMC(PM, Ctx, ObjStream)) {
+        CompileError = make_error<StringError>("Target does not support MC emission",
+                                               inconvertibleErrorCode());
+      } else {
+        auto &ctx = M.getContext();
+        std::string stream_buffer;
+        raw_string_ostream buffer(stream_buffer);
+        auto serializer = std::make_unique<ObJitRemarkSerializer>(JitEngine, buffer);
+        auto streamer = std::make_unique<remarks::RemarkStreamer>(std::move(serializer));
+        auto llvm_streamer = std::make_unique<LLVMRemarkStreamer>(*streamer);
 
-  {
-    raw_svector_ostream ObjStream(ObjBufferSV);
+        ctx.setLLVMRemarkStreamer(std::move(llvm_streamer));
+        PM.run(M);
+        ctx.setLLVMRemarkStreamer(nullptr);
+      }
+    }
 
-    legacy::PassManager PM;
-    MCContext *Ctx;
-
-    if (TM->addPassesToEmitMC(PM, Ctx, ObjStream)) {
-      return make_error<StringError>("Target does not support MC emission",
-                                     inconvertibleErrorCode());
-    } else {
-      auto &ctx = M.getContext();
-
-      std::string stream_buffer;
-      raw_string_ostream buffer(stream_buffer);
-      auto serializer = std::make_unique<ObJitRemarkSerializer>(JitEngine, buffer);
-      auto streamer = std::make_unique<remarks::RemarkStreamer>(std::move(serializer));
-      auto llvm_streamer = std::make_unique<LLVMRemarkStreamer>(*streamer);
-
-      ctx.setLLVMRemarkStreamer(std::move(llvm_streamer));
-      PM.run(M);
-      ctx.setLLVMRemarkStreamer(nullptr);
+    if (!CompileError) {
+      ObjBuffer = std::make_unique<SmallVectorMemoryBuffer>(
+          std::move(ObjBufferSV), M.getModuleIdentifier() + "-jitted-objectbuffer");
+      auto Obj = object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef());
+      if (!Obj) {
+        CompileError = Obj.takeError();
+      } else {
+        notifyObjectCompiled(M, *ObjBuffer);
+      }
     }
   }
 
-  auto ObjBuffer = std::make_unique<SmallVectorMemoryBuffer>(
-      std::move(ObjBufferSV), M.getModuleIdentifier() + "-jitted-objectbuffer");
-
-  auto Obj = object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef());
-
-  if (!Obj) {
-    return Obj.takeError();
-  }
-
-  notifyObjectCompiled(M, *ObjBuffer);
-  return std::move(ObjBuffer);
+  return CompileError ? Expected<CompileResult>(std::move(CompileError))
+                      : Expected<CompileResult>(std::move(ObjBuffer));
 }
 
 ObPLIRCompiler::CompileResult

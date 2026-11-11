@@ -1,1 +1,4 @@
 ob_unittest(test_dbms_xmldom test_dbms_xmldom.cpp)
+oblib_addtest(test_pl_jit_frame_pointer.cpp test_pl_jit_frame_pointer)
+target_link_libraries(test_pl_jit_frame_pointer PRIVATE objit)
+set_tests_properties(test_pl_jit_frame_pointer PROPERTIES TIMEOUT 300)

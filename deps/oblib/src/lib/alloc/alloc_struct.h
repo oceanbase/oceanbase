@@ -823,34 +823,6 @@ private:
   bool old_use_500_;
 };
 
-// Suppress allocation backtraces only on the current thread and restore the
-// previous state when leaving a nested scope.
-class ObMallocSampleDisableGuard
-{
-public:
-  ObMallocSampleDisableGuard() : previous_disabled_(tl_disabled())
-  {
-    tl_disabled() = true;
-  }
-  ~ObMallocSampleDisableGuard()
-  {
-    tl_disabled() = previous_disabled_;
-  }
-  static bool is_disabled()
-  {
-    return tl_disabled();
-  }
-  ObMallocSampleDisableGuard(const ObMallocSampleDisableGuard &) = delete;
-  ObMallocSampleDisableGuard &operator=(const ObMallocSampleDisableGuard &) = delete;
-private:
-  static bool &tl_disabled()
-  {
-    static __thread bool disabled = false;
-    return disabled;
-  }
-  const bool previous_disabled_;
-};
-
 class ObLightBacktraceGuard
 {
 public:
