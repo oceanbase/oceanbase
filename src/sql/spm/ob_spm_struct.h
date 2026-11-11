@@ -35,15 +35,11 @@ public:
 
   bool set_record_for_finish_plan(const int64_t receive_ts, const int64_t elapsed_t)
   {
-    bool find = false;
     bool ret = false;
-    for (int i = 0; !find && i < RECORDS_SIZE; ++i) {
-      if (receive_ts == receive_ts_[i]) {
-        if (0 == elapsed_t_[i]) {
-          elapsed_t_[i] = elapsed_t;
-          ret = true;
-        }
-        find = true;
+    for (int i = 0; !ret && i < RECORDS_SIZE; ++i) {
+      if (receive_ts == receive_ts_[i]
+          && ATOMIC_BCAS(&elapsed_t_[i], 0, elapsed_t)) {
+        ret = true;
       }
     }
     return ret;
