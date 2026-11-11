@@ -75,7 +75,7 @@ int ObMViewRefreshExecutor::execute(ObExecContext &ctx, const ObMViewRefreshArg 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid ctx or arg", K(ret), K(session_info_), K(arg), K(sql_proxy));
   } else if (OB_FALSE_IT(tenant_id_ = session_info_->get_effective_tenant_id())) {
-  } else if (OB_FAIL(ObMViewExecutorUtil::resolve_mview_list_and_method(ctx.get_sql_ctx()->schema_guard_, session_info_, arg.list_, arg.method_, mview_id, refresh_method_))) {
+  } else if (OB_FAIL(ObMViewExecutorUtil::resolve_mview_list_and_method(ctx.get_sql_ctx()->schema_guard_, session_info_, sql_proxy, arg.list_, arg.method_, mview_id, refresh_method_))) {
     LOG_WARN("fail to resolve mview list and method", KR(ret));
   } else if (OB_INVALID_ID == mview_id) {
     // empty list: do nothing, return success

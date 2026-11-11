@@ -184,6 +184,7 @@ int ObDBMSMViewMysql::refresh(ObPLExecCtx &pl_ctx, ParamStore &params, ObObj &re
       } else if (OB_FAIL(ObMViewExecutorUtil::resolve_mview_list_and_method(
                           ctx.get_sql_ctx()->schema_guard_,
                           ctx.get_my_session(),
+                          ctx.get_sql_proxy(),
                           params.at(ObDBMSMViewRefreshParam::MV_LIST).get_varchar(),
                           params.at(ObDBMSMViewRefreshParam::METHOD).get_varchar(),
                           schedule_arg.mview_id_,

@@ -17,6 +17,10 @@
 
 namespace oceanbase
 {
+namespace common
+{
+class ObISQLClient;
+}
 namespace sql
 {
 class ObExecContext;
@@ -52,6 +56,7 @@ public:
 
   static int resolve_mview_list_and_method(share::schema::ObSchemaGetterGuard *schema_guard,
                                            sql::ObSQLSessionInfo *session_info,
+                                           common::ObISQLClient *sql_proxy,
                                            const common::ObString &list,
                                            const common::ObString &method,
                                            uint64_t &mview_id,

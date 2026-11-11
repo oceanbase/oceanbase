@@ -21,6 +21,7 @@
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_compatibility_control.h"
 #include "share/ob_ddl_common.h"
+#include "share/schema/ob_mview_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/resolver/ob_schema_checker.h"
@@ -257,6 +258,7 @@ bool ObMViewExecutorUtil::is_mview_refresh_retry_ret_code(int ret_code)
 
 int ObMViewExecutorUtil::resolve_mview_list_and_method(ObSchemaGetterGuard *schema_guard,
                                                        ObSQLSessionInfo *session_info,
+                                                       ObISQLClient *sql_proxy,
                                                        const ObString &list,
                                                        const ObString &method,
                                                        uint64_t &mview_id,
@@ -346,6 +348,20 @@ int ObMViewExecutorUtil::resolve_mview_list_and_method(ObSchemaGetterGuard *sche
   } else {
     mview_id = mview_ids.at(0);
     refresh_method = refresh_methods.empty() ? ObMVRefreshMethod::MAX : refresh_methods.at(0);
+    if (ObMVRefreshMethod::MAX == refresh_method) {
+      ObMViewInfo mview_info;
+      if (OB_ISNULL(sql_proxy)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sql proxy is null", KR(ret));
+      } else if (OB_FAIL(ObMViewInfo::fetch_mview_info(*sql_proxy,
+                                                       tenant_id,
+                                                       mview_id,
+                                                       mview_info))) {
+        LOG_WARN("fail to fetch mview info", KR(ret), K(tenant_id), K(mview_id));
+      } else {
+        refresh_method = mview_info.get_refresh_method();
+      }
+    }
   }
   return ret;
 }
