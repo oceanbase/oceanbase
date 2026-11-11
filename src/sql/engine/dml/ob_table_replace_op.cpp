@@ -684,10 +684,14 @@ int ObTableReplaceOp::do_replace_into()
     int64_t end_time = 0;
     // must set conflict_row fetch flag
     add_need_conflict_result_flag();
-    if (OB_FAIL(ObSqlTransControl::create_anonymous_savepoint(ctx_, savepoint_no))) {
-      LOG_WARN("fail to create save_point", K(ret));
-    } else if (OB_FAIL(load_all_replace_row(is_iter_end))) {
+    // The savepoint only covers try-insert writes. Effects of loading rows, including
+    // BEFORE ROW triggers, are kept and must not be repeated in conflict replay.
+    if (OB_FAIL(load_all_replace_row(is_iter_end))) {
       LOG_WARN("fail to load all row", K(ret));
+    } else if (OB_FAIL(ObDMLService::check_das_tasks_unstarted(dml_rtctx_.das_ref_))) {
+      LOG_WARN("try insert task is executed before savepoint", K(ret));
+    } else if (OB_FAIL(ObSqlTransControl::create_anonymous_savepoint(ctx_, savepoint_no))) {
+      LOG_WARN("fail to create save_point", K(ret));
     } else if (OB_FAIL(post_all_try_insert_das_task(dml_rtctx_))) {
       LOG_WARN("fail to post all das task", K(ret));
     } else if (!check_is_duplicated() && OB_FAIL(ObDMLService::handle_after_row_processing(this, &dml_modify_rows_))) {
@@ -713,7 +717,7 @@ int ObTableReplaceOp::do_replace_into()
       LOG_WARN("fail to prepare final das task", K(ret));
     } else if (OB_FAIL(post_all_dml_das_task(replace_rtctx_))) {
       LOG_WARN("do insert rows post process failed", K(ret));
-    } else if (OB_FAIL(ObDMLService::handle_after_row_processing(this, &dml_modify_rows_))) {
+    } else if (OB_FAIL(ObDMLService::handle_after_row_processing(this, &dml_modify_rows_, true))) {
       LOG_WARN("try insert is duplicated, failed to process foreign key handle", K(ret));
     }
     GET_DIAGNOSTIC_INFO->get_ash_stat().in_duplicate_conflict_resolve_=false;
@@ -819,7 +823,7 @@ int ObTableReplaceOp::replace_conflict_row_cache()
 
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(ObDMLService::process_insert_row(ins_ctdef, ins_rtdef, *this, is_skipped))) {
+    } else if (OB_FAIL(ObDMLService::process_insert_row(ins_ctdef, ins_rtdef, *this, is_skipped, true))) {
       LOG_WARN("convert exprs to stored_row failed", K(ret), KPC(insert_new_row));
     } else if (OB_UNLIKELY(is_skipped)) {
       ret = OB_ERR_UNEXPECTED;

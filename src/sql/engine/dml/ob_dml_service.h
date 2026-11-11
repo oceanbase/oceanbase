@@ -76,10 +76,12 @@ public:
                                       bool &filtered);
   static int init_heap_table_pk_for_ins(const ObInsCtDef &ins_ctdef,
                                         ObEvalCtx &eval_ctx);
+  // skip_before_row_trigger is only for replaying a row whose BEFORE ROW trigger has already run.
   static int process_insert_row(const ObInsCtDef &ins_ctdef,
                                 ObInsRtDef &ins_rtdef,
                                 ObTableModifyOp &dml_op,
-                                bool &is_check_cst_violated_ignored);
+                                bool &is_check_cst_violated_ignored,
+                                const bool skip_before_row_trigger = false);
   static int check_column_null(ObEvalCtx &eval_ctx,
                                const ObExprPtrIArray &row,
                                const ColumnContent &column_info,
@@ -291,12 +293,19 @@ public:
   static int get_nested_dup_table_ctx(const uint64_t table_id,
                                       DASDelCtxList& del_ctx_list,
                                       SeRowkeyDistCtx *&rowkey_dist_ctx);
-  static int handle_after_processing_single_row(ObDMLModifyRowsList *dml_modify_rows);
-  static int handle_after_processing_single_row(ObDMLModifyRowNode &modify_row);
+  static int handle_after_processing_single_row(ObDMLModifyRowsList *dml_modify_rows,
+                                                const bool restore_rows);
+  static int handle_after_processing_single_row(ObDMLModifyRowNode &modify_row,
+                                                const bool restore_rows = false);
   static int handle_after_processing_multi_row(ObDMLModifyRowsList *dml_modify_rows, ObTableModifyOp *op);
   // static int handle_after_processing_batch(const ObTableModifyOp *op,
   //                                           ObDMLModifyRowsList *dml_modify_rows);
-  static int handle_after_row_processing(ObTableModifyOp *op, ObDMLModifyRowsList *dml_modify_rows);
+  // restore_rows is required when single-row processing has overwritten the exprs of earlier rows,
+  // e.g. conflict resolution of REPLACE deletes several old rows for one new row.
+  static int handle_after_row_processing(ObTableModifyOp *op,
+                                         ObDMLModifyRowsList *dml_modify_rows,
+                                         const bool restore_rows = false);
+  static int check_das_tasks_unstarted(ObDASRef &das_ref);
   static int init_ob_rowkey( ObIAllocator &allocator, const int64_t rowkey_cnt, ObRowkey &table_rowkey);
   static int add_trans_info_datum(ObExpr *trans_info_expr,
                                   ObEvalCtx &eval_ctx,

@@ -396,7 +396,7 @@ int ObTableInsertUpOp::do_insert_up_cache()
       if (is_ignore_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ignore is unexpected", K(ret), KPC(insert_row));
-      } else if (OB_FAIL(ObDMLService::process_insert_row(ins_ctdef, ins_rtdef, *this, is_skipped))) {
+      } else if (OB_FAIL(ObDMLService::process_insert_row(ins_ctdef, ins_rtdef, *this, is_skipped, true))) {
         LOG_WARN("fail to do process insert", K(ret), K(ins_ctdef),
                  "insert_row", ROWEXPR2STR(eval_ctx_, get_primary_table_insert_row()));
       // TODO(yikang): fix trigger related for heap table
@@ -437,18 +437,6 @@ int ObTableInsertUpOp::do_insert_up_cache()
       } else if (OB_FAIL(upd_old_row->to_expr(get_primary_table_upd_old_row(), eval_ctx_))) {
         LOG_WARN("upd_old_row to expr failed", K(ret), KPC(upd_old_row),
                  "exprs", get_primary_table_upd_old_row());
-      } else if (ins_ctdef.is_primary_index_
-                 && OB_FAIL(TriggerHandle::init_param_new_row(get_eval_ctx(),
-                                                              ins_ctdef.trig_ctdef_,
-                                                              ins_rtdef.trig_rtdef_))) {
-        LOG_WARN("init_param_new_row failed", K(ret));
-        // 冲突的行update这里也需要重新执行before insert row trigger
-      } else if (ins_ctdef.is_primary_index_
-                 && OB_FAIL(TriggerHandle::do_handle_before_row(*this,
-                                                                ins_ctdef.das_base_ctdef_,
-                                                                ins_ctdef.trig_ctdef_,
-                                                                ins_rtdef.trig_rtdef_))) {
-        LOG_WARN("do_handle_before_row failed", K(ret));
       } else if (OB_FAIL(ObDMLService::process_update_row(upd_ctdef, upd_rtdef, is_skipped, *this))) {
         LOG_WARN("process update failed", K(ret), K(upd_ctdef));
       } else if (upd_ctdef.is_table_without_pk_ &&
@@ -1116,10 +1104,14 @@ int ObTableInsertUpOp::do_insert_up()
     transaction::ObTxSEQ savepoint_no;
     // must set conflict_row fetch flag
     add_need_conflict_result_flag();
-    if (OB_FAIL(ObSqlTransControl::create_anonymous_savepoint(ctx_, savepoint_no))) {
-      LOG_WARN("fail to create save_point", K(ret));
-    } else if (OB_FAIL(load_batch_insert_up_rows(is_iter_end, insert_rows))) {
+    // The savepoint only covers try-insert writes. Effects of loading rows, including
+    // BEFORE ROW triggers, are kept and must not be repeated in conflict replay.
+    if (OB_FAIL(load_batch_insert_up_rows(is_iter_end, insert_rows))) {
       LOG_WARN("fail to load all row", K(ret));
+    } else if (OB_FAIL(ObDMLService::check_das_tasks_unstarted(dml_rtctx_.das_ref_))) {
+      LOG_WARN("try insert task is executed before savepoint", K(ret));
+    } else if (OB_FAIL(ObSqlTransControl::create_anonymous_savepoint(ctx_, savepoint_no))) {
+      LOG_WARN("fail to create save_point", K(ret));
     } else if (OB_FAIL(post_all_try_insert_das_task(dml_rtctx_))) {
       LOG_WARN("fail to post all das task", K(ret));
     } else if (!check_is_duplicated() && OB_FAIL(ObDMLService::handle_after_row_processing(this, &dml_modify_rows_))) {
@@ -1146,7 +1138,7 @@ int ObTableInsertUpOp::do_insert_up()
       LOG_WARN("fail to prepare final das task", K(ret));
     } else if (OB_FAIL(post_all_dml_das_task(upd_rtctx_))) {
       LOG_WARN("do insert rows post process failed", K(ret));
-    } else if (OB_FAIL(ObDMLService::handle_after_row_processing(this, &dml_modify_rows_))) {
+    } else if (OB_FAIL(ObDMLService::handle_after_row_processing(this, &dml_modify_rows_, true))) {
       LOG_WARN("try insert is duplicated, failed to process foreign key handle", K(ret));
     }
     GET_DIAGNOSTIC_INFO->get_ash_stat().in_duplicate_conflict_resolve_=false;

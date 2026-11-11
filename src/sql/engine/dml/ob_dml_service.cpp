@@ -757,7 +757,8 @@ int ObDMLService::init_heap_table_pk_for_ins(const ObInsCtDef &ins_ctdef, ObEval
 int ObDMLService::process_insert_row(const ObInsCtDef &ins_ctdef,
                                      ObInsRtDef &ins_rtdef,
                                      ObTableModifyOp &dml_op,
-                                     bool &is_skipped)
+                                     bool &is_skipped,
+                                     const bool skip_before_row_trigger)
 {
   int ret = OB_SUCCESS;
   if (ins_ctdef.is_primary_index_) {
@@ -778,13 +779,13 @@ int ObDMLService::process_insert_row(const ObInsCtDef &ins_ctdef,
       LOG_WARN("session is NULL", K(ret));
     } else if (OB_FAIL(check_nested_sql_legality(dml_op.get_exec_ctx(), ins_ctdef.das_ctdef_.index_tid_))) {
       LOG_WARN("failed to check stmt table", K(ret), K(ref_table_id));
-    } else if (OB_FAIL(TriggerHandle::begin_trigger_row(
+    } else if (!skip_before_row_trigger && OB_FAIL(TriggerHandle::begin_trigger_row(
                    dml_op.get_exec_ctx(), ins_ctdef.trig_ctdef_, ins_rtdef.trig_rtdef_))) {
       LOG_WARN("failed to begin trigger row", K(ret));
     } else if (OB_FAIL(TriggerHandle::init_param_new_row(
         eval_ctx, ins_ctdef.trig_ctdef_, ins_rtdef.trig_rtdef_))) {
       LOG_WARN("failed to handle before trigger", K(ret));
-    } else if (OB_FAIL(TriggerHandle::do_handle_before_row(
+    } else if (!skip_before_row_trigger && OB_FAIL(TriggerHandle::do_handle_before_row(
         dml_op, ins_ctdef.das_base_ctdef_, ins_ctdef.trig_ctdef_, ins_rtdef.trig_rtdef_))) {
       LOG_WARN("failed to handle before trigger", K(ret));
     }
@@ -2990,7 +2991,8 @@ int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_mod
   return ret;
 }
 
-int ObDMLService::handle_after_processing_single_row(ObDMLModifyRowNode &modify_row)
+int ObDMLService::handle_after_processing_single_row(ObDMLModifyRowNode &modify_row,
+                                                     const bool restore_rows)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(modify_row.full_row_) && OB_ISNULL(modify_row.new_row_) && OB_ISNULL(modify_row.old_row_)) {
@@ -3003,6 +3005,7 @@ int ObDMLService::handle_after_processing_single_row(ObDMLModifyRowNode &modify_
     ObTableModifyOp &op = *modify_row.dml_op_;
     const ObDMLBaseCtDef &dml_ctdef = *modify_row.dml_ctdef_;
     ObDMLBaseRtDef &dml_rtdef = *modify_row.dml_rtdef_;
+    ObEvalCtx &eval_ctx = op.get_eval_ctx();
     const ObDmlEventType t_insert = ObDmlEventType::DE_INSERTING;
     const ObDmlEventType t_update = ObDmlEventType::DE_UPDATING;
     const ObDmlEventType t_delete = ObDmlEventType::DE_DELETING;
@@ -3010,6 +3013,28 @@ int ObDMLService::handle_after_processing_single_row(ObDMLModifyRowNode &modify_
     if (dml_event != t_insert && dml_event != t_update && dml_event != t_delete) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid trigger event", K(ret));
+    } else if (!restore_rows) {
+    } else if (OB_NOT_NULL(modify_row.full_row_)
+               && OB_FAIL(modify_row.full_row_->to_expr(dml_ctdef.full_row_, eval_ctx))) {
+      LOG_WARN("failed to convert stored full row to expr", K(ret));
+    } else if (OB_NOT_NULL(modify_row.old_row_)
+               && OB_FAIL(modify_row.old_row_->to_expr(dml_ctdef.old_row_, eval_ctx))) {
+      LOG_WARN("failed to convert stored old row to expr", K(ret));
+    } else if (OB_NOT_NULL(modify_row.new_row_)
+               && OB_FAIL(modify_row.new_row_->to_expr(dml_ctdef.new_row_, eval_ctx))) {
+      LOG_WARN("failed to convert stored new row to expr", K(ret));
+    } else if (!dml_ctdef.trig_ctdef_.all_tm_points_.has_after_row()) {
+    } else if (t_insert == dml_event && OB_FAIL(TriggerHandle::init_param_new_row(
+        eval_ctx, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_))) {
+      LOG_WARN("failed to init trigger parameter for new row", K(ret));
+    } else if (t_delete == dml_event && OB_FAIL(TriggerHandle::init_param_old_row(
+        eval_ctx, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_))) {
+      LOG_WARN("failed to init trigger parameter for old row", K(ret));
+    } else if (t_update == dml_event && OB_FAIL(TriggerHandle::init_param_rows(
+        eval_ctx, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_))) {
+      LOG_WARN("failed to init trigger parameter for old row and new row", K(ret));
+    }
+    if (OB_FAIL(ret)) {
     } else {
       if (t_update == dml_event) {
         // for update op, Foreign key checks need to be performed only if the value has changed
@@ -3027,17 +3052,19 @@ int ObDMLService::handle_after_processing_single_row(ObDMLModifyRowNode &modify_
   return ret;
 }
 
-int ObDMLService::handle_after_processing_single_row(ObDMLModifyRowsList *dml_modify_rows)
+int ObDMLService::handle_after_processing_single_row(ObDMLModifyRowsList *dml_modify_rows,
+                                                     const bool restore_rows)
 {
   int ret = OB_SUCCESS;
   // for single-row processing, the expr defined in ctdef and trig parameters haven't been refreshed
   // case1: only one row added to the list of dml_modify_rows;
   // case2: for multi table dml stmt, each table adds a row to the list;
   // In these cases, there is no need to re-convert the rows to be modified into an expression and init trig parameters;
+  // otherwise the caller must set restore_rows.
   ObDMLModifyRowsList::iterator row_iter = dml_modify_rows->begin();
   for (; OB_SUCC(ret) && row_iter != dml_modify_rows->end(); row_iter++) {
     ObDMLModifyRowNode &modify_row = *row_iter;
-    if (OB_FAIL(handle_after_processing_single_row(modify_row))) {
+    if (OB_FAIL(handle_after_processing_single_row(modify_row, restore_rows))) {
       LOG_WARN("fail to handle after row process", K(ret), K(modify_row));
     }
   }
@@ -3045,7 +3072,8 @@ int ObDMLService::handle_after_processing_single_row(ObDMLModifyRowsList *dml_mo
 }
 
 int ObDMLService::handle_after_row_processing(ObTableModifyOp *op,
-                                              ObDMLModifyRowsList *dml_modify_rows)
+                                              ObDMLModifyRowsList *dml_modify_rows,
+                                              const bool restore_rows)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(op) || OB_ISNULL(dml_modify_rows)) {
@@ -3057,9 +3085,31 @@ int ObDMLService::handle_after_row_processing(ObTableModifyOp *op,
       LOG_INFO("No row need to perform foreign key check or after row trigger");
     #endif
   } else if (op->execute_single_row_) {
-    ret = handle_after_processing_single_row(dml_modify_rows);
+    ret = handle_after_processing_single_row(dml_modify_rows, restore_rows);
   } else {
     ret = handle_after_processing_multi_row(dml_modify_rows, op);
+  }
+  return ret;
+}
+
+int ObDMLService::check_das_tasks_unstarted(ObDASRef &das_ref)
+{
+  int ret = OB_SUCCESS;
+  // Parallel submission may move tasks out of the task map, so it cannot be checked below.
+  if (OB_UNLIKELY(DAS_SERIALIZATION != das_ref.get_parallel_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("das tasks are not serialized", K(ret), K(das_ref.get_parallel_type()));
+  }
+  DASTaskIter iter = das_ref.begin_task_iter();
+  for (; OB_SUCC(ret) && !iter.is_end(); ++iter) {
+    const ObIDASTaskOp *task = *iter;
+    if (OB_ISNULL(task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("das task is null", K(ret));
+    } else if (OB_UNLIKELY(ObDasTaskStatus::UNSTART != task->get_task_status())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("das task has been executed", K(ret), KPC(task));
+    }
   }
   return ret;
 }
