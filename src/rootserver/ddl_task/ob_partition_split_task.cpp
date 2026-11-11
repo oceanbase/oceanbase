@@ -876,6 +876,8 @@ int ObPartitionSplitTask::check_compaction_progress(
         arg.ls_id_ = ls_id;
         arg.tablet_id_ = tablet_id;
         int tmp_ret = OB_SUCCESS;
+        // wait() appends results, so clear the previous replica's RPC state first.
+        compaction_check_proxy.reuse();
         if (OB_FAIL(compaction_check_proxy.call(replica_addr, rpc_timeout, tenant_id_, arg))) {
           LOG_WARN("send rpc failed", K(ret), K(tenant_id_), K(replica_addr), K(arg));
         } else if (OB_TMP_FAIL(compaction_check_proxy.wait())) {
@@ -909,10 +911,13 @@ int ObPartitionSplitTask::check_compaction_progress(
             } else if (OB_UNLIKELY(existed_compaction_scn != result->primary_compaction_scn_)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unequal compaction scn between replicas", K(ret), K(tablet_id), K(replica_addr), K(existed_compaction_scn), K(result->primary_compaction_scn_));
-            } else if (OB_FAIL(compaction_progress_map_.set_refactored(check_progress_key, ObCheckProgressStatus::DONE, true/*overwrite*/))) {
-              LOG_WARN("failed to update compaction progress", K(ret), K(replica_addr));
-            } else {
-              compaction_end_number++;
+            }
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(compaction_progress_map_.set_refactored(check_progress_key, ObCheckProgressStatus::DONE, true/*overwrite*/))) {
+                LOG_WARN("failed to update compaction progress", K(ret), K(replica_addr));
+              } else {
+                compaction_end_number++;
+              }
             }
           }
         }
