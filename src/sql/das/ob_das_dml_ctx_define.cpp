@@ -946,16 +946,35 @@ int ObDASWriteBuffer::deserialize_buffer_list(const char *buf, const int64_t dat
   int ret = OB_SUCCESS;
   int64_t list_size = 0;
   OB_UNIS_DECODE(list_size);
+  if (OB_SUCC(ret) && (list_size < 0 || data_len < 0 || pos < 0 || pos > data_len
+                       || list_size > data_len - pos)) {
+    ret = OB_DESERIALIZE_ERROR;
+    LOG_WARN("invalid DAS write buffer list size", KR(ret), K(list_size), K(pos), K(data_len));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < list_size; ++i) {
     int64_t row_size = 0;
     DmlRow *row_buffer = nullptr;
     OB_UNIS_DECODE(row_size);
-    OZ(create_link_buffer(row_size, row_buffer));
+    if (OB_SUCC(ret)) {
+      if (row_size < static_cast<int64_t>(sizeof(DmlRow))
+          || row_size > data_len - pos
+          || row_size > INT64_MAX - static_cast<int64_t>(sizeof(LinkNode))) {
+        ret = OB_DESERIALIZE_ERROR;
+        LOG_WARN("invalid DAS write buffer row size", KR(ret), K(row_size), K(pos), K(data_len));
+      } else {
+        OZ(create_link_buffer(row_size, row_buffer));
+      }
+    }
     if (OB_SUCC(ret)) {
       //deserialize row buffer data
       MEMCPY(row_buffer, buf + pos, row_size);
-      row_buffer->swizzling(row_buffer->payload_);
-      pos += row_buffer->row_size_;
+      if (row_buffer->row_size_ != row_size) {
+        ret = OB_DESERIALIZE_ERROR;
+        LOG_WARN("invalid DAS write buffer row", KR(ret), K(row_size), K(row_buffer->row_size_));
+      } else {
+        row_buffer->swizzling(row_buffer->payload_);
+        pos += row_size;
+      }
     }
   }
   return ret;

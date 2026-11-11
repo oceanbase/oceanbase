@@ -18,21 +18,30 @@ OB_SERIALIZE_MEMBER((ObDASTableLookupCtDef, ObDASAttachCtDef));
 const ObDASScanCtDef *ObDASTableLookupCtDef::get_lookup_scan_ctdef() const
 {
   const ObDASScanCtDef *scan_ctdef = nullptr;
-  OB_ASSERT(2 == children_cnt_ && children_ != nullptr);
-  if (DAS_OP_TABLE_SCAN == children_[1]->op_type_) {
+  if (OB_UNLIKELY(children_cnt_ != 2 || children_ == nullptr || children_[1] == nullptr)) {
+  } else if (DAS_OP_TABLE_SCAN == children_[1]->op_type_) {
     scan_ctdef = static_cast<const ObDASScanCtDef*>(children_[1]);
   } else if (DAS_OP_DOC_ID_MERGE == children_[1]->op_type_) {
     ObDASDocIdMergeCtDef *doc_id_merge_ctdef = static_cast<ObDASDocIdMergeCtDef *>(children_[1]);
-    OB_ASSERT(2 == doc_id_merge_ctdef->children_cnt_ && doc_id_merge_ctdef->children_ != nullptr);
-    scan_ctdef = static_cast<ObDASScanCtDef*>(doc_id_merge_ctdef->children_[0]);
+    if (doc_id_merge_ctdef->children_cnt_ == 2 && doc_id_merge_ctdef->children_ != nullptr
+        && doc_id_merge_ctdef->children_[0] != nullptr
+        && doc_id_merge_ctdef->children_[0]->op_type_ == DAS_OP_TABLE_SCAN) {
+      scan_ctdef = static_cast<ObDASScanCtDef*>(doc_id_merge_ctdef->children_[0]);
+    }
   } else if (DAS_OP_VID_MERGE == children_[1]->op_type_) {
     ObDASVIdMergeCtDef *vid_merge_ctdef = static_cast<ObDASVIdMergeCtDef *>(children_[1]);
-    OB_ASSERT(2 == vid_merge_ctdef->children_cnt_ && vid_merge_ctdef->children_ != nullptr);
-    scan_ctdef = static_cast<ObDASScanCtDef*>(vid_merge_ctdef->children_[0]);
+    if (vid_merge_ctdef->children_cnt_ == 2 && vid_merge_ctdef->children_ != nullptr
+        && vid_merge_ctdef->children_[0] != nullptr
+        && vid_merge_ctdef->children_[0]->op_type_ == DAS_OP_TABLE_SCAN) {
+      scan_ctdef = static_cast<ObDASScanCtDef*>(vid_merge_ctdef->children_[0]);
+    }
   } else if (DAS_OP_DOMAIN_ID_MERGE == children_[1]->op_type_) {
     ObDASDomainIdMergeCtDef *domain_id_merge_ctdef = static_cast<ObDASDomainIdMergeCtDef *>(children_[1]);
-    OB_ASSERT(domain_id_merge_ctdef->children_ != nullptr);
-    scan_ctdef = static_cast<ObDASScanCtDef*>(domain_id_merge_ctdef->children_[0]);
+    if (domain_id_merge_ctdef->children_cnt_ > 0 && domain_id_merge_ctdef->children_ != nullptr
+        && domain_id_merge_ctdef->children_[0] != nullptr
+        && domain_id_merge_ctdef->children_[0]->op_type_ == DAS_OP_TABLE_SCAN) {
+      scan_ctdef = static_cast<ObDASScanCtDef*>(domain_id_merge_ctdef->children_[0]);
+    }
   }
   return scan_ctdef;
 }
@@ -42,21 +51,30 @@ OB_SERIALIZE_MEMBER((ObDASTableLookupRtDef, ObDASAttachRtDef));
 ObDASScanRtDef *ObDASTableLookupRtDef::get_lookup_scan_rtdef()
 {
   ObDASScanRtDef *scan_rtdef = nullptr;
-  OB_ASSERT(2 == children_cnt_ && children_ != nullptr);
-  if (DAS_OP_TABLE_SCAN == children_[1]->op_type_) {
+  if (OB_UNLIKELY(children_cnt_ != 2 || children_ == nullptr || children_[1] == nullptr)) {
+  } else if (DAS_OP_TABLE_SCAN == children_[1]->op_type_) {
     scan_rtdef = static_cast<ObDASScanRtDef*>(children_[1]);
   } else if (DAS_OP_DOC_ID_MERGE == children_[1]->op_type_) {
     ObDASDocIdMergeRtDef *doc_id_merge_rtdef = static_cast<ObDASDocIdMergeRtDef *>(children_[1]);
-    OB_ASSERT(2 == doc_id_merge_rtdef->children_cnt_ && doc_id_merge_rtdef->children_ != nullptr);
-    scan_rtdef = static_cast<ObDASScanRtDef*>(doc_id_merge_rtdef->children_[0]);
+    if (doc_id_merge_rtdef->children_cnt_ == 2 && doc_id_merge_rtdef->children_ != nullptr
+        && doc_id_merge_rtdef->children_[0] != nullptr
+        && doc_id_merge_rtdef->children_[0]->op_type_ == DAS_OP_TABLE_SCAN) {
+      scan_rtdef = static_cast<ObDASScanRtDef*>(doc_id_merge_rtdef->children_[0]);
+    }
   } else if (DAS_OP_VID_MERGE == children_[1]->op_type_) {
     ObDASVIdMergeRtDef *vid_merge_rtdef = static_cast<ObDASVIdMergeRtDef *>(children_[1]);
-    OB_ASSERT(2 == vid_merge_rtdef->children_cnt_ && vid_merge_rtdef->children_ != nullptr);
-    scan_rtdef = static_cast<ObDASScanRtDef*>(vid_merge_rtdef->children_[0]);
+    if (vid_merge_rtdef->children_cnt_ == 2 && vid_merge_rtdef->children_ != nullptr
+        && vid_merge_rtdef->children_[0] != nullptr
+        && vid_merge_rtdef->children_[0]->op_type_ == DAS_OP_TABLE_SCAN) {
+      scan_rtdef = static_cast<ObDASScanRtDef*>(vid_merge_rtdef->children_[0]);
+    }
   } else if (DAS_OP_DOMAIN_ID_MERGE == children_[1]->op_type_) {
     ObDASDomainIdMergeRtDef *domain_id_merge_rtdef = static_cast<ObDASDomainIdMergeRtDef *>(children_[1]);
-    OB_ASSERT(domain_id_merge_rtdef->children_ != nullptr);
-    scan_rtdef = static_cast<ObDASScanRtDef*>(domain_id_merge_rtdef->children_[0]);
+    if (domain_id_merge_rtdef->children_cnt_ > 0 && domain_id_merge_rtdef->children_ != nullptr
+        && domain_id_merge_rtdef->children_[0] != nullptr
+        && domain_id_merge_rtdef->children_[0]->op_type_ == DAS_OP_TABLE_SCAN) {
+      scan_rtdef = static_cast<ObDASScanRtDef*>(domain_id_merge_rtdef->children_[0]);
+    }
   }
   return scan_rtdef;
 }
