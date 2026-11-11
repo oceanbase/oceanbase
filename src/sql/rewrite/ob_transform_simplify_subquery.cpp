@@ -1003,15 +1003,12 @@ int ObTransformSimplifySubquery::do_transform_any_all_as_min_max(ObSelectStmt *s
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have incorrect value", K(ret),
              K(stmt->get_select_items()), K(col_expr), K(aggr_type));
-  } else if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(aggr_type, aggr_expr))) {
-    LOG_WARN("fail to create raw expr", K(ret), K(aggr_expr));
-  } else if (OB_ISNULL(aggr_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to create aggr expr", K(ret), K(aggr_type));
-  } else if (OB_FAIL(aggr_expr->add_real_param_expr(col_expr))) {
-    LOG_WARN("fail to add param expr", K(ret));
-  } else if (OB_FAIL(aggr_expr->formalize(ctx_->session_info_))) {
-    LOG_WARN("failed to formalize expr", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(*ctx_->expr_factory_,
+                                                            ctx_->session_info_,
+                                                            aggr_type,
+                                                            col_expr,
+                                                            aggr_expr))) {
+    LOG_WARN("failed to build min/max expr", K(ret));
   } else if (OB_FAIL(aggr_expr->pull_relation_id())) {
     LOG_WARN("failed to pull relation id", K(ret));
   } else {

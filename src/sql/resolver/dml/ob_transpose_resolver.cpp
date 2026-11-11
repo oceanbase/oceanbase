@@ -970,7 +970,8 @@ int ObTransposeResolver::get_exprs_for_pivot_table(PivotDef &pivot_def,
     for (int64_t j = 0; OB_SUCC(ret) && j < pivot_def.aggr_pairs_.count(); ++j) {
       PivotDef::AggrPair &aggr_pair = pivot_def.aggr_pairs_.at(j);
       ObRawExpr *select_expr = NULL;
-      if (OB_FAIL(build_select_expr_for_pivot(aggr_pair, in_pair, pivot_def.for_columns_, select_expr))) {
+      if (OB_FAIL(build_select_expr_for_pivot(aggr_pair, in_pair, pivot_def.for_columns_,
+                                             !groups.empty(), select_expr))) {
         LOG_WARN("failed to build select expr for pivot", K(ret));
       } else if (OB_ISNULL(select_expr)) {
         ret = OB_ERR_UNEXPECTED;
@@ -986,11 +987,12 @@ int ObTransposeResolver::get_exprs_for_pivot_table(PivotDef &pivot_def,
 // aggr(expr) -> aggr(case when (for_exprs) in (in_exprs) then expr end)
 // count(*) -> count(case when (for_exprs) in (in_exprs) then 1 end)
 // list_agg(expr1, expr2) -> list_agg(case when (for_exprs) in (in_exprs) then expr1 end, expr2)
-// ((c1, c2) in (1, 2)) is in fact (c1=1 and c2=2), so 'for_exprs in in_exprs' is 'for_expr1 = in_expr2 and ...'
+// Match pivot key components pairwise and combine the comparisons with AND.
 int ObTransposeResolver::build_select_expr_for_pivot(
     PivotDef::AggrPair &aggr_pair,
     PivotDef::InPair &in_pair,
     ObIArray<ObRawExpr *> &for_exprs,
+    bool has_group_columns,
     ObRawExpr *&select_expr)
 {
   int ret = OB_SUCCESS;
@@ -1032,13 +1034,23 @@ int ObTransposeResolver::build_select_expr_for_pivot(
     } else if (OB_FAIL(aggr_expr->assign(*aggr_pair.expr_))) {
       LOG_WARN("failed to assign aggr expr", K(ret));
     }
+    // Any implicit grouping column, including a constant, disables Oracle's NULL pivot key matching.
+    const bool use_null_safe_equal = lib::is_oracle_mode() && !has_group_columns;
     for (int64_t i = 0; OB_SUCC(ret) && i < for_exprs.count(); ++i) {
       ObRawExpr *equal_expr = NULL;
-      if (OB_FAIL(ObRawExprUtils::create_equal_expr(*expr_factory,
-                                                    session_info,
-                                                    in_pair.const_exprs_.at(i),
-                                                    for_exprs.at(i),
-                                                    equal_expr))) {
+      if (use_null_safe_equal &&
+          OB_FAIL(ObRawExprUtils::create_null_safe_equal_expr(*expr_factory,
+                                                            session_info,
+                                                            for_exprs.at(i),
+                                                            in_pair.const_exprs_.at(i),
+                                                            equal_expr))) {
+        LOG_WARN("failed to create null safe equal expr", K(ret));
+      } else if (!use_null_safe_equal &&
+                 OB_FAIL(ObRawExprUtils::create_equal_expr(*expr_factory,
+                                                         session_info,
+                                                         in_pair.const_exprs_.at(i),
+                                                         for_exprs.at(i),
+                                                         equal_expr))) {
         LOG_WARN("failed to create equal expr", K(ret));
       } else if (OB_ISNULL(equal_expr)) {
         ret = OB_ERR_UNEXPECTED;

@@ -207,6 +207,7 @@ private:
   int build_select_expr_for_pivot(PivotDef::AggrPair &aggr_pair,
                                   PivotDef::InPair &in_pair,
                                   ObIArray<ObRawExpr *> &for_exprs,
+                                  bool has_group_columns,
                                   ObRawExpr *&select_expr);
   int get_exprs_for_unpivot_table(UnpivotDef &unpivot_def,
                                   ObIArray<ObRawExpr *> &select_exprs,
