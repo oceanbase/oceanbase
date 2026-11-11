@@ -66,17 +66,37 @@ OB_DEF_DESERIALIZE(ObConflictCheckerCtdef)
 {
   int ret = OB_SUCCESS;
   int64_t cons_info_cnt = 0;
-  OB_UNIS_DECODE(cons_info_cnt);
+  // Each UNIS constraint needs at least one byte each for its version and length.
+  // Bound the count by the remaining payload before allocating the constraint array.
+  const int64_t min_cst_ctdef_size = 2;
+  // The count is mandatory; OB_UNIS_DECODE skips decoding at the end of the buffer.
+  // decode_vi64 reads before checking the remaining length, so reject an empty payload first.
+  if (OB_UNLIKELY(pos >= data_len)) {
+    ret = OB_DESERIALIZE_ERROR;
+    LOG_WARN("missing constraint count", K(ret), K(data_len), K(pos));
+  } else if (OB_FAIL(serialization::decode(buf, data_len, pos, cons_info_cnt))) {
+    LOG_WARN("decode constraint count failed", K(ret), K(data_len), K(pos));
+  } else if (OB_UNLIKELY(cons_info_cnt < 0 || cons_info_cnt > (data_len - pos) / min_cst_ctdef_size)) {
+    ret = OB_DESERIALIZE_ERROR;
+    LOG_WARN("invalid constraint count", K(ret), K(cons_info_cnt), K(data_len), K(pos));
+  } else if (OB_FAIL(cst_ctdefs_.init(cons_info_cnt))) {
+    LOG_WARN("init constraint array failed", K(ret), K(cons_info_cnt));
+  }
   ObDMLCtDefAllocator<ObRowkeyCstCtdef> cons_info_allocator(alloc_);
-  OZ(cst_ctdefs_.init(cons_info_cnt));
   for (int64_t i = 0; OB_SUCC(ret) && i < cons_info_cnt; ++i) {
-    ObRowkeyCstCtdef *cst_ctdef = cons_info_allocator.alloc();
-    if (OB_ISNULL(cst_ctdef)) {
+    ObRowkeyCstCtdef *cst_ctdef = nullptr;
+    // Earlier constraints may consume more than the minimum, so recheck before allocating each object.
+    if (OB_UNLIKELY(data_len - pos < min_cst_ctdef_size)) {
+      ret = OB_DESERIALIZE_ERROR;
+      LOG_WARN("incomplete constraint payload", K(ret), K(i), K(cons_info_cnt), K(data_len), K(pos));
+    } else if (OB_ISNULL(cst_ctdef = cons_info_allocator.alloc())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc constraint_info failed", K(ret));
+    } else if (OB_FAIL(cst_ctdef->deserialize(buf, data_len, pos))) {
+      LOG_WARN("deserialize constraint_info failed", K(ret), K(i), K(data_len), K(pos));
+    } else if (OB_FAIL(cst_ctdefs_.push_back(cst_ctdef))) {
+      LOG_WARN("store constraint_info failed", K(ret), K(i));
     }
-    OB_UNIS_DECODE(*cst_ctdef);
-    OZ(cst_ctdefs_.push_back(cst_ctdef));
   }
   if (OB_SUCC(ret)) {
     OB_UNIS_DECODE(calc_part_id_expr_);
