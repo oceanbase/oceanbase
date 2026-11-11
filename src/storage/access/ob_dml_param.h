@@ -165,6 +165,7 @@ public:
         trans_desc_(NULL),
         snapshot_(),
         fb_read_tx_uncommitted_(false),
+        need_own_write_read_ctx_(false),
         tx_id_(),
         tx_lock_timeout_(-1),
         table_param_(NULL),
@@ -192,7 +193,8 @@ public:
   transaction::ObTxDesc *trans_desc_;      // transaction handle
   transaction::ObTxReadSnapshot snapshot_;
   bool fb_read_tx_uncommitted_;
-  transaction::ObTransID tx_id_;           // used when read-latest
+  bool need_own_write_read_ctx_;
+  transaction::ObTransID tx_id_;
   int64_t tx_lock_timeout_;
   const share::schema::ObTableParam *table_param_;
   common::ObIAllocator *allocator_; //stmt level allocator, only be free at the end of query

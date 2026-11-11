@@ -526,11 +526,6 @@ bool ObLobAccessParam::need_transfer_own_write_read_latest() const
     for (int64_t i = 0; !current_ls_in_snapshot && i < snapshot_.parts_.count(); ++i) {
       current_ls_in_snapshot = (snapshot_.parts_.at(i).left_ == ls_id_);
     }
-    // Transfer can move the LOB tablet to an LS which is absent from the
-    // serialized snapshot.  READ_LATEST only changes visibility for Case 2.0
-    // (reader_tx_id == data_tx_id): it restores the transaction's latest
-    // non-rolled-back own write.  Other transactions still obey the normal
-    // snapshot/prepare-version checks.
     need_read_latest = !current_ls_in_snapshot;
   }
   return need_read_latest;

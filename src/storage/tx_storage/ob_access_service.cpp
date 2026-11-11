@@ -695,30 +695,31 @@ int ObAccessService::check_read_allowed_(
         LOG_WARN("get read store ctx fail", K(user_specified_snapshot), K(ls_id), K(ret));
       }
     } else {
-      bool read_latest = access_type == ObStoreAccessType::READ_LATEST;
+      const bool need_own_ctx = access_type == ObStoreAccessType::READ_LATEST
+          || scan_param.need_own_write_read_ctx_;
       if (user_specified_snapshot.is_valid()) {
         transaction::ObTxReadSnapshot spec_snapshot;
         if (OB_FAIL(spec_snapshot.assign(scan_param.snapshot_))) {
           LOG_WARN("copy snapshot fail", K(ret));
         } else if (FALSE_IT(spec_snapshot.specify_snapshot_scn(user_specified_snapshot))) {
         } else if (OB_FAIL(ls->get_read_store_ctx(spec_snapshot,
-                                                  read_latest,
+                                                  need_own_ctx,
                                                   scan_param.tx_lock_timeout_,
                                                   ctx))) {
-          LOG_WARN("get read store ctx fail", K(ret), K(read_latest), K(spec_snapshot), K(user_specified_snapshot), K(ls_id));
+          LOG_WARN("get read store ctx fail", K(ret), K(need_own_ctx), K(spec_snapshot), K(user_specified_snapshot), K(ls_id));
         }
       } else if (OB_FAIL(ls->get_read_store_ctx(scan_param.snapshot_,
-                                                read_latest,
+                                                need_own_ctx,
                                                 scan_param.tx_lock_timeout_,
                                                 ctx,
                                                 scan_param.trans_desc_))) {
-        LOG_WARN("get read store ctx fail", K(ret), K(read_latest), K(scan_param.snapshot_), K(ls_id));
+        LOG_WARN("get read store ctx fail", K(ret), K(need_own_ctx), K(scan_param.snapshot_), K(ls_id));
       }
       if (OB_FAIL(ret)) {
-      } else if (read_latest) {
+      } else if (need_own_ctx) {
         if (!scan_param.tx_id_.is_valid()) {
           ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("readlatest need scan_param.tx_id_ valid", K(ret));
+          LOG_WARN("own-write context needs valid scan transaction id", K(ret), K(scan_param.tx_id_));
         } else {
           ctx.mvcc_acc_ctx_.tx_id_ = scan_param.tx_id_;
         }

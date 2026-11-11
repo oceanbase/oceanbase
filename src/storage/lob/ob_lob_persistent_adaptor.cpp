@@ -351,8 +351,8 @@ int ObPersistentLobApator::build_common_scan_param(
     ObIAllocator *scan_allocator)
 {
   int ret = OB_SUCCESS;
-  const bool effective_read_latest =
-      param.need_read_latest_ || param.need_transfer_own_write_read_latest();
+  // Transfer needs own-write context without relaxing the locator's snapshot.
+  scan_param.need_own_write_read_ctx_ = param.need_transfer_own_write_read_latest();
 
   ObQueryFlag query_flag(ObQueryFlag::Forward, // scan_order
                           false, // daily_merge
@@ -362,7 +362,7 @@ int ObPersistentLobApator::build_common_scan_param(
                           false, // index_back
                           false, // query_stat
                           ObQueryFlag::MysqlMode, // sql_mode
-                          effective_read_latest // read_latest
+                          param.need_read_latest_ // read_latest
                         );
   query_flag.disable_cache();
   if (param.enable_block_cache()) query_flag.set_use_block_cache();
@@ -390,7 +390,7 @@ int ObPersistentLobApator::build_common_scan_param(
     scan_param.limit_param_.limit_ = -1;
     scan_param.limit_param_.offset_ = 0;
     // sessions
-    if (param.read_latest_ || effective_read_latest) {
+    if (param.read_latest_ || param.need_read_latest_ || scan_param.need_own_write_read_ctx_) {
       scan_param.tx_id_ = param.snapshot_.core_.tx_id_;
     }
     scan_param.sql_mode_ = param.sql_mode_;
