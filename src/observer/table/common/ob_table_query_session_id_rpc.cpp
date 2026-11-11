@@ -15,12 +15,17 @@ using namespace share;
 using namespace obrpc;
 namespace observer
 {
+// Upper bound of a single request range, 10 * ObTableSessIDService::OB_TABLE_QUERY_SESSION_RANGE.
+// Defend against huge range(e.g. INT64_MAX) from rpc peers, which may cause
+// signed integer overflow in ObIDService::get_number.
+static const int64_t MAX_REQUEST_RANGE = 10 * ObTableSessIDService::OB_TABLE_QUERY_SESSION_RANGE;
+
 OB_SERIALIZE_MEMBER(ObTableSessIDRequest, tenant_id_, range_);
 
 int ObTableSessIDRequest::init(const uint64_t tenant_id, const int64_t range)
 {
   int ret = OB_SUCCESS;
-  if (!is_valid_tenant_id(tenant_id) || 0 >= range) {
+  if (!is_valid_tenant_id(tenant_id) || 0 >= range || range > MAX_REQUEST_RANGE) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(range));
   } else {
@@ -32,7 +37,7 @@ int ObTableSessIDRequest::init(const uint64_t tenant_id, const int64_t range)
 
 bool ObTableSessIDRequest::is_valid() const
 {
-  return is_valid_tenant_id(tenant_id_) && range_ > 0;
+  return is_valid_tenant_id(tenant_id_) && range_ > 0 && range_ <= MAX_REQUEST_RANGE;
 }
 
 int ObTableSessIDRequestRpc::init(obrpc::ObTableSessIDRpcProxy *rpc_proxy,

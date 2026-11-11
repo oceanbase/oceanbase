@@ -530,7 +530,10 @@ int ObIDService::get_number(const int64_t range, const int64_t base_id, int64_t 
 {
   int ret = OB_SUCCESS;
   bool leader = false;
-  if (OB_FAIL(check_leader(leader))) {
+  if (OB_UNLIKELY(range <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", KR(ret), K(range), K(base_id));
+  } else if (OB_FAIL(check_leader(leader))) {
     TRANS_LOG(WARN, "check leader fail", K(ret));
   } else if (!leader) {
     ret = OB_NOT_MASTER;
@@ -564,7 +567,12 @@ int ObIDService::get_number(const int64_t range, const int64_t base_id, int64_t 
       }
     }
     if (OB_EAGAIN == ret || (limited_id_ - last_id_) < (pre_allocated_range_ * 2 / 3)) {
-      const int64_t pre_allocated_id = min(max_pre_allocated_id_(base_id), max(base_id, limited_id_) + max(range * 10, pre_allocated_range_));
+      // 'range' may be huge(e.g. INT64_MAX) from rpc peers, clamp to keep both
+      // the multiplication and the addition overflow-free
+      const int64_t pre_alloc_base = max(base_id, limited_id_);
+      const int64_t range_x10 = (range <= INT64_MAX / 10) ? range * 10 : pre_allocated_range_;
+      const int64_t pre_allocated_id = min(max_pre_allocated_id_(base_id),
+          pre_alloc_base + min(max(range_x10, pre_allocated_range_), max(INT64_MAX - pre_alloc_base, (int64_t)0)));
       submit_log_with_lock_(pre_allocated_id, pre_allocated_id);
     }
   }

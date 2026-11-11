@@ -13,13 +13,17 @@ using namespace share;
 using namespace obrpc;
 namespace transaction
 {
+// Upper bound of a single request range, 10 * ObGtiSource::MAX_PREALLOCATE_COUNT.
+// Defend against huge range(e.g. INT64_MAX) from rpc peers, which may cause
+// signed integer overflow in ObIDService::get_number.
+static const int64_t MAX_REQUEST_RANGE = 10 * ObGtiSource::MAX_PREALLOCATE_COUNT;
 
 OB_SERIALIZE_MEMBER(ObGtiRequest, tenant_id_, range_);
 
 int ObGtiRequest::init(const uint64_t tenant_id, const int64_t range)
 {
   int ret = OB_SUCCESS;
-  if (!is_valid_tenant_id(tenant_id) || 0 >= range) {
+  if (!is_valid_tenant_id(tenant_id) || 0 >= range || range > MAX_REQUEST_RANGE) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(range));
   } else {
@@ -31,7 +35,7 @@ int ObGtiRequest::init(const uint64_t tenant_id, const int64_t range)
 
 bool ObGtiRequest::is_valid() const
 {
-  return is_valid_tenant_id(tenant_id_) && range_ > 0;
+  return is_valid_tenant_id(tenant_id_) && range_ > 0 && range_ <= MAX_REQUEST_RANGE;
 }
 
 int ObGtiRequestRpc::init(ObGtiRpcProxy *rpc_proxy, const ObAddr &self, ObGtiSource *gti_source)

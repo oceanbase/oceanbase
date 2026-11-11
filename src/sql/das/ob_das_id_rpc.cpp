@@ -14,13 +14,17 @@ using namespace common;
 using namespace share;
 namespace sql
 {
+// Upper bound of a single request range, 10 * ObDASIDCache::MAX_PREALLOCATE_COUNT.
+// Defend against huge range(e.g. INT64_MAX) from rpc peers, which may cause
+// signed integer overflow in ObIDService::get_number.
+static const int64_t MAX_REQUEST_RANGE = 10 * ObDASIDCache::MAX_PREALLOCATE_COUNT;
 
 OB_SERIALIZE_MEMBER(ObDASIDRequest, tenant_id_, range_);
 
 int ObDASIDRequest::init(const uint64_t tenant_id, const int64_t range)
 {
   int ret = OB_SUCCESS;
-  if (!is_valid_tenant_id(tenant_id) || 0 >= range) {
+  if (!is_valid_tenant_id(tenant_id) || 0 >= range || range > MAX_REQUEST_RANGE) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(range));
   } else {
@@ -32,7 +36,7 @@ int ObDASIDRequest::init(const uint64_t tenant_id, const int64_t range)
 
 bool ObDASIDRequest::is_valid() const
 {
-  return is_valid_tenant_id(tenant_id_) && range_ > 0;
+  return is_valid_tenant_id(tenant_id_) && range_ > 0 && range_ <= MAX_REQUEST_RANGE;
 }
 
 ObDASIDRequestRpc::ObDASIDRequestRpc()
