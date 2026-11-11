@@ -510,7 +510,8 @@ struct VecTCBatchHash<VEC_TC_STRING, HashMethod, hash_v2>
     const ObCollationType cs_type = meta.get_collation_type();
     if (hash_v2 && (CS_TYPE_UTF8MB4_BIN == cs_type || CS_TYPE_UTF8MB4_0900_BIN == cs_type)) {
       bool has_trailing_space = false;
-      if (CS_TYPE_UTF8MB4_BIN == cs_type && !calc_end_space) {
+      // Match the single-row hash path for both binary collations.
+      if (!calc_end_space) {
         for (int64_t i = start; i < end; i++) {
           if (!all_row_active && skip.at(i)) { continue; }
           const int32_t len = vec.get_length(i);

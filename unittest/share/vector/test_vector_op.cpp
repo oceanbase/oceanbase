@@ -316,6 +316,100 @@ TEST(ObTestVectorBasicOp, hash_op)
   test_discrete_hash<VEC_TC_RAW>(meta, "raw");
 }
 
+// 验证utf8mb4_0900_bin的向量化批量hash与单行hash一致地裁剪末尾空格。
+// 注意：本unittest二进制没有注册utf8mb4_0900_bin的charset，datum层hash会透传seed，
+// 因此0900_bin用例直接对照murmurhash64A参考值；datum层一致性用已注册的utf8mb4_bin验证。
+TEST(ObTestVectorBasicOp, utf8mb4_0900_bin_hash_trailing_space)
+{
+  const char *case_strs[] = {"",
+                             "a",
+                             "a ",
+                             "a  ",
+                             "abc",
+                             "abc ",
+                             "abc  ",
+                             " ",
+                             "  ",
+                             "abc def ",
+                             "\xE4\xB8\xAD\xE6\x96\x87",
+                             "\xE4\xB8\xAD\xE6\x96\x87 ",
+                             "a\xE4\xB8\xAD b ",
+                             "   abc   "};
+  const int64_t case_cnt = sizeof(case_strs) / sizeof(case_strs[0]);
+  std::vector<int32_t> lens(case_cnt, 0);
+  std::vector<char *> ptrs(case_cnt, nullptr);
+  std::vector<uint64_t> seeds;
+  for (int64_t i = 0; i < case_cnt; i++) {
+    lens[i] = strlen(case_strs[i]);
+    ptrs[i] = const_cast<char *>(case_strs[i]);
+    seeds.push_back(i * 2654435761u + 12345);
+  }
+  int64_t skip_data = 0;
+  sql::ObBitVector *skip = sql::to_bit_vector(&skip_data);
+  sql::ObExpr mock_expr;
+  sql::EvalBound bound(case_cnt, true);
+
+  // helper: trim trailing spaces
+  auto trimmed_len = [&case_strs](int64_t i) -> int32_t {
+    int32_t len = strlen(case_strs[i]);
+    while (len > 0 && case_strs[i][len - 1] == ' ') { len--; }
+    return len;
+  };
+
+  // 1. utf8mb4_0900_bin: batch and single-row hashes must agree.
+  {
+    ObObjMeta meta;
+    meta.set_varchar();
+    meta.set_collation_type(CS_TYPE_UTF8MB4_0900_BIN);
+    mock_expr.obj_meta_ = meta;
+    ObDiscreteVector<VectorBasicOp<VEC_TC_STRING>> vec(lens.data(), ptrs.data(), skip);
+    std::vector<uint64_t> vec_hash(case_cnt, 0);
+
+    ASSERT_EQ(OB_SUCCESS, vec.murmur_hash_v3(mock_expr, vec_hash.data(), *skip, bound, seeds.data(), true));
+    for (int64_t i = 0; i < case_cnt; i++) {
+      uint64_t row_hash = 0;
+      ASSERT_EQ(OB_SUCCESS, vec.murmur_hash_v3_for_one_row(mock_expr, row_hash, i, case_cnt, seeds[i]));
+      ASSERT_EQ(murmurhash64A(ptrs[i], trimmed_len(i), seeds[i]), vec_hash[i]) << "case " << i;
+      ASSERT_EQ(row_hash, vec_hash[i]) << "case " << i;
+    }
+    ASSERT_NE(murmurhash64A(ptrs[2], lens[2], seeds[2]), murmurhash64A(ptrs[2], trimmed_len(2), seeds[2]));
+
+    // A NULL switches dispatch to per-row hashing; non-NULL values must keep the same hashes.
+    int64_t null_data = 1;
+    ObDiscreteVector<VectorBasicOp<VEC_TC_STRING>> nullable_vec(lens.data(), ptrs.data(),
+                                                                sql::to_bit_vector(&null_data));
+    nullable_vec.set_has_null();
+    std::vector<uint64_t> nullable_hash(case_cnt, 0);
+    ASSERT_EQ(OB_SUCCESS,
+              nullable_vec.murmur_hash_v3(mock_expr, nullable_hash.data(), *skip, bound, seeds.data(), true));
+    ASSERT_EQ(seeds[0], nullable_hash[0]);
+    for (int64_t i = 1; i < case_cnt; i++) { ASSERT_EQ(vec_hash[i], nullable_hash[i]) << "case " << i; }
+    ASSERT_EQ(OB_SUCCESS, vec.crc_hash_v3(mock_expr, vec_hash.data(), *skip, bound, seeds.data(), true));
+    ASSERT_EQ(OB_SUCCESS, nullable_vec.crc_hash_v3(mock_expr, nullable_hash.data(), *skip, bound, seeds.data(), true));
+    for (int64_t i = 1; i < case_cnt; i++) { ASSERT_EQ(vec_hash[i], nullable_hash[i]) << "CRC case " << i; }
+  }
+
+  // 2. utf8mb4_bin
+  // 行为不变：向量化批量hash裁剪末尾空格，与datum层一致。
+  {
+    ObObjMeta meta;
+    meta.set_varchar();
+    meta.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+    mock_expr.obj_meta_ = meta;
+    sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(meta.get_type(), meta.get_collation_type(),
+                                                                      meta.get_scale(), false, meta.has_lob_header());
+    ASSERT_TRUE(nullptr != basic_funcs);
+    ObDiscreteVector<VectorBasicOp<VEC_TC_STRING>> vec(lens.data(), ptrs.data(), skip);
+    std::vector<ObDatum> datums;
+    for (int64_t i = 0; i < case_cnt; i++) { datums.push_back(ObDatum(ptrs[i], lens[i], false)); }
+    std::vector<uint64_t> vec_hash(case_cnt, 0);
+    std::vector<uint64_t> datum_hash(case_cnt, 0);
+    basic_funcs->murmur_hash_v2_batch_(datum_hash.data(), datums.data(), true, *skip, case_cnt, seeds.data(), true);
+    ASSERT_EQ(OB_SUCCESS, vec.murmur_hash_v3(mock_expr, vec_hash.data(), *skip, bound, seeds.data(), true));
+    for (int64_t i = 0; i < case_cnt; i++) { ASSERT_EQ(datum_hash[i], vec_hash[i]) << "case " << i; }
+  }
+}
+
 TEST(ObTestVectorBasicOp, cmp_op)
 {
   ObObjMeta l_meta, r_meta;
