@@ -22,6 +22,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObSqcBcastService;
+class ObExecContext;
 
 namespace dtl {
 
@@ -103,7 +104,7 @@ class ObDtlFlowControl
 {
 public:
   ObDtlFlowControl() :
-  tenant_id_(OB_INVALID_ID), timeout_ts_(0), communicate_flag_(0),
+  tenant_id_(OB_INVALID_ID), timeout_ts_(0), exec_ctx_(nullptr), communicate_flag_(0),
   compressor_type_(common::ObCompressorType::NONE_COMPRESSOR), is_init_(false), block_ch_cnt_(0),
   total_memory_size_(0), total_buffer_cnt_(0), accumulated_blocked_cnt_(0), blocks_(), chans_(), drain_ch_cnt_(0),
   dfo_key_(), op_metric_(nullptr),
@@ -118,6 +119,7 @@ public:
   OB_INLINE uint64_t get_tenant_id() const { return tenant_id_; }
   OB_INLINE int64_t get_timeout_ts() const { return timeout_ts_; }
   OB_INLINE void set_timeout_ts(int64_t timeout_ts) { timeout_ts_ = timeout_ts; }
+  OB_INLINE void set_exec_ctx(ObExecContext &exec_ctx) { exec_ctx_ = &exec_ctx; }
 
   OB_INLINE void increase(int64_t size) { (ATOMIC_AAF(&total_memory_size_, size)); ATOMIC_INC(&total_buffer_cnt_); }
   OB_INLINE void decrease(int64_t size) { (ATOMIC_SAF(&total_memory_size_, size)); ATOMIC_DEC(&total_buffer_cnt_); }
@@ -184,6 +186,7 @@ public:
     chans_.reset();
     blocks_.reset();
     ch_info_ = nullptr;
+    exec_ctx_ = nullptr;
     is_init_ = false;
   }
 
@@ -252,6 +255,7 @@ private:
   static const int64_t MAX_BUFFER_FACTOR = 2;
   uint64_t tenant_id_;
   int64_t timeout_ts_;
+  ObExecContext *exec_ctx_;
   // 标识是否是transmit、receive、qc等
   int communicate_flag_;
   common::ObCompressorType compressor_type_;

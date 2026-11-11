@@ -275,6 +275,9 @@ int ObDtlBatchAsyncSender::async_send_batch()
   }
 
   while (OB_SUCC(ret)) {
+    if (OB_FAIL(exec_ctx_.fast_check_status())) {
+      LOG_WARN("execution status failed in batch async send", K(ret));
+    }
     ObTMArray<ObWaitChannelInfo> round_wait_channels;
     bool made_progress = false;
     for (int64_t si = 0; OB_SUCC(ret) && si < slots.count(); ++si) {
@@ -658,26 +661,16 @@ int ObDfcUnblockAsynSender::process_local(ObDtlChannel *self_ch, ObDtlChannel *p
   if (self_ch->use_interm_result()) {
     // if use dtl interm result peer channel is not exist
   } else if (OB_NOT_NULL(peer_ch) && OB_NOT_NULL(peer_ch->get_dfc())) {
-    if (peer_ch->get_dfc()->is_block(peer_ch)) {
-      // transmit's message response is already processed,
-      // we can unblock the channel directly
-      if (OB_FAIL(peer_ch->get_dfc()->unblock_channel(peer_ch))) {
-        LOG_WARN("failed to unblock channel", K(ret), K(peer_ch->get_id()), K(peer_ch->get_peer()));
-      } else {
-        LOG_TRACE("[DTL BATCH BLOCK] unblock channel", K(peer_ch->get_id()), K(peer_ch->get_peer()));
-      }
-    } else {
-      // response message is not processed yet, we should send a unblocking msg
-      // for later processing
-      ObDtlUnblockingMsg unblocking_msg;
-      if (self_ch->is_drain()) {
-      } else if (OB_FAIL(self_ch->send(unblocking_msg, timeout_ts_))) {
-        LOG_WARN("failed to push data to channel", K(ret), KP(self_ch->get_id()), K(self_ch->get_peer()));
-      } else if (OB_FAIL(self_ch->flush(true, false))) {
-        LOG_WARN("failed to flush unblocking msg", K(ret), KP(self_ch->get_id()), K(self_ch->get_peer()));
-      }
-      LOG_TRACE("[DTL BATCH BLOCK] send local unblocking msg", K(peer_ch->get_id()), K(peer_ch->get_peer()));
+    // Let the transmit worker consume UNBLOCK after its block transition finishes.
+    // A local peer must follow the same ordering as a remote peer.
+    ObDtlUnblockingMsg unblocking_msg;
+    if (self_ch->is_drain()) {
+    } else if (OB_FAIL(self_ch->send(unblocking_msg, timeout_ts_))) {
+      LOG_WARN("failed to push data to channel", K(ret), KP(self_ch->get_id()), K(self_ch->get_peer()));
+    } else if (OB_FAIL(self_ch->flush(true, false))) {
+      LOG_WARN("failed to flush unblocking msg", K(ret), KP(self_ch->get_id()), K(self_ch->get_peer()));
     }
+    LOG_TRACE("[DTL BATCH BLOCK] send local unblocking msg", K(peer_ch->get_id()), K(peer_ch->get_peer()));
   }
   return ret;
 }

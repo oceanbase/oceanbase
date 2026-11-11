@@ -394,8 +394,11 @@ int ObDtlFlowControl::notify_all_blocked_channels_unblocking(int64_t &unblock_cn
     if (OB_FAIL(sync_send_drain(unblock_cnt))) {
       LOG_WARN("failed to sync send drain", K(ret));
     }
+  } else if (OB_ISNULL(exec_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("execution context is null when sending batch unblock", K(ret));
   } else {
-    ObDfcUnblockAsynSender asyn_sender(chans_, ch_info_, is_transmit(), timeout_ts_, *this, server_groups_);
+    ObDfcUnblockAsynSender asyn_sender(chans_, ch_info_, is_transmit(), timeout_ts_, *this, server_groups_, *exec_ctx_);
     if (OB_FAIL(asyn_sender.asyn_send())) {
       LOG_WARN("failed to asyn send unblocking msg", K(ret));
     }
@@ -412,8 +415,11 @@ int ObDtlFlowControl::drain_all_channels()
     if (ch_info_->transmit_exec_server_.total_task_cnt_ != chans_.count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected status: ch info is null", K(ret), KP(ch_info_), K(chans_.count()));
+    } else if (OB_ISNULL(exec_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("execution context is null when sending batch drain", K(ret));
     } else {
-      ObDfcDrainAsynSender drain_asyn_sender(chans_, ch_info_, false, timeout_ts_, server_groups_);
+      ObDfcDrainAsynSender drain_asyn_sender(chans_, ch_info_, false, timeout_ts_, server_groups_, *exec_ctx_);
       if (OB_FAIL(drain_asyn_sender.asyn_send())) {
         LOG_WARN("failed to asyn send drain", K(ret), K(lbt()));
       }

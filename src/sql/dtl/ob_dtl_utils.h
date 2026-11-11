@@ -94,9 +94,10 @@ public:
   ObDtlBatchAsyncSender(
       ObIArray<ObDtlChannel *> &channels, ObDtlChTotalInfo *ch_info,
       bool is_transmit, int64_t timeout_ts,
-      const ObIArray<ObDtlServerChannelGroup *> *server_groups)
+      const ObIArray<ObDtlServerChannelGroup *> *server_groups,
+      sql::ObExecContext &exec_ctx)
       : ObDtlAsynSender(channels, ch_info, is_transmit, timeout_ts, server_groups),
-        batch_msg_() {}
+        batch_msg_(), exec_ctx_(exec_ctx) {}
 
   int async_send_batch() override final;
   int post_batch_dtl_msg(ObDtlPeerCtlBatch &slot, ObDtlChannel *&out_carrier_ch);
@@ -131,6 +132,7 @@ private:
 
 protected:
   ObDtlBatchMsg batch_msg_;
+  sql::ObExecContext &exec_ctx_;
 };
 
 class ObTransmitEofAsynSender : public ObDtlBatchAsyncSender
@@ -140,11 +142,12 @@ public:
                           ObDtlChTotalInfo *ch_info,
                           bool is_transmit,
                           int64_t timeout_ts,
-                          sql::ObEvalCtx *eval_ctx,
+                          sql::ObEvalCtx &eval_ctx,
                           ObDtlMsgType type,
                           const ObIArray<ObDtlServerChannelGroup *> *server_groups) :
-    ObDtlBatchAsyncSender(channels, ch_info, is_transmit, timeout_ts, server_groups),
-    eval_ctx_(eval_ctx),
+    ObDtlBatchAsyncSender(channels, ch_info, is_transmit, timeout_ts, server_groups,
+                         eval_ctx.exec_ctx_),
+    eval_ctx_(&eval_ctx),
     type_(type)
   {
     batch_msg_.contained_msg_type_ = type_;
@@ -166,8 +169,9 @@ public:
                       ObDtlChTotalInfo *ch_info,
                       bool is_transmit,
                       int64_t timeout_ts,
-                      const ObIArray<ObDtlServerChannelGroup *> *server_groups) :
-    ObDtlBatchAsyncSender(channels, ch_info, is_transmit, timeout_ts, server_groups)
+                      const ObIArray<ObDtlServerChannelGroup *> *server_groups,
+                      sql::ObExecContext &exec_ctx) :
+    ObDtlBatchAsyncSender(channels, ch_info, is_transmit, timeout_ts, server_groups, exec_ctx)
   {
     batch_msg_.contained_msg_type_ = ObDtlMsgType::DRAIN_DATA_FLOW;
   }
@@ -184,8 +188,9 @@ public:
                       bool is_transmit,
                       int64_t timeout_ts,
                       ObDtlFlowControl &dfc,
-                      const ObIArray<ObDtlServerChannelGroup *> *server_groups) :
-    ObDtlBatchAsyncSender(channels, ch_info, is_transmit, timeout_ts, server_groups),
+                      const ObIArray<ObDtlServerChannelGroup *> *server_groups,
+                      sql::ObExecContext &exec_ctx) :
+    ObDtlBatchAsyncSender(channels, ch_info, is_transmit, timeout_ts, server_groups, exec_ctx),
     dfc_(dfc),
     unblock_cnt_(0)
   {
