@@ -91,6 +91,7 @@ int LogWritingThrottle::decide_throttle_(
     const int64_t io_size,
     const NeedPurgingThrottlingFunc &need_purging_throttling_func,
     IPalfEnvImpl *palf_env_impl,
+    const bool force_update,
     bool &need_throttle,
     int64_t &wait_us,
     const bool need_account_skipped_task)
@@ -100,7 +101,7 @@ int LogWritingThrottle::decide_throttle_(
   need_throttle = false;
   wait_us = 0;
   if (OB_FAIL(update_throtting_options_guarded_by_lock_(palf_env_impl,
-                                                        false /* force_update */,
+                                                        force_update,
                                                         has_freed_up_space))) {
     if (REACH_THREAD_TIME_INTERVAL(1_s)) {
       LOG_WARN("failed to update_throttling_info", KPC(this), K(io_size));
@@ -140,8 +141,8 @@ int LogWritingThrottle::throttling(const int64_t throttling_size,
     bool need_throttle = false;
     int64_t wait_us = 0;
     if (OB_FAIL(decide_throttle_(throttling_size, need_purging_throttling_func,
-                                 palf_env_impl, need_throttle, wait_us,
-                                 true /* need_account_skipped_task */))) {
+                                 palf_env_impl, false /* force_update */,
+                                 need_throttle, wait_us, true /* need_account_skipped_task */))) {
       if (REACH_THREAD_TIME_INTERVAL(1_s)) {
         LOG_WARN("failed to decide throttle", KPC(this), K(throttling_size));
       }
@@ -209,7 +210,8 @@ int LogWritingThrottle::try_admit_async(const int64_t logical_bytes,
                                         int64_t &delay_us)
 {
   return admit_async_(logical_bytes, need_purging_throttling_func, palf_env_impl,
-                      true /* need_account_skipped_task */, can_admit, delay_us);
+                      false /* force_update */, true /* need_account_skipped_task */,
+                      can_admit, delay_us);
 }
 
 int LogWritingThrottle::probe_admit_async(const int64_t logical_bytes,
@@ -219,12 +221,14 @@ int LogWritingThrottle::probe_admit_async(const int64_t logical_bytes,
                                           int64_t &delay_us)
 {
   return admit_async_(logical_bytes, need_purging_throttling_func, palf_env_impl,
-                      false /* need_account_skipped_task */, can_admit, delay_us);
+                      true /* force_update */, false /* need_account_skipped_task */,
+                      can_admit, delay_us);
 }
 
 int LogWritingThrottle::admit_async_(const int64_t logical_bytes,
                                      const NeedPurgingThrottlingFunc &need_purging_throttling_func,
                                      IPalfEnvImpl *palf_env_impl,
+                                     const bool force_update,
                                      const bool need_account_skipped_task,
                                      bool &can_admit,
                                      int64_t &delay_us)
@@ -242,7 +246,7 @@ int LogWritingThrottle::admit_async_(const int64_t logical_bytes,
     bool need_throttle = false;
     int64_t wait_us = 0;
     if (OB_FAIL(decide_throttle_(logical_bytes, need_purging_throttling_func,
-                                 palf_env_impl, need_throttle, wait_us,
+                                 palf_env_impl, force_update, need_throttle, wait_us,
                                  need_account_skipped_task))) {
       if (REACH_THREAD_TIME_INTERVAL(1_s)) {
         LOG_WARN("failed to decide async throttle", KR(ret), K(logical_bytes),
@@ -269,7 +273,8 @@ int LogWritingThrottle::update_throtting_options_guarded_by_lock_(IPalfEnvImpl *
   has_freed_up_space = false;
   SpinLockGuard guard(lock_);
   const int64_t cur_ts = ObClockGenerator::getClock();
-  if (!force_update && cur_ts <= last_update_ts_ + UPDATE_INTERVAL_US) {
+  const bool need_update = force_update || cur_ts > last_update_ts_ + UPDATE_INTERVAL_US;
+  if (!need_update) {
   } else if (ATOMIC_LOAD(&need_writing_throttling_notified_)) {
     PalfThrottleOptions new_throttling_options;
     if (OB_FAIL(palf_env_impl->get_throttling_options(new_throttling_options))) {
@@ -337,7 +342,8 @@ int LogWritingThrottle::update_throtting_options_guarded_by_lock_(IPalfEnvImpl *
       stat_.stop_throttling();
     }
   }
-  if (OB_SUCC(ret)) {
+  // Frequent skipped calls must not postpone the next refresh.
+  if (OB_SUCC(ret) && need_update) {
     last_update_ts_ = cur_ts;
   }
   return ret;

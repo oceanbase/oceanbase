@@ -178,7 +178,8 @@ class MockPalfEnvImpl : public IPalfEnvImpl
 {
 public:
   explicit MockPalfEnvImpl(MockAsyncPalfHandleImpl &handle)
-    : handle_(handle), allocator_(), guard_get_count_(0), revert_count_(0)
+    : handle_(handle), allocator_(), guard_get_count_(0), revert_count_(0),
+      throttling_options_(), throttling_options_ret_(OB_SUCCESS), throttling_options_get_count_(0)
   {}
   ~MockPalfEnvImpl() {}
 
@@ -237,7 +238,17 @@ public:
   int update_replayable_point(const SCN &replayable_scn) override
   { UNUSED(replayable_scn); return OB_SUCCESS; }
   int get_throttling_options(PalfThrottleOptions &option) override
-  { option.reset(); return OB_SUCCESS; }
+  {
+    int ret = throttling_options_ret_;
+    ++throttling_options_get_count_;
+    if (OB_SUCC(ret)) {
+      option = throttling_options_;
+    }
+    return ret;
+  }
+  void set_throttling_options(const PalfThrottleOptions &option) { throttling_options_ = option; }
+  void set_throttling_options_ret(const int ret) { throttling_options_ret_ = ret; }
+  int64_t get_throttling_options_count() const { return throttling_options_get_count_; }
   void period_calc_disk_usage() override {}
   LogSharedQueueTh *get_log_shared_queue_thread() override { return NULL; }
   int get_options(PalfOptions &options) override
@@ -254,6 +265,9 @@ private:
   MockLogAllocator allocator_;
   int64_t guard_get_count_;
   int64_t revert_count_;
+  PalfThrottleOptions throttling_options_;
+  int throttling_options_ret_;
+  int64_t throttling_options_get_count_;
 };
 
 class MockAsyncDriveWaker : public IAsyncDriveWaker
@@ -604,11 +618,13 @@ TEST(TestPalfAsyncFragment, CtxReportsAioDelayAsNextDriveInterval)
   ctx->destroy();
 }
 
-void prepare_async_throttle(LogWritingThrottle &throttle, const int64_t unrecyclable_size)
+void prepare_async_throttle(LogWritingThrottle &throttle,
+                            MockPalfEnvImpl &env,
+                            const int64_t unrecyclable_size)
 {
   throttle.notify_need_writing_throttling(true);
-  // Keep the cached options valid during the case so no real disk-space query
-  // or sleep is needed to exercise the ctx deadline state machine.
+  // Keep initial admission on the cached options. Waiting probes must read
+  // fresh options from the mock even before this refresh interval expires.
   throttle.last_update_ts_ = common::ObClockGenerator::getClock() + 60 * 1000 * 1000L;
   // Keep the test deadline well above assertion overhead so it cannot expire
   // between drive_write() and the deadline checks below.
@@ -618,6 +634,7 @@ void prepare_async_throttle(LogWritingThrottle &throttle, const int64_t unrecycl
   throttle.throttling_options_.trigger_percentage_ = 50;
   throttle.throttling_options_.maximum_duration_ = 7200 * 1000 * 1000L;
   throttle.throttling_options_.unrecyclable_disk_space_ = unrecyclable_size;
+  env.set_throttling_options(throttle.throttling_options_);
 }
 
 void release_and_advance_finished_prefix(LogAsyncWritePlanner &planner,
@@ -881,7 +898,7 @@ TEST(TestPalfAsyncFragment, CtxThrottleDeadlineCanShrinkAndBypassesOnce)
   int64_t current_next_admit_ts = 0;
   int64_t next_admit_ts = 0;
   ASSERT_TRUE(OB_NOT_NULL(ctx.get()));
-  prepare_async_throttle(throttle, 80 * 1024 * 1024L);
+  prepare_async_throttle(throttle, env, 80 * 1024 * 1024L);
   ASSERT_EQ(OB_SUCCESS, ctx->init(1 /* palf_id */, 1 /* cb_tg_id */,
                                   &env, &waker,
                                   AsyncThrottleContext(&throttle, &purge_func, &purge_task_count)));
@@ -895,7 +912,7 @@ TEST(TestPalfAsyncFragment, CtxThrottleDeadlineCanShrinkAndBypassesOnce)
 
   const int64_t first_next_admit_ts = next_admit_ts;
   current_next_admit_ts = next_admit_ts;
-  throttle.last_update_ts_ = 0;
+  env.set_throttling_options_ret(OB_ERR_UNEXPECTED);
   EXPECT_EQ(OB_ERR_UNEXPECTED,
             ctx->can_admit_new_entry_(1 << 20, current_next_admit_ts,
                                       can_admit, next_admit_ts));
@@ -903,14 +920,18 @@ TEST(TestPalfAsyncFragment, CtxThrottleDeadlineCanShrinkAndBypassesOnce)
   EXPECT_EQ(first_next_admit_ts, next_admit_ts);
   EXPECT_TRUE(ctx->ignore_throttle_once_);
 
-  throttle.last_update_ts_ = common::ObClockGenerator::getClock() + 60 * 1000 * 1000L;
+  EXPECT_EQ(1, env.get_throttling_options_count());
+  env.set_throttling_options_ret(OB_SUCCESS);
   ASSERT_EQ(OB_SUCCESS, ctx->can_admit_new_entry_(1 << 20, current_next_admit_ts,
                                                   can_admit, next_admit_ts));
   EXPECT_FALSE(can_admit);
   EXPECT_EQ(first_next_admit_ts, next_admit_ts);
   EXPECT_EQ(1, throttle.stat_.total_skipped_task_cnt_);
 
-  throttle.throttling_options_.unrecyclable_disk_space_ = 60 * 1024 * 1024L;
+  EXPECT_EQ(2, env.get_throttling_options_count());
+  PalfThrottleOptions options = throttle.throttling_options_;
+  options.unrecyclable_disk_space_ = 60 * 1024 * 1024L;
+  env.set_throttling_options(options);
   ASSERT_EQ(OB_SUCCESS, ctx->can_admit_new_entry_(1 << 20, current_next_admit_ts,
                                                   can_admit, next_admit_ts));
   EXPECT_FALSE(can_admit);
@@ -918,7 +939,9 @@ TEST(TestPalfAsyncFragment, CtxThrottleDeadlineCanShrinkAndBypassesOnce)
   EXPECT_EQ(1, throttle.stat_.total_skipped_task_cnt_);
 
   current_next_admit_ts = next_admit_ts;
-  throttle.throttling_options_.unrecyclable_disk_space_ = 10 * 1024 * 1024L;
+  EXPECT_EQ(3, env.get_throttling_options_count());
+  options.unrecyclable_disk_space_ = 10 * 1024 * 1024L;
+  env.set_throttling_options(options);
   ASSERT_EQ(OB_SUCCESS, ctx->can_admit_new_entry_(1 << 20, current_next_admit_ts,
                                                   can_admit, next_admit_ts));
   EXPECT_TRUE(can_admit);
@@ -926,7 +949,11 @@ TEST(TestPalfAsyncFragment, CtxThrottleDeadlineCanShrinkAndBypassesOnce)
   EXPECT_FALSE(ctx->ignore_throttle_once_);
 
   current_next_admit_ts = next_admit_ts;
-  throttle.throttling_options_.unrecyclable_disk_space_ = 80 * 1024 * 1024L;
+  EXPECT_EQ(4, env.get_throttling_options_count());
+  options.unrecyclable_disk_space_ = 80 * 1024 * 1024L;
+  env.set_throttling_options(options);
+  // A new admission round still uses the ordinary refresh interval.
+  throttle.last_update_ts_ = 0;
   ASSERT_EQ(OB_SUCCESS, ctx->can_admit_new_entry_(1 << 20, current_next_admit_ts,
                                                   can_admit, next_admit_ts));
   EXPECT_FALSE(can_admit);
@@ -960,7 +987,7 @@ TEST(TestPalfAsyncFragment, CtxThrottleDeadlineDrainsQueuedTasks)
   int64_t next_drive_interval_us = INT64_MAX;
   ASSERT_TRUE(OB_NOT_NULL(ctx.get()));
   ASSERT_EQ(OB_SUCCESS, cb_pool.init(&env));
-  prepare_async_throttle(throttle, 80 * 1024 * 1024L);
+  prepare_async_throttle(throttle, env, 80 * 1024 * 1024L);
   ASSERT_EQ(OB_SUCCESS, ctx->init(1 /* palf_id */, cb_pool.get_tg_id(),
                                   &env, &waker,
                                   AsyncThrottleContext(&throttle, &purge_func, &purge_task_count)));
@@ -1077,7 +1104,7 @@ TEST(TestPalfAsyncFragment, CtxThrottleDoesNotBlockPendingPlannerWork)
   bool consumed = false;
   ASSERT_TRUE(OB_NOT_NULL(ctx.get()));
   ASSERT_EQ(OB_SUCCESS, cb_pool.init(&env));
-  prepare_async_throttle(throttle, 80 * 1024 * 1024L);
+  prepare_async_throttle(throttle, env, 80 * 1024 * 1024L);
   ASSERT_EQ(OB_SUCCESS, ctx->init(1 /* palf_id */, cb_pool.get_tg_id(),
                                   &env, &waker,
                                   AsyncThrottleContext(&throttle, &purge_func, &purge_task_count)));
@@ -1157,7 +1184,7 @@ TEST(TestPalfAsyncFragment, CtxPurgeBarrierBypassesThrottleAndReleasesCount)
   int64_t next_drive_interval_us = INT64_MAX;
   ASSERT_TRUE(OB_NOT_NULL(ctx.get()));
   ASSERT_EQ(OB_SUCCESS, cb_pool.init(&env));
-  prepare_async_throttle(throttle, 80 * 1024 * 1024L);
+  prepare_async_throttle(throttle, env, 80 * 1024 * 1024L);
   ASSERT_EQ(OB_SUCCESS, ctx->init(1 /* palf_id */,
                                   cb_pool.get_tg_id(), &env, &waker,
                                   AsyncThrottleContext(
@@ -1483,7 +1510,7 @@ TEST(TestPalfAsyncFragment, CtxDoesNotRefreshPlannerBeforeFrontBarrier)
   ASSERT_TRUE(OB_NOT_NULL(ctx.get()));
   PlannerStatus status;
   handle.set_planned_tail(make_lsn(0));
-  prepare_async_throttle(throttle, 80 * 1024 * 1024L);
+  prepare_async_throttle(throttle, env, 80 * 1024 * 1024L);
 
   ASSERT_EQ(OB_SUCCESS, ctx->init(1 /* palf_id */,
                                 1 /* cb_tg_id */, &env, &waker,

@@ -12,9 +12,8 @@
 
 #include <gtest/gtest.h>
 
-#include "common/ob_clock_generator.h"
-
 #define private public
+#include "common/ob_clock_generator.h"
 #include "logservice/palf/palf_env_impl.h"
 #undef private
 
@@ -34,6 +33,7 @@ public:
     : PalfEnvImpl(),
       use_injected_options_(false),
       get_options_ret_(OB_SUCCESS),
+      get_options_count_(0),
       options_()
   {}
   virtual ~TestPalfThrottleEnv() {}
@@ -41,6 +41,7 @@ public:
   virtual int get_throttling_options(PalfThrottleOptions &options) override
   {
     int ret = get_options_ret_;
+    ++get_options_count_;
     if (OB_SUCC(ret)) {
       if (use_injected_options_) {
         options = options_;
@@ -54,6 +55,7 @@ public:
 public:
   bool use_injected_options_;
   int get_options_ret_;
+  int64_t get_options_count_;
   PalfThrottleOptions options_;
 };
 
@@ -127,6 +129,323 @@ void TestPalfThrottling::assert_zero_throttle_counters(const LogWritingThrottle 
   ASSERT_EQ(0, throttle.stat_.max_throttling_interval_);
 }
 
+
+class TestPalfThrottleRefresh : public TestPalfThrottling
+{
+public:
+  void SetUp() override
+  {
+    ASSERT_NO_FATAL_FAILURE(TestPalfThrottling::SetUp());
+    // Advance the cached clock explicitly so call intervals are deterministic.
+    ObClockGenerator::get_instance().stop();
+    ObClockGenerator::get_instance().wait();
+  }
+
+protected:
+  void advance_clock(const int64_t interval_us)
+  {
+    ATOMIC_AAF(&ObClockGenerator::get_instance().cur_ts_, interval_us);
+  }
+};
+
+TEST_F(TestPalfThrottleRefresh, frequent_async_requests_refresh_shared_options)
+{
+  const int64_t LOGICAL_BYTES = 8192;
+  const int64_t APPENDED_BYTES = 128L * 1024L * 1024L * 1024L;
+  LogWritingThrottle throttle;
+  TestPalfThrottleEnv palf_env;
+  bool can_admit = false;
+  int64_t delay_us = 0;
+  configure_active_throttle(throttle, palf_env);
+  ASSERT_EQ(OB_SUCCESS, throttle.update_throttling_options(&palf_env));
+
+  for (int64_t round = 0; round < 2; ++round) {
+    const int64_t old_unrecyclable_size = palf_env.options_.unrecyclable_disk_space_;
+    ASSERT_EQ(OB_SUCCESS, throttle.after_append_log(APPENDED_BYTES));
+    ASSERT_EQ(OB_SUCCESS, throttle.try_admit_async(LOGICAL_BYTES,
+        g_need_purging_throttling_func, &palf_env, can_admit, delay_us));
+    const int64_t old_delay_us = delay_us;
+    palf_env.options_.unrecyclable_disk_space_ -= 1024L * 1024L;
+    for (int64_t step = 1; step <= 6; ++step) {
+      advance_clock(100 * 1000L);
+      // New requests from different LS share one refresh interval.
+      ASSERT_EQ(OB_SUCCESS, throttle.try_admit_async(LOGICAL_BYTES,
+          g_need_purging_throttling_func, &palf_env, can_admit, delay_us));
+      ASSERT_FALSE(can_admit);
+      ASSERT_EQ(OB_SUCCESS, throttle.try_admit_async(LOGICAL_BYTES,
+          g_need_purging_throttling_func, &palf_env, can_admit, delay_us));
+      ASSERT_FALSE(can_admit);
+      ASSERT_EQ(OB_SUCCESS, throttle.update_throttling_options(&palf_env));
+      if (step <= 5) {
+        ASSERT_EQ(round + 1, palf_env.get_options_count_);
+        ASSERT_EQ(old_unrecyclable_size, throttle.throttling_options_.unrecyclable_disk_space_);
+        ASSERT_EQ(APPENDED_BYTES, throttle.appended_log_size_cur_round_);
+        ASSERT_EQ(old_delay_us, delay_us);
+      } else {
+        ASSERT_EQ(round + 2, palf_env.get_options_count_);
+        ASSERT_EQ(palf_env.options_.unrecyclable_disk_space_,
+                  throttle.throttling_options_.unrecyclable_disk_space_);
+        ASSERT_EQ(0, throttle.appended_log_size_cur_round_);
+        ASSERT_GT(delay_us, 0);
+        ASSERT_LT(delay_us, old_delay_us);
+      }
+    }
+  }
+}
+
+TEST_F(TestPalfThrottleRefresh, async_probe_refreshes_before_interval)
+{
+  const int64_t LOGICAL_BYTES = 8192;
+  const int64_t APPENDED_BYTES = 128L * 1024L * 1024L * 1024L;
+  LogWritingThrottle throttle;
+  TestPalfThrottleEnv palf_env;
+  bool can_admit = true;
+  int64_t delay_us = 0;
+  configure_active_throttle(throttle, palf_env);
+  ASSERT_EQ(OB_SUCCESS, throttle.try_admit_async(LOGICAL_BYTES,
+      g_need_purging_throttling_func, &palf_env, can_admit, delay_us));
+  ASSERT_FALSE(can_admit);
+  ASSERT_EQ(OB_SUCCESS, throttle.after_append_log(APPENDED_BYTES));
+  advance_clock(100 * 1000L);
+  palf_env.options_.unrecyclable_disk_space_ -= 1024L * 1024L;
+  ASSERT_EQ(OB_SUCCESS, throttle.try_admit_async(LOGICAL_BYTES,
+      g_need_purging_throttling_func, &palf_env, can_admit, delay_us));
+  const int64_t old_delay_us = delay_us;
+  ASSERT_EQ(1, palf_env.get_options_count_);
+  ASSERT_EQ(APPENDED_BYTES, throttle.appended_log_size_cur_round_);
+  ASSERT_EQ(2, throttle.stat_.total_skipped_task_cnt_);
+
+  ASSERT_EQ(OB_SUCCESS, throttle.probe_admit_async(LOGICAL_BYTES,
+      g_need_purging_throttling_func, &palf_env, can_admit, delay_us));
+  ASSERT_FALSE(can_admit);
+  ASSERT_GT(delay_us, 0);
+  ASSERT_LT(delay_us, old_delay_us);
+  ASSERT_EQ(2, palf_env.get_options_count_);
+  ASSERT_EQ(0, throttle.appended_log_size_cur_round_);
+  ASSERT_EQ(palf_env.options_.unrecyclable_disk_space_,
+            throttle.throttling_options_.unrecyclable_disk_space_);
+
+  ASSERT_EQ(OB_SUCCESS, throttle.after_append_log(LOGICAL_BYTES));
+  ASSERT_EQ(OB_SUCCESS, throttle.probe_admit_async(LOGICAL_BYTES,
+      g_need_purging_throttling_func, &palf_env, can_admit, delay_us));
+  ASSERT_EQ(3, palf_env.get_options_count_);
+  ASSERT_EQ(LOGICAL_BYTES, throttle.appended_log_size_cur_round_);
+  ASSERT_EQ(2, throttle.stat_.total_skipped_task_cnt_);
+  ASSERT_EQ(2 * LOGICAL_BYTES, throttle.stat_.total_skipped_size_);
+
+  palf_env.options_.unrecyclable_disk_space_ = palf_env.options_.total_disk_space_ / 2;
+  ASSERT_EQ(OB_SUCCESS, throttle.probe_admit_async(LOGICAL_BYTES,
+      g_need_purging_throttling_func, &palf_env, can_admit, delay_us));
+  ASSERT_TRUE(can_admit);
+  ASSERT_EQ(0, delay_us);
+  ASSERT_EQ(4, palf_env.get_options_count_);
+  ASSERT_EQ(0, throttle.appended_log_size_cur_round_);
+  ASSERT_EQ(2, throttle.stat_.total_skipped_task_cnt_);
+  ASSERT_EQ(ObClockGenerator::getClock(), throttle.stat_.stop_ts_);
+}
+
+TEST_F(TestPalfThrottleRefresh, async_probe_failure_retries_and_cancellation_cleans_up)
+{
+  const int64_t LOGICAL_BYTES = 8192;
+  LogWritingThrottle throttle;
+  TestPalfThrottleEnv palf_env;
+  bool can_admit = true;
+  int64_t delay_us = 0;
+  configure_active_throttle(throttle, palf_env);
+  ASSERT_EQ(OB_SUCCESS, throttle.try_admit_async(LOGICAL_BYTES,
+      g_need_purging_throttling_func, &palf_env, can_admit, delay_us));
+  ASSERT_EQ(OB_SUCCESS, throttle.after_append_log(LOGICAL_BYTES));
+  const int64_t last_update_ts = throttle.last_update_ts_;
+  advance_clock(100 * 1000L);
+  palf_env.get_options_ret_ = OB_EAGAIN;
+  ASSERT_EQ(OB_EAGAIN, throttle.probe_admit_async(LOGICAL_BYTES,
+      g_need_purging_throttling_func, &palf_env, can_admit, delay_us));
+  ASSERT_FALSE(can_admit);
+  ASSERT_EQ(0, delay_us);
+  ASSERT_EQ(2, palf_env.get_options_count_);
+  ASSERT_EQ(last_update_ts, throttle.last_update_ts_);
+  ASSERT_EQ(LOGICAL_BYTES, throttle.appended_log_size_cur_round_);
+  ASSERT_EQ(1, throttle.stat_.total_skipped_task_cnt_);
+
+  palf_env.get_options_ret_ = OB_SUCCESS;
+  ASSERT_EQ(OB_SUCCESS, throttle.probe_admit_async(LOGICAL_BYTES,
+      g_need_purging_throttling_func, &palf_env, can_admit, delay_us));
+  ASSERT_FALSE(can_admit);
+  ASSERT_EQ(3, palf_env.get_options_count_);
+  ASSERT_EQ(LOGICAL_BYTES, throttle.appended_log_size_cur_round_);
+  ASSERT_EQ(ObClockGenerator::getClock(), throttle.last_update_ts_);
+  throttle.notify_need_writing_throttling(false);
+  ASSERT_EQ(OB_SUCCESS, throttle.probe_admit_async(LOGICAL_BYTES,
+      g_need_purging_throttling_func, &palf_env, can_admit, delay_us));
+  ASSERT_TRUE(can_admit);
+  ASSERT_EQ(0, delay_us);
+  ASSERT_EQ(3, palf_env.get_options_count_);
+  ASSERT_EQ(0, throttle.appended_log_size_cur_round_);
+  ASSERT_EQ(1, throttle.stat_.total_skipped_task_cnt_);
+  ASSERT_EQ(ObClockGenerator::getClock(), throttle.stat_.stop_ts_);
+}
+
+TEST_F(TestPalfThrottleRefresh, frequent_sync_requests_refresh_options)
+{
+  LogWritingThrottle throttle;
+  TestPalfThrottleEnv palf_env;
+  ASSERT_EQ(OB_SUCCESS, throttle.update_throttling_options(&palf_env));
+  configure_active_throttle(throttle, palf_env);
+  const int64_t old_unrecyclable_size = palf_env.options_.unrecyclable_disk_space_;
+
+  for (int64_t step = 1; step <= 12; ++step) {
+    advance_clock(100 * 1000L);
+    // The sync worker updates options before calling throttling for each task.
+    ASSERT_EQ(OB_SUCCESS, throttle.update_throttling_options(&palf_env));
+    ASSERT_EQ(OB_SUCCESS, throttle.throttling(1, g_need_purging_throttling_func, &palf_env));
+    ASSERT_EQ(step / 6, palf_env.get_options_count_);
+    ASSERT_EQ(step >= 6, throttle.stat_.has_ever_throttled());
+    if (step >= 6 && step < 12) {
+      ASSERT_EQ(old_unrecyclable_size, throttle.throttling_options_.unrecyclable_disk_space_);
+    } else if (12 == step) {
+      ASSERT_EQ(palf_env.options_.unrecyclable_disk_space_,
+                throttle.throttling_options_.unrecyclable_disk_space_);
+    }
+    if (6 == step) {
+      palf_env.options_.unrecyclable_disk_space_ -= 1024L * 1024L;
+    }
+  }
+}
+
+TEST_F(TestPalfThrottleRefresh, sync_wait_forces_refresh_before_interval)
+{
+  const int64_t LOGICAL_BYTES = 1024L * 1024L;
+  LogWritingThrottle throttle;
+  TestPalfThrottleEnv palf_env;
+  bool can_admit = false;
+  int64_t delay_us = 0;
+  configure_active_throttle(throttle, palf_env);
+  ASSERT_EQ(OB_SUCCESS, throttle.update_throttling_options(&palf_env));
+  ASSERT_EQ(OB_SUCCESS, throttle.after_append_log(LOGICAL_BYTES));
+  advance_clock(100 * 1000L);
+  palf_env.options_.unrecyclable_disk_space_ -= LOGICAL_BYTES;
+  ASSERT_EQ(OB_SUCCESS, throttle.try_admit_async(LOGICAL_BYTES,
+      g_need_purging_throttling_func, &palf_env, can_admit, delay_us));
+  ASSERT_FALSE(can_admit);
+  ASSERT_GT(delay_us, throttle.DETECT_INTERVAL_US);
+  ASSERT_EQ(1, palf_env.get_options_count_);
+
+  ASSERT_EQ(OB_SUCCESS, throttle.throttling(LOGICAL_BYTES,
+      g_need_purging_throttling_func, &palf_env));
+  ASSERT_EQ(2, palf_env.get_options_count_);
+  ASSERT_EQ(palf_env.options_.unrecyclable_disk_space_,
+            throttle.throttling_options_.unrecyclable_disk_space_);
+  ASSERT_EQ(0, throttle.appended_log_size_cur_round_);
+  ASSERT_EQ(throttle.DETECT_INTERVAL_US, throttle.stat_.total_throttling_interval_);
+  ASSERT_EQ(ObClockGenerator::getClock(), throttle.last_update_ts_);
+}
+
+TEST_F(TestPalfThrottleRefresh, unchanged_options_preserve_appended_bytes)
+{
+  const int64_t APPENDED_BYTES = 1024L * 1024L;
+  LogWritingThrottle throttle;
+  TestPalfThrottleEnv palf_env;
+  configure_active_throttle(throttle, palf_env);
+  ASSERT_EQ(OB_SUCCESS, throttle.update_throttling_options(&palf_env));
+  ASSERT_EQ(OB_SUCCESS, throttle.after_append_log(APPENDED_BYTES));
+  advance_clock(LogWritingThrottle::UPDATE_INTERVAL_US + 1);
+  ASSERT_EQ(OB_SUCCESS, throttle.update_throttling_options(&palf_env));
+  ASSERT_EQ(2, palf_env.get_options_count_);
+  ASSERT_EQ(APPENDED_BYTES, throttle.appended_log_size_cur_round_);
+
+  advance_clock(100 * 1000L);
+  ASSERT_EQ(OB_SUCCESS, throttle.update_throttling_options(&palf_env));
+  ASSERT_EQ(2, palf_env.get_options_count_);
+  ASSERT_EQ(APPENDED_BYTES, throttle.appended_log_size_cur_round_);
+}
+
+TEST_F(TestPalfThrottleRefresh, failed_refresh_can_retry_without_another_interval)
+{
+  const int64_t APPENDED_BYTES = 1024L * 1024L;
+  LogWritingThrottle throttle;
+  TestPalfThrottleEnv palf_env;
+  bool can_admit = true;
+  int64_t delay_us = 0;
+  configure_active_throttle(throttle, palf_env);
+  ASSERT_EQ(OB_SUCCESS, throttle.update_throttling_options(&palf_env));
+  ASSERT_EQ(OB_SUCCESS, throttle.after_append_log(APPENDED_BYTES));
+  const int64_t last_update_ts = throttle.last_update_ts_;
+  const int64_t old_unrecyclable_size = palf_env.options_.unrecyclable_disk_space_;
+  advance_clock(LogWritingThrottle::UPDATE_INTERVAL_US + 1);
+  palf_env.options_.unrecyclable_disk_space_ -= APPENDED_BYTES;
+  palf_env.get_options_ret_ = OB_NOT_INIT;
+  ASSERT_EQ(OB_NOT_INIT, throttle.probe_admit_async(8192,
+      g_need_purging_throttling_func, &palf_env, can_admit, delay_us));
+  ASSERT_FALSE(can_admit);
+  ASSERT_EQ(0, delay_us);
+  ASSERT_EQ(last_update_ts, throttle.last_update_ts_);
+  ASSERT_EQ(APPENDED_BYTES, throttle.appended_log_size_cur_round_);
+  ASSERT_EQ(old_unrecyclable_size, throttle.throttling_options_.unrecyclable_disk_space_);
+
+  palf_env.get_options_ret_ = OB_SUCCESS;
+  const int64_t total_disk_space = palf_env.options_.total_disk_space_;
+  palf_env.options_.total_disk_space_ = -1;
+  ASSERT_EQ(OB_ERR_UNEXPECTED, throttle.update_throttling_options(&palf_env));
+  ASSERT_EQ(last_update_ts, throttle.last_update_ts_);
+  ASSERT_EQ(APPENDED_BYTES, throttle.appended_log_size_cur_round_);
+  palf_env.options_.total_disk_space_ = total_disk_space;
+  ASSERT_EQ(OB_SUCCESS, throttle.probe_admit_async(8192,
+      g_need_purging_throttling_func, &palf_env, can_admit, delay_us));
+  ASSERT_EQ(4, palf_env.get_options_count_);
+  ASSERT_EQ(ObClockGenerator::getClock(), throttle.last_update_ts_);
+  ASSERT_EQ(0, throttle.appended_log_size_cur_round_);
+  ASSERT_EQ(palf_env.options_.unrecyclable_disk_space_,
+            throttle.throttling_options_.unrecyclable_disk_space_);
+}
+
+TEST_F(TestPalfThrottleRefresh, frequent_requests_stop_and_restart_throttling)
+{
+  LogWritingThrottle throttle;
+  TestPalfThrottleEnv palf_env;
+  for (int64_t mode = 0; mode < 2; ++mode) {
+    throttle.reset();
+    palf_env.get_options_count_ = 0;
+    bool can_admit = false;
+    int64_t delay_us = 0;
+    configure_active_throttle(throttle, palf_env);
+    ASSERT_EQ(OB_SUCCESS, throttle.update_throttling_options(&palf_env));
+    ASSERT_EQ(OB_SUCCESS, throttle.after_append_log(1024L * 1024L));
+    if (0 == mode) {
+      throttle.notify_need_writing_throttling(false);
+    } else {
+      palf_env.options_.unrecyclable_disk_space_ = palf_env.options_.total_disk_space_ / 2;
+    }
+    for (int64_t step = 1; step <= 6; ++step) {
+      advance_clock(100 * 1000L);
+      ASSERT_EQ(OB_SUCCESS, throttle.try_admit_async(8192,
+          g_need_purging_throttling_func, &palf_env, can_admit, delay_us));
+      if (0 == mode || step > 5) {
+        ASSERT_TRUE(can_admit);
+        ASSERT_EQ(0, delay_us);
+      } else {
+        ASSERT_FALSE(can_admit);
+      }
+    }
+    ASSERT_EQ(mode + 1, palf_env.get_options_count_);
+    ASSERT_EQ(0, throttle.appended_log_size_cur_round_);
+    ASSERT_FALSE(throttle.throttling_options_.need_throttling());
+    ASSERT_EQ(ObClockGenerator::getClock(), throttle.stat_.stop_ts_);
+    ASSERT_EQ(ObClockGenerator::getClock(), throttle.last_update_ts_);
+
+    configure_active_throttle(throttle, palf_env);
+    ASSERT_EQ(OB_SUCCESS, throttle.try_admit_async(8192,
+        g_need_purging_throttling_func, &palf_env, can_admit, delay_us));
+    ASSERT_TRUE(can_admit);
+    ASSERT_EQ(mode + 1, palf_env.get_options_count_);
+    advance_clock(LogWritingThrottle::UPDATE_INTERVAL_US + 1);
+    ASSERT_EQ(OB_SUCCESS, throttle.try_admit_async(8192,
+        g_need_purging_throttling_func, &palf_env, can_admit, delay_us));
+    ASSERT_FALSE(can_admit);
+    ASSERT_GT(delay_us, 0);
+    ASSERT_EQ(mode + 2, palf_env.get_options_count_);
+    ASSERT_EQ(0, throttle.appended_log_size_cur_round_);
+  }
+}
 
 TEST_F(TestPalfThrottling, test_palf_options)
 {

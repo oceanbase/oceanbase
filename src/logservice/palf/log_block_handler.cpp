@@ -12,6 +12,7 @@
 
 #include "log_block_handler.h"
 #include "lib/stat/ob_session_stat.h"         // Session
+#include "lib/utility/ob_tracepoint.h"
 #include "share/rc/ob_tenant_base.h"                    // mtl_malloc
 #include "log_writer_utils.h"                           // LogWriteBuf
 #include "log_io_utils.h"                               // close_with_ret
@@ -22,6 +23,8 @@ using namespace common;
 using namespace share;
 namespace palf
 {
+ERRSIM_POINT_DEF(ERRSIM_PALF_BLOCK_OPEN_FAILED);
+
 LogDIOAlignedBuf::LogDIOAlignedBuf(): buf_write_offset_(LOG_INVALID_LSN_VAL),
                                       buf_padding_size_(0),
                                       align_size_(-1),
@@ -338,7 +341,8 @@ int LogBlockHandler::inner_open_(const char *block_path)
 {
   int ret = OB_SUCCESS;
   do {
-    if (OB_FAIL(io_adapter_->open(block_path, LOG_WRITE_FLAG, FILE_OPEN_MODE, io_fd_))) {
+    if (OB_FAIL(OB_E(ERRSIM_PALF_BLOCK_OPEN_FAILED, MTL_ID())
+                io_adapter_->open(block_path, LOG_WRITE_FLAG, FILE_OPEN_MODE, io_fd_))) {
       PALF_LOG(WARN, "io_adapter open failed", K(ret), K(block_path), K_(io_fd));
       ob_usleep(RETRY_INTERVAL);
     } else {

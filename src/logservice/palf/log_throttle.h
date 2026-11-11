@@ -126,8 +126,8 @@ public:
                       IPalfEnvImpl *palf_env_impl,
                       bool &can_admit,
                       int64_t &delay_us);
-  // deadline 到期前重新探测限流状态, 但不重复统计 skipped task;
-  // 探测过程中仍会刷新共享限流参数及启停状态.
+  // Recheck an existing admission deadline with fresh options, as in the
+  // synchronous wait loop, without counting the same skipped task again.
   int probe_admit_async(const int64_t logical_bytes,
                         const NeedPurgingThrottlingFunc &need_purging_throttling_func,
                         IPalfEnvImpl *palf_env_impl,
@@ -149,12 +149,14 @@ private:
   int decide_throttle_(const int64_t io_size,
                        const NeedPurgingThrottlingFunc &need_purging_throttling_func,
                        IPalfEnvImpl *palf_env_impl,
+                       const bool force_update,
                        bool &need_throttle,
                        int64_t &wait_us,
                        const bool need_account_skipped_task);
   int admit_async_(const int64_t logical_bytes,
                    const NeedPurgingThrottlingFunc &need_purging_throttling_func,
                    IPalfEnvImpl *palf_env_impl,
+                   const bool force_update,
                    const bool need_account_skipped_task,
                    bool &can_admit,
                    int64_t &delay_us);

@@ -20,6 +20,7 @@
 #include "lib/time/ob_time_utility.h"
 #include "lib/container/ob_array_wrap.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "share/ob_debug_sync.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "share/rc/ob_tenant_base.h"  // MTL_ID
 #include "log_reader_utils.h"          // ReadBufGuard
@@ -58,6 +59,7 @@ AsyncPalfIOCtx::AsyncPalfIOCtx()
     available_flush_task_slot_count_(0),
     available_barrier_task_slot_count_(0),
     active_ref_(0),
+    drive_start_ts_(OB_INVALID_TIMESTAMP),
     submit_fail_cnt_(0),
     complete_fail_cnt_(0),
     stale_completion_cnt_(0),
@@ -634,6 +636,9 @@ int AsyncPalfIOCtx::drive_write(int64_t &next_drive_interval_us)
 int AsyncPalfIOCtx::drive_write_(int64_t &next_drive_interval_us)
 {
   int ret = OB_SUCCESS;
+  // Include synchronous block switches and control barriers in hang detection.
+  ATOMIC_STORE(&drive_start_ts_, common::ObTimeUtility::current_time());
+  DEBUG_SYNC(PALF_ASYNC_DRIVE_AFTER_START);
   next_drive_interval_us = INT64_MAX;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -757,6 +762,7 @@ int AsyncPalfIOCtx::drive_write_(int64_t &next_drive_interval_us)
     }
   }
   print_async_ctx_stat_();
+  ATOMIC_STORE(&drive_start_ts_, OB_INVALID_TIMESTAMP);
   return ret;
 }
 
@@ -1016,6 +1022,7 @@ void AsyncPalfIOCtx::add_async_ctx_server_event_(const char *event,
 
 void AsyncPalfIOCtx::reset_diag_fields_()
 {
+  ATOMIC_STORE(&drive_start_ts_, OB_INVALID_TIMESTAMP);
   ATOMIC_STORE(&submit_fail_cnt_, 0);
   ATOMIC_STORE(&complete_fail_cnt_, 0);
   ATOMIC_STORE(&stale_completion_cnt_, 0);
@@ -1895,7 +1902,13 @@ int64_t AsyncPalfIOCtx::get_oldest_pending_io_start_ts() const
 
 int64_t AsyncPalfIOCtx::get_oldest_pending_io_start_ts_() const
 {
-  return pool_.get_oldest_pending_io_start_ts();
+  int64_t oldest_ts = pool_.get_oldest_pending_io_start_ts();
+  const int64_t drive_start_ts = ATOMIC_LOAD(&drive_start_ts_);
+  if (drive_start_ts > 0
+      && (OB_INVALID_TIMESTAMP == oldest_ts || drive_start_ts < oldest_ts)) {
+    oldest_ts = drive_start_ts;
+  }
+  return oldest_ts;
 }
 
 int64_t AsyncPalfIOCtx::get_pending_async_stage_count_() const

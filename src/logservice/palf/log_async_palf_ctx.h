@@ -392,6 +392,7 @@ private:
   // Diagnostic counters and timestamps. These are not state-machine inputs
   // except throttle_next_admit_ts_, which the owning async worker reads when
   // choosing the next wake-up deadline.
+  int64_t drive_start_ts_;
   int64_t submit_fail_cnt_;
   int64_t complete_fail_cnt_;
   int64_t stale_completion_cnt_;
