@@ -291,7 +291,8 @@ public:
       reclaim_deferred_to_local();
       uint64_t all_size = size + AOBJECT_META_SIZE;
       static thread_local ObMallocSampleLimiter sample_limiter;
-      const bool sample_allowed = sample_limiter.try_acquire(size);
+      const bool sample_allowed = !ObMallocSampleDisableGuard::is_disabled()
+          && sample_limiter.try_acquire(size);
       if (OB_UNLIKELY(sample_allowed)) {
         all_size += AOBJECT_EXTRA_INFO_SIZE;
       }

@@ -397,9 +397,15 @@ public:
       }
       BASIC_TIME_GUARD(time_guard, "ObMalloc");
       DEFER(ObMallocTimeMonitor::get_instance().record_malloc_time(time_guard, size, inner_attr));
-      const bool light_backtrace_allowed = is_memleak_light_backtrace_enabled() && ObLightBacktraceGuard::is_enabled() && ObCtxIds::GLIBC != attr.ctx_id_;
-      bool sample_allowed = light_backtrace_allowed || malloc_sample_allowed(size, inner_attr);
-      if (sample_allowed) {
+      const bool sample_disabled = ObMallocSampleDisableGuard::is_disabled();
+      const bool light_backtrace_allowed = !sample_disabled
+          && is_memleak_light_backtrace_enabled() && ObLightBacktraceGuard::is_enabled()
+          && ObCtxIds::GLIBC != attr.ctx_id_;
+      bool sample_allowed = !sample_disabled
+          && (light_backtrace_allowed || malloc_sample_allowed(size, inner_attr));
+      if (sample_disabled) {
+        inner_attr.extra_size_ = 0;
+      } else if (sample_allowed) {
         inner_attr.extra_size_ = AOBJECT_EXTRA_INFO_SIZE;
       }
       do {

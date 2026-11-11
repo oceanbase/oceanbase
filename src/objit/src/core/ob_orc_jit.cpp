@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX PL
 #include "core/ob_orc_jit.h"
+#include "lib/alloc/alloc_struct.h"
 
 #include "llvm/ExecutionEngine/JITSymbol.h"
 #include "core/ob_pl_ir_compiler.h"
@@ -72,6 +73,9 @@ void ObOrcJit::ensure_registered() {
   ref_count_++;
 
   if (1 == ref_count_ && eh_frame_) {
+    // __register_frame allocates while JIT frames are active. The sampling
+    // unwinder cannot safely walk those frames during EH registration.
+    lib::ObMallocSampleDisableGuard sample_guard;
     __register_frame(const_cast<void*>(eh_frame_));
   }
 }
