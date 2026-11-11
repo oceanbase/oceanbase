@@ -1099,12 +1099,6 @@ int ObParser::parse_sql(const ObString &stmt,
     if (!no_throw_parser_error) {
       LOG_INFO("failed to parse stmt as sql", K(stmt_str), K(ret));
     }
-  } else if (parse_result.is_dynamic_sql_) {
-    memmove(parse_result.no_param_sql_ + parse_result.no_param_sql_len_,
-            parse_result.input_sql_ + parse_result.pl_parse_info_.last_pl_symbol_pos_,
-            parse_result.input_sql_len_ - parse_result.pl_parse_info_.last_pl_symbol_pos_);
-    parse_result.no_param_sql_len_
-      += parse_result.input_sql_len_ - parse_result.pl_parse_info_.last_pl_symbol_pos_;
   } else { /*do nothing*/ }
 #ifndef NDEBUG
   parse_result.contain_sensitive_data_ = false;
