@@ -741,6 +741,65 @@ private:
 
 class ObPLPackageGuard;
 
+enum ObPLCursorScopeAction
+{
+  CURSOR_SCOPE_OWNERSHIP = 0,
+  CURSOR_SCOPE_CLOSE_ONLY = 1
+};
+
+struct ObPLCursorScopeItem
+{
+  ObPLCursorScopeItem()
+    : block_level_(OB_INVALID_INDEX),
+      package_id_(OB_INVALID_ID),
+      routine_id_(OB_INVALID_ID),
+      cursor_index_(OB_INVALID_INDEX),
+      action_(CURSOR_SCOPE_OWNERSHIP)
+  {}
+
+  ObPLCursorScopeItem(int64_t block_level,
+                      uint64_t package_id,
+                      uint64_t routine_id,
+                      int64_t cursor_index,
+                      ObPLCursorScopeAction action)
+    : block_level_(block_level),
+      package_id_(package_id),
+      routine_id_(routine_id),
+      cursor_index_(cursor_index),
+      action_(action)
+  {}
+
+  TO_STRING_KV(K_(block_level), K_(package_id), K_(routine_id), K_(cursor_index), K_(action));
+
+  int64_t block_level_;
+  uint64_t package_id_;
+  uint64_t routine_id_;
+  int64_t cursor_index_;
+  ObPLCursorScopeAction action_;
+};
+
+class ObPLCursorScopeStack
+{
+public:
+  ObPLCursorScopeStack() : items_() {}
+  ~ObPLCursorScopeStack() {}
+
+  int push(int64_t block_level,
+           uint64_t package_id,
+           uint64_t routine_id,
+           int64_t cursor_index,
+           ObPLCursorScopeAction action);
+  bool empty() const { return items_.empty(); }
+  int64_t count() const { return items_.count(); }
+  ObPLCursorScopeItem &top() { return items_.at(items_.count() - 1); }
+  const ObPLCursorScopeItem &top() const { return items_.at(items_.count() - 1); }
+  void pop() { items_.pop_back(); }
+  void reset() { items_.reset(); }
+
+private:
+  common::ObSEArray<ObPLCursorScopeItem, 8> items_;
+};
+
 #define IDX_PLEXECCTX_VTABLE 0
 #define IDX_PLEXECCTX_ALLOCATOR 1
 #define IDX_PLEXECCTX_CTX 2
@@ -774,7 +833,8 @@ struct ObPLExecCtx : public ObPLINS
       local_expr_alloc_(pl_level_alloc),
       tmp_alloc_for_copy_param_("PLTmpAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       save_ret_code_(OB_SUCCESS),
-      param_store_for_sql_(nullptr), mem_context_(nullptr), calc_once_results_(nullptr)
+      param_store_for_sql_(nullptr), mem_context_(nullptr), calc_once_results_(nullptr),
+      cursor_scope_stack_()
   {
     if (NULL != exec_ctx && NULL != exec_ctx_->get_my_session()) {
       pl_ctx_ = exec_ctx_->get_my_session()->get_pl_context();
@@ -840,6 +900,8 @@ struct ObPLExecCtx : public ObPLINS
   int get_param_store_for_sql(ObIAllocator &allocator, ParamStore *&param_store);
   int get_spi_result_set(ObSPIResultSet *&spi_result_set);
   int get_mem_context_for_sql(lib::MemoryContext &mem_context);
+  ObPLCursorScopeStack &get_cursor_scope_stack() { return cursor_scope_stack_; }
+  const ObPLCursorScopeStack &get_cursor_scope_stack() const { return cursor_scope_stack_; }
 
   int get_calc_once_result(int64_t idx, ObObjParam *& result);
   int set_calc_once_result(int64_t idx, ObObjParam *result);
@@ -863,6 +925,7 @@ struct ObPLExecCtx : public ObPLINS
   lib::MemoryContext mem_context_;
   // 懒加载: 第一次调用 set_calc_once_result 时才会真正分配并 create
   common::hash::ObHashMap<int64_t, ObObjParam*, common::hash::NoPthreadDefendMode> *calc_once_results_;
+  ObPLCursorScopeStack cursor_scope_stack_;
 };
 
 // backup and restore ObExecContext attributes
