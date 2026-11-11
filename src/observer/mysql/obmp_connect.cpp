@@ -775,16 +775,6 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
               LOG_WARN("fail to check user unlock", K(inner_ret));
             }
           }
-          if (MYSQL_MODE == session.get_compatibility_mode()
-              && OB_ERR_USER_IS_LOCKED == ret) {
-            if (OB_SUCCESS != (inner_ret = unlock_user_if_time_is_up_mysql(conn->tenant_id_,
-                                                                           user_name_,
-                                                                           session_priv.user_id_,
-                                                                           schema_guard,
-                                                                           is_unlocked))) {
-              LOG_WARN("fail to check user unlock", K(inner_ret));
-            }
-          }
 
           int tmp_ret = OB_SUCCESS;
           ObMultiVersionSchemaService *schema_service = gctx_.schema_service_;
@@ -850,14 +840,17 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
         // Use login_ret to determine if the login was successful
         // prevent the failure count from being reset when OB_ERR_USER_IS_LOCKED
         const bool is_login_success = (OB_SUCCESS == login_ret);
-        bool is_unlocked_now = false;
+        bool in_delay_window = false;
         if (OB_FAIL(update_login_stat_mysql(
             conn->tenant_id_, user_name_, client_ip_, auth_user_id,
-            is_login_success, schema_guard, is_unlocked_now))) {
+            is_login_success, schema_guard, in_delay_window))) {
           LOG_WARN("fail to update login stat", K(ret));
-        } else if (OB_ERR_USER_IS_LOCKED == login_ret && is_unlocked_now) {
+        } else if (OB_UNLIKELY(in_delay_window)) {
           ret = OB_PASSWORD_WRONG;
-          LOG_WARN("user under connnection control and temporarily not locked",
+          FORWARD_USER_ERROR_MSG(ret, "%s: the account is temporarily blocked by connection control due to"
+                                 " too many consecutive failed login attempts; please retry later",
+                                 ob_errpkt_strerror(ret, false));
+          LOG_WARN("user under connection control and still in delay window",
                    K(conn->tenant_id_), K(user_name_), K(ret));
         } else {
           ret = login_ret; // recover return code
@@ -974,16 +967,14 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
 int ObMPConnect::switch_lock_status_for_current_login_user(const uint64_t tenant_id, bool do_lock)
 {
   int ret = OB_SUCCESS;
-  OZ(switch_lock_status_for_user(tenant_id, user_name_, ObString::make_string("%"),
-                                 ORACLE_MODE, do_lock),
-     tenant_id, do_lock);
+  if (OB_FAIL(switch_lock_status_for_user(tenant_id, user_name_, do_lock))) {
+    LOG_WARN("fail to switch user lock status", K(ret), K(tenant_id), K(do_lock));
+  }
   return ret;
 }
 
 int ObMPBase::switch_lock_status_for_user(const uint64_t tenant_id,
                                           const ObString &user_name,
-                                          const ObString &host_name,
-                                          ObCompatibilityMode compat_mode,
                                           bool do_lock)
 {
   int ret = OB_SUCCESS;
@@ -991,11 +982,6 @@ int ObMPBase::switch_lock_status_for_user(const uint64_t tenant_id,
   ObSqlString lock_user_sql;
   common::ObMySQLProxy *sql_proxy = nullptr;
   int64_t affected_rows = 0;
-  const char *name_quote = ORACLE_MODE == compat_mode ? "\"" : "'";
-  ObCStringHelper helper;
-  const char *escaped_user_name = user_name.ptr();
-  const char *escaped_host_name = host_name.ptr();
-  int64_t escaped_user_name_len = user_name.length();
 
   if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1005,30 +991,18 @@ int ObMPBase::switch_lock_status_for_user(const uint64_t tenant_id,
   } else if (is_standby_tenant) {
     // do nothing for standby tenant
     LOG_INFO("standby tenant cannot switch user lock status", K(tenant_id), K(do_lock));
-  } else if (MYSQL_MODE == compat_mode
-             && OB_FAIL(helper.convert(ObHexEscapeSqlStr(user_name, false, false), escaped_user_name))) {
-    LOG_WARN("fail to escape user name", K(ret));
-  } else if (MYSQL_MODE == compat_mode
-             && OB_FAIL(helper.convert(ObHexEscapeSqlStr(host_name, false, false), escaped_host_name))) {
-    LOG_WARN("fail to escape host name", K(ret));
-  } else if (OB_FAIL(lock_user_sql.append_fmt("ALTER USER %s%.*s%s", name_quote,
-                                              static_cast<int32_t>(MYSQL_MODE == compat_mode
-                                                  ? strlen(escaped_user_name) : escaped_user_name_len),
-                                              escaped_user_name, name_quote))) {
-    LOG_WARN("append string failed", K(ret));
-  } else if (MYSQL_MODE == compat_mode && OB_FAIL(lock_user_sql.append_fmt("@%s%.*s%s",
-      name_quote, static_cast<int32_t>(strlen(escaped_host_name)), escaped_host_name, name_quote))) {
-    LOG_WARN("append string failed", K(ret));
-  } else if (OB_FAIL(lock_user_sql.append_fmt(" ACCOUNT %s", do_lock ? "LOCK" : "UNLOCK"))) {
+  } else if (OB_FAIL(lock_user_sql.append_fmt("ALTER USER \"%.*s\" ACCOUNT %s",
+                                              static_cast<int32_t>(user_name.length()), user_name.ptr(),
+                                              do_lock ? "LOCK" : "UNLOCK"))) {
     LOG_WARN("append string failed", K(ret));
   } else if (OB_ISNULL(sql_proxy = gctx_.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", K(ret));
-  } else if (OB_FAIL(sql_proxy->write(tenant_id, lock_user_sql.ptr(), affected_rows, compat_mode))) {
+  } else if (OB_FAIL(sql_proxy->write(tenant_id, lock_user_sql.ptr(), affected_rows, ORACLE_MODE))) {
     LOG_WARN("fail to execute lock user", K(ret));
   } else {
     LOG_INFO("user ddl has been sent, change user lock status to ",
-             K(tenant_id), K(user_name), K(host_name), K(do_lock));
+             K(tenant_id), K(user_name), K(do_lock));
   }
 
   return ret;
@@ -1103,69 +1077,6 @@ int ObMPConnect::unlock_user_if_time_is_up(const uint64_t tenant_id,
   LOG_DEBUG("user is locked, check timeout", K(failed_login_limit_num), K(current_failed_login_num),
             "need unlock", (current_gmt - last_failed_login_timestamp >= failed_login_limit_time));
 
-  return ret;
-}
-
-int ObMPBase::unlock_user_if_time_is_up_mysql(const uint64_t tenant_id,
-                                              const ObString &user_name,
-                                              const uint64_t user_id,
-                                              ObSchemaGetterGuard &schema_guard,
-                                              bool &is_unlock)
-{
-  int ret = OB_SUCCESS;
-  int64_t current_failed_login_num = 0;
-  int64_t last_failed_login_timestamp = 0;
-  const ObUserInfo *user_info = NULL;
-  bool need_lock = false; // useless here
-  bool is_locked_now = false;
-  is_unlock = false;
-  ObMySQLTransaction trans;
-
-  if (!is_valid_tenant_id(tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid tenant", K(tenant_id), K(ret));
-  } else if (!is_connection_control_enabled(tenant_id, user_name)) {
-    // do nothing when connection_control is disabled
-  } else if (!is_valid_id(user_id)) {
-    // user_id is valid only the password is correct, do nothing when password wrong
-  } else if (OB_FAIL(schema_guard.get_user_info(tenant_id,
-                                                user_id,
-                                                user_info))) {
-    LOG_WARN("fail to get user info", K(ret));
-  } else if (OB_ISNULL(user_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("user not exist", K(ret));
-  } else if (OB_FAIL(trans.start(gctx_.sql_proxy_, gen_meta_tenant_id(tenant_id)))) {
-    LOG_WARN("fail to start trans", K(ret), K(tenant_id));
-  } else if (OB_FAIL(get_last_failed_login_info(tenant_id, user_id, trans,
-                                                current_failed_login_num,
-                                                last_failed_login_timestamp))) {
-    LOG_WARN("fail to get current user failed login num", K(ret));
-  } else if (OB_FAIL(get_connection_control_stat_mysql(tenant_id,
-                                                       current_failed_login_num,
-                                                       last_failed_login_timestamp,
-                                                       is_locked_now))) {
-    LOG_WARN("fail to get current user failed login num", K(ret));
-  } else if (!is_locked_now) { // time's up
-    if (OB_UNLIKELY(current_failed_login_num != 0)
-        && OB_FAIL(clear_current_user_failed_login_num(tenant_id, user_id, trans))) {
-      LOG_WARN("fail to clear failed login num", K(ret));
-    } else if (OB_FAIL(switch_lock_status_for_user(tenant_id, user_name,
-                                                   user_info->get_host_name_str(),
-                                                   MYSQL_MODE, false))) {
-      LOG_WARN("fail to check lock status", K(ret));
-    } else {
-      is_unlock = true;
-    }
-  }
-
-  if (trans.is_started()) {
-    int temp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(ret), K(temp_ret));
-      ret = OB_SUCC(ret) ? temp_ret : ret;
-    }
-  }
   return ret;
 }
 
@@ -1330,12 +1241,11 @@ int ObMPBase::update_login_stat_mysql(const uint64_t tenant_id,
                                       const uint64_t auth_user_id,
                                       const bool is_login_succ,
                                       ObSchemaGetterGuard &schema_guard,
-                                      bool &is_unlocked_now)
+                                      bool &in_delay_window)
 {
   int ret = OB_SUCCESS;
   const ObUserInfo *user_info = NULL;
-  bool in_locked_window = false;
-  is_unlocked_now = false;
+  in_delay_window = false;
   if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid tenant", K(tenant_id), K(ret));
@@ -1350,10 +1260,8 @@ int ObMPBase::update_login_stat_mysql(const uint64_t tenant_id,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("user info is null", K(ret), K(tenant_id), K(auth_user_id));
     } else if (OB_FAIL(update_login_stat_in_trans_mysql(
-        tenant_id, user_name, client_ip, *user_info, is_login_succ, in_locked_window))) {
+        tenant_id, user_name, client_ip, *user_info, is_login_succ, in_delay_window))) {
       LOG_WARN("fail to update login stat in trans mysql", K(ret), K(tenant_id), K(auth_user_id));
-    } else {
-      is_unlocked_now = !in_locked_window;
     }
   }
   return ret;
@@ -1364,22 +1272,18 @@ int ObMPBase::update_login_stat_in_trans_mysql(const uint64_t tenant_id,
                                                const ObString &client_ip,
                                                const ObUserInfo &user_info,
                                                const bool is_login_succ,
-                                               bool &in_locked_window)
+                                               bool &in_delay_window)
 {
   int ret = OB_SUCCESS;
   int64_t current_failed_login_num = INT64_MAX;
   int64_t last_failed_login_timestamp = INT64_MAX;
-  bool need_lock = false; // true if need to lock user
-  bool is_standby_tenant = false;
-  in_locked_window = false;  // true if exceed the threshold and time's not up
+  in_delay_window = false;  // true if count >= threshold and still inside the delay window
   ObMySQLTransaction trans;
   if (!is_valid_tenant_id(tenant_id) || !is_valid_id(user_info.get_user_id())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(user_info.get_user_id()));
   } else if (OB_FAIL(trans.start(gctx_.sql_proxy_, gen_meta_tenant_id(tenant_id)))) {
     LOG_WARN("fail to start transaction", K(ret));
-  } else if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(gctx_.sql_proxy_, tenant_id, is_standby_tenant))) {
-    LOG_WARN("fail to check if tenant is standby", K(ret), K(tenant_id));
   } else if (!is_login_succ
              && OB_FAIL(insert_initial_failed_login_stat(tenant_id, user_info.get_user_id(), user_name, trans))) {
     LOG_WARN("fail to insert initial failed login stat", K(ret), K(tenant_id), K(user_info.get_user_id()));
@@ -1390,49 +1294,28 @@ int ObMPBase::update_login_stat_in_trans_mysql(const uint64_t tenant_id,
   } else if (OB_FAIL(get_connection_control_stat_mysql(tenant_id,
                                                        current_failed_login_num,
                                                        last_failed_login_timestamp,
-                                                       in_locked_window))) {
+                                                       in_delay_window))) {
     LOG_WARN("fail to get current user failed login num", K(ret));
-  } else if (OB_UNLIKELY(is_standby_tenant && in_locked_window)) {
-    // Case 1: standby tenant in the locked window.
-    // a standby tenant cannot execute lock/unlock user DDL
-    // so we treat `in_locked_window` as the actual lock status
-    ret = OB_ERR_USER_IS_LOCKED;
-    LOG_WARN("user locked by connection control",
-             K(tenant_id), K(user_info), K(client_ip),
-             K(is_login_succ), K(current_failed_login_num), K(last_failed_login_timestamp), K(ret));
+  } else if (OB_UNLIKELY(in_delay_window)) {
+    // Case 1: the account is still inside the connection control delay window.
+    // The delay window is not extended by the attempts rejected inside it, so the failed-login
+    // stat is left untouched and the caller rejects this login.
   } else if (OB_LIKELY(is_login_succ)) {
-    // Case 2: login succeeded, clear failed-login counters
-    // notice: if user is actually locked, the login would be rejected earlier (before this function)
+    // Case 2: login succeeded outside the delay window, clear the failed-login counter
+    // notice: if the account is actually locked, the login would be rejected earlier (before this function)
     if (OB_UNLIKELY(current_failed_login_num != 0)) {
       if (OB_FAIL(clear_current_user_failed_login_num(tenant_id, user_info.get_user_id(), trans))) {
         LOG_WARN("fail to clear current user failed login", K(ret));
       }
     }
-  } else if (OB_UNLIKELY(in_locked_window)) {
-    // Case 3: primary tenant in the locked window and authentication failed.
-    // just update the user status as LOCKED but do not update failed login num
-    if (OB_FAIL(switch_lock_status_for_user(
-        tenant_id, user_name, user_info.get_host_name(), MYSQL_MODE, true))) {
-      LOG_WARN("fail to lock user", K(ret));
-    }
   } else {
-    // Case 4: not in locked window and login failed
-    // Increase the failed-login counter first
-    // then lock the account when the failing threshold is reached or when the delayed re-lock condition holds.
+    // Case 3: authentication failed outside the delay window, count it in.
+    // The account lock status is never touched here: it is controlled by the DDL only, so that a
+    // failed login can neither lock the account nor clear the lock set by the administrator.
     if (OB_FAIL(update_current_user_failed_login_num(
         tenant_id, user_info.get_user_id(), user_name, client_ip,
         trans, current_failed_login_num + 1))) {
-      LOG_WARN("fail to clear current user failed login", K(ret));
-    } else if (OB_FAIL(is_need_lock_user_mysql(tenant_id,
-                                               current_failed_login_num + 1,
-                                               last_failed_login_timestamp,
-                                               need_lock))) {
-      LOG_WARN("fail to check if need to lock user", K(ret));
-    } else if (need_lock && !user_info.get_is_locked()) {
-      if (OB_FAIL(switch_lock_status_for_user(
-          tenant_id, user_name, user_info.get_host_name(), MYSQL_MODE, true))) {
-        LOG_WARN("fail to lock user", K(ret));
-      }
+      LOG_WARN("fail to update current user failed login", K(ret));
     }
   }
 
@@ -1645,10 +1528,10 @@ bool ObMPBase::is_connection_control_enabled(const uint64_t tenant_id,
 int ObMPBase::get_connection_control_stat_mysql(const uint64_t tenant_id,
                                                 const int64_t current_failed_login_num,
                                                 const int64_t last_failed_login_timestamp,
-                                                bool &is_locked)
+                                                bool &in_delay_window)
 {
   int ret = OB_SUCCESS;
-  is_locked = false;
+  in_delay_window = false;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   if (tenant_config.is_valid()) {
     int64_t threshold = tenant_config->connection_control_failed_connections_threshold;
@@ -1660,29 +1543,7 @@ int ObMPBase::get_connection_control_stat_mysql(const uint64_t tenant_id,
       // do nothing if no failed connections threshold or not reached the threshold
     } else {
       delay = MIN(MAX((current_failed_login_num + 1 - threshold) * MSECS_PER_SEC, min_delay), max_delay);
-      is_locked = current_gmt <= delay * USECS_PER_MSEC + last_failed_login_timestamp;
-    }
-  }
-  return ret;
-}
-
-int ObMPBase::is_need_lock_user_mysql(const uint64_t tenant_id,
-                                      const int64_t current_failed_login_num,
-                                      const int64_t last_failed_login_timestamp,
-                                      bool &need_lock)
-{
-  int ret = OB_SUCCESS;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  need_lock = false;
-  if (tenant_config.is_valid()) {
-    int64_t threshold = tenant_config->connection_control_failed_connections_threshold;
-    if (threshold <= 0) {
-      // do nothing if no failed connections threshold
-    } else if (current_failed_login_num == threshold
-               || (current_failed_login_num > threshold
-                   && ObTimeUtil::current_time() - last_failed_login_timestamp > USECS_PER_SEC * 10)) {
-      // the 10 sec delay is to reduce parallel DDL
-      need_lock = true;
+      in_delay_window = current_gmt <= delay * USECS_PER_MSEC + last_failed_login_timestamp;
     }
   }
   return ret;

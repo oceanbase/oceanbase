@@ -169,21 +169,14 @@ protected:
                               const uint64_t auth_user_id,
                               const bool is_login_succ,
                               share::schema::ObSchemaGetterGuard &schema_guard,
-                              bool &is_unlocked_now);
+                              bool &in_delay_window);
   int check_password_expired(const uint64_t tenant_id,
                              const uint64_t user_id,
                              share::schema::ObSchemaGetterGuard &schema_guard,
                              sql::ObSQLSessionInfo &session);
-  int unlock_user_if_time_is_up_mysql(const uint64_t tenant_id,
-                                      const common::ObString &user_name,
-                                      const uint64_t user_id,
-                                      share::schema::ObSchemaGetterGuard &schema_guard,
-                                      bool &is_unlock);
 
   int switch_lock_status_for_user(const uint64_t tenant_id,
                                   const common::ObString &user_name,
-                                  const common::ObString &host_name,
-                                  ObCompatibilityMode compat_mode,
                                   bool do_lock);
   int insert_initial_failed_login_stat(const uint64_t tenant_id,
                                        const uint64_t user_id,
@@ -208,17 +201,13 @@ protected:
                                        const common::ObString &client_ip,
                                        const share::schema::ObUserInfo &user_info,
                                        const bool is_login_succ,
-                                       bool &is_locked_now);
+                                       bool &in_delay_window);
   bool is_connection_control_enabled(const uint64_t tenant_id,
                                      const common::ObString &user_name);
   int get_connection_control_stat_mysql(const uint64_t tenant_id,
                                         const int64_t current_failed_login_num,
                                         const int64_t last_failed_login_timestamp,
-                                        bool &is_locked);
-  int is_need_lock_user_mysql(const uint64_t tenant_id,
-                              const int64_t current_failed_login_num,
-                              const int64_t last_failed_login_timestamp,
-                              bool &need_lock);
+                                        bool &in_delay_window);
 
   // Authentication related methods
   int get_user_required_plugin(

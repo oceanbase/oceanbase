@@ -796,16 +796,6 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv,
                 enable_role_id_array, ssl_st, user_info))) {
-      int inner_ret = OB_SUCCESS;
-      bool is_unlocked = false;
-      if (MYSQL_MODE == session->get_compatibility_mode()
-          && OB_ERR_USER_IS_LOCKED == ret
-          && OB_SUCCESS != (inner_ret = unlock_user_if_time_is_up_mysql(
-              session->get_effective_tenant_id(), login_info.user_name_, session_priv.user_id_,
-              schema_guard, is_unlocked))) {
-        LOG_WARN("fail to check user unlock for change user", K(inner_ret));
-      }
-
       int tmp_ret = OB_SUCCESS;
       int64_t local_version = OB_INVALID_VERSION;
       int64_t global_version = OB_INVALID_VERSION;
@@ -817,9 +807,9 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
           session->get_effective_tenant_id(), global_version))) {
         LOG_WARN("fail to get global schema version", K(tmp_ret),
                  "tenant_id", session->get_effective_tenant_id());
-      } else if (local_version < global_version || is_unlocked) {
+      } else if (local_version < global_version) {
         LOG_INFO("try to refresh schema for change user",
-                 "tenant_id", session->get_effective_tenant_id(), K(is_unlocked),
+                 "tenant_id", session->get_effective_tenant_id(),
                  K(local_version), K(global_version));
         if (OB_SUCCESS != (tmp_ret = gctx_.schema_service_->async_refresh_schema(
             session->get_effective_tenant_id(), global_version))) {
@@ -829,8 +819,7 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
             session->get_effective_tenant_id(), schema_guard))) {
           LOG_WARN("get schema guard failed", K(tmp_ret),
                    "tenant_id", session->get_effective_tenant_id());
-        } else if (OB_SUCCESS == inner_ret
-                   && OB_FAIL(schema_guard.check_user_access(login_info, session_priv,
+        } else if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv,
                        enable_role_id_array, ssl_st, user_info))) {
           LOG_WARN("user access denied after schema refresh", K(login_info), K(ret));
         }

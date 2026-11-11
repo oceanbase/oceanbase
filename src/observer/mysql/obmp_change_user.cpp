@@ -339,18 +339,21 @@ int ObMPChangeUser::process()
       && (OB_SUCC(ret) || OB_PASSWORD_WRONG == ret || OB_ERR_USER_IS_LOCKED == ret)) {
     const int login_ret = ret;
     const bool is_login_success = OB_SUCCESS == login_ret;
-    bool is_unlocked_now = false;
+    bool in_delay_window = false;
     if (OB_FAIL(update_login_stat_mysql(session->get_effective_tenant_id(),
                                         login_info.user_name_,
                                         login_info.client_ip_,
                                         auth_user_id,
                                         is_login_success,
                                         schema_guard,
-                                        is_unlocked_now))) {
+                                        in_delay_window))) {
       LOG_WARN("fail to update login stat for change user", K(ret));
-    } else if (OB_ERR_USER_IS_LOCKED == login_ret && is_unlocked_now) {
+    } else if (OB_UNLIKELY(in_delay_window)) {
       ret = OB_PASSWORD_WRONG;
-      LOG_WARN("user under connection control and temporarily not locked",
+      FORWARD_USER_ERROR_MSG(ret, "%s: the account is temporarily blocked by connection control due to"
+                             " too many consecutive failed login attempts; please retry later",
+                             ob_errpkt_strerror(ret, false));
+      LOG_WARN("target user under connection control and still in delay window",
                K(session->get_effective_tenant_id()), K(ret));
     } else {
       ret = login_ret;
