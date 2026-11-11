@@ -484,6 +484,7 @@ int ObPartitionSplitQuery::fill_range_filter_param(
         } else if (i <= part_column_cnt) { // 2. lower bound param expr.
           if (lower_bound.is_min_rowkey()) {
             expr_datum.set_outrow(); // min
+            expr_datum.len_ = 0;
             if (expr_datum.is_outrow()) {
               LOG_DEBUG("set is outrow", K(ret), K(expr_datum));
             }
@@ -491,11 +492,13 @@ int ObPartitionSplitQuery::fill_range_filter_param(
             const ObDatum &lower_datum = lower_bound.get_datum(col_idx);
             if (lower_datum.is_min()) {
               expr_datum.set_outrow(); // min
+              expr_datum.len_ = 0;
               if (expr_datum.is_outrow()) {
                 LOG_DEBUG("set is outrow", K(ret), K(expr_datum));
               }
             } else if (lower_datum.is_max()) {
               expr_datum.set_ext(); // max
+              expr_datum.len_ = 0;
               if (expr_datum.is_ext()) {
                 LOG_DEBUG("set is ext", K(ret), K(expr_datum));
               }
@@ -506,6 +509,7 @@ int ObPartitionSplitQuery::fill_range_filter_param(
         } else if (i <= part_column_cnt * 2) { // 3. upper bound param expr.
           if (upper_bound.is_max_rowkey()) {
             expr_datum.set_ext(); // max
+            expr_datum.len_ = 0;
             if (expr_datum.is_ext()) {
               LOG_DEBUG("set is ext", K(ret), K(expr_datum));
             }
@@ -513,11 +517,13 @@ int ObPartitionSplitQuery::fill_range_filter_param(
             const ObDatum &upper_datum = upper_bound.get_datum(col_idx);
             if ( upper_datum.is_max()) {
               expr_datum.set_ext();  // max
+              expr_datum.len_ = 0;
               if (expr_datum.is_ext()) {
                 LOG_DEBUG("set is ext", K(ret), K(expr_datum));
               }
             } else if (upper_datum.is_min()) {
               expr_datum.set_outrow();  // min
+              expr_datum.len_ = 0;
               if (expr_datum.is_outrow()) {
                 LOG_DEBUG("set is outrow", K(ret), K(expr_datum));
               }
