@@ -7275,9 +7275,6 @@ int ObSPIService::spi_handle_ref_cursor_refcount(ObPLExecCtx *ctx,
                                       int64_t addend)
 {
   int ret = OB_SUCCESS;
-#ifndef OB_BUILD_ORACLE_PL
-  UNUSEDx(ctx, package_id, routine_id, index, addend);
-#else
   ObPLCursorInfo *cursor_info = NULL;
   ObObjParam cursor_var;
   ObCusorDeclareLoc loc;
@@ -7310,7 +7307,6 @@ int ObSPIService::spi_handle_ref_cursor_refcount(ObPLExecCtx *ctx,
       end;
     */
   }
-#endif
   return ret;
 }
 
