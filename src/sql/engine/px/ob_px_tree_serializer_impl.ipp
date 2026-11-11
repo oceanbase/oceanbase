@@ -217,9 +217,20 @@ int ObPxTreeSerializer::deserialize_frame_info(const char *buf,
     const ObFrameInfo &frame_info = all_frames.at(i);
     int64_t expr_mem_size = 0;
     OB_UNIS_DECODE(expr_mem_size);
+    const int64_t item_size = frame_info.use_rich_format_
+        ? sizeof(ObDatum) + sizeof(ObEvalInfo) + sizeof(VectorHeader)
+        : sizeof(ObDatum) + sizeof(ObEvalInfo);
     if (frame_info.frame_idx_ >= frame_cnt) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("frame index exceed frame count", K(ret), K(frame_cnt), K(frame_info.frame_idx_));
+    } else if (OB_UNLIKELY(expr_mem_size < 0)
+               || OB_UNLIKELY(frame_info.frame_size_ > static_cast<uint64_t>(MAX_FRAME_SIZE))
+               || OB_UNLIKELY(static_cast<uint64_t>(expr_mem_size) > frame_info.frame_size_)
+               || OB_UNLIKELY(no_deser_data && expr_mem_size != 0)
+               || OB_UNLIKELY(!no_deser_data && frame_info.expr_cnt_ > frame_info.frame_size_ / item_size)) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("invalid serialized frame size", K(ret), K(frame_info.frame_size_),
+          K(frame_info.expr_cnt_), K(expr_mem_size));
     } else if (0 < frame_info.expr_cnt_) {
       char *frame_buf = nullptr;
       if (nullptr == (frame_buf = static_cast<char*>(allocator.alloc(frame_info.frame_size_)))) {
