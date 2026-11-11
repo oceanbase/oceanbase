@@ -63,6 +63,7 @@ void ObTenantDirectLoadMgr::destroy()
     }
   }
   tablet_exec_context_map_.destroy();
+  interval_alloc_lock_.destroy();
   bucket_lock_.destroy();
   allocator_.reset();
   is_inited_ = false;
@@ -104,6 +105,9 @@ int ObTenantDirectLoadMgr::init()
   } else if (OB_FAIL(bucket_lock_.init(bucket_num, ObLatchIds::TENANT_DIRECT_LOAD_MGR_LOCK,
       ObLabel("TenDLBucket"), tenant_id))) {
     LOG_WARN("init bucket lock failed", K(ret), K(bucket_num));
+  } else if (OB_FAIL(interval_alloc_lock_.init(bucket_num, ObLatchIds::TENANT_DIRECT_LOAD_MGR_LOCK,
+      ObLabel("TenDLInterval"), tenant_id))) {
+    LOG_WARN("init interval allocation lock failed", K(ret), K(bucket_num));
   } else if (OB_FAIL(tablet_mgr_map_.create(bucket_num, attr, attr))) {
     LOG_WARN("create context map failed", K(ret));
   } else if (OB_FAIL(tablet_exec_context_map_.create(bucket_num, attr, attr))) {
@@ -750,15 +754,19 @@ int ObTenantDirectLoadMgr::get_tablet_cache_interval(
     ObTabletDirectLoadExecContextId exec_id;
     exec_id.tablet_id_ = tablet_id;
     exec_id.context_id_ = context_id;
-    ObBucketHashWLockGuard guard(bucket_lock_, exec_id.hash());
+    // Keep interval and task ID allocation ordered without holding the lock needed by DDL log callbacks.
+    ObBucketHashWLockGuard interval_guard(interval_alloc_lock_, exec_id.hash());
     if (OB_FAIL(autoinc_service.get_tablet_cache_interval(MTL_ID(), interval))) {
       LOG_WARN("failed to get tablet cache intervals", K(ret));
-    } else if (OB_FAIL(tablet_exec_context_map_.get_refactored(exec_id, exec_context))) {
-      LOG_WARN("get tablet execution context failed", K(ret));
     } else {
-      interval.task_id_ = exec_context.seq_interval_task_id_++;
-      if (OB_FAIL(tablet_exec_context_map_.set_refactored(exec_id, exec_context, true/*overwrite*/))) {
-        LOG_WARN("set tablet execution context map", K(ret));
+      ObBucketHashWLockGuard guard(bucket_lock_, exec_id.hash());
+      if (OB_FAIL(tablet_exec_context_map_.get_refactored(exec_id, exec_context))) {
+        LOG_WARN("get tablet execution context failed", K(ret));
+      } else {
+        interval.task_id_ = exec_context.seq_interval_task_id_++;
+        if (OB_FAIL(tablet_exec_context_map_.set_refactored(exec_id, exec_context, true/*overwrite*/))) {
+          LOG_WARN("set tablet execution context map", K(ret));
+        }
       }
     }
   }

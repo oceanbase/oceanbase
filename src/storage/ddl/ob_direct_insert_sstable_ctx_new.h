@@ -227,6 +227,7 @@ private:
     common::hash::NoPthreadDefendMode> TABLET_EXEC_CONTEXT_MAP;
   bool is_inited_;
   common::ObBucketLock bucket_lock_; // to avoid concurrent execution on the TabletDirectLoadMgr.
+  common::ObBucketLock interval_alloc_lock_; // serialize interval and task ID allocation.
   common::ObConcurrentFIFOAllocator allocator_;
   TABLET_MGR_MAP tablet_mgr_map_;
   TABLET_EXEC_CONTEXT_MAP tablet_exec_context_map_;
