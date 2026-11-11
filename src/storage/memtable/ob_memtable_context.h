@@ -406,7 +406,7 @@ public:
   virtual void set_trans_ctx(transaction::ObPartTransCtx *ctx);
   virtual transaction::ObPartTransCtx *get_trans_ctx() const { return ctx_; }
   virtual void inc_truncate_cnt() override { truncate_cnt_++; }
-  int get_memtable_key_arr(transaction::ObMemtableKeyArray &memtable_key_arr);
+  int get_memtable_key_arr(transaction::ObMemtableKeyArray &memtable_key_arr, const int64_t expire_ts);
   uint64_t get_lock_for_read_retry_count() const { return lock_for_read_retry_count_; }
   virtual void add_trans_mem_total_size(const int64_t size);
   int64_t get_ref() const { return ATOMIC_LOAD(&ref_); }

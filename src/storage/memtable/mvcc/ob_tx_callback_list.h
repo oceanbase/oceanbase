@@ -74,8 +74,8 @@ public:
                                        const transaction::ObTxSEQ from_seq,
                                        const share::SCN replay_scn);
 
-  // get_memtable_key_arr__timeout get all memtable key until timeout
-  int get_memtable_key_arr_w_timeout(transaction::ObMemtableKeyArray &memtable_key_arr);
+  // Use one deadline for all callback lists in the transaction.
+  int get_memtable_key_arr_w_timeout(transaction::ObMemtableKeyArray &memtable_key_arr, const int64_t expire_ts);
 
   // clean_unlog_callbacks will remove all unlogged callbacks. Which is called
   // when switch to follower forcely.

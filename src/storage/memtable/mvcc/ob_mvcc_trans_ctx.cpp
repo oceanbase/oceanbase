@@ -1327,18 +1327,24 @@ void ObTransCallbackMgr::inc_flushed_log_size(const int64_t size) {
   }
 }
 
-int ObTransCallbackMgr::get_memtable_key_arr(ObMemtableKeyArray &memtable_key_arr)
+int ObTransCallbackMgr::get_memtable_key_arr(ObMemtableKeyArray &memtable_key_arr, const int64_t expire_ts)
 {
   int ret = OB_SUCCESS;
   int fail_at = 0;
-  CALLBACK_LISTS_FOREACH(idx, list) {
+  const int64_t list_count = nullptr == callback_lists_ ? 1 : MAX_CALLBACK_LIST_COUNT;
+
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < list_count && ObTimeUtility::current_time() < expire_ts; ++idx) {
+    ObTxCallbackList *list = 0 == idx ? &callback_list_ : &callback_lists_[idx - 1];
+
     fail_at = idx;
-    ret = list->get_memtable_key_arr_w_timeout(memtable_key_arr);
+    ret = list->get_memtable_key_arr_w_timeout(memtable_key_arr, expire_ts);
     if (OB_ITER_STOP == ret) { ret = OB_SUCCESS; }
   }
+
   if (OB_FAIL(ret)) {
-    TRANS_LOG(WARN, "get memtablekey fail", K(ret), K(fail_at), K(memtable_key_arr));
+    TRANS_LOG(WARN, "get memtablekey fail", K(ret), K(fail_at), "key_count", memtable_key_arr.count());
   }
+
   return ret;
 }
 

@@ -1159,6 +1159,9 @@ public:
       TRANS_LOG(WARN, "invalid argument", KR(ret), K(tx_id), "ctx", OB_P(tx_ctx));
     } else {
       ObMemtableKeyArray memtable_key_info_arr;
+
+      memtable_key_info_arr.set_attr(ObMemAttr(tx_ctx->get_tenant_id(), "TxLockStat"));
+
       if (OB_ISNULL(tx_ctx)) {
         ret = OB_INVALID_ARGUMENT;
         TRANS_LOG(WARN, "tx_ctx is null", KR(ret));

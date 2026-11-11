@@ -540,21 +540,23 @@ private:
 class ObGetMemtableKeyWTimeoutFunctor : public ObITxCallbackFunctor
 {
 public:
-  ObGetMemtableKeyWTimeoutFunctor(transaction::ObMemtableKeyArray &memtable_key_arr)
-    : start_ts_(ObTimeUtility::current_time()),
+  ObGetMemtableKeyWTimeoutFunctor(transaction::ObMemtableKeyArray &memtable_key_arr, const int64_t expire_ts)
+    : expire_ts_(expire_ts),
     memtable_key_arr_(memtable_key_arr) {}
 
   virtual bool is_iter_end(ObITransCallback *callback) const override
   {
-    // It can only take up to 300ms
-    return ObTimeUtility::current_time() - start_ts_ >= 300 * 1000L;
+    return ObTimeUtility::current_time() >= expire_ts_;
   }
 
-    virtual int operator()(ObITransCallback *callback) override
+  virtual int operator()(ObITransCallback *callback) override
   {
     int ret = OB_SUCCESS;
 
-    if (OB_FAIL(callback->merge_memtable_key(memtable_key_arr_))) {
+    if (OB_ISNULL(callback)) {
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "callback is null", K(ret));
+    } else if (OB_FAIL(callback->merge_memtable_key(memtable_key_arr_))) {
       TRANS_LOG(WARN, "fail to merge memtable key", K(ret));
     }
 
@@ -564,7 +566,7 @@ public:
   VIRTUAL_TO_STRING_KV(K_(memtable_key_arr));
 
 private:
-  int64_t start_ts_;
+  const int64_t expire_ts_;
   transaction::ObMemtableKeyArray &memtable_key_arr_;
 };
 

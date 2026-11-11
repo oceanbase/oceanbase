@@ -695,15 +695,16 @@ int ObTxCallbackList::clean_unlog_callbacks(int64_t &removed_cnt, common::ObFunc
   return ret;
 }
 
-int ObTxCallbackList::get_memtable_key_arr_w_timeout(transaction::ObMemtableKeyArray &memtable_key_arr)
+int ObTxCallbackList::get_memtable_key_arr_w_timeout(transaction::ObMemtableKeyArray &memtable_key_arr,
+                                                     const int64_t expire_ts)
 {
   int ret = OB_SUCCESS;
-  ObGetMemtableKeyWTimeoutFunctor functor(memtable_key_arr);
+  ObGetMemtableKeyWTimeoutFunctor functor(memtable_key_arr, expire_ts);
 
   ObTimeGuard tg("get memtable key arr", 500 * 1000L);
   LockGuard guard(*this, LOCK_MODE::LOCK_ALL, &tg);
   if (OB_FAIL(callback_(functor, guard.state_))) {
-    TRANS_LOG(WARN, "get memtable key arr failed", K(ret), K(functor));
+    TRANS_LOG(WARN, "get memtable key arr failed", K(ret), "key_count", memtable_key_arr.count(), K(expire_ts));
   }
 
   return ret;

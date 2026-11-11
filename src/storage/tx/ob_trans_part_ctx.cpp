@@ -24,6 +24,7 @@
 #include "storage/tx/ob_tx_log_operator.h"
 #include "lib/container/ob_array_wrap.h"
 #include "lib/ob_lib_config.h"
+#include "lib/worker.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_service.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_adapter.h"
@@ -49,6 +50,7 @@ typedef ObRedoLogSyncResponseMsg::ObRedoLogSyncResponseStatus ObRedoLogSyncRespo
 bool ObPartTransCtx::is_inited() const { return ATOMIC_LOAD(&is_inited_); }
 
 static const int64_t STANDBY_STAT_ARRAY_SIZE = 10;
+static const int64_t LOCK_STAT_TIMEOUT_US = 300 * 1000;
 // cache line aligned
 static int64_t STANDBY_STAT[STANDBY_STAT_ARRAY_SIZE][8];
 
@@ -1022,11 +1024,13 @@ int ObPartTransCtx::iterate_tx_lock_stat(ObTxLockStatIterator &iter)
   int ret = OB_SUCCESS;
   ObMemtableKeyArray memtable_key_info_arr;
 
+  memtable_key_info_arr.set_attr(ObMemAttr(get_tenant_id(), "TxLockStat"));
+
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(get_memtable_key_arr(memtable_key_info_arr))) {
-    TRANS_LOG(WARN, "get memtable key arr fail", KR(ret), K(memtable_key_info_arr));
+    TRANS_LOG(WARN, "get memtable key arr fail", KR(ret), "key_count", memtable_key_info_arr.count());
   } else {
     // If the row has been dumped into sstable, we can not get the
     // memtable key info since the callback of it has been dropped.
@@ -1035,7 +1039,10 @@ int ObPartTransCtx::iterate_tx_lock_stat(ObTxLockStatIterator &iter)
     // transactions by !tx_ctx->is_exiting().
     if (memtable_key_info_arr.empty() && !is_exiting() && get_memtable_ctx()->maybe_has_undecided_callback()) {
       ObMemtableKeyInfo key_info;
-      memtable_key_info_arr.push_back(key_info);
+
+      if (OB_FAIL(memtable_key_info_arr.push_back(key_info))) {
+        TRANS_LOG(WARN, "append empty lock key failed", K(ret));
+      }
     }
     int64_t count = memtable_key_info_arr.count();
     for (int i = 0; OB_SUCC(ret) && i < count; i++) {
@@ -1465,13 +1472,15 @@ int ObPartTransCtx::get_memtable_key_arr(ObMemtableKeyArray &memtable_key_arr)
 {
   int ret = OB_SUCCESS;
   if (OB_SUCCESS == lock_.try_lock()) {
+    const int64_t expire_ts = std::min(ObTimeUtility::current_time() + LOCK_STAT_TIMEOUT_US,
+                                       THIS_WORKER.get_timeout_ts());
+
     if (IS_NOT_INIT || is_follower_() || is_exiting_) {
       TRANS_LOG(DEBUG, "part_ctx not need to get memtable key");
-    } else if (OB_FAIL(mt_ctx_.get_memtable_key_arr(memtable_key_arr))) {
-      TRANS_LOG(WARN, "get_memtable_key_arr fail", K(ret), K(memtable_key_arr), K(mt_ctx_));
-    } else {
-      // do nothing
+    } else if (OB_FAIL(mt_ctx_.get_memtable_key_arr(memtable_key_arr, expire_ts))) {
+      TRANS_LOG(WARN, "get_memtable_key_arr fail", K(ret), "key_count", memtable_key_arr.count());
     }
+
     lock_.unlock();
   } else {
     ObMemtableKeyInfo info;

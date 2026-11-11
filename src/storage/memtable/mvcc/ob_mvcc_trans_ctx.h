@@ -257,7 +257,7 @@ public:
   int remove_callbacks_for_fast_commit(const int16_t callback_list_idx, const share::SCN stop_scn);
   int remove_callbacks_for_fast_commit(const ObCallbackScopeArray &callbacks_arr);
   int remove_callback_for_uncommited_txn(const memtable::ObMemtableSet *memtable_set);
-  int get_memtable_key_arr(transaction::ObMemtableKeyArray &memtable_key_arr);
+  int get_memtable_key_arr(transaction::ObMemtableKeyArray &memtable_key_arr, const int64_t expire_ts);
   int acquire_callback_list(const bool new_epoch);
   void revert_callback_list();
   int get_tx_seq_replay_idx(const transaction::ObTxSEQ seq) const;

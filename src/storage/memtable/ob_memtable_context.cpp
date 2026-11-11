@@ -783,14 +783,13 @@ void ObMemtableCtx::add_trans_mem_total_size(const int64_t size)
   }
 }
 
-int ObMemtableCtx::get_memtable_key_arr(transaction::ObMemtableKeyArray &memtable_key_arr)
+int ObMemtableCtx::get_memtable_key_arr(transaction::ObMemtableKeyArray &memtable_key_arr, const int64_t expire_ts)
 {
   int ret = OB_SUCCESS;
-  // the memtable pointer read from
-  ObMemtable *cur_memtable = NULL;
+
   // read row lock data
-  if (OB_FAIL(trans_mgr_.get_memtable_key_arr(memtable_key_arr))) {
-    TRANS_LOG(WARN, "get_memtable_key_arr fail", K(ret), K(memtable_key_arr));
+  if (OB_FAIL(trans_mgr_.get_memtable_key_arr(memtable_key_arr, expire_ts))) {
+    TRANS_LOG(WARN, "get_memtable_key_arr fail", K(ret), "key_count", memtable_key_arr.count());
   }
 
   // locking on a non-active memstore would generate OB_STATE_NOT_MATCH
