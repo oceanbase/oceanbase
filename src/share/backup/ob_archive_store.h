@@ -224,6 +224,23 @@ struct ObSinglePieceDescComparator
   }
 };
 
+// Order by <dest_id, round_id, piece_id>.
+struct ObTenantArchivePieceAttrComparator
+{
+  bool operator()(const ObTenantArchivePieceAttr &lhs, const ObTenantArchivePieceAttr &rhs) const
+  {
+    bool less = false;
+    if (lhs.key_.dest_id_ != rhs.key_.dest_id_) {
+      less = lhs.key_.dest_id_ < rhs.key_.dest_id_;
+    } else if (lhs.key_.round_id_ != rhs.key_.round_id_) {
+      less = lhs.key_.round_id_ < rhs.key_.round_id_;
+    } else {
+      less = lhs.key_.piece_id_ < rhs.key_.piece_id_;
+    }
+    return less;
+  }
+};
+
 
 // Define checkpoint file content.
 struct ObPieceCheckpointDesc final : public ObExternArchiveDesc

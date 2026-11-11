@@ -25,7 +25,6 @@ namespace share
 {
 struct ObHisRestoreJobPersistInfo;
 struct ObPhysicalRestoreJob;
-struct ObExternPieceWholeInfo;
 }
 namespace palf
 {
@@ -203,22 +202,40 @@ private:
              const SCN &restore_end_scn,
              const ObTimeZoneInfoWrap &time_zone_wrap,
              ObIArray<ObRestoreLogPieceBriefInfo> &backup_piece_list);
-  static int get_all_piece_keys_(
+  // piece_attrs are sorted by <dest_id, round_id, piece_id>.
+  static int get_all_piece_infos_(
              const ObIArray<ObString> &multi_path_array,
-             ObArray<ObPieceKey> &piece_keys,
+             ObArray<ObTenantArchivePieceAttr> &piece_attrs,
              common::hash::ObHashMap<ObPieceKey, ObString> &multi_path_map);
-  static int get_latest_non_empty_piece_(
-             const ObArray<ObPieceKey> &piece_keys,
-             const common::hash::ObHashMap<ObPieceKey, ObString> &multi_path_map,
-             ObExternPieceWholeInfo &piece_whole_info,
-             bool &is_empty_piece);
-  static int get_piece_paths_in_range_from_multi_path_(
-             const ObArray<ObTenantArchivePieceAttr> &candidate_pieces,
+  static int add_piece_attr_(
+             const ObTenantArchivePieceAttr &piece,
+             const ObString &multi_path,
+             ObArray<ObTenantArchivePieceAttr> &piece_attrs,
+             common::hash::ObHashMap<ObPieceKey, ObString> &multi_path_map);
+  // piece_attrs must be sorted by <dest_id, round_id, piece_id>. Check each <dest_id, round_id> group,
+  // and select pieces of the round which can support restore.
+  static int get_piece_paths_from_round_groups_(
+             const ObArray<ObTenantArchivePieceAttr> &piece_attrs,
              const common::hash::ObHashMap<ObPieceKey, ObString> &multi_path_map,
              const SCN &restore_start_scn,
              const SCN &restore_end_scn,
              const ObTimeZoneInfoWrap &time_zone_wrap,
              ObIArray<share::ObRestoreLogPieceBriefInfo> &pieces);
+  // Merge max restorable scn of one round which can not support restore, used for error message.
+  static void update_max_restorable_scn_(
+             const SCN &restore_start_scn,
+             const SCN &round_max_restorable_scn,
+             SCN &max_restorable_scn);
+  // candidate_pieces must be of the same <dest_id, round_id>. If pieces covering restore_start_scn are found,
+  // but not enough to restore_end_scn, max_restorable_scn is set to the checkpoint_scn of the last continuous
+  // piece, which may be smaller than restore_start_scn.
+  static int get_piece_paths_in_range_from_multi_path_(
+             const ObArray<ObTenantArchivePieceAttr> &candidate_pieces,
+             const common::hash::ObHashMap<ObPieceKey, ObString> &multi_path_map,
+             const SCN &restore_start_scn,
+             const SCN &restore_end_scn,
+             ObIArray<share::ObRestoreLogPieceBriefInfo> &pieces,
+             SCN &max_restorable_scn);
   static int get_restore_log_array_for_complement_log_(
              const ObIArray<share::ObBackupSetBriefInfo> &backup_set_list,
              const share::SCN &restore_start_scn,
