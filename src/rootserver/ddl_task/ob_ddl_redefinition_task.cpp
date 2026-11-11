@@ -14,6 +14,9 @@
 #include "storage/ob_partition_pre_split.h"
 #include "storage/mview/ob_mview_mds.h"
 #include "rootserver/mview/ob_mview_utils.h"
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+#include "rootserver/mview/ob_mview_pending_task_utils.h"
+#endif
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -41,15 +44,15 @@ ObDDLRedefinitionSSTableBuildTask::ObDDLRedefinitionSSTableBuildTask(
     ObRootService *root_service,
     const common::ObAddr &inner_sql_exec_addr,
     const int64_t data_format_version,
-    const bool is_retryable_ddl,
-    const obrpc::ObMViewRefreshInfo &mview_refresh_info)
+    const bool is_retryable_ddl)
   : is_inited_(false), tenant_id_(tenant_id), task_id_(task_id), data_table_id_(data_table_id),
     dest_table_id_(dest_table_id), schema_version_(schema_version), snapshot_version_(snapshot_version),
     execution_id_(execution_id), consumer_group_id_(consumer_group_id), sql_mode_(sql_mode), trace_id_(trace_id),
     parallelism_(parallelism), use_heap_table_ddl_plan_(use_heap_table_ddl_plan),
     is_retryable_ddl_(is_retryable_ddl),
     root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr), data_format_version_(0),
-    is_alter_clustering_key_tbl_partition_by_(false),  mview_refresh_info_(mview_refresh_info)
+    is_alter_clustering_key_tbl_partition_by_(false),
+    mview_refresh_info_()
 {
   set_retry_times(0); // do not retry
 }
@@ -60,14 +63,18 @@ int ObDDLRedefinitionSSTableBuildTask::init(
     const ObTableSchema &hidden_table_schema,
     const AlterTableSchema &alter_table_schema,
     const ObTimeZoneInfoWrap &tz_info_wrap,
-    const ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos)
+    const ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos,
+    const obrpc::ObMViewRefreshInfo &mview_refresh_info)
 {
   int ret = OB_SUCCESS;
+  // The source string remains valid until deep_copy() stores it in the queue-owned task buffer.
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, REDEF_SSTABLE_BULD_TASK_INIT_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
+  } else if (OB_FAIL(mview_refresh_info_.assign(mview_refresh_info))) {
+    LOG_WARN("fail to assign mview refresh info", K(ret), K(mview_refresh_info));
   } else if (OB_FAIL(tz_info_wrap_.deep_copy(tz_info_wrap))) {
     LOG_WARN("fail to copy time zone info wrap", K(ret), K(tz_info_wrap));
   } else if (OB_FAIL(col_name_map_.init(orig_table_schema, hidden_table_schema, alter_table_schema))) {
@@ -242,6 +249,8 @@ ObAsyncTask *ObDDLRedefinitionSSTableBuildTask::deep_copy(char *buf, const int64
 {
   int ret = OB_SUCCESS;
   ObDDLRedefinitionSSTableBuildTask *new_task = nullptr;
+  char *mview_refresh_info_buf = nullptr;
+  int64_t mview_refresh_info_buf_size = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ddl redefinition sstable build task not inited", K(ret));
@@ -265,9 +274,14 @@ ObAsyncTask *ObDDLRedefinitionSSTableBuildTask::deep_copy(char *buf, const int64
         root_service_,
         inner_sql_exec_addr_,
         data_format_version_,
-        is_retryable_ddl_,
-        mview_refresh_info_);
-    if (OB_FAIL(new_task->tz_info_wrap_.deep_copy(tz_info_wrap_))) {
+        is_retryable_ddl_);
+    mview_refresh_info_buf = buf + sizeof(*new_task);
+    mview_refresh_info_buf_size = buf_size - sizeof(*new_task);
+    if (OB_FAIL(new_task->mview_refresh_info_.deep_copy(mview_refresh_info_,
+                                                       mview_refresh_info_buf,
+                                                       mview_refresh_info_buf_size))) {
+      LOG_WARN("fail to deep copy mview refresh info", K(ret), K(mview_refresh_info_));
+    } else if (OB_FAIL(new_task->tz_info_wrap_.deep_copy(tz_info_wrap_))) {
       LOG_WARN("failed to copy tz info wrap", K(ret));
     } else if (OB_FAIL(new_task->col_name_map_.assign(col_name_map_))) {
       LOG_WARN("failed to assign column name map", K(ret));
@@ -344,6 +358,7 @@ int ObDDLRedefinitionSSTableBuildTask::procress_mview_complete_refresh_(
     sql::ObLocalSessionVar local_session_vars(&tmp_alloc);
     ObSessionParam session_param;
     InnerDDLInfo ddl_info;
+    bool is_refresh_queuing_enabled = false;
     session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode_);
     session_param.tz_info_wrap_ = &tz_info_wrap_;
     ddl_info.set_is_ddl(false);
@@ -368,6 +383,13 @@ int ObDDLRedefinitionSSTableBuildTask::procress_mview_complete_refresh_(
       sql_exec_addr = &inner_sql_exec_addr_;
       LOG_INFO("inner sql execute addr" , K(*sql_exec_addr), "ddl_event_info", ObDDLEventInfo());
     }
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+    if (OB_SUCC(ret)
+        && OB_FAIL(ObMViewPendingTaskUtils::is_initial_refresh_queuing_enabled(tenant_id_,
+                                                                               is_refresh_queuing_enabled))) {
+      LOG_WARN("failed to check whether initial refresh queuing is enabled", KR(ret), K_(tenant_id));
+    }
+#endif
     LOG_INFO("execute sql" , K(sql_string), K(data_table_id_), K(mview_refresh_info_), K(tenant_id_),
               "is_strict_mode", is_strict_mode(sql_mode_), K(sql_mode_), K(parallelism_), K(DDL_INNER_SQL_EXECUTE_TIMEOUT),
               "ddl_event_info", ObDDLEventInfo());
@@ -383,7 +405,8 @@ int ObDDLRedefinitionSSTableBuildTask::procress_mview_complete_refresh_(
       arg.target_data_sync_scn_ = mview_refresh_info_.mview_target_data_sync_scn_;
       if (OB_FAIL(trans.start(user_sql_proxy, tenant_id_))) {
         LOG_WARN("fail to start trans", K(ret), K(tenant_id_));
-      } else if (OB_FAIL(ObMViewMdsOpHelper::register_mview_mds(tenant_id_, arg, trans))) {
+      } else if (!is_refresh_queuing_enabled
+                 && OB_FAIL(ObMViewMdsOpHelper::register_mview_mds(tenant_id_, arg, trans))) {
         LOG_WARN("register mview mds failed", K(ret), K(tenant_id_), K(arg));
       }
       DEBUG_SYNC(BEFORE_MV_LOAD_DATA);

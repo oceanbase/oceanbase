@@ -326,7 +326,7 @@ int ObTransformSimplifyOrderby::remove_order_by_for_set_stmt(ObDMLStmt *&stmt, b
   } else if (!(stmt->is_select_stmt() && static_cast<ObSelectStmt*>(stmt)->is_set_stmt())) {
     //not set stmt, do nothing
   } else if (force_serial_set_order &&
-             ObSelectStmt::UNION == static_cast<ObSelectStmt*>(stmt)->get_set_op() &&
+             ObSetRelation::UNION == static_cast<ObSelectStmt*>(stmt)->get_set_op() &&
              !static_cast<ObSelectStmt*>(stmt)->is_set_distinct()) {
     //under oracle mode and force_serial_set_order, union-all do not remove order items in its child stmt
   } else {

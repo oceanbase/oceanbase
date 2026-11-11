@@ -19,7 +19,9 @@ class ObStandardGroupChecker
 public:
   ObStandardGroupChecker()
     : has_group_(false),
-      is_scalar_aggr_(true) {}
+      is_scalar_aggr_(true),
+      need_extract_non_group_by_columns_(false),
+      non_group_by_columns_() {}
   ~ObStandardGroupChecker() {}
   friend class ObStandardGroupVisitor;
 
@@ -30,7 +32,10 @@ public:
   int add_group_by_expr(ObRawExpr *expr);
   int add_unsettled_expr(ObRawExpr *expr);
   int check_only_full_group_by();
+  static int extract_non_group_by_columns(const ObSelectStmt *select_stmt,
+                                          common::ObIArray<ObRawExpr*> &non_group_by_columns);
 private:
+  int check_unsettled_exprs();
   int deduce_settled_exprs(ObArenaAllocator *alloc,
                            ObRawExprFactory *expr_factory,
                            ObFdItemFactory *fd_item_factory);
@@ -42,12 +47,14 @@ private:
   ObSchemaChecker *schema_checker_;
   bool has_group_;
   bool is_scalar_aggr_;
+  bool need_extract_non_group_by_columns_;
   //all unsettled exprs that needed be check whether meet the only full group by semantic constraints in current stmt
   common::ObArray<ObRawExpr*> unsettled_exprs_;
   //all exprs in the group by scope of current stmt
   common::ObArray<ObRawExpr*> group_by_exprs_;
   //exprs that meet the only full group by semantic constraints in current stmt
   common::ObArray<ObRawExpr*> settled_exprs_;
+  common::ObArray<ObRawExpr*> non_group_by_columns_;
 };
 
 class ObStandardGroupVisitor: public ObRawExprVisitor

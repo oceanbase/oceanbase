@@ -8514,6 +8514,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
   ObDMLStmt *stmt = get_stmt();
   TableItem *item = NULL;
   const ObTableSchema *tschema = NULL;
+  const bool is_pl_static_sql_prepare = params_.is_prepare_stage_ && OB_NOT_NULL(params_.secondary_namespace_);
   if (OB_ISNULL(stmt) || OB_ISNULL(schema_checker_) || OB_ISNULL(session_info_) || OB_ISNULL(allocator_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("resolver isn't init", K(stmt), K_(schema_checker), K_(session_info), K_(allocator));
@@ -8649,7 +8650,15 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
         item->table_id_ = generate_table_id();
         item->type_ = TableItem::ALIAS_TABLE;
         //主表schema
-        if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), tschema->get_data_table_id(), tab_schema))) {
+        if (OB_UNLIKELY(stmt->is_select_stmt()
+                        && !is_pl_static_sql_prepare
+                        && !params_.is_mview_definition_sql_
+                        && tschema->is_materialized_view()
+                        && !tschema->mv_available())) {
+          ret = OB_TABLE_NOT_EXIST;
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(db_name), helper.convert(tbl_name));
+        } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), tschema->get_data_table_id(), tab_schema))) {
           LOG_WARN("get data table schema failed", K(ret), K_(item->ref_id));
         } else {
           if (tschema->is_materialized_view()) {

@@ -1233,13 +1233,9 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
           OZ (resolve_external_partition_options(*action_node));
           break;
         }
-        case T_MV_OPTIONS: {
+        case T_MV_OPTION_LIST: {
           alter_table_stmt->set_alter_mview_attributes();
-          if (OB_FAIL(ObAlterMviewUtils::resolve_mv_options(*action_node, session_info_,
-                                                            alter_table_stmt, table_schema_,
-                                                            schema_checker_->get_schema_guard(),
-                                                            allocator_,
-                                                            params_))) {
+          if (OB_FAIL(ObAlterMviewUtils::resolve_mv_options(*action_node, alter_table_stmt, table_schema_, params_))) {
             LOG_WARN("failed to resolve mv options", KR(ret));
           }
           break;

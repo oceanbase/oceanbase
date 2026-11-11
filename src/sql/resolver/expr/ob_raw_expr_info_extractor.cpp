@@ -514,6 +514,10 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
   } else if (ob_is_enumset_tc(expr.get_data_type()) && OB_FAIL(expr.add_flag(IS_ENUM_OR_SET))) {
     LOG_WARN("add enum or set flag failed", K(ret));
   } else {
+    // LAST_REFRESH_SCN is statement-stable and can be duplicated by CTE inline, so it is
+    // not a state function. It remains excluded from const inheritance in
+    // ObRawExpr::is_const_inherit_expr() because its value comes from the execution context
+    // and must not be precomputed by the compiler.
     // these functions should not be calculated first
     if (T_FUN_SYS_AUTOINC_NEXTVAL == expr.get_expr_type()
         || T_FUN_SYS_RANDOM_PART_NEXTVAL == expr.get_expr_type()
@@ -529,7 +533,6 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
         || (T_FUN_SYS_SYSDATE == expr.get_expr_type() && !lib::is_oracle_mode())
         || T_FUN_NORMAL_UDF == expr.get_expr_type()
         || T_FUN_SYS_GENERATOR == expr.get_expr_type()
-        || T_FUN_SYS_LAST_REFRESH_SCN == expr.get_expr_type()
         || T_FUN_SYS_AUDIT_LOG_SET_FILTER == expr.get_expr_type()
         || T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER == expr.get_expr_type()
         || T_FUN_SYS_AUDIT_LOG_SET_USER == expr.get_expr_type()

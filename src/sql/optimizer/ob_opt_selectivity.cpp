@@ -1089,7 +1089,7 @@ int OptTableMetas::get_set_stmt_output_statistics(const ObSelectStmt &stmt,
       LOG_WARN("get null column meta info", K(ret));
     } else {
       double cur_ndv = column_meta->get_ndv();
-      double cur_num_null = ObSelectStmt::SetOperator::UNION == stmt.get_set_op() && !stmt.is_set_distinct() ?
+      double cur_num_null = ObSetRelation::UNION == stmt.get_set_op() && !stmt.is_set_distinct() ?
                             column_meta->get_num_null() : std::min(column_meta->get_num_null(), 1.0);
       double cur_avg_len = column_meta->get_avg_len();
       if (0 == i) {
@@ -1097,16 +1097,16 @@ int OptTableMetas::get_set_stmt_output_statistics(const ObSelectStmt &stmt,
         num_null = cur_num_null;
         avg_len = cur_avg_len;
       } else {
-        ObSelectStmt::SetOperator set_type = stmt.is_recursive_union() ? ObSelectStmt::SetOperator::RECURSIVE : stmt.get_set_op();
+        ObSetRelation::SetOperator set_type = stmt.is_recursive_union() ? ObSetRelation::RECURSIVE : stmt.get_set_op();
         ndv = ObOptSelectivity::get_set_stmt_output_count(ndv, cur_ndv, set_type);
         num_null = ObOptSelectivity::get_set_stmt_output_count(num_null, cur_num_null, set_type);
-        if (ObSelectStmt::SetOperator::UNION == set_type) {
+        if (ObSetRelation::UNION == set_type) {
           avg_len = std::max(avg_len, cur_avg_len);
-        } else if (ObSelectStmt::SetOperator::INTERSECT == set_type) {
+        } else if (ObSetRelation::INTERSECT == set_type) {
           avg_len = std::min(avg_len, cur_avg_len);
-        } else if (ObSelectStmt::SetOperator::EXCEPT == set_type) {
+        } else if (ObSetRelation::EXCEPT == set_type) {
           avg_len = std::min(avg_len, cur_avg_len);
-        } else if (ObSelectStmt::SetOperator::RECURSIVE == set_type) {
+        } else if (ObSetRelation::RECURSIVE == set_type) {
           avg_len = std::max(avg_len, cur_avg_len);
         }
       }
@@ -1122,7 +1122,7 @@ int OptTableMetas::get_set_stmt_output_ndv(const ObSelectStmt &stmt,
   int ret = OB_SUCCESS;
   ndv = 0;
   const OptTableMeta *table_meta = NULL;
-  ObSelectStmt::SetOperator set_type = stmt.is_recursive_union() ? ObSelectStmt::SetOperator::RECURSIVE : stmt.get_set_op();
+  ObSetRelation::SetOperator set_type = stmt.is_recursive_union() ? ObSetRelation::RECURSIVE : stmt.get_set_op();
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_set_query().count(); ++i) {
     if (OB_ISNULL(stmt.get_set_query().at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -4693,20 +4693,20 @@ int ObOptSelectivity::remove_ignorable_func_for_est_sel(ObRawExpr *&expr)
   return ret;
 }
 
-double ObOptSelectivity::get_set_stmt_output_count(double count1, double count2, ObSelectStmt::SetOperator set_type)
+double ObOptSelectivity::get_set_stmt_output_count(double count1, double count2, ObSetRelation::SetOperator set_type)
 {
   double output_count = 0.0;
   // we consider the worst-case scenario
   switch (set_type) {
     // Assuming there are no identical values in both branches.
-    case ObSelectStmt::SetOperator::UNION:     output_count = count1 + count2; break;
+    case ObSetRelation::UNION:     output_count = count1 + count2; break;
     // Assuming that all values appear as much as possible in both branches
-    case ObSelectStmt::SetOperator::INTERSECT: output_count = std::min(count1, count2); break;
+    case ObSetRelation::INTERSECT: output_count = std::min(count1, count2); break;
     // Assuming that none of the values in the right branch appear in the left branch
-    case ObSelectStmt::SetOperator::EXCEPT:    output_count = count1; break;
+    case ObSetRelation::EXCEPT:    output_count = count1; break;
     // Assuming the ratio between the output rowcount in each iteration and the previous iteration remains constant.
     // And the recursion branch continues until the number of rows exceeds 100 times the number of rows in the non-recursive branch and does not exceed 7 iterations.
-    case ObSelectStmt::SetOperator::RECURSIVE: {
+    case ObSetRelation::RECURSIVE: {
       count1 = std::max(1.0, count1);
       output_count = count1;
       double recursive_count = count2;

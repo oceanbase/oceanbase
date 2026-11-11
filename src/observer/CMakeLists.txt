@@ -659,6 +659,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_sys_variable_default_value.cpp
   virtual_table/ob_all_virtual_tenant_scheduler_running_job.cpp
   virtual_table/ob_all_virtual_tenant_mview_running_job.cpp
+  virtual_table/ob_all_virtual_mview_refresh_timer.cpp
   virtual_table/ob_all_virtual_compatibility_control.cpp
   virtual_table/ob_all_virtual_ss_local_cache_info.cpp
   virtual_table/ob_all_virtual_ss_local_cache_diagnose_info.cpp

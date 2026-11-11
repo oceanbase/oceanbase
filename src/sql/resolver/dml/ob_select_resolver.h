@@ -424,6 +424,7 @@ private:
                                ObSysFunRawExpr *&sensitive_field_expr);
   bool is_child_resolver_of_dml();
   // end of sensitive rule related functions
+  int convert_scalar_any_value(ObSelectStmt *select_stmt);
 protected:
   // data members
   /*these member is only for with clause*/

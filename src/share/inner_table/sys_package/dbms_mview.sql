@@ -16,7 +16,7 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER IS
     parallelism            IN     BINARY_INTEGER := 0,
     heap_size              IN     BINARY_INTEGER := 0,
     atomic_refresh         IN     BOOLEAN        := true,
-    nested                 IN     BOOLEAN        := false,
+    nested                 IN     BOOLEAN        := true,
     out_of_place           IN     BOOLEAN        := false,
     skip_ext_data          IN     BOOLEAN        := false,
     refresh_parallel       IN     BINARY_INTEGER := 0,
@@ -38,7 +38,7 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER IS
     parallelism            IN     BINARY_INTEGER := 0,
     heap_size              IN     BINARY_INTEGER := 0,
     atomic_refresh         IN     BOOLEAN        := true,
-    nested                 IN     BOOLEAN        := false,
+    nested                 IN     BOOLEAN        := true,
     out_of_place           IN     BOOLEAN        := false,
     skip_ext_data          IN     BOOLEAN        := false,
     refresh_parallel       IN     BINARY_INTEGER := 0,
@@ -58,7 +58,12 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER IS
   RETURN CLOB;
 
   PROCEDURE kill_refresh(
-    refresh_id              IN   BINARY_INTEGER);
+    refresh_id              IN   NUMBER);
+
+  -- Returns 1 if a cancellable published refresh exists, otherwise 0.
+  FUNCTION kill_refresh(
+    refresh_id              IN   NUMBER)
+  RETURN NUMBER;
 
   PROCEDURE set_refresh_params(
     mv_name        IN  VARCHAR2,

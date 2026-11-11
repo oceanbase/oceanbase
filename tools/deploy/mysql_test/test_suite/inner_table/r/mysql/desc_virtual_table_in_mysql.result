@@ -7073,3 +7073,22 @@ next_retry_time	timestamp(6)	YES		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview_refresh_pending_task;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_mview_refresh_timer;
+Field	Type	Null	Key	Default	Extra
+gmt_modified	timestamp(6)	YES		CURRENT_TIMESTAMP(6)	ON UPDATE CURRENT_TIMESTAMP(6)
+svr_ip	varchar(46)	NO	PRI	NULL	
+svr_port	bigint(20)	NO	PRI	NULL	
+tenant_id	bigint(20)	NO	PRI	NULL	
+group_id	bigint(20)	NO	PRI	NULL	
+mview_id	bigint(20)	NO	PRI	NULL	
+next_trigger_time	timestamp(6)	NO		NULL	
+group_interval	bigint(20)	NO		NULL	
+expected_interval	bigint(20)	NO		NULL	
+schedule_interval	bigint(20)	NO		NULL	
+last_start_time	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview_refresh_timer;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_mview_refresh_timer runs in single server"
+IF(count(*) >= 0, 1, 0)
+1

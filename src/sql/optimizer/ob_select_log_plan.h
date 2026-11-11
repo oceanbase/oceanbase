@@ -378,7 +378,7 @@ private:
   int candi_allocate_distinct_set(const ObIArray<ObSelectLogPlan*> &child_plans);
 
   int get_allowed_branch_order(const bool ignore_hint,
-                               const ObSelectStmt::SetOperator set_op,
+                               const ObSetRelation::SetOperator set_op,
                                bool &no_swap,
                                bool &swap);
 
@@ -390,7 +390,7 @@ private:
   int generate_hash_set_plans(const EqualSets &equal_sets,
                               const ObIArray<ObRawExpr*> &left_set_keys,
                               const ObIArray<ObRawExpr*> &right_set_keys,
-                              const ObSelectStmt::SetOperator set_op,
+                              const ObSetRelation::SetOperator set_op,
                               const ObIArray<CandidatePlan> &left_best_plans,
                               const ObIArray<CandidatePlan> &right_best_plans,
                               const bool ignore_hint,
@@ -399,7 +399,7 @@ private:
   int inner_generate_hash_set_plans(const EqualSets &equal_sets,
                                     const ObIArray<ObRawExpr*> &left_set_keys,
                                     const ObIArray<ObRawExpr*> &right_set_keys,
-                                    const ObSelectStmt::SetOperator set_op,
+                                    const ObSetRelation::SetOperator set_op,
                                     const ObIArray<CandidatePlan> &left_best_plans,
                                     const ObIArray<CandidatePlan> &right_best_plans,
                                     const bool ignore_hint,
@@ -410,7 +410,7 @@ private:
                            ObLogicalOperator *right_child,
                            const ObIArray<ObRawExpr*> &left_set_keys,
                            const ObIArray<ObRawExpr*> &right_set_keys,
-                           const ObSelectStmt::SetOperator set_op,
+                           const ObSetRelation::SetOperator set_op,
                            DistAlgo dist_set_method,
                            CandidatePlan &hash_plan);
 
@@ -419,7 +419,7 @@ private:
                                 ObLogicalOperator &right_child,
                                 const ObIArray<ObRawExpr*> &left_set_keys,
                                 const ObIArray<ObRawExpr*> &right_set_keys,
-                                const ObSelectStmt::SetOperator set_op,
+                                const ObSetRelation::SetOperator set_op,
                                 DistAlgo set_method,
                                 ObExchangeInfo &left_exch_info,
                                 ObExchangeInfo &right_exch_info);
@@ -432,7 +432,7 @@ private:
   int generate_merge_set_plans(const EqualSets &equal_sets,
                                const ObIArray<ObRawExpr*> &left_set_keys,
                                const ObIArray<ObRawExpr*> &right_set_keys,
-                               const ObSelectStmt::SetOperator set_op,
+                               const ObSetRelation::SetOperator set_op,
                                ObIArray<ObSEArray<CandidatePlan, 16>> &left_candidate_list,
                                ObIArray<ObSEArray<CandidatePlan, 16>> &right_candidate_list,
                                const bool ignore_hint,
@@ -443,7 +443,7 @@ private:
                                      const ObIArray<ObRawExpr*> &left_set_keys,
                                      const ObIArray<ObRawExpr*> &right_set_keys,
                                      const ObIArray<MergeKeyInfo*> &left_merge_keys,
-                                     const ObSelectStmt::SetOperator set_op,
+                                     const ObSetRelation::SetOperator set_op,
                                      ObIArray<CandidatePlan> &left_candidates,
                                      ObIArray<CandidatePlan> &right_candidates,
                                      const bool ignore_hint,
@@ -488,7 +488,7 @@ private:
                             ObLogicalOperator *right_child,
                             const ObIArray<ObRawExpr*> &left_set_keys,
                             const ObIArray<ObRawExpr*> &right_set_keys,
-                            const ObSelectStmt::SetOperator set_op,
+                            const ObSetRelation::SetOperator set_op,
                             const DistAlgo dist_set_method,
                             const ObIArray<ObOrderDirection> &order_directions,
                             const ObIArray<int64_t> &map_array,
@@ -531,7 +531,7 @@ private:
   int get_distributed_set_methods(const EqualSets &equal_sets,
                                   const ObIArray<ObRawExpr*> &left_set_keys,
                                   const ObIArray<ObRawExpr*> &right_set_keys,
-                                  const ObSelectStmt::SetOperator set_op,
+                                  const ObSetRelation::SetOperator set_op,
                                   const SetAlgo set_method,
                                   ObLogicalOperator &left_child,
                                   ObLogicalOperator &right_child,

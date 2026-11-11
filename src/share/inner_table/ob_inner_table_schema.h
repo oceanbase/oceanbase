@@ -1320,6 +1320,7 @@ public:
   static int all_virtual_table_opt_stat_invalidate_plan_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_mview_dep_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_mview_refresh_pending_task_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_mview_refresh_timer_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_cache_plan_explain_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -4837,6 +4838,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_table_opt_stat_invalidate_plan_schema,
   ObInnerTableSchema::all_virtual_mview_dep_schema,
   ObInnerTableSchema::all_virtual_mview_refresh_pending_task_schema,
+  ObInnerTableSchema::all_virtual_mview_refresh_timer_schema,
   ObInnerTableSchema::all_virtual_sql_audit_ora_schema,
   ObInnerTableSchema::all_virtual_plan_stat_ora_schema,
   ObInnerTableSchema::all_virtual_plan_cache_plan_explain_ora_schema,
@@ -7312,6 +7314,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_TABLE_OPT_STAT_INVALIDATE_PLAN_TID,
   OB_ALL_VIRTUAL_MVIEW_DEP_TID,
   OB_ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_TID,
+  OB_ALL_VIRTUAL_MVIEW_REFRESH_TIMER_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,
@@ -10708,6 +10711,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_TABLE_OPT_STAT_INVALIDATE_PLAN_TNAME,
   OB_ALL_VIRTUAL_MVIEW_DEP_TNAME,
   OB_ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_TNAME,
+  OB_ALL_VIRTUAL_MVIEW_REFRESH_TIMER_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TNAME,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TNAME,
@@ -13199,6 +13203,7 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_DDL_DAG_MONITOR_TID,
   OB_ALL_VIRTUAL_VECTOR_SEGMENT_INFO_TID,
   OB_ALL_VIRTUAL_TENANT_WORKER_GROUP_TID,
+  OB_ALL_VIRTUAL_MVIEW_REFRESH_TIMER_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,

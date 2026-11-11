@@ -1084,6 +1084,12 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         }
         break;
       }
+      case T_FUN_ANY_VALUE: {
+        if (OB_FAIL(process_any_value_node(node, expr, is_root_expr))) {
+          LOG_WARN("fail to process any_value node", K(ret), K(node));
+        }
+        break;
+      }
       case T_FUN_GROUP_CUME_DIST:
       case T_FUN_GROUP_RANK:
       case T_FUN_GROUP_DENSE_RANK:
@@ -6296,6 +6302,54 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
     }
   }
   OZ(param_not_row_check(expr));
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_any_value_node(const ParseNode *node, ObRawExpr *&expr, const bool is_root_expr)
+{
+  int ret = OB_SUCCESS;
+  bool is_agg = false;
+  if (OB_ISNULL(node) || OB_UNLIKELY(2 != node->num_child_) || OB_ISNULL(node->children_)
+      || OB_ISNULL(node->children_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid any_value node", K(ret), K(node));
+  } else if (lib::is_oracle_mode()) {
+    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_5_0_2_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("any_value is not supported in current cluster version", K(ret), K(GET_MIN_CLUSTER_VERSION()));
+    } else if (OB_FAIL(process_agg_node(node, expr))) {
+      LOG_WARN("failed to process any_value as aggregate function", K(ret));
+    }
+  } else if (OB_FAIL(ctx_.session_info_->check_feature_enable(share::ObCompatFeatureType::ANY_VALUE_AS_AGG_FUNC, is_agg))) {
+    LOG_WARN("failed to check feature enable", K(ret));
+  } else if (is_agg
+             && (T_FIELD_LIST_SCOPE == ctx_.current_scope_
+                 || T_HAVING_SCOPE == ctx_.current_scope_
+                 || T_ORDER_SCOPE == ctx_.current_scope_
+                 || T_NAMED_WINDOWS_SCOPE == ctx_.current_scope_)
+             && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_5_0_2_0) {
+    if (OB_FAIL(process_agg_node(node, expr))) {
+      LOG_WARN("failed to process any_value as aggregate function", K(ret));
+    }
+  } else {
+    ParseNode name_node = {};
+    ParseNode expr_list_node = {};
+    ParseNode sys_func_node = {};
+    ParseNode *expr_list_children[] = {node->children_[1]};
+    ParseNode *sys_func_children[] = {&name_node, &expr_list_node};
+    name_node.type_ = T_IDENT;
+    name_node.str_value_ = N_ANY_VAL;
+    name_node.str_len_ = strlen(N_ANY_VAL);
+    expr_list_node.type_ = T_EXPR_LIST;
+    expr_list_node.num_child_ = 1;
+    expr_list_node.children_ = expr_list_children;
+    sys_func_node.type_ = T_FUN_SYS;
+    sys_func_node.num_child_ = 2;
+    sys_func_node.children_ = sys_func_children;
+    if (OB_FAIL(process_fun_sys_node(&sys_func_node, expr, is_root_expr))) {
+      LOG_WARN("failed to process any_value as system function", K(ret));
+    }
+  }
   return ret;
 }
 

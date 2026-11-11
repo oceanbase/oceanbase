@@ -12,6 +12,7 @@
 #include "common/object/ob_object.h"
 #include "common/ob_range.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
+#include "sql/resolver/dml/ob_relation_set.h"
 #include "sql/optimizer/ob_opt_default_stat.h"
 #include "sql/optimizer/ob_optimizer_context.h"
 #include "sql/optimizer/ob_dynamic_sampling.h"
@@ -1205,7 +1206,7 @@ public:
 
   static int remove_ignorable_func_for_est_sel(const ObRawExpr *&expr);
   static int remove_ignorable_func_for_est_sel(ObRawExpr *&expr);
-  static double get_set_stmt_output_count(double count1, double count2, ObSelectStmt::SetOperator set_type);
+  static double get_set_stmt_output_count(double count1, double count2, ObSetRelation::SetOperator set_type);
 
   static int calculate_expr_avg_len(const OptTableMetas &table_metas,
                                     const OptSelectivityCtx &ctx,

@@ -72,7 +72,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     parallelism            IN     BINARY_INTEGER := 0,
     heap_size              IN     BINARY_INTEGER := 0,
     atomic_refresh         IN     BOOLEAN        := true,
-    nested                 IN     BOOLEAN        := false,
+    nested                 IN     BOOLEAN        := true,
     out_of_place           IN     BOOLEAN        := false,
     skip_ext_data          IN     BOOLEAN        := false,
     refresh_parallel       IN     BINARY_INTEGER := 0,
@@ -111,7 +111,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     parallelism            IN     BINARY_INTEGER := 0,
     heap_size              IN     BINARY_INTEGER := 0,
     atomic_refresh         IN     BOOLEAN        := true,
-    nested                 IN     BOOLEAN        := false,
+    nested                 IN     BOOLEAN        := true,
     out_of_place           IN     BOOLEAN        := false,
     skip_ext_data          IN     BOOLEAN        := false,
     refresh_parallel       IN     BINARY_INTEGER := 0,
@@ -150,15 +150,15 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
   RETURN CLOB;
   PRAGMA INTERFACE(C, DBMS_MVIEW_REFRESH_REPORT);
 
-  PROCEDURE do_kill_refresh(refresh_id IN BINARY_INTEGER);
-  PRAGMA INTERFACE(C, DBMS_MVIEW_KILL_REFRESH);
-
-  PROCEDURE kill_refresh(refresh_id IN BINARY_INTEGER)
+  PROCEDURE kill_refresh(refresh_id IN NUMBER)
   IS
+  ignored_refresh_exists NUMBER;
   BEGIN
-    COMMIT;
-    do_kill_refresh(refresh_id);
+    ignored_refresh_exists := kill_refresh(refresh_id);
   END;
+
+  FUNCTION kill_refresh(refresh_id IN NUMBER) RETURN NUMBER;
+  PRAGMA INTERFACE(C, DBMS_MVIEW_KILL_REFRESH);
 
   PROCEDURE set_refresh_params(
     mv_name           IN  VARCHAR2,

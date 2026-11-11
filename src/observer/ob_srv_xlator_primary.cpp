@@ -30,7 +30,7 @@
 #include "share/detect/ob_detect_rpc_processor.h"
 
 #include "share/external_table/ob_external_table_file_rpc_processor.h"
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
 #include "rootserver/mview/ob_mview_pending_task_rpc_processor.h"
 #endif
 
@@ -117,10 +117,11 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObRpcDBMSSchedPurgeP, gctx_);
 
   //mview pending task
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
   RPC_PROCESSOR(ObRpcRunMViewPendingTaskP, gctx_);
   RPC_PROCESSOR(ObRpcScheduleMViewRefreshP, gctx_);
-  RPC_PROCESSOR(ObRpcKillMViewRefreshP, gctx_);
+  RPC_PROCESSOR(ObRpcCancelMViewRefreshP, gctx_);
+  RPC_PROCESSOR(ObRpcNotifyMViewTimerP, gctx_);
 #endif
 
   RPC_PROCESSOR(ObRpcGetServerResourceInfoP, gctx_);

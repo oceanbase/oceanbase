@@ -5,6 +5,9 @@
 
 #include "observer/virtual_table/ob_all_virtual_tenant_mview_running_job.h"
 #include "observer/ob_server.h"
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+#include "rootserver/mview/ob_mview_pending_task_utils.h"
+#endif
 #include "share/config/ob_server_config.h"
 
 using namespace oceanbase::common;
@@ -55,18 +58,21 @@ int ObAllVirtualTenantMviewRunningJob::inner_get_next_row(ObNewRow *&row)
         MTL_SWITCH(cur_tenant_id)
         {
           ObMViewMaintenanceService *mview_service = MTL(ObMViewMaintenanceService *);
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
           // New engine: pending task manager is the source of truth for
           // running jobs; fields not tracked in pending (session_id,
           // read_snapshot, ...) are reported as defaults. Legacy engine: jobs
           // live in MDS. The two paths are mutually exclusive.
-          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(cur_tenant_id));
-          const bool refresh_queuing_enabled = tenant_config.is_valid()
-                                      && tenant_config->_enable_mv_refresh_queuing;
+          bool refresh_queuing_enabled = false;
           ObMViewPendingTaskManager *pending_task_manager = nullptr;
           if (OB_ISNULL(mview_service)) {
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "mview maintenance service is null", K(ret), K(cur_tenant_id));
+          } else if (OB_FAIL(ObMViewPendingTaskUtils::is_refresh_queuing_enabled(
+                         cur_tenant_id, refresh_queuing_enabled))) {
+            SERVER_LOG(WARN, "failed to check whether refresh queuing is enabled",
+                       K(ret), K(cur_tenant_id));
+            ret = OB_SUCCESS;
           } else if (OB_FAIL(fill_scanner_.init(cur_tenant_id,
                                                 &scanner_,
                                                 &cur_row_,
@@ -251,7 +257,7 @@ int ObAllVirtualTenantMviewRunningJob::FillScanner::check_fill_param() const
   return ret;
 }
 
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
 int ObAllVirtualTenantMviewRunningJob::FillScanner::operator()(
     const ObMViewPendingRunningJobInfo &job_info)
 {
@@ -305,8 +311,7 @@ int ObAllVirtualTenantMviewRunningJob::FillScanner::operator()(
           break;
         }
         case JOB_START_TIME: {
-          const int64_t start_ts = job_info.gmt_modified_ > 0 ? job_info.gmt_modified_ : job_info.gmt_create_;
-          cur_row_->cells_[cell_idx].set_timestamp(start_ts);
+          cur_row_->cells_[cell_idx].set_timestamp(job_info.start_time_);
           break;
         }
         case TARGET_DATA_SYNC_SCN: {

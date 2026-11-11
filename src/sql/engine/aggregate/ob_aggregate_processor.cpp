@@ -1520,6 +1520,7 @@ int ObAggregateProcessor::init()
     } else if (T_FUN_ARG_MIN == aggr_info.get_expr_type() ||
                T_FUN_ARG_MAX == aggr_info.get_expr_type() ||
                T_FUN_ANY     == aggr_info.get_expr_type() ||
+               T_FUN_ANY_VALUE == aggr_info.get_expr_type() ||
                T_FUN_ARBITRARY == aggr_info.get_expr_type() ||
                T_FUN_CK_GROUPCONCAT == aggr_info.get_expr_type() ||
                T_FUN_WINDOW_FUNNEL == aggr_info.get_expr_type()) {

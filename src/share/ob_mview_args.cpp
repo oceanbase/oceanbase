@@ -85,8 +85,6 @@ int ObMViewCompleteRefreshArg::assign(const ObMViewCompleteRefreshArg &other)
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(required_columns_infos_.assign(other.required_columns_infos_))) {
         LOG_WARN("fail to assign required columns infos", KR(ret), K(other.required_columns_infos_));
-      } else if (OB_FAIL(ob_write_string(allocator_, other.select_sql_, select_sql_))) {
-        LOG_WARN("fail to assign use direct load for complete refresh", KR(ret), K(other.select_sql_));
       }
     }
   }
@@ -239,6 +237,24 @@ int ObMViewRefreshInfo::assign(const ObMViewRefreshInfo &other)
   return ret;
 }
 
+int ObMViewRefreshInfo::deep_copy(const ObMViewRefreshInfo &other, char *buf, const int64_t buf_size)
+{
+  int ret = OB_SUCCESS;
+  const int64_t deep_copy_size = other.get_deep_copy_size();
+  if (OB_UNLIKELY(buf_size < deep_copy_size) ||
+      (0 < deep_copy_size &&
+       (OB_ISNULL(buf) || OB_ISNULL(other.select_sql_.ptr())))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(buf), K(buf_size), K(deep_copy_size), K(other));
+  } else if (OB_FAIL(assign(other))) {
+    LOG_WARN("fail to assign mview refresh info", KR(ret), K(other));
+  } else if (0 < deep_copy_size) {
+    MEMCPY(buf, other.select_sql_.ptr(), deep_copy_size);
+    select_sql_.assign_ptr(buf, deep_copy_size);
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObMViewRefreshInfo,
                     mview_table_id_,
                     last_refresh_scn_,
@@ -296,6 +312,9 @@ bool ObAlterMViewArg::is_valid() const
 {
   bool is_valid = true;
   if (is_alter_refresh_method_ && ObMVRefreshMethod::MAX <= refresh_method_) {
+    is_valid = false;
+  } else if (is_alter_refresh_mode_
+             && (ObMVRefreshMode::NEVER > refresh_mode_ || ObMVRefreshMode::MAX <= refresh_mode_)) {
     is_valid = false;
   } else if (is_alter_refresh_dop_ && refresh_dop_ < 0) {
     is_valid = false;

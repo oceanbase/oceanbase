@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/mv/ob_mv_printer.h"
+#include "sql/resolver/mv/ob_mv_checker_utils.h"
 #include "sql/resolver/mv/ob_mv_compat_control.h"
 #include "share/schema/ob_schema_service.h"
 #include "share/schema/ob_table_schema.h"
@@ -23,16 +24,33 @@ const ObString ObMVPrinter::DELTA_MV_VIEW_NAME = "DLT_MV$$";
 const ObString ObMVPrinter::INNER_RT_MV_VIEW_NAME = "INNER_RT_MV$$";
 const ObString ObMVPrinter::MV_STAT_VIEW_NAME = "MVS$$";
 const ObString ObMVPrinter::GROUP_CALC_AGGR_VIEW_NAME = "GROUP_CALC_VIEW$$";
+const ObString ObMVPrinter::DML_FACTOR_TABLE_VIEW_NAME = "DML_FACTOR_T$$";
+const ObString ObMVPrinter::LEFT_JOIN_INSERT_CHANGES_NAME = "LJ_INSERT$$";
+const ObString ObMVPrinter::LEFT_JOIN_RELATIVE_ROWS_NAME = "LJ_RELATIVE_ROWS$$";
+const ObString ObMVPrinter::LEFT_JOIN_DELETE_CHANGES_NAME = "LJ_DELETE$$";
+const ObString ObMVPrinter::LEFT_JOIN_DELTA_CNT_NAME = "LJ_DELTA_CNT$$";
+const ObString ObMVPrinter::LEFT_JOIN_PRE_R_CNT_NAME = "LJ_PRE_R_CNT$$";
+const ObString ObMVPrinter::LEFT_JOIN_DELTA_NULL_NAME = "LJ_DELTA_NULL$$";
 // column name
 const ObString ObMVPrinter::HEAP_TABLE_ROWKEY_COL_NAME  = OB_MLOG_ROWID_COLUMN_NAME;
 const ObString ObMVPrinter::OLD_NEW_COL_NAME  = OB_MLOG_OLD_NEW_COLUMN_NAME;
 const ObString ObMVPrinter::SEQUENCE_COL_NAME  = OB_MLOG_SEQ_NO_COLUMN_NAME;
 const ObString ObMVPrinter::DML_FACTOR_COL_NAME  = "DMLFACTOR$$";
+const ObString ObMVPrinter::STEP_COL_NAME  = "STEP$$";
 const ObString ObMVPrinter::WIN_MAX_SEQ_COL_NAME  = "MAXSEQ$$";
 const ObString ObMVPrinter::WIN_MIN_SEQ_COL_NAME  = "MINSEQ$$";
+const ObString ObMVPrinter::WIN_FIRST_SEQ_COL_NAME  = "FIRSTSEQ$$";
+const ObString ObMVPrinter::WIN_LAST_SEQ_COL_NAME  = "LASTSEQ$$";
+const ObString ObMVPrinter::WIN_FIRST_STEP_COL_NAME  = "FIRSTSTEP$$";
+const ObString ObMVPrinter::WIN_LAST_STEP_COL_NAME  = "LASTSTEP$$";
+const ObString ObMVPrinter::WIN_FIRST_DML_COL_NAME  = "FIRSTDML$$";
+const ObString ObMVPrinter::WIN_LAST_DML_COL_NAME  = "LASTDML$$";
 const ObString ObMVPrinter::WIN_ROW_NUM_COL_NAME  = "RN$$";
 const ObString ObMVPrinter::WIN_CNT_ALL_COL_NAME  = "CNT_A$$";
 const ObString ObMVPrinter::WIN_CNT_NOT_NULL_COL_NAME  = "CNT_N$$";
+const ObString ObMVPrinter::LEFT_JOIN_DEL_R_MATCHED_COL_NAME  = "DEL_R_MATCHED$$";
+const ObString ObMVPrinter::DELTA_CNT_COL_NAME  = "DELTA_CNT$$";
+const ObString ObMVPrinter::PRE_R_CNT_COL_NAME  = "PRE_R_CNT$$";
 
 int ObMVPrinter::print_mv_operators(ObIAllocator &str_alloc,
                                     ObIArray<ObString> &operators)
@@ -64,7 +82,6 @@ int ObMVPrinter::print_mv_operators(ObIAllocator &str_alloc,
     LOG_WARN("failed to prepare allocate ObSqlString arrays", K(ret), K(dml_stmts.count()));
   } else {
     ObObjPrintParams obj_print_params(mv_def_stmt_.get_query_ctx()->get_timezone_info());
-    obj_print_params.print_origin_stmt_ = true;
     obj_print_params.not_print_internal_catalog_ = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < dml_stmts.count(); ++i) {
       if (OB_FAIL(ObSQLUtils::reconstruct_sql(str_alloc,
@@ -437,7 +454,8 @@ int ObMVPrinter::gen_delta_table_view_select_list(const TableItem &table,
 }
 
 int ObMVPrinter::add_dml_factor_to_select_list(ObRawExpr *old_new_col,
-                                               ObIArray<SelectItem> &select_items)
+                                               ObIArray<SelectItem> &select_items,
+                                               const ObString &alias_name)
 {
   int ret = OB_SUCCESS;
   ObRawExpr *equal_expr = NULL;
@@ -451,7 +469,7 @@ int ObMVPrinter::add_dml_factor_to_select_list(ObRawExpr *old_new_col,
     LOG_WARN("failed to build case when expr", K(ret));
   } else {
     sel_item->is_real_alias_ = true;
-    sel_item->alias_name_ = DML_FACTOR_COL_NAME;
+    sel_item->alias_name_ = alias_name;
   }
   return ret;
 }
@@ -727,7 +745,8 @@ int ObMVPrinter::create_simple_table_item(ObDMLStmt *stmt,
                                           TableItem *&table_item,
                                           ObSelectStmt *view_stmt /* default null */,
                                           const bool add_to_from /* default true */,
-                                          const TableItem *source_table /* default null */)
+                                          const TableItem *source_table /* default null */,
+                                          const bool is_temp_table /* default false */)
 {
   int ret = OB_SUCCESS;
   table_item = NULL;
@@ -743,8 +762,10 @@ int ObMVPrinter::create_simple_table_item(ObDMLStmt *stmt,
     view_stmt = (NULL == view_stmt && NULL != source_table && NULL != source_table->ref_query_) ? source_table->ref_query_ : view_stmt;
     table_item->table_name_ = table_name;
     table_item->table_id_ = stmt->get_query_ctx()->available_tb_id_--;
-    table_item->type_ = NULL == view_stmt ? TableItem::BASE_TABLE : TableItem::GENERATED_TABLE;
+    table_item->type_ = NULL == view_stmt ? TableItem::BASE_TABLE :
+                            (is_temp_table ? TableItem::TEMP_TABLE : TableItem::GENERATED_TABLE);
     table_item->ref_query_ = view_stmt;
+    table_item->cte_type_ = is_temp_table ? TableItem::CTEType::NORMAL_CTE : TableItem::CTEType::NOT_CTE;
     table_item->is_view_table_ = (NULL != source_table && source_table->table_type_ == ObTableType::USER_VIEW);
     if (OB_SUCC(ret) && add_to_from && OB_FAIL(stmt->add_from_item(table_item->table_id_))) {
       LOG_WARN("failed to add from item", K(ret));
@@ -1379,7 +1400,7 @@ int ObMVPrinter::get_table_rowkey_ids(const ObTableSchema *table_schema,
       || OB_ISNULL(schema_guard = ctx_.stmt_factory_.get_query_ctx()->sql_schema_guard_.get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(table_schema), K(ctx_.stmt_factory_.get_query_ctx()), K(schema_guard));
-  } else if (OB_FAIL(ObMVChecker::get_table_rowkey_ids(table_schema, schema_guard, rowkey_ids))) {
+  } else if (OB_FAIL(ObMVCheckerUtils::get_table_rowkey_ids(table_schema, schema_guard, rowkey_ids))) {
     LOG_WARN("failed to get table rowkey ids", K(ret), KPC(table_schema));
   }
   return ret;
@@ -1559,17 +1580,6 @@ int ObMVPrinter::add_dynamic_sampling_hint(ObDMLStmt *stmt,
   return ret;
 }
 
-bool ObMVPrinter::is_table_without_delete(const TableItem &table) const
-{
-  bool without_delete = false;
-  if (table.is_basic_table()
-      && NULL != ctx_.refresh_info_
-      && NULL != ctx_.refresh_info_->tables_without_delete_) {
-    without_delete = ObOptimizerUtil::find_item(*ctx_.refresh_info_->tables_without_delete_, table.ref_id_);
-  }
-  return without_delete;
-}
-
 bool ObMVPrinter::is_table_without_insert(const TableItem &table) const
 {
   bool without_insert = false;
@@ -1577,8 +1587,36 @@ bool ObMVPrinter::is_table_without_insert(const TableItem &table) const
       && NULL != ctx_.refresh_info_
       && NULL != ctx_.refresh_info_->tables_without_insert_) {
     without_insert = ObOptimizerUtil::find_item(*ctx_.refresh_info_->tables_without_insert_, table.ref_id_);
+    if (without_insert && ctx_.update_as_insert_delete_) {
+      without_insert = is_table_without_update(table);
+    }
   }
   return without_insert;
+}
+
+bool ObMVPrinter::is_table_without_update(const TableItem &table) const
+{
+  bool without_update = false;
+  if (table.is_basic_table()
+      && NULL != ctx_.refresh_info_
+      && NULL != ctx_.refresh_info_->tables_without_update_) {
+    without_update = ObOptimizerUtil::find_item(*ctx_.refresh_info_->tables_without_update_, table.ref_id_);
+  }
+  return without_update;
+}
+
+bool ObMVPrinter::is_table_without_delete(const TableItem &table) const
+{
+  bool without_delete = false;
+  if (table.is_basic_table()
+      && NULL != ctx_.refresh_info_
+      && NULL != ctx_.refresh_info_->tables_without_delete_) {
+    without_delete = ObOptimizerUtil::find_item(*ctx_.refresh_info_->tables_without_delete_, table.ref_id_);
+    if (without_delete && ctx_.update_as_insert_delete_) {
+      without_delete = is_table_without_update(table);
+    }
+  }
+  return without_delete;
 }
 
 int ObMVPrinter::print_complete_refresh_mview_operator(ObRawExprFactory &expr_factory,

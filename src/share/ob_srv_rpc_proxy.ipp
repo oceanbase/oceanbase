@@ -329,7 +329,9 @@
   RPC_S(PR5 report_backup_validate_over, OB_VALIDATE_BACKUP_LS_TASK_RES, (ObBackupTaskRes));
   RPC_AP(PR5 run_mview_pending_task, OB_RUN_MVIEW_PENDING_TASK, (obrpc::ObRunMViewPendingTaskArg), obrpc::ObRunMViewPendingTaskResult);
   RPC_S(PR5 schedule_mview_refresh, OB_SCHEDULE_MVIEW_REFRESH, (obrpc::ObScheduleMViewRefreshArg), obrpc::ObScheduleMViewRefreshResult);
-  RPC_S(PR5 kill_mview_refresh, OB_KILL_MVIEW_REFRESH, (obrpc::ObKillMViewRefreshArg), obrpc::ObKillMViewRefreshResult);
+  RPC_S(PR5 cancel_mview_refresh, OB_CANCEL_MVIEW_REFRESH, (obrpc::ObCancelMViewRefreshArg),
+        obrpc::ObCancelMViewRefreshResult);
+  RPC_S(PR5 notify_mview_refresh_timer, OB_NOTIFY_MVIEW_REFRESH_TIMER, (obrpc::ObNotifyMViewTimerArg), obrpc::ObNotifyMViewTimerResult);
   RPC_S(PR5 admin_clear_transfer_meta_info_op, OB_HA_CLEAR_TRANSFER_META_INFO, (obrpc::ObAdminClearTransferMetaInfoOpArg));
   RPC_AP(PR5 get_tenant_memory_info, OB_GET_TENANT_MEMORY_INFO, (obrpc::ObGetTenantMemoryInfoArg), obrpc::ObGetTenantMemoryInfoResult);
   RPC_S(PR5 run_inspection, OB_RUN_INSPECTION, (obrpc::ObRunInspectionArg));

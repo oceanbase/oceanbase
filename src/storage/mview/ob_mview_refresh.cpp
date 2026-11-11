@@ -18,6 +18,9 @@
 #include "storage/mview/ob_mview_refresh_stats_utils.h"
 #include "storage/mview/ob_mview_mds.h"
 #include "rootserver/mview/ob_mview_utils.h"
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+#include "rootserver/mview/ob_mview_pending_task_utils.h"
+#endif
 #include "share/stat/ob_opt_stat_manager.h"
 #include "sql/optimizer/ob_dynamic_sampling.h"
 #include "sql/resolver/mv/ob_mv_dep_utils.h"
@@ -333,8 +336,9 @@ int ObMViewRefresher::prepare_for_refresh(ObIAllocator &allocator,
   refresh_type = ObMVRefreshType::MAX;
   fast_refresh_sqls.reuse();
   ObSEArray<uint64_t, 8> tables_need_mlog;
-  ObSEArray<uint64_t, 4> tables_without_delete;
   ObSEArray<uint64_t, 4> tables_without_insert;
+  ObSEArray<uint64_t, 4> tables_without_update;
+  ObSEArray<uint64_t, 4> tables_without_delete;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *mview_table_schema = NULL;
@@ -363,10 +367,12 @@ int ObMViewRefresher::prepare_for_refresh(ObIAllocator &allocator,
                                                              ObMVCompatFeatureType::ADAPTIVE_REFRESH_STEP,
                                                              enable_adaptive_refresh_step_))) {
     LOG_WARN("fail to check mv compat feature", KR(ret));
-  } else if (ObMVRefreshMode::NEVER == mview_info_.get_refresh_mode()) {
+  } else if (mview_info_.initial_refresh_finished()
+             && ObMVRefreshMode::NEVER == mview_info_.get_refresh_mode()) {
     ret = OB_ERR_MVIEW_NEVER_REFRESH;
     LOG_WARN("mview never refresh", KR(ret), K(mview_info_));
-  } else if (ObMVRefreshMode::MAJOR_COMPACTION == mview_info_.get_refresh_mode()) {
+  } else if (mview_info_.initial_refresh_finished()
+             && ObMVRefreshMode::MAJOR_COMPACTION == mview_info_.get_refresh_mode()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("major compaction mview cannot be refreshed via DBMS_MVIEW", KR(ret), K(mview_info_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "refresh major compaction materialized view via DBMS_MVIEW");
@@ -386,6 +392,8 @@ int ObMViewRefresher::prepare_for_refresh(ObIAllocator &allocator,
   } else if (OB_FAIL(mv_provider.get_mlog_mv_refresh_infos(ctx_.get_my_session(),
                                                            &schema_guard,
                                                            mview_info_.get_refresh_method(),
+                                                           mview_info_.initial_refresh_finished(),
+                                                           mview_info_.get_compat_version(),
                                                            dependency_infos_,
                                                            tables_need_mlog,
                                                            can_fast_refresh))) {
@@ -397,8 +405,9 @@ int ObMViewRefresher::prepare_for_refresh(ObIAllocator &allocator,
     LOG_WARN("fail to fetch based infos", KR(ret));
   } else if (OB_FAIL(collect_and_check_detail_table_changes(trans_, schema_guard,
                                                             tables_need_mlog,
-                                                            tables_without_delete,
                                                             tables_without_insert,
+                                                            tables_without_update,
+                                                            tables_without_delete,
                                                             reached_complete_refresh_threshold))) {
     LOG_WARN("fail to collect and check detail table changes", KR(ret));
   } else if (OB_FALSE_IT(refresh_method = ObMVRefreshMethod::MAX == refresh_method ? mview_info_.get_refresh_method() : refresh_method)) {
@@ -416,9 +425,9 @@ int ObMViewRefresher::prepare_for_refresh(ObIAllocator &allocator,
     refresh_type = ObMVRefreshType::FAST;
     ObMVPrinterRefreshInfo refresh_info(base_table_scn_range_,
                                         mview_refresh_scn_range_,
-                                        tables_without_delete,
                                         tables_without_insert,
-                                        mview_info_.get_compat_version());
+                                        tables_without_update,
+                                        tables_without_delete);
     if (OB_FAIL(mv_provider.print_mv_operators(ctx_.get_my_session(),
                                                &refresh_info,
                                                allocator,
@@ -543,8 +552,9 @@ int ObMViewRefresher::get_and_check_refresh_scn(ObMViewTransaction &trans,
 int ObMViewRefresher::collect_and_check_detail_table_changes(ObMViewTransaction &trans,
                                                             ObSchemaGetterGuard &schema_guard,
                                                             const ObIArray<uint64_t> &tables_need_mlog,
-                                                            ObIArray<uint64_t> &tables_without_delete,
                                                             ObIArray<uint64_t> &tables_without_insert,
+                                                            ObIArray<uint64_t> &tables_without_update,
+                                                            ObIArray<uint64_t> &tables_without_delete,
                                                             bool &reached_complete_refresh_threshold) const
 {
   int ret = OB_SUCCESS;
@@ -643,12 +653,15 @@ int ObMViewRefresher::collect_and_check_detail_table_changes(ObMViewTransaction 
             }
           }
           if (OB_SUCC(ret) && cur_table_need_mlog && enable_adaptive_refresh_step_) {
-            if (detail_change.num_rows_del_ + detail_change.num_rows_upd_ == 0 &&
-                OB_FAIL(tables_without_delete.push_back(dep.get_ref_obj_id()))) {
-              LOG_WARN("fail to push back table without delete", KR(ret), K(dep.get_ref_obj_id()));
-            } else if (detail_change.num_rows_ins_ + detail_change.num_rows_upd_ == 0 &&
-                       OB_FAIL(tables_without_insert.push_back(dep.get_ref_obj_id()))) {
+            if (detail_change.num_rows_ins_ == 0
+                && OB_FAIL(tables_without_insert.push_back(dep.get_ref_obj_id()))) {
               LOG_WARN("fail to push back table without insert", KR(ret), K(dep.get_ref_obj_id()));
+            } else if (detail_change.num_rows_upd_ == 0
+                       && OB_FAIL(tables_without_update.push_back(dep.get_ref_obj_id()))) {
+              LOG_WARN("fail to push back table without update", KR(ret), K(dep.get_ref_obj_id()));
+            } else if (detail_change.num_rows_del_ == 0
+                       && OB_FAIL(tables_without_delete.push_back(dep.get_ref_obj_id()))) {
+              LOG_WARN("fail to push back table without delete", KR(ret), K(dep.get_ref_obj_id()));
             }
           }
         }
@@ -871,6 +884,11 @@ int ObMViewRefresher::prepare_plan_capture_info(sql::ObSQLSessionInfo *exec_sess
     capture_info.svr_port_ = GCTX.self_addr().get_port();
     // Always capture plan_hash; full-plan mode additionally needs sql_id/trace_id/plan_id.
     capture_info.plan_hash_ = exec_session_info->get_current_plan_hash();
+    const ObLastStmtResourceUsage &resource_usage = exec_session_info->get_last_stmt_resource_usage();
+    capture_info.cpu_time_ = resource_usage.cpu_time_;
+    capture_info.io_wait_time_ = resource_usage.io_wait_time_;
+    capture_info.disk_reads_ = resource_usage.disk_reads_;
+    capture_info.memory_used_ = resource_usage.memory_used_;
     if (capture_info.is_full_plan()) {
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(sql::ObSQLUtils::gen_sql_id_from_sql_string(*exec_session_info,
@@ -897,12 +915,18 @@ int ObMViewRefresher::do_fast_refresh(const ObIArray<ObString> &refresh_sqls)
   const SCN &target_data_sync_scn = param_.target_data_sync_scn_;
   ObSQLSessionInfo *exec_session_info = nullptr;
   int64_t affected_rows = 0;
-  if (OB_ISNULL(exec_session_info = trans_.get_session_info())) {
+  bool is_refresh_queuing_enabled = false;
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+  if (OB_FAIL(rootserver::ObMViewPendingTaskUtils::is_initial_refresh_queuing_enabled(tenant_id,
+                                                                                      is_refresh_queuing_enabled))) {
+    LOG_WARN("failed to check whether initial refresh queuing is enabled", KR(ret), K(tenant_id));
+  }
+#endif
+  if (OB_SUCC(ret) && OB_ISNULL(exec_session_info = trans_.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("trans_ is not valid", KR(ret));
   }
-  // register mview mds
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !is_refresh_queuing_enabled) {
     ObMViewOpArg mds_arg;
     mds_arg.table_id_ = mview_id;
     mds_arg.parallel_ = parallelism;

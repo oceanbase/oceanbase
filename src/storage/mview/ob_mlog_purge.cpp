@@ -7,7 +7,12 @@
 
 #include "storage/mview/ob_mlog_purge.h"
 #include "common/ob_timeout_ctx.h"
+#include "lib/mysqlclient/ob_mysql_result.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+#include "rootserver/mview/ob_mview_pending_task_utils.h"
+#endif
+#include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/schema/ob_mview_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "storage/mview/ob_mview_refresh_helper.h"
@@ -78,6 +83,97 @@ int ObMLogPurger::purge()
   return ret;
 }
 
+int ObMLogPurger::collect_min_mview_refresh_scn(ObSchemaGetterGuard &schema_guard,
+                                                uint64_t &min_mview_refresh_scn)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = purge_param_.tenant_id_;
+  const uint64_t master_table_id = purge_param_.master_table_id_;
+  ObArray<ObDependencyInfo> deps;
+  min_mview_refresh_scn = OB_INVALID_SCN_VAL;
+  if (OB_FAIL(ObDependencyInfo::collect_dep_infos(tenant_id, master_table_id,
+                                                  *ctx_->get_sql_proxy(), deps))) {
+    LOG_WARN("fail to collect dep infos", KR(ret), K(master_table_id));
+  }
+  // collect min refresh scn of mviews
+  for (int64_t i = 0; OB_SUCC(ret) && i < deps.count(); ++i) {
+    const uint64_t table_id = deps.at(i).get_dep_obj_id();
+    const ObTableSchema *table_schema = nullptr;
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+    } else if (OB_NOT_NULL(table_schema) && table_schema->is_materialized_view()) {
+      ObMViewInfo mview_info;
+      if (OB_FAIL(ObMViewInfo::fetch_mview_info(*ctx_->get_sql_proxy(), tenant_id, table_id,
+                                                mview_info))) {
+        if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+          LOG_WARN("fail to fetch mview info", KR(ret), K(table_id));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else if (OB_INVALID_SCN_VAL == mview_info.get_last_refresh_scn() ||
+                 0 == mview_info.get_last_refresh_scn()) {
+        // do nothing
+      } else if (mview_info.get_refresh_method() == ObMVRefreshMethod::FAST ||
+                 mview_info.get_refresh_method() == ObMVRefreshMethod::FORCE ||
+                 table_schema->mv_on_query_computation()) {
+        // for fast refresh mv or real-query mv
+        if (mview_info.get_is_synced()) {
+          min_mview_refresh_scn = MIN(min_mview_refresh_scn, mview_info.get_data_sync_scn());
+        } else {
+          min_mview_refresh_scn = MIN(min_mview_refresh_scn, mview_info.get_last_refresh_scn());
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMLogPurger::query_min_mview_refresh_scn(uint64_t &min_mview_refresh_scn)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = purge_param_.tenant_id_;
+  const uint64_t master_table_id = purge_param_.master_table_id_;
+  ObSqlString sql;
+  min_mview_refresh_scn = OB_INVALID_SCN_VAL;
+  if (OB_FAIL(sql.assign_fmt(
+        "SELECT CAST(MIN(CASE WHEN COALESCE(M.last_refresh_scn, 0) IN (0, %lu) THEN 0 "
+        "                WHEN M.is_synced = 1 THEN M.data_sync_scn "
+        "                ELSE M.last_refresh_scn END) AS UNSIGNED) AS min_mview_refresh_scn "
+        "FROM %s D, %s T, %s M "
+        "WHERE D.tenant_id = 0 AND T.tenant_id = D.tenant_id "
+        "  AND M.tenant_id = D.tenant_id AND T.table_id = D.dep_obj_id "
+        "  AND T.table_type = %ld AND M.mview_id = D.dep_obj_id "
+        "  AND D.ref_obj_id = %lu "
+        "  AND (M.refresh_method IN (%ld, %ld) OR ((T.table_mode >> 28) & 1) = 1)",
+        OB_INVALID_SCN_VAL,
+        OB_ALL_TENANT_DEPENDENCY_TNAME,
+        OB_ALL_TABLE_TNAME,
+        OB_ALL_MVIEW_TNAME,
+        static_cast<int64_t>(MATERIALIZED_VIEW),
+        master_table_id,
+        static_cast<int64_t>(ObMVRefreshMethod::FAST),
+        static_cast<int64_t>(ObMVRefreshMethod::FORCE)))) {
+    LOG_WARN("fail to assign sql", KR(ret), K(master_table_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = nullptr;
+      if (OB_FAIL(ctx_->get_sql_proxy()->read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("fail to query min mview refresh scn", KR(ret), K(sql), K(tenant_id));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret), K(sql), K(tenant_id));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("fail to get min mview refresh scn", KR(ret), K(sql), K(tenant_id));
+      } else {
+        EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(
+            *result, "min_mview_refresh_scn", min_mview_refresh_scn, uint64_t,
+            true /*skip null error*/, false /*skip column error*/, OB_INVALID_SCN_VAL);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObMLogPurger::prepare_for_purge()
 {
   int ret = OB_SUCCESS;
@@ -88,8 +184,8 @@ int ObMLogPurger::prepare_for_purge()
   SCN current_scn;
   const share::schema::ObTableSchema *master_table_schema = nullptr;
   const share::schema::ObTableSchema *mlog_table_schema = nullptr;
-  ObArray<ObDependencyInfo> deps;
-  uint64_t min_mview_refresh_scn = UINT64_MAX;
+  uint64_t min_mview_refresh_scn = OB_INVALID_SCN_VAL;
+  bool is_refresh_queuing_enabled = false;
   // get refreshed schema and scn
   if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -142,7 +238,7 @@ int ObMLogPurger::prepare_for_purge()
       }
     }
   }
-  // fetch mlog info and dep objs
+  // fetch mlog info and collect the minimum refresh SCN of dependent mviews
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObMLogInfo::fetch_mlog_info(*ctx_->get_sql_proxy(), tenant_id, mlog_table_id,
                                             mlog_info_, false /*for_update*/))) {
@@ -152,44 +248,27 @@ int ObMLogPurger::prepare_for_purge()
         ret = OB_ERR_TABLE_NO_MLOG;
         LOG_WARN("materialized view log may dropped", KR(ret), K(mlog_table_id));
       }
-    } else if (OB_FAIL(ObDependencyInfo::collect_dep_infos(tenant_id, master_table_id,
-                                                           *ctx_->get_sql_proxy(), deps))) {
-      LOG_WARN("fail to collect dep infos", KR(ret), K(master_table_id));
-    }
-  }
-  // collect min refresh scn of mviews
-  for (int64_t i = 0; OB_SUCC(ret) && i < deps.count(); ++i) {
-    const uint64_t table_id = deps.at(i).get_dep_obj_id();
-    const ObTableSchema *table_schema = nullptr;
-    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
-      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-    } else if (OB_NOT_NULL(table_schema) && table_schema->is_materialized_view()) {
-      ObMViewInfo mview_info;
-      if (OB_FAIL(ObMViewInfo::fetch_mview_info(*ctx_->get_sql_proxy(), tenant_id, table_id,
-                                                mview_info))) {
-        if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
-          LOG_WARN("fail to fetch mview info", KR(ret), K(table_id));
-        } else {
-          ret = OB_SUCCESS;
-        }
-      } else if (OB_INVALID_SCN_VAL == mview_info.get_last_refresh_scn() || 0 == mview_info.get_last_refresh_scn()) {
-        // do nothing
-      } else if (mview_info.get_refresh_method()== ObMVRefreshMethod::FAST
-          || mview_info.get_refresh_method()== ObMVRefreshMethod::FORCE
-          || table_schema->mv_on_query_computation()) {
-        // for fast refresh mv or real-query mv
-        if (mview_info.get_is_synced()) {
-          min_mview_refresh_scn = MIN(min_mview_refresh_scn, mview_info.get_data_sync_scn());
-        } else {
-          min_mview_refresh_scn = MIN(min_mview_refresh_scn, mview_info.get_last_refresh_scn());
-        }
-      }
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+    } else if (OB_FAIL(rootserver::ObMViewPendingTaskUtils::is_initial_refresh_queuing_enabled(
+                   tenant_id, is_refresh_queuing_enabled))) {
+      LOG_WARN("failed to check whether initial refresh queuing is enabled", KR(ret), K(tenant_id));
+    } else if (is_refresh_queuing_enabled
+               && OB_FAIL(query_min_mview_refresh_scn(min_mview_refresh_scn))) {
+      LOG_WARN("fail to query min mview refresh scn", KR(ret), K(master_table_id));
+#endif
+    } else if (!is_refresh_queuing_enabled
+               && OB_FAIL(collect_min_mview_refresh_scn(schema_guard, min_mview_refresh_scn))) {
+      LOG_WARN("fail to collect min mview refresh scn", KR(ret), K(master_table_id));
     }
   }
     // todo sean.yyj: remove need_real_purge_ related code after compaction scheduler is refined
   if (OB_SUCC(ret)) {
     need_real_purge_ = false;
-    if (min_mview_refresh_scn != UINT64_MAX) {
+    if (is_refresh_queuing_enabled && 0 == min_mview_refresh_scn) {
+      // TODO: This conservative guard may retain a large amount of MLog data. Optimize it with a safe watermark.
+      LOG_INFO("skip mlog purge for unfinished initial refresh",
+               K(tenant_id), K(master_table_id), K(min_mview_refresh_scn));
+    } else if (OB_INVALID_SCN_VAL != min_mview_refresh_scn) {
       if (min_mview_refresh_scn >= mlog_info_.get_last_purge_scn()) {
         need_real_purge_ = true;
       } else if (!called_in_refresh_ && ObMLogPurgeMethod::COMPACTION == purge_method_ &&

@@ -18,6 +18,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_table_schema.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/monitor/ob_sql_plan.h"
 #include "sql/ob_sql_context.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "storage/mview/cmd/ob_mview_refresh_report_executor.h"
@@ -30,6 +31,38 @@ namespace storage
 using namespace common;
 using namespace sql;
 using namespace share::schema;
+
+// One __ALL_VIRTUAL_PROCESSLIST row: the session currently executing a
+// statement of the observed refresh run, pinning its active plan location.
+struct MViewLiveSessionRow
+{
+  MViewLiveSessionRow() : svr_ip_(), svr_port_(0), plan_id_(0), sql_id_() {}
+
+  common::ObString svr_ip_;
+  int64_t svr_port_;
+  int64_t plan_id_;
+  common::ObString sql_id_;
+  TO_STRING_KV(K_(svr_ip), K_(svr_port), K_(plan_id), K_(sql_id));
+};
+
+enum LiveSessionColumnIdx : int64_t
+{
+  LIVE_SESSION_COL_SVR_IP = 0,
+  LIVE_SESSION_COL_SVR_PORT,
+  LIVE_SESSION_COL_PLAN_ID,
+  LIVE_SESSION_COL_SQL_ID,
+};
+
+static bool is_live_plan_sql_id_valid(const common::ObString &sql_id)
+{
+  return !sql_id.empty() && sql_id.length() <= common::OB_MAX_SQL_ID_LENGTH;
+}
+
+static bool is_pending_live_match(const MViewReportStmtData *stmt, const common::ObString &sql_id)
+{
+  return OB_NOT_NULL(stmt) && MViewLivePlanInfo::NOT_AVAILABLE == stmt->live_plan_info_.state_
+         && 0 == stmt->sqlid_.case_compare(sql_id);
+}
 
 static int collect_distinct_mv_ids(const ObIArray<MViewReportMVData> &mv_array, ObIArray<int64_t> &mv_ids)
 {
@@ -161,6 +194,110 @@ static int prepare_report_names(ObExecContext &ctx,
                                      ch.tbl_display_name_))) {
         LOG_WARN("fail to resolve change table name", KR(ret), K(target_tenant_id), K(ch.detail_table_id_));
       }
+    }
+  }
+  return ret;
+}
+
+static int find_final_mv_data(ObIArray<MViewReportMVData> &mv_array, int64_t mview_id,
+                              MViewReportMVData *&mv_data)
+{
+  int ret = OB_SUCCESS;
+  mv_data = NULL;
+  for (int64_t i = mv_array.count() - 1; OB_ISNULL(mv_data) && i >= 0; --i) {
+    if (mv_array.at(i).mview_id_ == mview_id) {
+      mv_data = &mv_array.at(i);
+    }
+  }
+  if (OB_ISNULL(mv_data)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mv data not found in array", KR(ret), K(mview_id));
+  }
+  return ret;
+}
+
+static int fetch_prev_refresh_info(ObExecContext &ctx,
+                                   uint64_t conn_tenant_id,
+                                   uint64_t target_tenant_id,
+                                   int64_t refresh_id,
+                                   int64_t mview_id,
+                                   const char *stats_table,
+                                   const char *run_stats_table,
+                                   bool same_tenant,
+                                   ObIArray<MViewReportMVData> &mv_array)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString prev_sql;
+  const char *hint = same_tenant ? "/*+ INDEX(s idx_mview_refresh_stats_mview_end_time) */ " : "";
+  // Inner tables store data with extract tenant_id (0), while virtual tables
+  // expose the real tenant_id.  Use 0 for direct inner-table queries, otherwise
+  // use the caller-supplied target_tenant_id.
+  const uint64_t query_tenant_id = same_tenant ? 0 : target_tenant_id;
+  uint64_t prev_refresh_scn = 0;
+  uint64_t data_target_scn = 0;
+  MViewReportMVData *mv_data = NULL;
+  if (OB_FAIL(prev_sql.assign_fmt(
+          "SELECT %s"
+          "s.refresh_scn, r.data_target_scn "
+          "FROM %s s "
+          "LEFT JOIN %s r "
+          "  ON r.tenant_id = s.tenant_id AND r.refresh_id = s.refresh_id "
+          "WHERE s.tenant_id = %lu AND s.mview_id = %ld "
+          "  AND s.result = 0 AND s.refresh_scn IS NOT NULL "
+          "  AND s.end_time < ("
+          "    SELECT MIN(c.start_time) FROM %s c "
+          "    WHERE c.tenant_id = %lu AND c.refresh_id = %ld AND c.mview_id = %ld"
+          "  ) "
+          "ORDER BY s.end_time DESC, s.refresh_id DESC, s.retry_id DESC LIMIT 1",
+          hint,
+          stats_table,
+          run_stats_table,
+          query_tenant_id,
+          mview_id,
+          stats_table,
+          query_tenant_id,
+          refresh_id,
+          mview_id))) {
+    LOG_WARN("fail to build prev scn sql", KR(ret), K(mview_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, prev_res)
+    {
+      sqlclient::ObMySQLResult *prev_result = NULL;
+      if (OB_FAIL(ctx.get_sql_proxy()->read(prev_res, conn_tenant_id, prev_sql.ptr()))) {
+        LOG_WARN("fail to execute prev scn query", KR(ret), K(mview_id));
+      } else if (OB_ISNULL(prev_result = prev_res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null prev scn result", KR(ret));
+      } else if (OB_FAIL(prev_result->next())) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("fail to get prev scn result", KR(ret), K(mview_id));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else {
+        EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*prev_result,
+                                                    "refresh_scn",
+                                                    prev_refresh_scn,
+                                                    uint64_t,
+                                                    false /*skip_null_error*/,
+                                                    false /*skip_column_error*/,
+                                                    0);
+        EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*prev_result,
+                                                    "data_target_scn",
+                                                    data_target_scn,
+                                                    uint64_t,
+                                                    true /*skip_null_error*/,
+                                                    false /*skip_column_error*/,
+                                                    0);
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(find_final_mv_data(mv_array, mview_id, mv_data))) {
+      LOG_WARN("fail to find final mv data", KR(ret), K(mview_id));
+    } else {
+      mv_data->mv_refresh_start_scn_ = prev_refresh_scn;
+      mv_data->base_table_start_scn_ = data_target_scn;
     }
   }
   return ret;
@@ -543,14 +680,14 @@ static int fetch_stmt_data(ObExecContext &ctx,
           }
           EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result, "result", stmt_data.result_, int64_t, true, true, 0);
           if (OB_SUCC(ret) && !stmt_data.execution_plan_.empty()) {
-            int tmp_ret = aggregate_mview_plan_resources(allocator,
-                                                         stmt_data.execution_plan_,
-                                                         stmt_data.cpu_time_,
-                                                         stmt_data.io_wait_time_,
-                                                         stmt_data.disk_reads_,
-                                                         stmt_data.memory_used_);
+            int tmp_ret = parse_mview_plan_resources(allocator,
+                                                     stmt_data.execution_plan_,
+                                                     stmt_data.cpu_time_,
+                                                     stmt_data.io_wait_time_,
+                                                     stmt_data.disk_reads_,
+                                                     stmt_data.memory_used_);
             if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
-              LOG_WARN("fail to aggregate plan resources, skip plan", K(tmp_ret), K(stmt_data.step_));
+              LOG_WARN("fail to parse plan resources, skip plan", K(tmp_ret), K(stmt_data.step_));
             }
           }
           if (OB_SUCC(ret) && OB_FAIL(stmt_array.push_back(stmt_data))) {
@@ -561,6 +698,249 @@ static int fetch_stmt_data(ObExecContext &ctx,
           ret = OB_SUCCESS;
         }
       }
+    }
+  }
+  return ret;
+}
+
+static int collect_live_plan_candidates(MViewReportData &data,
+                                        ObIArray<MViewReportStmtData *> &candidates)
+{
+  int ret = OB_SUCCESS;
+  candidates.reset();
+  for (int64_t mv_idx = 0; mv_idx < data.mv_array_.count(); ++mv_idx) {
+    const MViewReportMVData &mv = data.mv_array_.at(mv_idx);
+    const bool can_observe_live_plan = data.is_latest_mv_attempt(mv_idx)
+                                       && mv.is_running()
+                                       && !mv.is_complete_refresh();
+    for (int64_t stmt_idx = 0; stmt_idx < data.stmt_array_.count(); ++stmt_idx) {
+      MViewReportStmtData &stmt = data.stmt_array_.at(stmt_idx);
+      if (!stmt.matches_mv_attempt(mv) || !stmt.is_running()) {
+      } else if (can_observe_live_plan) {
+        stmt.live_plan_info_.reset();
+        stmt.live_plan_info_.state_ = MViewLivePlanInfo::NOT_AVAILABLE;
+        stmt.plan_info_ = NULL;
+        if (OB_UNLIKELY(!is_live_plan_sql_id_valid(stmt.sqlid_))) {
+          stmt.live_plan_info_.state_ = MViewLivePlanInfo::ERROR;
+          LOG_WARN("invalid live plan sql id", K(stmt.sqlid_));
+        } else if (OB_SUCC(ret) && OB_FAIL(candidates.push_back(&stmt))) {
+          LOG_WARN("fail to collect live plan candidate", KR(ret), K(stmt));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+/**
+ * Locate the sessions currently executing the candidate statements of the
+ * observed refresh run, filtered by trace id and the candidate sql ids.
+ * Each row pins the active plan of one running statement by
+ * (svr_ip, svr_port, plan_id); sql_id attributes the session back to report
+ * candidate steps.
+ */
+static int query_live_plan_sessions(sql::ObExecContext &ctx,
+                                    const uint64_t tenant_id,
+                                    const common::ObString &trace_id,
+                                    const common::ObIArray<MViewReportStmtData *> &candidates,
+                                    common::ObIAllocator &allocator,
+                                    common::ObIArray<MViewLiveSessionRow> &sessions)
+{
+  int ret = OB_SUCCESS;
+  common::ObSqlString sql;
+  SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
+    common::sqlclient::ObMySQLResult *mysql_result = NULL;
+    if (OB_FAIL(sql.assign_fmt("SELECT SVR_IP, SVR_PORT, PLAN_ID, SQL_ID "
+                               "FROM OCEANBASE.__ALL_VIRTUAL_PROCESSLIST "
+                               "WHERE TENANT_ID = %lu AND TRACE_ID = '%.*s' AND SQL_ID IN (",
+                               tenant_id,
+                               trace_id.length(),
+                               trace_id.ptr()))) {
+      LOG_WARN("fail to build live session query", KR(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < candidates.count(); ++i) {
+      const common::ObString &sql_id = candidates.at(i)->sqlid_;
+      if (OB_FAIL(sql.append_fmt(0 == i ? "'%.*s'" : ", '%.*s'", sql_id.length(), sql_id.ptr()))) {
+        LOG_WARN("fail to append sql id filter", KR(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(sql.append(")"))) {
+      LOG_WARN("fail to close sql id filter", KR(ret));
+    } else if (OB_FAIL(ctx.get_sql_proxy()->read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("fail to execute live session query", KR(ret), K(sql));
+    } else if (OB_ISNULL(mysql_result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("live session query returned null result", KR(ret));
+    }
+    while (OB_SUCC(ret) && OB_SUCC(mysql_result->next())) {
+      MViewLiveSessionRow row;
+      ObString tmp_str;
+      EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*mysql_result,
+                                                 LIVE_SESSION_COL_SVR_PORT,
+                                                 row.svr_port_,
+                                                 int64_t,
+                                                 true,
+                                                 false,
+                                                 0);
+      EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*mysql_result,
+                                                 LIVE_SESSION_COL_PLAN_ID,
+                                                 row.plan_id_,
+                                                 int64_t,
+                                                 true,
+                                                 false,
+                                                 0);
+      EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*mysql_result, LIVE_SESSION_COL_SVR_IP, tmp_str);
+      if (OB_SUCC(ret) && OB_FAIL(ob_write_string(allocator, tmp_str, row.svr_ip_))) {
+        LOG_WARN("fail to copy live session svr ip", KR(ret));
+      }
+      tmp_str.reset();
+      EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*mysql_result, LIVE_SESSION_COL_SQL_ID, tmp_str);
+      if (OB_SUCC(ret) && OB_FAIL(ob_write_string(allocator, tmp_str, row.sql_id_))) {
+        LOG_WARN("fail to copy live session sql id", KR(ret));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (row.svr_ip_.empty() || row.plan_id_ <= 0 || !is_live_plan_sql_id_valid(row.sql_id_)) {
+        LOG_WARN("invalid live session plan reference", K(row));
+      } else if (OB_FAIL(sessions.push_back(row))) {
+        LOG_WARN("fail to add live session row", KR(ret), K(row));
+      }
+    }
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
+/**
+ * Capture the complete active plan of one running statement (plan cache
+ * operators LEFT JOIN realtime monitor aggregates) directly onto the
+ * report allocator; the payload stays resident for report assembly
+ * and is shared by candidates executing identical SQL.
+ */
+static int capture_live_session_plan(common::ObMySQLProxy &sql_proxy,
+                                     const uint64_t tenant_id,
+                                     const common::ObString &trace_id,
+                                     const MViewLiveSessionRow &session,
+                                     common::ObIAllocator &allocator,
+                                     MViewStmtPlanInfo *&payload)
+{
+  int ret = OB_SUCCESS;
+  MViewStmtPlanInfo *captured = NULL;
+  payload = NULL;
+  if (OB_ISNULL(captured = OB_NEWx(MViewStmtPlanInfo, &allocator, allocator))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate live plan payload", KR(ret), K(session));
+  } else if (OB_FAIL(capture_mview_live_plan(sql_proxy,
+                                             tenant_id,
+                                             trace_id,
+                                             session.sql_id_,
+                                             session.svr_ip_,
+                                             session.svr_port_,
+                                             static_cast<uint64_t>(session.plan_id_),
+                                             allocator,
+                                             *captured))) {
+    LOG_WARN("fail to capture live plan rows", KR(ret), K(session));
+  } else if (0 == captured->plan_infos_.count()) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("active plan not found in plan cache", KR(ret), K(session));
+  } else {
+    payload = captured;
+  }
+  return ret;
+}
+
+// Capture each matching SQL once; successful payloads survive later observation failures.
+static int observe_live_plans(ObExecContext &ctx,
+                              const uint64_t tenant_id,
+                              const ObString &trace_id,
+                              ObIAllocator &allocator,
+                              ObIArray<MViewReportStmtData *> &candidates)
+{
+  int ret = OB_SUCCESS;
+  // Session rows are only referenced inside this function; keep them on a
+  // temporary arena released at return instead of the report allocator.
+  ObArenaAllocator session_allocator("MvLiveSess", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+  ObArray<MViewLiveSessionRow> sessions(OB_MALLOC_NORMAL_BLOCK_SIZE,
+                                        ModulePageAllocator(session_allocator, "MvLiveSess"));
+  const int64_t start_time = ObTimeUtility::current_time();
+  if (OB_FAIL(query_live_plan_sessions(ctx,
+                                       tenant_id,
+                                       trace_id,
+                                       candidates,
+                                       session_allocator,
+                                       sessions))) {
+    LOG_WARN("fail to query live plan sessions", KR(ret));
+  } else if (sessions.empty()) {
+    LOG_WARN("no active session for live plan", K(trace_id));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < sessions.count(); ++i) {
+    const MViewLiveSessionRow &session = sessions.at(i);
+    bool has_pending_match = false;
+    for (int64_t j = 0; !has_pending_match && j < candidates.count(); ++j) {
+      has_pending_match = is_pending_live_match(candidates.at(j), session.sql_id_);
+    }
+    if (!has_pending_match) {
+    } else if (OB_FAIL(ctx.check_status())) {
+      LOG_WARN("live plan observation interrupted", KR(ret));
+    } else {
+      MViewStmtPlanInfo *payload = NULL;
+      const int capture_ret = capture_live_session_plan(*ctx.get_sql_proxy(),
+                                                        tenant_id,
+                                                        trace_id,
+                                                        session,
+                                                        allocator,
+                                                        payload);
+      if (OB_SUCCESS != capture_ret) {
+        LOG_WARN("fail to capture live session plan", KR(capture_ret), K(session));
+      }
+      for (int64_t j = 0; j < candidates.count(); ++j) {
+        MViewReportStmtData *stmt = candidates.at(j);
+        if (is_pending_live_match(stmt, session.sql_id_)) {
+          stmt->plan_info_ = payload;
+          // ERROR marks an attempted SQL so another session cannot retry it.
+          stmt->live_plan_info_.state_ = OB_SUCCESS == capture_ret ? MViewLivePlanInfo::AVAILABLE : MViewLivePlanInfo::ERROR;
+        }
+      }
+      if (OB_TIMEOUT == capture_ret || OB_ALLOCATE_MEMORY_FAILED == capture_ret) {
+        ret = capture_ret;
+      }
+    }
+  }
+  const int64_t end_time = ObTimeUtility::current_time();
+  for (int64_t i = 0; i < candidates.count(); ++i) {
+    candidates.at(i)->live_plan_info_.observation_start_time_ = start_time;
+    candidates.at(i)->live_plan_info_.observation_end_time_ = end_time;
+  }
+  return ret;
+}
+
+// Live plans are optional; only the report request's own status is fatal.
+static int fetch_live_execution_plans(ObExecContext &ctx,
+                                      uint64_t target_tenant_id,
+                                      ObIAllocator &allocator,
+                                      MViewReportData &data)
+{
+  int ret = OB_SUCCESS;
+  int plan_ret = OB_SUCCESS;
+  ObSEArray<MViewReportStmtData *, 16> candidates;
+  const ObString &trace_id = data.run_data_->trace_id_;
+  if (OB_FAIL(ctx.check_status())) {
+    LOG_WARN("refresh report is no longer active", KR(ret));
+  } else {
+    if (OB_SUCCESS != (plan_ret = collect_live_plan_candidates(data, candidates))) {
+      LOG_WARN("fail to collect live plan candidates, keep report", KR(plan_ret));
+    } else if (candidates.empty()) {
+    } else if (OB_UNLIKELY(trace_id.empty() || trace_id.length() > OB_MAX_TRACE_ID_BUFFER_SIZE)) {
+      LOG_WARN("invalid trace id for live plan", K(trace_id));
+    } else if (OB_ISNULL(ctx.get_sql_proxy())) {
+      LOG_WARN("sql proxy is null for live plan observation");
+    } else if (OB_SUCCESS != (plan_ret = observe_live_plans(ctx, target_tenant_id, trace_id, allocator, candidates))) {
+      LOG_WARN("fail to observe live plans, keep report", KR(plan_ret));
+    }
+    if (OB_FAIL(ctx.check_status())) {
+      LOG_WARN("refresh report is no longer active after live plan observation", KR(ret));
     }
   }
   return ret;
@@ -594,100 +974,29 @@ int ObMViewRefreshReportFetcher::fetch_all(ObExecContext &ctx,
     LOG_WARN("fail to fetch mv data", KR(ret), K(refresh_id));
   }
   if (OB_FAIL(ret)) {
-  } else {
-    ObSqlString base_scn_sql;
-    if (OB_FAIL(base_scn_sql.assign_fmt("SELECT MAX(data_target_scn) AS base_scn FROM %s "
-                                        "WHERE tenant_id = %lu AND refresh_id < %ld AND data_target_scn IS NOT NULL",
-                                        OB_ALL_VIRTUAL_MVIEW_REFRESH_RUN_STATS_TNAME,
-                                        target_tenant_id,
-                                        refresh_id))) {
-      LOG_WARN("fail to build base_scn sql", KR(ret));
-    } else {
-      SMART_VAR(ObMySQLProxy::MySQLResult, base_res)
-      {
-        sqlclient::ObMySQLResult *base_result = NULL;
-        if (OB_FAIL(ctx.get_sql_proxy()->read(base_res, conn_tenant_id, base_scn_sql.ptr()))) {
-          LOG_WARN("fail to execute base_scn query", KR(ret));
-        } else if (OB_ISNULL(base_result = base_res.get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("null base_scn result", KR(ret));
-        } else if (OB_FAIL(base_result->next())) {
-          if (OB_ITER_END != ret) {
-            LOG_WARN("fail to get base_scn result", KR(ret));
-          } else {
-            ret = OB_SUCCESS;
-          }
-        } else {
-          uint64_t base_scn = 0;
-          EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*base_result, "base_scn", base_scn, uint64_t, true, true, 0);
-          for (int64_t i = 0; i < data.mv_array_.count(); ++i) {
-            data.mv_array_.at(i).base_table_start_scn_ = base_scn;
-          }
-        }
-      }
-    }
-  }
-  if (OB_FAIL(ret)) {
   } else if (0 < data.mv_array_.count() && OB_FAIL(collect_distinct_mv_ids(data.mv_array_, data.mv_ids_))) {
     LOG_WARN("fail to collect distinct mv ids", KR(ret));
   }
   if (OB_FAIL(ret)) {
   } else if (0 < data.mv_ids_.count()) {
+    const bool same_tenant = (conn_tenant_id == target_tenant_id);
+    const char *stats_table = same_tenant ? OB_ALL_MVIEW_REFRESH_STATS_TNAME
+                                          : OB_ALL_VIRTUAL_MVIEW_REFRESH_STATS_TNAME;
+    const char *run_stats_table = same_tenant ? OB_ALL_MVIEW_REFRESH_RUN_STATS_TNAME
+                                              : OB_ALL_VIRTUAL_MVIEW_REFRESH_RUN_STATS_TNAME;
     ObSqlString in_ids;
     for (int64_t i = 0; OB_SUCC(ret) && i < data.mv_ids_.count(); ++i) {
       if (OB_FAIL(in_ids.append_fmt(0 == i ? "%ld" : ",%ld", data.mv_ids_.at(i)))) {
         LOG_WARN("fail to append mv_id", KR(ret));
       }
     }
-    if (OB_FAIL(ret)) {
-    } else {
-      ObSqlString hist_scn_sql;
-      if (OB_FAIL(hist_scn_sql.assign_fmt("SELECT mview_id, MAX(refresh_scn) AS hist_scn "
-                                          "FROM %s "
-                                          "WHERE tenant_id = %lu AND result = 0 "
-                                          "  AND refresh_id < %ld "
-                                          "  AND mview_id IN (%s) "
-                                          "GROUP BY mview_id",
-                                          OB_ALL_VIRTUAL_MVIEW_REFRESH_STATS_TNAME,
-                                          target_tenant_id,
-                                          refresh_id,
-                                          in_ids.ptr()))) {
-        LOG_WARN("fail to build hist_scn sql", KR(ret));
-      } else {
-        SMART_VAR(ObMySQLProxy::MySQLResult, hist_res)
-        {
-          sqlclient::ObMySQLResult *hist_result = NULL;
-          if (OB_FAIL(ctx.get_sql_proxy()->read(hist_res, conn_tenant_id, hist_scn_sql.ptr()))) {
-            LOG_WARN("fail to execute hist_scn query", KR(ret));
-          } else if (OB_ISNULL(hist_result = hist_res.get_result())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("null hist_scn result", KR(ret));
-          } else {
-            while (OB_SUCC(ret) && OB_SUCC(hist_result->next())) {
-              int64_t result_mv_id = 0;
-              uint64_t hist_scn = 0;
-              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*hist_result,
-                                                         "mview_id",
-                                                         result_mv_id,
-                                                         int64_t,
-                                                         true,
-                                                         true,
-                                                         0);
-              EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*hist_result, "hist_scn", hist_scn, uint64_t, true, true, 0);
-              if (OB_SUCC(ret)) {
-                for (int64_t i = 0; i < data.mv_array_.count(); ++i) {
-                  if (data.mv_array_.at(i).mview_id_ == result_mv_id
-                      && hist_scn > data.mv_array_.at(i).mv_refresh_start_scn_) {
-                    data.mv_array_.at(i).mv_refresh_start_scn_ = hist_scn;
-                  }
-                }
-              }
-            }
-            if (OB_ITER_END == ret) {
-              ret = OB_SUCCESS;
-            }
-          }
-        }
+    for (int64_t i = 0; OB_SUCC(ret) && i < data.mv_ids_.count(); ++i) {
+      int tmp_ret = fetch_prev_refresh_info(ctx, conn_tenant_id, target_tenant_id,
+                                            refresh_id, data.mv_ids_.at(i),
+                                            stats_table, run_stats_table, same_tenant,
+                                            data.mv_array_);
+      if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
+        LOG_WARN("fail to fetch prev refresh info, skip mv", KR(tmp_ret), K(data.mv_ids_.at(i)));
       }
     }
     ObSqlString dep_sql;
@@ -739,6 +1048,13 @@ int ObMViewRefreshReportFetcher::fetch_all(ObExecContext &ctx,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(prepare_report_names(ctx, target_tenant_id, context))) {
     LOG_WARN("fail to prepare report names", KR(ret), K(refresh_id));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(fetch_live_execution_plans(ctx,
+                                                target_tenant_id,
+                                                allocator,
+                                                data))) {
+    LOG_WARN("fail to fetch live report plan", KR(ret), K(refresh_id));
   }
   }  // end else (context valid)
   return ret;

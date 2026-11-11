@@ -61,6 +61,9 @@ public:
 
 private:
   int prepare_for_purge();
+  int collect_min_mview_refresh_scn(share::schema::ObSchemaGetterGuard &schema_guard,
+                                    uint64_t &min_mview_refresh_scn);
+  int query_min_mview_refresh_scn(uint64_t &min_mview_refresh_scn);
   int do_purge();
   int update_last_purge_scn();
   bool need_purge() const

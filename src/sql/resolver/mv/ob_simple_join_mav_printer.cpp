@@ -247,7 +247,7 @@ int ObSimpleJoinMAVPrinter::gen_pre_data_access_stmt(const TableItem &source_tab
     LOG_WARN("failed to set set query", K(ret));
   } else {
     union_stmt->assign_set_all();
-    union_stmt->assign_set_op(ObSelectStmt::UNION);
+    union_stmt->assign_set_op(ObSetRelation::UNION);
     access_sel = union_stmt;
   }
   return ret;

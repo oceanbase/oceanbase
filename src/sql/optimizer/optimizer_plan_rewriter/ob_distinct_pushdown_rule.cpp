@@ -944,7 +944,7 @@ int ObDistinctPushDownPlanRewriter::visit_set(ObLogSet *set,
   } else if ((NULL == ctx || ctx->is_empty() || set->get_filter_exprs().count() > 0) && !set->is_set_distinct()) {
     OPT_TRACE("visit set: union all with no ctx or has filters, skip", set->get_name(), set->get_op_id());
     can_transform = false;
-  } else if (ObSelectStmt::UNION == set->get_set_op() && !set->is_set_distinct()) {
+  } else if (ObSetRelation::UNION == set->get_set_op() && !set->is_set_distinct()) {
     // handle union all
     // directly pushdown to all input
     OPT_TRACE("visit set: union all, push ctx to all children", set->get_name(), set->get_op_id(),
@@ -1040,7 +1040,7 @@ int ObDistinctPushDownPlanRewriter::visit_set(ObLogSet *set,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected set expr count", K(ret), K(set_exprs.count()), K(pure_set_exprs.count()));
     } else if (NULL == ctx || ctx->is_empty() || set->get_filter_exprs().count() > 0
-               || ObSelectStmt::UNION != set->get_set_op()) {
+               || ObSetRelation::UNION != set->get_set_op()) {
       // get_current_context
       OPT_TRACE("visit set: no upper ctx or not union distinct, use set exprs as context", set->get_name());
       if (OB_FAIL(simplified_pushdown_context.distinct_exprs_.assign(set_exprs))) {

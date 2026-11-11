@@ -422,120 +422,12 @@ int ObTransformPreProcess::expand_materialized_view(ObDMLStmt *stmt, bool &trans
 int ObTransformPreProcess::add_all_rowkey_columns_to_stmt(ObDMLStmt *stmt, bool &trans_happened)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->schema_checker_)
-      || OB_ISNULL(ctx_->expr_factory_) || OB_ISNULL(ctx_->session_info_)) {
+  if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null", K(ret), K(stmt), K(ctx_));
-  } else {
-    ObIArray<TableItem*> &tables = stmt->get_table_items();
-    TableItem *table_item = NULL;
-    const ObTableSchema *table_schema = NULL;
-    ObSEArray<ColumnItem, 16> column_items;
-    for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
-      if (OB_ISNULL(table_item = tables.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null", K(ret), K(table_item));
-      } else if (!table_item->is_basic_table()) {
-        /* do nothing */
-      } else if (OB_FAIL(ctx_->schema_checker_->get_table_schema(ctx_->session_info_->get_effective_tenant_id(),
-                                                                 table_item->ref_id_,
-                                                                 table_schema,
-                                                                 table_item->is_link_table()))) {
-        LOG_WARN("table schema not found", K(table_schema));
-      } else if (OB_ISNULL(table_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get invalid table schema", K(table_schema));
-      } else if (OB_FAIL(add_all_rowkey_columns_to_stmt(*table_schema, *table_item,
-                                                        *ctx_->expr_factory_,
-                                                        *stmt,
-                                                        column_items))) {
-        LOG_WARN("add all rowkey exprs failed", K(ret));
-      }
-    }
-
-    if (OB_SUCC(ret) && !column_items.empty()) {
-      ObIArray<ColumnItem> &orign_column_items = stmt->get_column_items();
-      for (int i = 0; OB_SUCC(ret) && i < orign_column_items.count(); ++i) {
-        if (OB_ISNULL(orign_column_items.at(i).expr_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret), K(orign_column_items.at(i).expr_));
-        } else if (!orign_column_items.at(i).expr_->is_rowkey_column() &&
-                   OB_FAIL(column_items.push_back(orign_column_items.at(i)))) {
-          LOG_WARN("failed to push back column item", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(stmt->get_column_items().assign(column_items))) {
-          LOG_WARN("failed to assign column items", K(ret));
-        } else {
-          trans_happened = true;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTransformPreProcess::add_all_rowkey_columns_to_stmt(const ObTableSchema &table_schema,
-                                                          const TableItem &table_item,
-                                                          ObRawExprFactory &expr_factory,
-                                                          ObDMLStmt &stmt,
-                                                          ObIArray<ColumnItem> &column_items)
-{
-  int ret = OB_SUCCESS;
-  const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
-  const ObColumnSchemaV2 *column_schema = NULL;
-  uint64_t column_id = OB_INVALID_ID;
-  ColumnItem *exists_col_item = NULL;
-  ObColumnRefRawExpr *rowkey = NULL;
-  for (int col_idx = 0; OB_SUCC(ret) && col_idx < rowkey_info.get_size(); ++col_idx) {
-    if (OB_FAIL(rowkey_info.get_column_id(col_idx, column_id))) {
-      LOG_WARN("Failed to get column id", K(ret));
-    } else if (NULL != (exists_col_item = stmt.get_column_item_by_id(table_item.table_id_,
-                                                                     column_id))) {
-      if (OB_FAIL(column_items.push_back(*exists_col_item))) {
-        LOG_WARN("failed to push back column item", K(ret));
-      }
-    } else if (OB_MOCK_LINK_TABLE_PK_COLUMN_ID == column_id && table_item.is_link_table()) {
-      continue;
-    } else if (OB_ISNULL(column_schema = (table_schema.get_column_schema(column_id)))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get column schema", K(column_id), K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, *column_schema,
-                                                         ctx_->session_info_, rowkey))) {
-      LOG_WARN("build column expr failed", K(ret));
-    } else if (OB_ISNULL(rowkey)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to create raw expr for dummy output", K(ret));
-    } else {
-      ColumnItem column_item;
-      rowkey->set_ref_id(table_item.table_id_, column_schema->get_column_id());
-      rowkey->set_column_attr(table_item.get_table_name(), column_schema->get_column_name_str());
-      rowkey->set_database_name(table_item.database_name_);
-      if (!table_item.alias_name_.empty()) {
-        rowkey->set_table_alias_name();
-      }
-      column_item.expr_ = rowkey;
-      column_item.table_id_ = rowkey->get_table_id();
-      column_item.column_id_ = rowkey->get_column_id();
-      column_item.base_tid_ = table_item.ref_id_;
-      column_item.base_cid_ = rowkey->get_column_id();
-      column_item.column_name_ = rowkey->get_column_name();
-      column_item.set_default_value(column_schema->get_cur_default_value());
-      if (OB_FAIL(stmt.add_column_item(column_item))) {
-        LOG_WARN("add column item to stmt failed", K(ret));
-      } else if (OB_FAIL(column_items.push_back(column_item))) {
-        LOG_WARN("failed to push back column item", K(ret));
-      } else if (FALSE_IT(rowkey->clear_explicited_referece())) {
-      } else if (OB_ISNULL(ctx_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("trans ctx is null", K(ret));
-      } else if (OB_FAIL(rowkey->formalize(ctx_->session_info_))) {
-        LOG_WARN("formalize rowkey failed", K(ret));
-      } else if (OB_FAIL(rowkey->pull_relation_id())) {
-        LOG_WARN("failed to pullup relation ids", K(ret));
-      }
-    }
+    LOG_WARN("unexpect null", K(ret), K(ctx_));
+  } else if (OB_FAIL(ObTransformUtils::add_all_rowkey_columns_to_stmt(*ctx_, stmt,
+                                                                      trans_happened))) {
+    LOG_WARN("failed to add all rowkey columns to stmt", K(ret));
   }
   return ret;
 }
@@ -1851,7 +1743,7 @@ int ObTransformPreProcess::create_set_view_stmt(ObSelectStmt *stmt, TableItem *v
     LOG_WARN("origin stmt is null", K(ret));
   } else if (OB_FAIL(create_child_stmts_for_groupby_sets(parent_stmt, child_stmts))) {
     LOG_WARN("failed to create child stmts for groupby set stmt", K(ret), K(*parent_stmt));
-  } else if (OB_FAIL(ObTransformUtils::create_set_stmt(ctx_, ObSelectStmt::UNION, false,
+  } else if (OB_FAIL(ObTransformUtils::create_set_stmt(ctx_, ObSetRelation::UNION, false,
                                                        child_stmts, set_view_stmt))) {
     LOG_WARN("failed to create set stmt", K(ret));
   } else if (OB_ISNULL(set_view_stmt)) {
@@ -9612,7 +9504,7 @@ int ObTransformPreProcess::expand_full_outer_join(ObSelectStmt *&ref_query)
                                                     right_stmt->get_joined_tables().at(0),
                                                     right_stmt->get_select_items()))) {
     LOG_WARN("failed to switch join table to semi.", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::create_set_stmt(ctx_, ObSelectStmt::UNION, false, left_stmt,
+  } else if (OB_FAIL(ObTransformUtils::create_set_stmt(ctx_, ObSetRelation::UNION, false, left_stmt,
                                                        right_stmt, union_stmt))) {
     LOG_WARN("failed to create union stmt.", K(ret));
   } else if (OB_ISNULL(union_stmt)) {

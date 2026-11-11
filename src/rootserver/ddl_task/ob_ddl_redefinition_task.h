@@ -54,19 +54,22 @@ public:
       ObRootService *root_service,
       const common::ObAddr &inner_sql_exec_addr,
       const int64_t data_format_version,
-      const bool is_retryable_ddl,
-      const obrpc::ObMViewRefreshInfo &mview_refresh_info);
+      const bool is_retryable_ddl);
   int init(
       const share::ObDDLType task_type,
       const ObTableSchema &orig_table_schema,
       const ObTableSchema &hidden_table_schema,
       const AlterTableSchema &alter_table_schema,
       const ObTimeZoneInfoWrap &tz_info_wrap,
-      const common::ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos);
+      const common::ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos,
+      const obrpc::ObMViewRefreshInfo &mview_refresh_info);
   ObDDLTaskID get_ddl_task_id() { return ObDDLTaskID(tenant_id_, task_id_); }
   virtual ~ObDDLRedefinitionSSTableBuildTask() = default;
   virtual int process() override;
-  virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
+  virtual int64_t get_deep_copy_size() const override
+  {
+    return sizeof(*this) + mview_refresh_info_.get_deep_copy_size();
+  }
   virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
   void add_event_info(const int ret, const ObString &ddl_event_stmt);
 private:

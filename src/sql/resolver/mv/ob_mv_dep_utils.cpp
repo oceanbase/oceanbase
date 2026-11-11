@@ -7,6 +7,9 @@
 #include "sql/resolver/mv/ob_mv_dep_utils.h"
 #include "share/ob_dml_sql_splicer.h"
 #include "share/schema/ob_dependency_info.h"
+#include "share/ob_cluster_version.h"
+#include "share/ob_server_struct.h"
+#include "sql/resolver/mv/ob_mv_checker.h"
 
 namespace oceanbase
 {
@@ -516,84 +519,6 @@ int ObMVDepUtils::get_mds_locked_mview_ids(ObISQLClient &sql_client,
   return ret;
 }
 
-int ObMVDepUtils::get_mview_ids_in_topo_refresh_order(ObISQLClient &sql_client,
-                                                      const uint64_t tenant_id,
-                                                      const uint64_t target_mview_id,
-                                                      ObIArray<uint64_t> &topo_ordered_mview_ids,
-                                                      ObIArray<ObSEArray<uint64_t, 4>> &topo_ordered_dep_mview_ids)
-{
-  int ret = OB_SUCCESS;
-  topo_ordered_mview_ids.reuse();
-  topo_ordered_dep_mview_ids.reuse();
-  ObSqlString sql;
-  const char cte_name[] = "nested_mv_deps";
-  if (OB_FAIL(build_mview_dep_recursive_cte(target_mview_id, cte_name, sql))) {
-    LOG_WARN("fail to build mview dep recursive cte", KR(ret));
-  } else if (OB_FAIL(sql.append_fmt("SELECT parent_mview_id, mview_id FROM %s"
-                 " group by parent_mview_id, mview_id"
-                 " ORDER BY max(level) desc, mview_id, parent_mview_id", cte_name))) {
-    LOG_WARN("fail to assign sql", KR(ret));
-  } else {
-    ObSEArray<uint64_t, 8> dep_parent_ids;
-    ObSEArray<uint64_t, 8> dep_child_ids;
-    int64_t parent_idx = -1;
-    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ObMySQLResult *result = nullptr;
-      if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
-        LOG_WARN("execute sql failed", KR(ret), K(sql));
-      } else if (OB_ISNULL(result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("result is null", KR(ret));
-      }
-
-      while (OB_SUCC(ret)) {
-        if (OB_FAIL(result->next())) {
-          if (OB_UNLIKELY(OB_ITER_END != ret)) {
-            LOG_WARN("failed to get next", KR(ret));
-          } else {
-            ret = OB_SUCCESS;
-            break;
-          }
-        } else {
-          uint64_t mview_id = 0;
-          uint64_t parent_mview_id = 0;
-          EXTRACT_INT_FIELD_MYSQL(*result, "mview_id", mview_id, uint64_t);
-          EXTRACT_INT_FIELD_MYSQL_SKIP_RET(*result, "parent_mview_id", parent_mview_id, uint64_t);
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(add_var_to_array_no_dup(topo_ordered_mview_ids, mview_id))) {
-            LOG_WARN("fail to add mview id", KR(ret), K(mview_id));
-          } else if (0 == parent_mview_id) {
-            // do nothing
-          } else if (OB_FAIL(dep_parent_ids.push_back(parent_mview_id))) {
-            LOG_WARN("fail to push dep parent id", KR(ret), K(parent_mview_id));
-          } else if (OB_FAIL(dep_child_ids.push_back(mview_id))) {
-            LOG_WARN("fail to push dep child id", KR(ret), K(mview_id));
-          }
-        }
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(topo_ordered_mview_ids.empty())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected array", KR(ret), K(dep_parent_ids), K(dep_child_ids));
-    } else if (OB_FAIL(topo_ordered_dep_mview_ids.prepare_allocate(topo_ordered_mview_ids.count()))) {
-      LOG_WARN("prepare allocate pending tasks failed", KR(ret), K(topo_ordered_mview_ids));
-    }
-
-    for (int i = 0; OB_SUCC(ret) && i < dep_parent_ids.count(); ++i) {
-      if (OB_UNLIKELY(!has_exist_in_array(topo_ordered_mview_ids, dep_parent_ids.at(i), &parent_idx))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("parent mview not found in topo array", KR(ret), K(i), K(dep_parent_ids.at(i)));
-      } else if (OB_FAIL(add_var_to_array_no_dup(topo_ordered_dep_mview_ids.at(parent_idx),
-                                                 dep_child_ids.at(i)))) {
-        LOG_WARN("fail to add dep mview id", KR(ret), K(i), K(dep_parent_ids.at(i)), K(dep_child_ids.at(i)));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObMVDepUtils::update_mview_dep_base_table(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
@@ -623,6 +548,181 @@ int ObMVDepUtils::update_mview_dep_base_table(
     } else {
       LOG_INFO("updated mview dep base table", K(tenant_id), K(old_base_table_id),
                K(new_base_table_id), K(affected_rows));
+    }
+  }
+  return ret;
+}
+
+int ObMVDepUtils::check_dep_mview_refresh_interval_order(const ObSelectStmt &stmt,
+                                                         const uint64_t tenant_id,
+                                                         const int64_t refresh_interval)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<uint64_t, 4> dep_mview_ids;
+  if (refresh_interval <= 0) {
+  } else if (OB_FAIL(ObMVChecker::collect_dep_mview_ids_from_stmt(stmt, dep_mview_ids))) {
+    LOG_WARN("failed to collect dependency mview ids from stmt", KR(ret));
+  } else if (dep_mview_ids.empty()) {
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else if (OB_FAIL(check_mview_refresh_interval_order(
+                 *GCTX.sql_proxy_, tenant_id, dep_mview_ids, refresh_interval))) {
+    LOG_WARN("failed to check mview refresh interval order", KR(ret), K(tenant_id),
+             K(refresh_interval), K(dep_mview_ids));
+  }
+  return ret;
+}
+
+int ObMVDepUtils::check_mview_refresh_interval_order(ObISQLClient &sql_client,
+                                                     const uint64_t tenant_id,
+                                                     const ObIArray<uint64_t> &mview_ids,
+                                                     const int64_t refresh_interval)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  ObSqlString sql;
+  common::sqlclient::ObMySQLResult *result = nullptr;
+  int64_t invalid_mview_count = 0;
+  if (refresh_interval <= 0 || mview_ids.empty()) {
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(mview_ids.count()));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("failed to get min data version", KR(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_5_0_2_0) {
+  } else if (OB_FAIL(sql.assign_fmt(
+                 "WITH RECURSIVE up_dep (mview_id, refresh_interval) AS ("
+                 "  SELECT mv.mview_id, mv.refresh_interval FROM %s.%s mv "
+                 "  WHERE mv.tenant_id = 0 AND mv.mview_id IN (",
+                 OB_SYS_DATABASE_NAME, OB_ALL_MVIEW_TNAME))) {
+    LOG_WARN("failed to assign sql", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < mview_ids.count(); ++i) {
+      if (OB_FAIL(sql.append_fmt("%s%lu", 0 == i ? "" : ", ", mview_ids.at(i)))) {
+        LOG_WARN("failed to append mview id", KR(ret), K(i), K(mview_ids.at(i)));
+      }
+    }
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(sql.append_fmt(
+                     ") UNION ALL "
+                     "  SELECT /*+leading(u dep mv) use_nl(dep mv) */ "
+                     "         mv.mview_id, mv.refresh_interval "
+                     "    FROM up_dep u, %s.%s dep, %s.%s mv "
+                     "   WHERE u.refresh_interval <= 0 "
+                     "     AND dep.tenant_id = 0 AND mv.tenant_id = 0 "
+                     "     AND dep.mview_id = u.mview_id AND dep.p_obj = mv.mview_id"
+                     ") SELECT COUNT(*) AS invalid_mview_count "
+                     "FROM up_dep WHERE refresh_interval > %ld",
+                     OB_SYS_DATABASE_NAME, OB_ALL_MVIEW_DEP_TNAME,
+                     OB_SYS_DATABASE_NAME, OB_ALL_MVIEW_TNAME,
+                     refresh_interval))) {
+        LOG_WARN("failed to append sql", KR(ret));
+      } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("failed to execute read", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("failed to get invalid mview count", KR(ret));
+      } else {
+        EXTRACT_INT_FIELD_MYSQL(*result, "invalid_mview_count", invalid_mview_count, int64_t);
+        if (OB_SUCC(ret) && invalid_mview_count > 0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                         "a materialized view refresh interval shorter than its referenced "
+                         "materialized view refresh interval");
+          LOG_WARN("downstream mview refreshes faster than its upstream mview", KR(ret),
+                   K(tenant_id), K(refresh_interval), K(mview_ids), K(sql));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMVDepUtils::check_mview_refresh_interval_order(ObISQLClient &sql_client,
+                                                     const uint64_t tenant_id,
+                                                     const uint64_t mview_id,
+                                                     const int64_t refresh_interval)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  ObSqlString sql;
+  common::sqlclient::ObMySQLResult *result = nullptr;
+  int64_t invalid_mview_count = 0;
+  if (refresh_interval <= 0) {
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == mview_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(mview_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("failed to get min data version", KR(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_5_0_2_0) {
+  } else if (OB_FAIL(sql.assign_fmt(
+                 "WITH RECURSIVE up_dep (mview_id, refresh_interval) AS ("
+                 "  SELECT mv.mview_id, mv.refresh_interval "
+                 "    FROM %s.%s dep, %s.%s mv "
+                 "   WHERE dep.tenant_id = 0 AND mv.tenant_id = 0 "
+                 "     AND dep.mview_id = %lu AND dep.p_obj = mv.mview_id "
+                 "  UNION ALL "
+                 "  SELECT /*+leading(u dep mv) use_nl(dep mv) */ "
+                 "         mv.mview_id, mv.refresh_interval "
+                 "    FROM up_dep u, %s.%s dep, %s.%s mv "
+                 "   WHERE u.refresh_interval <= 0 "
+                 "     AND dep.tenant_id = 0 AND mv.tenant_id = 0 "
+                 "     AND dep.mview_id = u.mview_id AND dep.p_obj = mv.mview_id"
+                 "), down_dep (mview_id, refresh_interval) AS ("
+                 "  SELECT /*+ leading(dep mv) use_nl(mv) */ "
+                 "         mv.mview_id, mv.refresh_interval "
+                 "    FROM %s.%s dep, %s.%s mv "
+                 "   WHERE dep.tenant_id = 0 AND mv.tenant_id = 0 "
+                 "     AND dep.p_obj = %lu AND dep.mview_id = mv.mview_id "
+                 "  UNION ALL "
+                 "  SELECT /*+leading(d dep mv) use_hash(dep) */ "
+                 "         mv.mview_id, mv.refresh_interval "
+                 "    FROM down_dep d, %s.%s dep, %s.%s mv "
+                 "   WHERE d.refresh_interval <= 0 "
+                 "     AND dep.tenant_id = 0 AND mv.tenant_id = 0 "
+                 "     AND dep.p_obj = d.mview_id AND dep.mview_id = mv.mview_id"
+                 ") SELECT COUNT(*) AS invalid_mview_count FROM ("
+                 "  SELECT 1 FROM up_dep WHERE refresh_interval > %ld "
+                 "  UNION ALL "
+                 "  SELECT 1 FROM down_dep "
+                 "   WHERE refresh_interval > 0 AND refresh_interval < %ld"
+                 ") t",
+                 OB_SYS_DATABASE_NAME, OB_ALL_MVIEW_DEP_TNAME,
+                 OB_SYS_DATABASE_NAME, OB_ALL_MVIEW_TNAME,
+                 mview_id,
+                 OB_SYS_DATABASE_NAME, OB_ALL_MVIEW_DEP_TNAME,
+                 OB_SYS_DATABASE_NAME, OB_ALL_MVIEW_TNAME,
+                 OB_SYS_DATABASE_NAME, OB_ALL_MVIEW_DEP_TNAME,
+                 OB_SYS_DATABASE_NAME, OB_ALL_MVIEW_TNAME,
+                 mview_id,
+                 OB_SYS_DATABASE_NAME, OB_ALL_MVIEW_DEP_TNAME,
+                 OB_SYS_DATABASE_NAME, OB_ALL_MVIEW_TNAME,
+                 refresh_interval, refresh_interval))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(mview_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("failed to execute read", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("failed to get invalid mview count", KR(ret));
+      } else {
+        EXTRACT_INT_FIELD_MYSQL(*result, "invalid_mview_count", invalid_mview_count, int64_t);
+        if (OB_SUCC(ret) && invalid_mview_count > 0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                         "a materialized view refresh interval shorter than its referenced "
+                         "materialized view refresh interval");
+          LOG_WARN("downstream mview refreshes faster than its upstream mview", KR(ret),
+                   K(tenant_id), K(mview_id), K(refresh_interval), K(sql));
+        }
+      }
     }
   }
   return ret;

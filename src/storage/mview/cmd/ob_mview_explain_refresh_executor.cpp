@@ -356,6 +356,8 @@
    } else if (OB_FAIL(mv_provider.get_mlog_mv_refresh_infos(session_info_,
                                                              &schema_guard,
                                                              ObMVRefreshMethod::FORCE,
+                                                             true /* initial_refresh_finished */,
+                                                             mview_info.get_compat_version(),
                                                              dependency_infos,
                                                              tables_need_mlog,
                                                              can_fast_refresh))) {
@@ -454,14 +456,17 @@
          }
        }
      } else if (ObMVRefreshType::FAST == refresh_type) {
-       ObArray<uint64_t> tables_without_delete;
        ObArray<uint64_t> tables_without_insert;
+       ObArray<uint64_t> tables_without_update;
+       ObArray<uint64_t> tables_without_delete;
        ObMVPrinterRefreshInfo refresh_info(base_table_scn_range,
                                            mview_refresh_scn_range,
-                                           tables_without_delete,
                                            tables_without_insert,
-                                           mview_info.get_compat_version());
-       if (OB_FAIL(mv_provider.print_mv_operators(session_info_, &refresh_info, str_alloc,
+                                           tables_without_update,
+                                           tables_without_delete);
+       if (OB_FAIL(mv_provider.print_mv_operators(session_info_,
+                                                  &refresh_info,
+                                                  str_alloc,
                                                   operators))) {
          LOG_WARN("fail to print mv operators", KR(ret));
        } else if (OB_UNLIKELY(operators.empty())) {

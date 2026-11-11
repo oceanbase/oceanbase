@@ -46,7 +46,8 @@ private:
                                     const ObTableSchema *orig_table_schema,
                                     obrpc::ObAlterTableArg &alter_table_arg,
                                     ObDDLOperator &ddl_operator, ObSchemaGetterGuard &schema_guard,
-                                    ObDDLSQLTransaction &trans);
+                                    ObDDLSQLTransaction &trans,
+                                    bool &need_schedule_update);
   static int alter_mlog_attributes(const uint64_t tenant_id, const ObTableSchema *orig_table_schema,
                                    obrpc::ObAlterTableArg &alter_table_arg,
                                    ObDDLOperator &ddl_operator, ObSchemaGetterGuard &schema_guard,

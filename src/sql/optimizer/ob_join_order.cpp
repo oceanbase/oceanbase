@@ -35,6 +35,7 @@
 #include "sql/hybrid_search/ob_hybrid_search_node.h"
 #include "sql/hybrid_search/ob_hybrid_search_dsl_resolver.h"
 #include "share/search_index/ob_search_index_encoder.h"
+#include "share/scn.h"
 #include "sql/optimizer/ob_select_log_plan.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/expr/ob_expr_json_utils.h"
@@ -6570,6 +6571,15 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
     }
   }
 
+  if (OB_SUCC(ret)
+      && TableItem::NOT_USING != table_item->flashback_query_type_
+      && OB_FAIL(filter_indexes_by_flashback_query(*table_item,
+                                                   ref_table_id,
+                                                   *schema_guard,
+                                                   valid_index_ids))) {
+    LOG_WARN("failed to filter indexes for flashback query", K(ret), K(table_id), K(ref_table_id));
+  }
+
   if (OB_SUCC(ret)) {
     // if there is no filter and need vector index scan, set helper.vec_index_type_ to post without filter.
     if (helper.vec_index_id_ != OB_INVALID_ID && (helper.filters_.count() == 0 && stmt->get_subquery_exprs().empty() && !has_match_expr_on_table && !helper.is_index_merge_)) {
@@ -6602,6 +6612,229 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
     LOG_WARN("failed add primary key id to array no dup", K(ret));
   }
   LOG_TRACE("all valid index id", K(valid_index_ids), K(ret));
+  return ret;
+}
+
+int ObJoinOrder::get_flashback_query_snapshot(const TableItem &table_item,
+                                              const ObRawExpr &real_snapshot_expr,
+                                              int64_t &snapshot_ts_us,
+                                              bool &got_snapshot,
+                                              bool &is_static_snapshot)
+{
+  int ret = OB_SUCCESS;
+  ObObj snapshot_obj;
+  ObRawExpr *snapshot_expr = table_item.flashback_query_expr_;
+  ObQueryCtx *query_ctx = OPT_CTX.get_query_ctx();
+  ObRtMViewInfo rt_mview_info;
+  uint64_t mview_id = OB_INVALID_ID;
+  share::SCN snapshot_scn;
+  snapshot_ts_us = 0;
+  got_snapshot = false;
+  is_static_snapshot = T_FUN_SYS_LAST_REFRESH_SCN != real_snapshot_expr.get_expr_type()
+                       && snapshot_expr->is_static_scalar_const_expr();
+  if (OB_ISNULL(query_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("query ctx is null", K(ret));
+  } else if (!is_static_snapshot) {
+    if (T_FUN_SYS_LAST_REFRESH_SCN == real_snapshot_expr.get_expr_type()) {
+      if (OB_UNLIKELY(!real_snapshot_expr.is_sys_func_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected last refresh scn expression", K(ret), K(real_snapshot_expr));
+      } else if (OB_FALSE_IT(mview_id = static_cast<const ObSysFunRawExpr &>(real_snapshot_expr).get_mview_id())) {
+      } else if (OB_UNLIKELY(!is_valid_id(mview_id))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid materialized view id", K(ret), K(mview_id));
+      } else if (!ObRtMViewInfo::find(query_ctx->rt_mview_infos_, mview_id, rt_mview_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("rt mview info is missing", K(ret), K(mview_id));
+      } else if (OB_FALSE_IT(snapshot_ts_us = rt_mview_info.last_refresh_ts_us_)) {
+      } else if (snapshot_ts_us > 0) {
+        got_snapshot = true;
+        OPT_TRACE("use rt mview refresh snapshot", K(mview_id), K(snapshot_ts_us));
+      }
+    }
+  } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(OPT_CTX.get_exec_ctx(),
+                                                               snapshot_expr,
+                                                               snapshot_obj,
+                                                               got_snapshot,
+                                                               *allocator_))) {
+    LOG_WARN("failed to calculate flashback query snapshot", K(ret));
+  } else if (!got_snapshot || snapshot_obj.is_null()) {
+    // Let execution report invalid or unavailable runtime snapshots.
+  } else if (TableItem::USING_SCN == table_item.flashback_query_type_) {
+    if (OB_UNLIKELY(!snapshot_obj.is_uint64())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected flashback query snapshot type", K(ret), K(snapshot_obj));
+    } else if (OB_FAIL(snapshot_scn.convert_for_sql(snapshot_obj.get_uint64()))) {
+      LOG_WARN("failed to convert flashback query snapshot", K(ret), K(snapshot_obj));
+    } else if (FALSE_IT(snapshot_ts_us = snapshot_scn.convert_to_ts())) {
+    }
+  } else if (TableItem::USING_TIMESTAMP == table_item.flashback_query_type_) {
+    if (OB_UNLIKELY(!snapshot_obj.is_timestamp_tz())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected flashback query timestamp type", K(ret), K(snapshot_obj));
+    } else {
+      snapshot_ts_us = snapshot_obj.get_otimestamp_value().time_us_;
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::filter_indexes_by_flashback_query(const TableItem &table_item,
+                                                   const uint64_t ref_table_id,
+                                                   ObSqlSchemaGuard &schema_guard,
+                                                   ObIArray<uint64_t> &valid_index_ids)
+{
+  int ret = OB_SUCCESS;
+  bool got_snapshot = false;
+  bool is_static_snapshot = false;
+  int64_t snapshot_ts_us = 0;
+  int64_t max_kept_index_version = OB_INVALID_VERSION;
+  int64_t min_filtered_index_version = INT64_MAX;
+  bool filtered_index = false;
+  ObSEArray<uint64_t, 4> new_valid_index_ids;
+  ObRawExpr *snapshot_expr = table_item.flashback_query_expr_;
+  const ObRawExpr *real_snapshot_expr = snapshot_expr;
+  ObQueryCtx *query_ctx = OPT_CTX.get_query_ctx();
+  if (OB_ISNULL(allocator_) || OB_ISNULL(snapshot_expr) || OB_ISNULL(query_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(allocator_), KP(snapshot_expr), KP(query_ctx));
+  } else if (T_FUN_SYS_CAST == snapshot_expr->get_expr_type()
+             && (OB_UNLIKELY(snapshot_expr->get_param_count() < 1)
+                 || OB_ISNULL(snapshot_expr->get_param_expr(0)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected flashback query cast expression", K(ret), KPC(snapshot_expr));
+  } else if (!query_ctx->check_opt_compat_version(COMPAT_VERSION_5_0_2)) {
+    // do nothing
+  } else {
+    if (T_FUN_SYS_CAST == snapshot_expr->get_expr_type()
+        && T_FUN_SYS_LAST_REFRESH_SCN == snapshot_expr->get_param_expr(0)->get_expr_type()) {
+      real_snapshot_expr = snapshot_expr->get_param_expr(0);
+    }
+    if (OB_FAIL(get_flashback_query_snapshot(table_item,
+                                             *real_snapshot_expr,
+                                             snapshot_ts_us,
+                                             got_snapshot,
+                                             is_static_snapshot))) {
+      LOG_WARN("failed to get flashback query snapshot", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && got_snapshot && i < valid_index_ids.count(); ++i) {
+    const uint64_t index_id = valid_index_ids.at(i);
+    const ObTableSchema *index_schema = NULL;
+    bool is_link = false;
+    if (ref_table_id == index_id) {
+      if (OB_FAIL(new_valid_index_ids.push_back(index_id))) {
+        LOG_WARN("failed to push back base table id", K(ret), K(index_id));
+      }
+    } else if (OB_FAIL(schema_guard.get_table_schema(index_id, index_schema, is_link))) {
+      LOG_WARN("failed to get index schema", K(ret), K(index_id));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null index schema", K(ret), K(index_id));
+    } else if (!(index_schema->is_normal_index() || index_schema->is_unique_index())) {
+      if (OB_FAIL(new_valid_index_ids.push_back(index_id))) {
+        LOG_WARN("failed to push back special index id", K(ret), K(index_id));
+      }
+    } else {
+      const int64_t index_schema_version = index_schema->get_schema_version();
+      if (index_schema_version <= 0
+          || !share::schema::ObSchemaService::is_formal_version(index_schema_version)) {
+        if (OB_FAIL(new_valid_index_ids.push_back(index_id))) {
+          LOG_WARN("failed to push back index id", K(ret), K(index_id));
+        } else {
+          LOG_TRACE("skip flashback index filtering for invalid schema version",
+                    K(index_id), K(index_schema_version));
+        }
+      } else if (index_schema_version > snapshot_ts_us) {
+        filtered_index = true;
+        min_filtered_index_version = std::min(min_filtered_index_version, index_schema_version);
+        OPT_TRACE("ignore index because its schema version is later than flashback snapshot",
+                  index_id, index_schema_version, snapshot_ts_us);
+      } else {
+        max_kept_index_version = std::max(max_kept_index_version, index_schema_version);
+        if (OB_FAIL(new_valid_index_ids.push_back(index_id))) {
+          LOG_WARN("failed to push back index id", K(ret), K(index_id));
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret) || !got_snapshot) {
+  } else if (filtered_index && new_valid_index_ids.empty() && OB_FAIL(new_valid_index_ids.push_back(ref_table_id))) {
+    LOG_WARN("failed to add base table after ignoring index hint", K(ret), K(ref_table_id));
+  } else if (OB_FAIL(valid_index_ids.assign(new_valid_index_ids))) {
+    LOG_WARN("failed to assign filtered index ids", K(ret));
+  }
+  if (OB_SUCC(ret)
+      && is_static_snapshot
+      && OB_INVALID_VERSION != max_kept_index_version
+      && OB_FAIL(add_flashback_index_schema_constraint(table_item, max_kept_index_version, true))) {
+    LOG_WARN("failed to add kept index schema constraint", K(ret), K(max_kept_index_version));
+  }
+  if (OB_SUCC(ret)
+      && is_static_snapshot
+      && INT64_MAX != min_filtered_index_version
+      && OB_FAIL(add_flashback_index_schema_constraint(table_item, min_filtered_index_version, false))) {
+    LOG_WARN("failed to add filtered index schema constraint", K(ret), K(min_filtered_index_version));
+  }
+  return ret;
+}
+
+int ObJoinOrder::add_flashback_index_schema_constraint(const TableItem &table_item,
+                                                       const int64_t index_schema_version,
+                                                       const bool expect_index_available)
+{
+  int ret = OB_SUCCESS;
+  ObConstRawExpr *index_schema_version_expr = NULL;
+  ObRawExpr *constraint_expr = NULL;
+  ObRawExpr *snapshot_expr = table_item.flashback_query_expr_;
+  ObRawExprFactory &expr_factory = OPT_CTX.get_expr_factory();
+  ObSQLSessionInfo *session_info = OPT_CTX.get_session_info();
+  ObQueryCtx *query_ctx = OPT_CTX.get_query_ctx();
+  if (OB_ISNULL(snapshot_expr) || OB_ISNULL(session_info) || OB_ISNULL(query_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(snapshot_expr), KP(session_info), KP(query_ctx));
+  } else if (TableItem::USING_SCN == table_item.flashback_query_type_) {
+    share::SCN index_schema_scn;
+    if (OB_FAIL(index_schema_scn.convert_from_ts(index_schema_version))) {
+      LOG_WARN("failed to convert index schema version", K(ret), K(index_schema_version));
+    } else if (OB_FAIL(ObRawExprUtils::build_const_uint_expr(expr_factory,
+                                                             ObUInt64Type,
+                                                             index_schema_scn.get_val_for_sql(),
+                                                             index_schema_version_expr))) {
+      LOG_WARN("failed to build index schema scn expr", K(ret), K(index_schema_version));
+    }
+  } else if (TableItem::USING_TIMESTAMP == table_item.flashback_query_type_) {
+    ObObj index_schema_timestamp;
+    ObOTimestampData timestamp_data;
+    timestamp_data.time_us_ = index_schema_version;
+    index_schema_timestamp.set_timestamp_tz(timestamp_data);
+    index_schema_timestamp.set_scale(OB_MAX_TIMESTAMP_TZ_PRECISION);
+    if (OB_FAIL(expr_factory.create_raw_expr(T_TIMESTAMP_TZ, index_schema_version_expr))) {
+      LOG_WARN("failed to create index schema timestamp expr", K(ret));
+    } else {
+      index_schema_version_expr->set_value(index_schema_timestamp);
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected flashback query type", K(ret), K(table_item.flashback_query_type_));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(expr_factory,
+                                                                 T_OP_GE,
+                                                                 snapshot_expr,
+                                                                 index_schema_version_expr,
+                                                                 constraint_expr))) {
+    LOG_WARN("failed to build flashback index schema constraint", K(ret));
+  } else if (OB_FAIL(constraint_expr->formalize(session_info))) {
+    LOG_WARN("failed to formalize flashback index schema constraint", K(ret));
+  } else {
+    const PreCalcExprExpectResult expect_result = expect_index_available ? PRE_CALC_RESULT_TRUE : PRE_CALC_RESULT_FALSE;
+    ObExprConstraint constraint(constraint_expr, expect_result);
+    if (OB_FAIL(add_var_to_array_no_dup(query_ctx->all_expr_constraints_, constraint))) {
+      LOG_WARN("failed to add flashback index schema constraint", K(ret));
+    }
+  }
   return ret;
 }
 

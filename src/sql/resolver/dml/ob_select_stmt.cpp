@@ -7,6 +7,7 @@
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/expr/ob_shared_expr_resolver.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "sql/resolver/dml/ob_relation_group.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -198,9 +199,9 @@ int ObSelectStmt::check_aggr_and_winfunc(ObRawExpr &expr)
 {
   int ret = OB_SUCCESS;
   if (expr.is_aggr_expr() &&
-      !ObRawExprUtils::find_expr(agg_items_, &expr)) {
+      !ObRawExprUtils::find_expr(group_clause_.agg_items_, &expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("aggr expr does not exist in the stmt", K(agg_items_), K(expr), K(ret));
+    LOG_WARN("aggr expr does not exist in the stmt", K(group_clause_.agg_items_), K(expr), K(ret));
   } else if (expr.is_win_func_expr() &&
              !ObRawExprUtils::find_expr(win_func_exprs_, &expr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -216,20 +217,8 @@ int ObSelectStmt::assign(const ObSelectStmt &other)
     LOG_WARN("failed to copy stmt");
   } else if (OB_FAIL(select_items_.assign(other.select_items_))) {
     LOG_WARN("assign other select items failed", K(ret));
-  } else if (OB_FAIL(group_exprs_.assign(other.group_exprs_))) {
-    LOG_WARN("assign other group exprs failed", K(ret));
-  } else if (OB_FAIL(rollup_exprs_.assign(other.rollup_exprs_))) {
-    LOG_WARN("assign other rollup exprs failed", K(ret));
-  } else if (OB_FAIL(grouping_sets_items_.assign(other.grouping_sets_items_))) {
-    LOG_WARN("assgin other grouping sets items failed", K(ret));
-  } else if (OB_FAIL(rollup_items_.assign(other.rollup_items_))) {
-    LOG_WARN("assgin other rollup items failed", K(ret));
-  } else if (OB_FAIL(cube_items_.assign(other.cube_items_))) {
-    LOG_WARN("assgin other cube items failed", K(ret));
-  } else if (OB_FAIL(having_exprs_.assign(other.having_exprs_))) {
-    LOG_WARN("assign other having exprs failed", K(ret));
-  } else if (OB_FAIL(agg_items_.assign(other.agg_items_))) {
-    LOG_WARN("assign other aggr items failed", K(ret));
+  } else if (OB_FAIL(group_clause_.assign(other.group_clause_))) {
+    LOG_WARN("assign other group clause failed", K(ret));
   } else if (OB_FAIL(start_with_exprs_.assign(other.start_with_exprs_))) {
     LOG_WARN("assign other start with failed", K(ret));
   } else if (OB_FAIL(win_func_exprs_.assign(other.win_func_exprs_))) {
@@ -244,16 +233,13 @@ int ObSelectStmt::assign(const ObSelectStmt &other)
     LOG_WARN("assign ctx_exprs failed", K(ret));
   } else if (OB_FAIL(cycle_by_items_.assign(other.cycle_by_items_))) {
     LOG_WARN("assign cycle by item failed", K(ret));
-  } else if (OB_FAIL(rollup_directions_.assign(other.rollup_directions_))) {
-    LOG_WARN("assign other rollup directions.", K(ret));
   } else if (OB_FAIL(search_by_items_.assign(other.search_by_items_))) {
     LOG_WARN("assign search by items failed", K(ret));
-  } else if (OB_FAIL(set_query_.assign(other.set_query_))) {
-    LOG_WARN("assign set query failed", K(ret));
+  } else if (OB_FAIL(set_clause_.assign(other.set_clause_))) {
+    LOG_WARN("assign set clause failed", K(ret));
   } else if (OB_FAIL(for_update_dml_info_.assign(other.for_update_dml_info_))) {
     LOG_WARN("assign for update dml info failed", K(ret));
   } else {
-    set_op_ = other.set_op_;
     is_recursive_cte_ = other.is_recursive_cte_;
     is_breadth_search_ = other.is_breadth_search_;
     is_distinct_ = other.is_distinct_;
@@ -262,7 +248,6 @@ int ObSelectStmt::assign(const ObSelectStmt &other)
     view_ref_id_ = other.view_ref_id_;
     is_match_topk_ = other.is_match_topk_;
     is_nocycle_ = other.is_nocycle_;
-    is_set_distinct_ = other.is_set_distinct();
     show_stmt_ctx_.assign(other.show_stmt_ctx_);
     select_type_ = other.select_type_;
     into_item_ = other.into_item_;
@@ -293,22 +278,16 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
   if (OB_UNLIKELY(!input.is_select_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("input stmt is invalid", K(ret));
-  } else if (OB_FAIL(set_query_.assign(other.set_query_))) {
-    LOG_WARN("failed to assgin set query", K(ret));
+  } else if (OB_FAIL(set_clause_.deep_copy(other.set_clause_))) {
+    LOG_WARN("failed to deep copy set clause", K(ret));
   } else if (OB_FAIL(ObDMLStmt::deep_copy_stmt_struct(allocator, expr_copier, other))) {
     LOG_WARN("deep copy DML stmt failed", K(ret));
   } else if (OB_FAIL(deep_copy_stmt_objects<ColumnItem>(expr_copier,
                                                         other.cycle_by_items_,
                                                         cycle_by_items_))) {
     LOG_WARN("deep copy cycle by item failed", K(ret));
-  } else if (OB_FAIL(expr_copier.copy(other.group_exprs_, group_exprs_))) {
-    LOG_WARN("deep copy group expr failed", K(ret));
-  } else if (OB_FAIL(expr_copier.copy(other.rollup_exprs_, rollup_exprs_))) {
-    LOG_WARN("deep copy rollup expr failed", K(ret));
-  } else if (OB_FAIL(expr_copier.copy(other.having_exprs_, having_exprs_))) {
-    LOG_WARN("deep copy having expr failed", K(ret));
-  } else if (OB_FAIL(expr_copier.copy(other.agg_items_, agg_items_))) {
-    LOG_WARN("deep copy agg item failed", K(ret));
+  } else if (OB_FAIL(group_clause_.deep_copy(expr_copier, other.group_clause_))) {
+    LOG_WARN("deep copy group clause failed", K(ret));
   } else if (OB_FAIL(expr_copier.copy(other.win_func_exprs_, win_func_exprs_))) {
     LOG_WARN("deep copy window function expr failed", K(ret));
   } else if (OB_FAIL(expr_copier.copy(other.qualify_filters_, qualify_filters_))) {
@@ -326,8 +305,6 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
                                                        other.search_by_items_,
                                                        search_by_items_))) {
     LOG_WARN("deep copy search by items failed", K(ret));
-  } else if (OB_FAIL(rollup_directions_.assign(other.rollup_directions_))) {
-    LOG_WARN("assign rollup directions failed", K(ret));
   } else if (OB_FAIL(deep_copy_stmt_objects<SelectItem>(expr_copier,
                                                         other.select_items_,
                                                         select_items_))) {
@@ -336,25 +313,12 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
                                                        other.order_items_,
                                                        order_items_))) {
     LOG_WARN("deep copy order items failed", K(ret));
-  } else if (OB_FAIL(deep_copy_stmt_objects<ObGroupingSetsItem>(expr_copier,
-                                                                other.grouping_sets_items_,
-                                                                grouping_sets_items_))) {
-    LOG_WARN("deep copy grouping sets items failed", K(ret));
-  } else if (OB_FAIL(deep_copy_stmt_objects<ObRollupItem>(expr_copier,
-                                                          other.rollup_items_,
-                                                          rollup_items_))) {
-    LOG_WARN("deep copy rollup items failed", K(ret));
-  } else if (OB_FAIL(deep_copy_stmt_objects<ObCubeItem>(expr_copier,
-                                                        other.cube_items_,
-                                                        cube_items_))) {
-    LOG_WARN("deep copy cube items failed", K(ret));
   } else if (OB_FAIL(deep_copy_stmt_objects<ForUpdateDMLInfo>(allocator,
                                                               expr_copier,
                                                               other.for_update_dml_info_,
                                                               for_update_dml_info_))) {
     LOG_WARN("deep copy for update dml info failed", K(ret));
   } else {
-    set_op_ = other.set_op_;
     is_recursive_cte_ = other.is_recursive_cte_;
     is_breadth_search_ = other.is_breadth_search_;
     is_distinct_ = other.is_distinct_;
@@ -363,7 +327,6 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     is_view_stmt_ = other.is_view_stmt_;
     view_ref_id_ = other.view_ref_id_;
     is_match_topk_ = other.is_match_topk_;
-    is_set_distinct_ = other.is_set_distinct_;
     show_stmt_ctx_.assign(other.show_stmt_ctx_);
     select_type_ = other.select_type_;
     children_swapped_ = other.children_swapped_;
@@ -438,18 +401,20 @@ int ObSelectStmt::create_select_list_for_set_stmt(ObRawExprFactory &expr_factory
 int ObSelectStmt::update_stmt_table_id(ObIAllocator *allocator, const ObSelectStmt &other, bool need_update_qb_name)
 {
   int ret = OB_SUCCESS;
+  const ObIArray<ObSelectStmt *> &set_queries = get_set_query();
+  const ObIArray<ObSelectStmt *> &other_set_queries = other.get_set_query();
   if (OB_FAIL(ObDMLStmt::update_stmt_table_id(allocator, other, need_update_qb_name))) {
     LOG_WARN("failed to update stmt table id", K(ret));
-  } else if (OB_UNLIKELY(set_query_.count() != other.set_query_.count())) {
+  } else if (OB_UNLIKELY(set_queries.count() != other_set_queries.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected child query count", K(ret), K(set_query_.count()),
-                                                 K(other.set_query_.count()));
+    LOG_WARN("get unexpected child query count", K(ret), K(set_queries.count()),
+                                                 K(other_set_queries.count()));
   } else {
     ObSelectStmt *child_query = NULL;
     ObSelectStmt *other_child_query = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < set_query_.count(); i++) {
-      if (OB_ISNULL(other_child_query = other.set_query_.at(i))
-          || OB_ISNULL(child_query = set_query_.at(i))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < set_queries.count(); i++) {
+      if (OB_ISNULL(other_child_query = other_set_queries.at(i))
+          || OB_ISNULL(child_query = set_queries.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null statement", K(ret), K(child_query), K(other_child_query));
       } else if (OB_FAIL(SMART_CALL(child_query->update_stmt_table_id(allocator, *other_child_query, need_update_qb_name)))) {
@@ -473,25 +438,25 @@ int ObSelectStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(visitor.visit(group_exprs_, SCOPE_GROUPBY))) {
+    if (OB_FAIL(visitor.visit(group_clause_.group_exprs_, SCOPE_GROUPBY))) {
       LOG_WARN("failed to visit group exprs", K(ret));
-    } else if (OB_FAIL(visitor.visit(rollup_exprs_, SCOPE_GROUPBY))) {
+    } else if (OB_FAIL(visitor.visit(group_clause_.rollup_exprs_, SCOPE_GROUPBY))) {
       LOG_WARN("failed to visit rollup exprs", K(ret));
-    } else if (OB_FAIL(visitor.visit(having_exprs_, SCOPE_HAVING))) {
+    } else if (OB_FAIL(visitor.visit(group_clause_.having_exprs_, SCOPE_HAVING))) {
       LOG_WARN("failed to visit having exprs", K(ret));
-    } else if (OB_FAIL(visitor.visit(agg_items_, SCOPE_DICT_FIELDS))) {
+    } else if (OB_FAIL(visitor.visit(group_clause_.agg_items_, SCOPE_DICT_FIELDS))) {
       LOG_WARN("failed to visit aggr items", K(ret));
-    } else if (OB_FAIL(iterate_rollup_items(rollup_items_, visitor))) {
+    } else if (OB_FAIL(iterate_rollup_items(group_clause_.rollup_items_, visitor))) {
       LOG_WARN("failed to iterate multi rollup items", K(ret));
-    } else if (OB_FAIL(iterate_cube_items(cube_items_, visitor))) {
+    } else if (OB_FAIL(iterate_cube_items(group_clause_.cube_items_, visitor))) {
       LOG_WARN("failed to iterate multi cube items", K(ret));
     } else {/* do nothing */}
-    for (int64_t i = 0; OB_SUCC(ret) && i < grouping_sets_items_.count(); i++) {
-      if (OB_FAIL(iterate_group_items(grouping_sets_items_.at(i).grouping_sets_exprs_, visitor))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < group_clause_.grouping_sets_items_.count(); i++) {
+      if (OB_FAIL(iterate_group_items(group_clause_.grouping_sets_items_.at(i).grouping_sets_exprs_, visitor))) {
         LOG_WARN("failed to iterate grouping sets exprs", K(ret));
-      } else if (OB_FAIL(iterate_rollup_items(grouping_sets_items_.at(i).rollup_items_, visitor))) {
+      } else if (OB_FAIL(iterate_rollup_items(group_clause_.grouping_sets_items_.at(i).rollup_items_, visitor))) {
         LOG_WARN("failed to iterate rollup items", K(ret));
-      } else if (OB_FAIL(iterate_cube_items(grouping_sets_items_.at(i).cube_items_, visitor))) {
+      } else if (OB_FAIL(iterate_cube_items(group_clause_.grouping_sets_items_.at(i).cube_items_, visitor))) {
         LOG_WARN("failed to iterate cube items", K(ret));
       } else {/* do nothing */}
     }
@@ -571,33 +536,25 @@ int ObSelectStmt::iterate_group_items(ObIArray<ObGroupbyExpr> &group_items,
 
 ObSelectStmt::ObSelectStmt(ObIAllocator &allocator)
     : ObDMLStmt(stmt::T_SELECT, allocator),
+      ObRelation(allocator),
+      set_clause_(allocator),
       search_by_items_(allocator),
       cycle_by_items_(allocator),
       cte_exprs_(allocator),
       select_items_(allocator),
-      group_exprs_(allocator),
-      rollup_exprs_(allocator),
-      having_exprs_(allocator),
-      agg_items_(allocator),
       win_func_exprs_(allocator),
       qualify_filters_(allocator),
       start_with_exprs_(allocator),
       connect_by_exprs_(allocator),
       connect_by_prior_exprs_(allocator),
-      rollup_directions_(allocator),
-      grouping_sets_items_(allocator),
-      rollup_items_(allocator),
-      cube_items_(allocator),
+      group_clause_(allocator),
       for_update_columns_(allocator),
-      set_query_(allocator),
       for_update_dml_info_(allocator)
 {
   limit_count_expr_  = NULL;
   limit_offset_expr_ = NULL;
   is_distinct_ = false;
   is_nocycle_ = false;
-  is_set_distinct_ = false;
-  set_op_ = NONE;
   is_recursive_cte_ = false;
   is_breadth_search_ = true;
   is_view_stmt_ = false;
@@ -699,7 +656,7 @@ int ObSelectStmt::get_child_stmt_size(int64_t &child_size) const
   if (OB_FAIL(ObDMLStmt::get_child_stmt_size(tmp_size))) {
     LOG_WARN("failed to get child stmt size", K(ret));
   } else {
-    child_size = tmp_size + set_query_.count();
+    child_size = tmp_size + get_set_query().count();
   }
   return ret;
 }
@@ -707,7 +664,7 @@ int ObSelectStmt::get_child_stmt_size(int64_t &child_size) const
 int ObSelectStmt::get_child_stmts(ObIArray<ObSelectStmt*> &child_stmts) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(append(child_stmts, set_query_))) {
+  if (OB_FAIL(append(child_stmts, get_set_query()))) {
     LOG_WARN("failed to append child query", K(ret));
   } else if (OB_FAIL(ObDMLStmt::get_child_stmts(child_stmts))) {
     LOG_WARN("failed to get child stmts", K(ret));
@@ -718,9 +675,9 @@ int ObSelectStmt::get_child_stmts(ObIArray<ObSelectStmt*> &child_stmts) const
 int ObSelectStmt::set_child_stmt(const int64_t child_num, ObSelectStmt* child_stmt)
 {
   int ret = OB_SUCCESS;
-  if (child_num < set_query_.count()) {
+  if (child_num < get_set_query().count()) {
     ret = set_set_query(child_num, child_stmt);
-  } else if (OB_FAIL(ObDMLStmt::set_child_stmt(child_num - set_query_.count(), child_stmt))) {
+  } else if (OB_FAIL(ObDMLStmt::set_child_stmt(child_num - get_set_query().count(), child_stmt))) {
     LOG_WARN("failed to set dml child stmt", K(ret));
   }
   return ret;
@@ -729,11 +686,8 @@ int ObSelectStmt::set_child_stmt(const int64_t child_num, ObSelectStmt* child_st
 int ObSelectStmt::set_set_query(const int64_t index, ObSelectStmt *stmt)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(index < 0 || index >= set_query_.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to set child query", K(ret), K(index), K(set_query_.count()));
-  } else {
-    set_query_.at(index) = stmt;
+  if (OB_FAIL(set_clause_.set_set_query(index, stmt))) {
+    LOG_WARN("failed to set child query", K(ret), K(index), K(get_set_query().count()));
   }
   return ret;
 }
@@ -753,7 +707,7 @@ int ObSelectStmt::get_from_subquery_stmts(ObIArray<ObSelectStmt*> &child_stmts,
                                           bool contain_lateral_table/* =true */) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(child_stmts.assign(set_query_))) {
+  if (OB_FAIL(child_stmts.assign(get_set_query()))) {
     LOG_WARN("failed to assign child query", K(ret));
   } else if (OB_FAIL(ObDMLStmt::get_from_subquery_stmts(child_stmts,
                                                         contain_lateral_table))) {
@@ -776,7 +730,7 @@ int ObSelectStmt::do_to_string(char *buf, const int64_t buf_len, int64_t &pos) c
   ObArray<ObSelectStmt*> child_stmts;
   if (OB_FAIL(ObDMLStmt::get_child_stmts(child_stmts))) {
     databuff_printf(buf, buf_len, pos, "ERROR get child stmts failed");
-  } else if (NONE == set_op_) {
+  } else if (!is_set_stmt()) {
     if (OB_ISNULL(query_ctx_)) {
       ret = OB_ERR_UNEXPECTED;
       databuff_printf(buf, buf_len, pos, "ERROR query context is null");
@@ -785,7 +739,7 @@ int ObSelectStmt::do_to_string(char *buf, const int64_t buf_len, int64_t &pos) c
            N_STMT_TYPE, stmt_type_,
            N_TABLE, table_items_,
            N_JOINED_TABLE, joined_tables_,
-           N_SEMI_INFO, semi_infos_,
+           N_SEMI_INFO, get_semi_infos(),
            N_PARTITION_EXPR, part_expr_items_,
            N_COLUMN, column_items_,
            N_SELECT, select_items_,
@@ -793,15 +747,15 @@ int ObSelectStmt::do_to_string(char *buf, const int64_t buf_len, int64_t &pos) c
            //"recursive union", is_recursive_cte_,
            N_DISTINCT, is_distinct_,
            N_NOCYCLE, is_nocycle_,
-           N_FROM, from_items_,
+           N_FROM, get_from_items(),
            N_START_WITH, start_with_exprs_,
            N_CONNECT_BY, connect_by_exprs_,
            //"cte exprs", cte_exprs_,
-           N_WHERE, condition_exprs_,
-           N_GROUP_BY, group_exprs_,
-           N_ROLLUP, rollup_exprs_,
-           N_HAVING, having_exprs_,
-           N_AGGR_FUNC, agg_items_,
+           N_WHERE, get_condition_exprs(),
+           N_GROUP_BY, group_clause_.group_exprs_,
+           N_ROLLUP, group_clause_.rollup_exprs_,
+           N_HAVING, group_clause_.having_exprs_,
+           N_AGGR_FUNC, group_clause_.agg_items_,
            N_ORDER_BY, order_items_,
            N_LIMIT, limit_count_expr_,
            N_WIN_FUNC, win_func_exprs_,
@@ -822,11 +776,11 @@ int ObSelectStmt::do_to_string(char *buf, const int64_t buf_len, int64_t &pos) c
              );
     }
   } else {
-    J_KV(N_SET_OP, ((int)set_op_),
+    J_KV(N_SET_OP, static_cast<int>(get_set_op()),
          //"recursive union", is_recursive_cte_,
          //"breadth search ", is_breadth_search_,
-         N_DISTINCT, is_set_distinct_,
-         K_(set_query),
+         N_DISTINCT, is_set_distinct(),
+         "set_query", get_set_query(),
          N_ORDER_BY, order_items_,
          N_LIMIT, limit_count_expr_,
          N_SELECT, select_items_,
@@ -849,17 +803,17 @@ int ObSelectStmt::check_and_get_same_aggr_item(ObRawExpr *expr,
     LOG_WARN("expr is null", K(ret));
   } else {
     bool is_existed = false;
-    for (int64_t i = 0; OB_SUCC(ret) && !is_existed && i < agg_items_.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && !is_existed && i < group_clause_.agg_items_.count(); ++i) {
       bool need_check_status = (i + 1) % 1000 == 0;
-      if (OB_ISNULL(agg_items_.at(i))) {
+      if (OB_ISNULL(group_clause_.agg_items_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", K(ret));
       } else if (need_check_status &&
                  OB_FAIL(THIS_WORKER.check_status())) {
         LOG_WARN("failed to check status", K(ret));
-      } else if (agg_items_.at(i)->same_as(*expr)) {
+      } else if (group_clause_.agg_items_.at(i)->same_as(*expr)) {
         is_existed = true;
-        same_aggr = agg_items_.at(i);
+        same_aggr = group_clause_.agg_items_.at(i);
       }
     }
   }
@@ -926,8 +880,8 @@ int ObSelectStmt::clear_sharable_expr_reference()
     LOG_WARN("failed to clear sharable expr reference", K(ret));
   } else {
     ObRawExpr *expr = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < agg_items_.count(); i++) {
-      if (OB_ISNULL(expr = agg_items_.at(i))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < group_clause_.agg_items_.count(); i++) {
+      if (OB_ISNULL(expr = group_clause_.agg_items_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else {
@@ -959,13 +913,13 @@ int ObSelectStmt::remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
   } else {
     ObRawExpr *expr = NULL;
     const bool is_scala = is_scala_group_by();
-    for (int64_t i = agg_items_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
-      if (OB_ISNULL(expr = agg_items_.at(i))) {
+    for (int64_t i = group_clause_.agg_items_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+      if (OB_ISNULL(expr = group_clause_.agg_items_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else if (expr->is_explicited_reference()) {
         /*do nothing*/
-      } else if (OB_FAIL(agg_items_.remove(i))) {
+      } else if (OB_FAIL(group_clause_.agg_items_.remove(i))) {
         LOG_WARN("failed to remove agg item", K(ret));
       } else {
         LOG_TRACE("succeed to remove agg items", K(*expr));
@@ -983,11 +937,11 @@ int ObSelectStmt::remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
         LOG_TRACE("succeed to remove win func exprs", K(*expr));
       }
     }
-    if (OB_SUCC(ret) && is_scala && agg_items_.empty()) {
+    if (OB_SUCC(ret) && is_scala && group_clause_.agg_items_.empty()) {
       ObAggFunRawExpr *aggr_expr = NULL;
       if (OB_FAIL(ObRawExprUtils::build_dummy_count_expr(*expr_factory, session_info, aggr_expr))) {
         LOG_WARN("failed to build a dummy expr", K(ret));
-      } else if (OB_FAIL(agg_items_.push_back(aggr_expr))) {
+      } else if (OB_FAIL(group_clause_.agg_items_.push_back(aggr_expr))) {
         LOG_WARN("failed to push back", K(ret));
       } else if (OB_FAIL(set_sharable_expr_reference(*aggr_expr,
                                                      ExplicitedRefType::REF_BY_NORMAL))) {
@@ -1113,7 +1067,7 @@ int ObSelectStmt::get_equal_set_conditions(ObIArray<ObRawExpr *> &conditions,
     LOG_WARN("failed to get equal set cond", K(ret));
   } else if (!check_having) {
     // do nothing
-  } else if (OB_FAIL(append(conditions, having_exprs_))) {
+  } else if (OB_FAIL(append(conditions, group_clause_.having_exprs_))) {
     LOG_WARN("failed to append having exprs", K(ret));
   } else { /* do nothing */ }
   return ret;
@@ -1131,7 +1085,7 @@ int ObSelectStmt::get_set_stmt_size(int64_t &size) const
         LOG_WARN("stmt is null", K(ret));
       } else if (!stmt->is_set_stmt()) {
         // do nothing
-      } else if (OB_FAIL(append(set_stmts, stmt->set_query_))) {
+      } else if (OB_FAIL(append(set_stmts, stmt->get_set_query()))) {
         LOG_WARN("failed to append stmts", K(ret));
       }
     }
@@ -1156,8 +1110,8 @@ bool ObSelectStmt::check_is_select_item_expr(const ObRawExpr *expr) const
 bool ObSelectStmt::contain_nested_aggr() const
 {
   bool ret = false;
-  for (int64_t i = 0; !ret && i < agg_items_.count(); i++) {
-    if (agg_items_.at(i)->contain_nested_aggr()) {
+  for (int64_t i = 0; !ret && i < group_clause_.agg_items_.count(); i++) {
+    if (group_clause_.agg_items_.at(i)->contain_nested_aggr()) {
       ret = true;
     } else { /*do nothing.*/ }
   }
@@ -1281,14 +1235,14 @@ int ObCubeItem::deep_copy(ObIRawExprCopier &expr_copier, const ObCubeItem &other
 bool ObSelectStmt::is_expr_in_groupings_sets_item(const ObRawExpr *expr) const
 {
   bool is_true = false;
-  for (int64_t i = 0; !is_true && i < grouping_sets_items_.count(); ++i) {
+  for (int64_t i = 0; !is_true && i < group_clause_.grouping_sets_items_.count(); ++i) {
     const ObIArray<ObGroupbyExpr> &grouping_sets_exprs =
-                                                    grouping_sets_items_.at(i).grouping_sets_exprs_;
+                                    group_clause_.grouping_sets_items_.at(i).grouping_sets_exprs_;
     for (int64_t j = 0; !is_true && j < grouping_sets_exprs.count(); ++j) {
       is_true = ObOptimizerUtil::find_item(grouping_sets_exprs.at(j).groupby_exprs_, expr);
     }
     if (!is_true) {
-      const ObIArray<ObRollupItem> &rollup_items = grouping_sets_items_.at(i).rollup_items_;
+      const ObIArray<ObRollupItem> &rollup_items = group_clause_.grouping_sets_items_.at(i).rollup_items_;
       for (int64_t j = 0; !is_true && j < rollup_items.count(); ++j) {
         const ObIArray<ObGroupbyExpr> &rollup_list_exprs = rollup_items.at(j).rollup_list_exprs_;
         for (int64_t k = 0; !is_true && k < rollup_list_exprs.count(); ++k) {
@@ -1297,7 +1251,7 @@ bool ObSelectStmt::is_expr_in_groupings_sets_item(const ObRawExpr *expr) const
       }
     }
     if (!is_true) {
-      const ObIArray<ObCubeItem> &cube_items = grouping_sets_items_.at(i).cube_items_;
+      const ObIArray<ObCubeItem> &cube_items = group_clause_.grouping_sets_items_.at(i).cube_items_;
       for (int64_t j = 0; !is_true && j < cube_items.count(); ++j) {
         const ObIArray<ObGroupbyExpr> &cube_list_exprs = cube_items.at(j).cube_list_exprs_;
         for (int64_t k = 0; !is_true && k < cube_list_exprs.count(); ++k) {
@@ -1408,8 +1362,8 @@ int ObSelectStmt::get_connect_by_pseudo_exprs(ObIArray<ObRawExpr*> &pseudo_exprs
 bool ObSelectStmt::is_expr_in_rollup_items(const ObRawExpr *expr) const
 {
   bool is_true = false;
-  for (int64_t i = 0; !is_true && i < rollup_items_.count(); ++i) {
-    const ObIArray<ObGroupbyExpr> &rollup_list_exprs = rollup_items_.at(i).rollup_list_exprs_;
+  for (int64_t i = 0; !is_true && i < group_clause_.rollup_items_.count(); ++i) {
+    const ObIArray<ObGroupbyExpr> &rollup_list_exprs = group_clause_.rollup_items_.at(i).rollup_list_exprs_;
     for (int64_t j = 0; !is_true && j < rollup_list_exprs.count(); ++j) {
       is_true = ObOptimizerUtil::find_item(rollup_list_exprs.at(j).groupby_exprs_, expr);
     }
@@ -1420,8 +1374,8 @@ bool ObSelectStmt::is_expr_in_rollup_items(const ObRawExpr *expr) const
 bool ObSelectStmt::is_expr_in_cube_items(const ObRawExpr *expr) const
 {
   bool is_true = false;
-  for (int64_t i = 0; !is_true && i < cube_items_.count(); ++i) {
-    const ObIArray<ObGroupbyExpr> &cube_list_exprs = cube_items_.at(i).cube_list_exprs_;
+  for (int64_t i = 0; !is_true && i < group_clause_.cube_items_.count(); ++i) {
+    const ObIArray<ObGroupbyExpr> &cube_list_exprs = group_clause_.cube_items_.at(i).cube_list_exprs_;
     for (int64_t j = 0; !is_true && j < cube_list_exprs.count(); ++j) {
       is_true = ObOptimizerUtil::find_equal_expr(cube_list_exprs.at(j).groupby_exprs_, expr);
     }
@@ -1432,11 +1386,11 @@ bool ObSelectStmt::is_expr_in_cube_items(const ObRawExpr *expr) const
 int ObSelectStmt::init_group_clause_capacity(int64_t rollup_num, int64_t cube_num, int64_t grouping_num)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(rollup_items_.reserve(rollup_num))) {
+  if (OB_FAIL(group_clause_.rollup_items_.reserve(rollup_num))) {
     LOG_WARN("failed to reserve rollup exprs", K(ret));
-  } else if (OB_FAIL(cube_items_.reserve(cube_num))) {
+  } else if (OB_FAIL(group_clause_.cube_items_.reserve(cube_num))) {
     LOG_WARN("failed to reserve cube items", K(ret));
-  } else if (OB_FAIL(grouping_sets_items_.reserve(grouping_num))) {
+  } else if (OB_FAIL(group_clause_.grouping_sets_items_.reserve(grouping_num))) {
     LOG_WARN("failed to reserve grouping sets items", K(ret));
   }
   return ret;
@@ -1525,15 +1479,15 @@ ObRawExpr* ObSelectStmt::get_pure_set_expr(ObRawExpr *expr)
 int ObSelectStmt::get_all_group_by_exprs(ObIArray<ObRawExpr*> &group_by_exprs) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(append(group_by_exprs, group_exprs_))) {
+  if (OB_FAIL(append(group_by_exprs, group_clause_.group_exprs_))) {
     LOG_WARN("failed to append group exprs");
-  } else if (OB_FAIL(append(group_by_exprs, rollup_exprs_))) {
+  } else if (OB_FAIL(append(group_by_exprs, group_clause_.rollup_exprs_))) {
     LOG_WARN("failed to append rollup exprs");
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < grouping_sets_items_.count(); ++i) {
-      const ObIArray<ObGroupbyExpr> &groupby_exprs = grouping_sets_items_.at(i).grouping_sets_exprs_;
-      const ObIArray<ObRollupItem> &rollup_items = grouping_sets_items_.at(i).rollup_items_;
-      const ObIArray<ObCubeItem> &cube_items = grouping_sets_items_.at(i).cube_items_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < group_clause_.grouping_sets_items_.count(); ++i) {
+      const ObIArray<ObGroupbyExpr> &groupby_exprs = group_clause_.grouping_sets_items_.at(i).grouping_sets_exprs_;
+      const ObIArray<ObRollupItem> &rollup_items = group_clause_.grouping_sets_items_.at(i).rollup_items_;
+      const ObIArray<ObCubeItem> &cube_items = group_clause_.grouping_sets_items_.at(i).cube_items_;
       for (int64_t j = 0; OB_SUCC(ret) && j < groupby_exprs.count(); ++j) {
         if (OB_FAIL(append(group_by_exprs, groupby_exprs.at(j).groupby_exprs_))) {
           LOG_WARN("failed to append exprs", K(ret));
@@ -1554,16 +1508,16 @@ int ObSelectStmt::get_all_group_by_exprs(ObIArray<ObRawExpr*> &group_by_exprs) c
         }
       }
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < rollup_items_.count(); ++i) {
-      const ObIArray<ObGroupbyExpr> &rollup_list_exprs = rollup_items_.at(i).rollup_list_exprs_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < group_clause_.rollup_items_.count(); ++i) {
+      const ObIArray<ObGroupbyExpr> &rollup_list_exprs = group_clause_.rollup_items_.at(i).rollup_list_exprs_;
       for (int64_t j = 0; OB_SUCC(ret) && j < rollup_list_exprs.count(); ++j) {
         if (OB_FAIL(append(group_by_exprs, rollup_list_exprs.at(j).groupby_exprs_))) {
           LOG_WARN("failed to append exprs", K(ret));
         }
       }
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < cube_items_.count(); ++i) {
-      const ObIArray<ObGroupbyExpr> &cube_list_exprs = cube_items_.at(i).cube_list_exprs_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < group_clause_.cube_items_.count(); ++i) {
+      const ObIArray<ObGroupbyExpr> &cube_list_exprs = group_clause_.cube_items_.at(i).cube_list_exprs_;
       for (int64_t j = 0; OB_SUCC(ret) && j < cube_list_exprs.count(); ++j) {
         if (OB_FAIL(append(group_by_exprs, cube_list_exprs.at(j).groupby_exprs_))) {
           LOG_WARN("failed to append exprs", K(ret));
@@ -1745,11 +1699,12 @@ int ObSelectStmt::is_query_deterministic(bool &is_deterministic) const
         is_deterministic = relation_exprs.at(i)->is_deterministic();
       }
     }
-    for (int64_t i = 0; OB_SUCC(ret) && is_deterministic && i < set_query_.count(); i++) {
-      if (OB_ISNULL(set_query_.at(i))) {
+    const ObIArray<ObSelectStmt *> &set_queries = get_set_query();
+    for (int64_t i = 0; OB_SUCC(ret) && is_deterministic && i < set_queries.count(); i++) {
+      if (OB_ISNULL(set_queries.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("got null expr");
-      } else if (OB_FAIL(SMART_CALL(set_query_.at(i)->is_query_deterministic(is_deterministic)))) {
+      } else if (OB_FAIL(SMART_CALL(set_queries.at(i)->is_query_deterministic(is_deterministic)))) {
         LOG_WARN("failed to check set query deterministic", K(ret));
       }
     }
@@ -1811,6 +1766,26 @@ int ObSelectStmt::is_contains_mv_proctime_table(bool &is_contains) const
     } else if (OB_FAIL(SMART_CALL(child_stmt->is_contains_mv_proctime_table(is_contains)))) {
       LOG_WARN("failed to check contains mv proctime table", K(ret));
     }
+  }
+  return ret;
+}
+
+// === ObRelation traversal interface ===
+
+int ObSelectStmt::get_non_empty_clauses(ObIArray<ObRelation *> &clauses)
+{
+  int ret = OB_SUCCESS;
+  // Clauses in computation order; only non-empty ones are returned.
+  // window/distinct/sort will be added later.
+  if (!set_clause_.is_empty()) {
+    // set stmt: only the set clause; each branch runs its own from/group pipeline.
+    if (OB_FAIL(clauses.push_back(&set_clause_))) {
+      LOG_WARN("failed to push back set_clause_", K(ret));
+    }
+  } else if (!group_clause_.is_empty() && OB_FAIL(clauses.push_back(&group_clause_))) {
+    LOG_WARN("failed to push back group_clause_", K(ret));
+  } else if (!from_clause_.is_empty() && OB_FAIL(clauses.push_back(&from_clause_))) {
+    LOG_WARN("failed to push back from_clause_", K(ret));
   }
   return ret;
 }

@@ -64,7 +64,7 @@ public:
       N_PARTITION_EXPR, part_expr_items_,
       N_COLUMN, column_items_,
       "update_tables", table_info_ ,
-      N_WHERE, condition_exprs_,
+      N_WHERE, get_condition_exprs(),
       N_ORDER_BY, order_items_,
       N_LIMIT, limit_count_expr_,
       N_OFFSET, limit_offset_expr_,

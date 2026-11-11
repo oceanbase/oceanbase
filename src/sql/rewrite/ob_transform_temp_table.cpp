@@ -132,13 +132,18 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
   hash::ObHashMap<uint64_t, ObParentDMLStmt, common::hash::NoPthreadDefendMode> parent_map;
   trans_happened = false;
   bool enable_temp_table_transform = false;
+  bool enable_cost_based_trans = true;
   bool has_hint = false;
   bool is_hint_enabled = false;
   ObSQLSessionInfo *session_info = NULL;
+  const ObQueryHint *query_hint = NULL;
   if (OB_ISNULL(ctx_) || OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx()) ||
+      OB_ISNULL(query_hint = stmt->get_stmt_hint().query_hint_) ||
       OB_ISNULL(session_info = ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ctx_), K(ret));
+  } else if (!allow_cost_based_trans(*stmt->get_query_ctx(), *query_hint)) {
+    enable_cost_based_trans = false;
   } else if (OB_FAIL(session_info->is_temp_table_transformation_enabled(enable_temp_table_transform))) {
     LOG_WARN("failed to check temp table transform enabled", K(ret));
   } else if (OB_FAIL(stmt->get_query_ctx()->get_global_hint().opt_params_.get_bool_opt_param(
@@ -148,6 +153,9 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
     enable_temp_table_transform = is_hint_enabled;
   }
   if (OB_FAIL(ret)) {
+  } else if (!enable_cost_based_trans) {
+    // This cost-based transformation gate takes precedence over the MATERIALIZE hint.
+    OPT_TRACE("disable CTE extraction since cost based transformation is disabled");
   } else if (ctx_->eval_cost_) {
     OPT_TRACE("disable CTE extraction during cost evaluation");
   } else if (ObTransformerImpl::is_type_needed(ctx_->happened_cost_based_trans_, OR_EXPANSION)) {
@@ -182,7 +190,7 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
     }
   }
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) || !enable_cost_based_trans) {
   } else if (OB_FAIL(extract_common_table_expression(stmt, child_stmts, parent_map, trans_happened))) {
     LOG_WARN("failed to extract common subquery as cte", K(ret));
   } else if (OB_FAIL(parent_map.destroy())) {
@@ -202,12 +210,17 @@ int ObTransformTempTable::try_inline_temp_table(ObDMLStmt *stmt,
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
+  bool enable_cost_based_trans = true;
   ObSQLSessionInfo *session_info = NULL;
-  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->stmt_factory_) ||
+  const ObQueryHint *query_hint = NULL;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx()) ||
+      OB_ISNULL(query_hint = stmt->get_stmt_hint().query_hint_) || OB_ISNULL(ctx_->stmt_factory_) ||
       OB_ISNULL(ctx_->allocator_) || OB_ISNULL(ctx_->expr_factory_) ||
       OB_ISNULL(session_info = ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ctx_), K(ret));
+  } else {
+    enable_cost_based_trans = allow_cost_based_trans(*stmt->get_query_ctx(), *query_hint);
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_info.count(); ++i) {
     TempTableInfo &helper = temp_table_info.at(i);
@@ -272,7 +285,7 @@ int ObTransformTempTable::try_inline_temp_table(ObDMLStmt *stmt,
       LOG_WARN("failed to check cte in blacklist", K(ret));
     } else if (in_blacklist) {
       OPT_TRACE("reject inline CTE due to blacklist");
-    } else if (ctx_->eval_cost_ || helper.temp_table_query_->is_recursive_union()) {
+    } else if (ctx_->eval_cost_ || helper.temp_table_query_->is_recursive_union() || !enable_cost_based_trans) {
       // only try inline by rule
     } else {
       need_check_cost = true;
@@ -2605,6 +2618,19 @@ int ObTransformTempTable::construct_transform_hint(ObDMLStmt &stmt, void *trans_
   return ret;
 }
 
+bool ObTransformTempTable::is_heuristic_and_cost_based_trans(const ObQueryCtx &query_ctx)
+{
+  return query_ctx.check_opt_compat_version(COMPAT_VERSION_5_0_2);
+}
+
+bool ObTransformTempTable::allow_cost_based_trans(const ObQueryCtx &query_ctx,
+                                                  const ObQueryHint &query_hint) const
+{
+  return !is_heuristic_and_cost_based_trans(query_ctx) ||
+         query_hint.has_outline_data() ||
+         ObTransformUtils::is_cost_based_trans_enable(*ctx_, query_hint.global_hint_);
+}
+
 int ObTransformTempTable::need_transform(const common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                           const int64_t current_level,
                                           const ObDMLStmt &stmt,
@@ -2620,15 +2646,16 @@ int ObTransformTempTable::need_transform(const common::ObIArray<ObParentDMLStmt>
   } else if (bypass) {
     need_trans = false;
     OPT_TRACE("transform rule bypassed");
-  } else if (OB_ISNULL(ctx_) || OB_ISNULL(query_hint = stmt.get_stmt_hint().query_hint_)) {
+  } else if (OB_ISNULL(ctx_) || OB_ISNULL(stmt.get_query_ctx()) ||
+             OB_ISNULL(query_hint = stmt.get_stmt_hint().query_hint_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(ctx_), K(query_hint));
   } else if (!parent_stmts.empty() || current_level != 0 ||
              is_normal_disabled_transform(stmt)) {
     need_trans = false;
   } else if (!query_hint->has_outline_data()) {
-    // TODO: sean.yyj make the priority of rule hint higher than cost based hint
-    need_trans = ObTransformUtils::is_cost_based_trans_enable(*ctx_, query_hint->global_hint_);
+    need_trans = is_heuristic_and_cost_based_trans(*stmt.get_query_ctx()) ||
+                 ObTransformUtils::is_cost_based_trans_enable(*ctx_, query_hint->global_hint_);
   } else if (NULL == (trans_hint = query_hint->get_outline_trans_hint(ctx_->trans_list_loc_))) {
     /*do nothing*/
     OPT_TRACE("outline reject transform");
@@ -3346,7 +3373,7 @@ int ObTransformTempTable::evaluate_cte_cost_globally(ObDMLStmt *origin_root,
     lib::ContextParam param;
     ObTransformerImpl trans(ctx_);
     bool trans_happended = false;
-    uint64_t trans_rules = ALL_HEURISTICS_RULES | (1L << TEMP_TABLE_OPTIMIZATION);
+    uint64_t trans_rules = ALL_HEURISTICS_RULES;
     param.set_mem_attr(ctx_->session_info_->get_effective_tenant_id(),
                        "TempTableCost",
                        ObCtxIds::DEFAULT_CTX_ID)

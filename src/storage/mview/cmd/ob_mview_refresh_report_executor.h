@@ -13,6 +13,7 @@
 #include "share/ob_define.h"
 #include "share/scn.h"
 #include "share/schema/ob_schema_getter_guard.h"
+#include "storage/mview/ob_mview_refresh_plan_format.h"
 
 namespace oceanbase
 {
@@ -280,6 +281,31 @@ struct MViewReportChangeData
   common::ObString tbl_display_name_;
 };
 
+// Request-local live capture status; plan contents belong to the statement.
+struct MViewLivePlanInfo
+{
+  enum State
+  {
+    NONE = 0,
+    AVAILABLE,
+    NOT_AVAILABLE,
+    ERROR,
+  };
+
+  MViewLivePlanInfo() { reset(); }
+  void reset()
+  {
+    state_ = NONE;
+    observation_start_time_ = 0;
+    observation_end_time_ = 0;
+  }
+
+  State state_;
+  int64_t observation_start_time_;
+  int64_t observation_end_time_;
+  TO_STRING_KV(K_(state), K_(observation_start_time), K_(observation_end_time));
+};
+
 // Per-step SQL stats and execution plan, from __all_virtual_mview_refresh_stmt_stats.
 struct MViewReportStmtData
 {
@@ -298,11 +324,32 @@ struct MViewReportStmtData
     memory_used_ = 0;
     sqlid_.reset();
     execution_plan_.reset();
+    plan_info_ = NULL;
+    live_plan_info_.reset();
   }
   bool is_success() const { return 0 == result_; }
   bool is_running() const { return 1 == result_; }
   bool is_failed() const { return !is_success() && !is_running(); }
-  TO_STRING_KV(K_(mview_id), K_(step), K_(result));
+  bool matches_mv_attempt(const MViewReportMVData &mv) const
+  {
+    return mview_id_ == mv.mview_id_ && retry_id_ == mv.retry_id_;
+  }
+  bool has_live_execution_plan() const
+  {
+    return is_running() && OB_NOT_NULL(plan_info_);
+  }
+  bool has_live_elapsed_time() const
+  {
+    return is_running() && MViewLivePlanInfo::AVAILABLE == live_plan_info_.state_
+           && 0 < start_time_
+           && start_time_ < live_plan_info_.observation_end_time_
+           && OB_NOT_NULL(plan_info_);
+  }
+  bool is_live_plan_capture_failed() const
+  {
+    return is_running() && MViewLivePlanInfo::NONE != live_plan_info_.state_ && OB_ISNULL(plan_info_);
+  }
+  TO_STRING_KV(K_(mview_id), K_(step), K_(result), KP_(plan_info), K_(live_plan_info));
 
   int64_t mview_id_;
   int64_t retry_id_;
@@ -316,6 +363,8 @@ struct MViewReportStmtData
   int64_t memory_used_;
   common::ObString sqlid_;
   common::ObString execution_plan_;
+  MViewStmtPlanInfo *plan_info_;
+  MViewLivePlanInfo live_plan_info_;
 };
 
 // All raw data fetched for one refresh run.
@@ -337,6 +386,12 @@ struct MViewReportData
       dep_edges_(OB_MALLOC_NORMAL_BLOCK_SIZE, common::ModulePageAllocator(allocator, "MvRptDE")),
       mv_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, common::ModulePageAllocator(allocator, "MvRptID"))
   {}
+
+  bool is_latest_mv_attempt(const int64_t mv_idx) const
+  {
+    return mv_idx + 1 >= mv_array_.count()
+           || mv_array_.at(mv_idx).mview_id_ != mv_array_.at(mv_idx + 1).mview_id_;
+  }
 };
 
 // Context bundling allocator and raw data fetched for one refresh run.

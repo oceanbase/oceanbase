@@ -402,14 +402,14 @@ int LimitPushdownRewriter::visit_set(ObLogSet *set, LimitPushdownContext *contex
     LOG_WARN("failed to extract pushdown context", K(ret));
   } else if (pushdown_context != NULL && !set->is_recursive_union()) {
     // union all
-    if (ObSelectStmt::UNION == set->get_set_op() && !set->is_set_distinct()) {
+    if (ObSetRelation::UNION == set->get_set_op() && !set->is_set_distinct()) {
       pushed_down = true;
       ObLogicalOperator *op = set;
       if (OB_FAIL(do_pushdown_limit_for_children(op, context, result, false))) {
         LOG_WARN("failed to push down partial limit", K(ret));
       }
     } else if (pushdown_context->is_limit_one() &&
-               ObSelectStmt::UNION == set->get_set_op() &&
+               ObSetRelation::UNION == set->get_set_op() &&
                set->is_set_distinct()) {
       pushed_down = true;
       // note that we use context here

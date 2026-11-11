@@ -35,24 +35,28 @@ public:
                                        ObSelectStmt *select_stmt,
                                        ObCreateTableArg &create_arg,
                                        ObCreateViewResolver &resolver);
-  static int resolve_refresh_method(const int32_t refresh_method_value,
+  static int resolve_refresh_method(const int64_t refresh_method_value,
                                     ObMVRefreshMethod &refresh_method);
   static int resolve_refresh_parallel_node(const ParseNode *refresh_parallel_node,
                                            int64_t &refresh_dop);
   static int resolve_nested_refresh_node(const ParseNode *nested_refresh_node,
+                                         const uint64_t tenant_id,
                                          ObMVNestedRefreshMode &nested_refresh_mode);
   static int resolve_refresh_on_node(const ParseNode *refresh_on_node,
                                      ObMVRefreshMode &refresh_mode);
-  static int resolve_refresh_interval_node(const ParseNode *refresh_interval_node,
-                                           ObSQLSessionInfo *session_info,
-                                           common::ObIAllocator *allocator,
-                                           ObResolverParams &resolver_params,
-                                           int64_t &start_time,
-                                           ObString &next_time_expr,
-                                           int64_t &period_sec);
-  static int resolve_compat_version_node(const ParseNode *compat_version_node,
-                                         const uint64_t tenant_id,
-                                         uint64_t &compat_version);
+  static int resolve_refresh_interval_node(const ParseNode *start_date,
+                                            const ParseNode *next_date,
+                                            ObResolverParams &resolver_params,
+                                            int64_t &start_time,
+                                            ObString &next_time_expr,
+                                            int64_t &period_sec);
+  static int resolve_compat_version(const ParseNode *compat_version_node,
+                                    const uint64_t tenant_id,
+                                    uint64_t &compat_version);
+  static int resolve_mv_refresh_info(const ParseNode *refresh_info_node,
+                                     ObResolverParams &resolver_params,
+                                     obrpc::ObMVRefreshInfo &refresh_info);
+  static int check_duplicate_mv_options(const ParseNode *options_node);
 
 private:
   static int resolve_mview_table_organization(const ParseNode *table_option_node,
@@ -76,9 +80,31 @@ private:
                                 ObTableSchema &container_table_schema,
                                 ObIArray<obrpc::ObMVRequiredColumnsInfo> &required_columns_infos,
                                 ObCreateViewResolver &resolver);
-  static int resolve_mv_refresh_info(ParseNode *refresh_info_node,
-                                     obrpc::ObMVRefreshInfo &refresh_info,
-                                     ObCreateViewResolver &resolver);
+  static int resolve_mv_fast_refresh(const ObSelectStmt *stmt,
+                                      obrpc::ObMVRefreshInfo &refresh_info,
+                                      ObTableSchema &table_schema,
+                                      ObTableSchema &container_table_schema,
+                                      ObIArray<obrpc::ObMVRequiredColumnsInfo> &required_columns_infos,
+                                      ObCreateViewResolver &resolver);
+  static int resolve_create_mview_options(const ParseNode *options_node,
+                                          const ObSelectStmt *stmt,
+                                          ObCreateViewResolver &resolver,
+                                          obrpc::ObMVRefreshInfo &refresh_info,
+                                          int64_t &mv_flags);
+  static int init_create_mview_options(const uint64_t tenant_id,
+                                       obrpc::ObMVRefreshInfo &refresh_info);
+  static int resolve_mv_sched_suspended(const uint64_t tenant_id,
+                                        bool &sched_suspended);
+  static int fill_mv_refresh_interval(const ParseNode *start_node,
+                                      const ParseNode *next_node,
+                                      const uint64_t tenant_id,
+                                      ObResolverParams &resolver_params,
+                                      obrpc::ObMVRefreshInfo &refresh_info);
+  static int check_mv_refresh_interval(const uint64_t tenant_id,
+                                       const obrpc::ObMVRefreshInfo &refresh_info,
+                                       const int64_t period_sec);
+  static int resolve_mv_build_mode(const ParseNode *build_mode_node,
+                                   ObMViewBuildMode &build_mode);
   static int check_on_query_computation_supported(const ObSelectStmt *stmt);
   static int load_mview_dep_session_vars(ObSQLSessionInfo &session_info,
                                          ObSelectStmt *stmt,
@@ -86,7 +112,7 @@ private:
   static int get_dep_session_vars_from_stmt(ObSQLSessionInfo &session_info,
                                             ObSelectStmt *stmt,
                                             ObLocalSessionVar &dep_vars);
-  static int generate_hidden_column_comment(const std::pair<ObRawExpr*, int64_t> &dependency_info,
+  static int generate_hidden_column_comment(const std::pair<ObRawExpr *, int64_t> &dep_col,
                                             const bool is_set_stmt,
                                             ObSchemaGetterGuard *schema_guard,
                                             ObSQLSessionInfo *session_info,

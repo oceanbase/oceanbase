@@ -2057,13 +2057,13 @@ int ObStmtComparer::compare_set_stmt(const ObSelectStmt *first,
           ((first->is_set_distinct() && second->is_set_distinct()) || 
           (!first->is_set_distinct() && !second->is_set_distinct()))) {
         relation = QueryRelation::QUERY_EQUAL;
-      } else if (ObSelectStmt::UNION == first->get_set_op() && !first->is_set_distinct()) {
+      } else if (ObSetRelation::UNION == first->get_set_op() && !first->is_set_distinct()) {
         relation = QueryRelation::QUERY_RIGHT_SUBSET;
-      } else if (ObSelectStmt::UNION == second->get_set_op() && !second->is_set_distinct()) {
+      } else if (ObSetRelation::UNION == second->get_set_op() && !second->is_set_distinct()) {
         relation = QueryRelation::QUERY_LEFT_SUBSET;
-      } else if (ObSelectStmt::UNION == first->get_set_op()) {
+      } else if (ObSetRelation::UNION == first->get_set_op()) {
         relation = QueryRelation::QUERY_RIGHT_SUBSET;
-      } else if (ObSelectStmt::UNION == second->get_set_op()) {
+      } else if (ObSetRelation::UNION == second->get_set_op()) {
         relation = QueryRelation::QUERY_LEFT_SUBSET;
       }
     }

@@ -29,7 +29,7 @@ public:
       set_algo_(INVALID_SET_ALGO),
       set_dist_algo_(DIST_INVALID_METHOD),
       random_none_idx_(OB_INVALID_INDEX),
-      set_op_(ObSelectStmt::NONE),
+      set_op_(ObSetRelation::NONE),
       set_directions_(plan.get_allocator()),
       map_array_(plan.get_allocator()),
       search_ordering_(plan.get_allocator()),
@@ -67,10 +67,10 @@ public:
   //hash set 全部都是从left 建立hash表，0号孩子是block input
   virtual bool is_block_input(const int64_t child_idx) const override 
   {
-    return HASH_SET == set_algo_ && 0 == child_idx && ObSelectStmt::UNION != get_set_op();
+    return HASH_SET == set_algo_ && 0 == child_idx && ObSetRelation::UNION != get_set_op();
   }
-  inline void assign_set_op(const ObSelectStmt::SetOperator set_op) { set_op_ = set_op; }
-  inline ObSelectStmt::SetOperator get_set_op() const { return set_op_; }
+  inline void assign_set_op(const ObSetRelation::SetOperator set_op) { set_op_ = set_op; }
+  inline ObSetRelation::SetOperator get_set_op() const { return set_op_; }
   int calculate_sharding_info(ObIArray<ObRawExpr *> &left_keys,
                               ObIArray<ObRawExpr *> &right_keys,
                               ObShardingInfo &output_sharding);
@@ -147,7 +147,7 @@ private:
   SetAlgo set_algo_;
   DistAlgo set_dist_algo_;
   int64_t random_none_idx_;
-  ObSelectStmt::SetOperator set_op_;
+  ObSetRelation::SetOperator set_op_;
   ObSqlArray<ObOrderDirection> set_directions_;
   ObSqlArray<int64_t> map_array_;
   //for cte search clause

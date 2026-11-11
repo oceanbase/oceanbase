@@ -15616,46 +15616,50 @@ public:
   int ret_;
 };
 
-struct ObKillMViewRefreshArg
+struct ObCancelMViewRefreshArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObKillMViewRefreshArg()
+  ObCancelMViewRefreshArg()
     : tenant_id_(common::OB_INVALID_ID),
       refresh_id_(common::OB_INVALID_ID),
       mview_id_(common::OB_INVALID_ID),
-      is_kill_by_mview_id_(false),
+      is_cancel_by_mview_id_(false),
       is_drop_(false)
   {}
   inline bool is_valid() const
   {
+    bool bret = true;
     if (!common::is_valid_tenant_id(tenant_id_)) {
-      return false;
+      bret = false;
+    } else if (is_cancel_by_mview_id_ || is_drop_) {
+      bret = common::OB_INVALID_ID != mview_id_;
+    } else {
+      bret = refresh_id_ > 0;
     }
-    return is_kill_by_mview_id_
-        ? (common::OB_INVALID_ID != mview_id_)
-        : (refresh_id_ > 0);
+    return bret;
   }
-  TO_STRING_KV(K_(tenant_id), K_(refresh_id), K_(mview_id), K_(is_kill_by_mview_id), K_(is_drop));
+  TO_STRING_KV(K_(tenant_id), K_(refresh_id), K_(mview_id), K_(is_cancel_by_mview_id), K_(is_drop));
   uint64_t tenant_id_;
   int64_t refresh_id_;
   uint64_t mview_id_;
-  bool is_kill_by_mview_id_;
+  bool is_cancel_by_mview_id_;
   bool is_drop_;
 };
 
-struct ObKillMViewRefreshResult
+struct ObCancelMViewRefreshResult
 {
   OB_UNIS_VERSION(1);
 public:
-  ObKillMViewRefreshResult()
-    : ret_(common::OB_SUCCESS)
+  ObCancelMViewRefreshResult()
+    : ret_(common::OB_SUCCESS),
+      refresh_exists_(false)
   {}
-  TO_STRING_KV(K_(ret));
+  TO_STRING_KV(K_(ret), K_(refresh_exists));
   int ret_;
+  bool refresh_exists_;
 };
 
-// placeholder for mv_feature_502 OB_NOTIFY_MVIEW_REFRESH_TIMER
 struct ObNotifyMViewTimerArg
 {
   OB_UNIS_VERSION(1);
@@ -15676,6 +15680,14 @@ public:
       database_id_(common::OB_INVALID_ID),
       op_type_(INVALID)
   {}
+  inline bool is_valid() const
+  {
+    const bool is_mview_scope = OB_INVALID_ID != mview_id_;
+    const bool is_database_scope = OB_INVALID_ID != database_id_;
+    return common::is_valid_tenant_id(tenant_id_)
+          && (is_mview_scope != is_database_scope)
+          && (is_database_scope ? ACTIVATE == op_type_ : (INVALID < op_type_ && MAX > op_type_));
+  }
   TO_STRING_KV(K_(tenant_id), K_(mview_id), K_(database_id), K_(op_type));
   uint64_t tenant_id_;
   uint64_t mview_id_;

@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_dml_stmt.h"
+#include "sql/resolver/dml/ob_relation_from.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/hybrid_search/ob_hybrid_search_dsl_resolver.h"
@@ -419,11 +420,10 @@ ObDMLStmt::ObDMLStmt(stmt::StmtType type, ObIAllocator &allocator)
       limit_percent_expr_(NULL),
       has_fetch_(false),
       is_fetch_with_ties_(false),
-      from_items_(allocator),
       part_expr_items_(allocator),
       joined_tables_(allocator),
       stmt_hint_(allocator),
-      semi_infos_(allocator),
+      from_clause_(allocator),
       autoinc_params_(allocator),
       is_calc_found_rows_(false),
       has_top_limit_(false),
@@ -433,7 +433,6 @@ ObDMLStmt::ObDMLStmt(stmt::StmtType type, ObIAllocator &allocator)
       sequence_infos_(allocator),
       table_items_(allocator),
       column_items_(allocator),
-      condition_exprs_(allocator),
       pseudo_column_like_exprs_(allocator),
       tables_hash_(),
       subquery_exprs_(allocator),
@@ -545,9 +544,9 @@ int ObDMLStmt::remove_from_item(uint64_t tid, bool *remove_happened/* = NULL*/)
   if (NULL != remove_happened) {
     *remove_happened = false;
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < from_items_.count(); i++) {
-    if (tid == from_items_.at(i).table_id_) {
-      if (OB_FAIL(from_items_.remove(i))) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < from_clause_.from_items_.count(); i++) {
+    if (tid == from_clause_.from_items_.at(i).table_id_) {
+      if (OB_FAIL(from_clause_.from_items_.remove(i))) {
         LOG_WARN("failed to remove from_items", K(ret));
       } else if (NULL != remove_happened) {
         *remove_happened = true;
@@ -561,9 +560,9 @@ int ObDMLStmt::remove_from_item(uint64_t tid, bool *remove_happened/* = NULL*/)
 int ObDMLStmt::remove_semi_info(SemiInfo* info)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < semi_infos_.count(); i++) {
-    if (info == semi_infos_.at(i)) {
-      if (OB_FAIL(semi_infos_.remove(i))) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < from_clause_.semi_infos_.count(); i++) {
+    if (info == from_clause_.semi_infos_.at(i)) {
+      if (OB_FAIL(from_clause_.semi_infos_.remove(i))) {
         LOG_WARN("failed to remove from_items", K(ret));
       }
       break;
@@ -584,18 +583,14 @@ int ObDMLStmt::assign(const ObDMLStmt &other)
     LOG_WARN("assign table hash desc failed", K(ret));
   } else if (OB_FAIL(column_items_.assign(other.column_items_))) {
     LOG_WARN("assign column items failed", K(ret));
-  } else if (OB_FAIL(condition_exprs_.assign(other.condition_exprs_))) {
-    LOG_WARN("assign condition exprs failed", K(ret));
+  } else if (OB_FAIL(from_clause_.assign(other.from_clause_))) {
+    LOG_WARN("assign from clause failed", K(ret));
   } else if (OB_FAIL(order_items_.assign(other.order_items_))) {
     LOG_WARN("assign order items failed", K(ret));
-  } else if (OB_FAIL(from_items_.assign(other.from_items_))) {
-    LOG_WARN("assign from items failed", K(ret));
   } else if (OB_FAIL(part_expr_items_.assign(other.part_expr_items_))) {
     LOG_WARN("assign part expr items failed", K(ret));
   } else if (OB_FAIL(joined_tables_.assign(other.joined_tables_))) {
     LOG_WARN("assign joined tables failed", K(ret));
-  } else if (OB_FAIL(semi_infos_.assign(other.semi_infos_))) {
-    LOG_WARN("assign semi infos failed", K(ret));
   } else if (OB_FAIL(stmt_hint_.assign(other.stmt_hint_))) {
     LOG_WARN("assign stmt hint failed", K(ret));
   } else if (OB_FAIL(subquery_exprs_.assign(other.subquery_exprs_))) {
@@ -739,11 +734,8 @@ int ObDMLStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     LOG_WARN("assign table hash desc failed", K(ret));
   } else if (OB_FAIL(deep_copy_join_tables(allocator, expr_copier, other))) {
     LOG_WARN("failed to copy joined tables", K(ret));
-  } else if (OB_FAIL(deep_copy_stmt_objects<SemiInfo>(allocator,
-                                                      expr_copier,
-                                                      other.semi_infos_,
-                                                      semi_infos_))) {
-    LOG_WARN("deep copy semi infos failed", K(ret));
+  } else if (OB_FAIL(from_clause_.deep_copy(allocator, expr_copier, other.from_clause_))) {
+    LOG_WARN("deep copy from clause failed", K(ret));
   } else if (OB_FAIL(deep_copy_stmt_objects<ColumnItem>(expr_copier,
                                                         other.column_items_,
                                                         column_items_))) {
@@ -754,9 +746,6 @@ int ObDMLStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
   } else if (OB_FAIL(expr_copier.copy(other.pseudo_column_like_exprs_,
                                       pseudo_column_like_exprs_))) {
     LOG_WARN("failed to copy pseudo column like exprs", K(ret));
-  } else if (OB_FAIL(expr_copier.copy(other.condition_exprs_,
-                                      condition_exprs_))) {
-    LOG_WARN("failed to copy condition exprs", K(ret));
   } else if (OB_FAIL(deep_copy_stmt_objects<PartExprItem>(expr_copier,
                                                           other.part_expr_items_,
                                                           part_expr_items_))) {
@@ -781,8 +770,6 @@ int ObDMLStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
                                                                  other.check_constraint_items_,
                                                                  check_constraint_items_))) {
     LOG_WARN("failed to deep copy related part expr arrays", K(ret));
-  } else if (OB_FAIL(from_items_.assign(other.from_items_))) {
-    LOG_WARN("assign from items failed", K(ret));
   } else if (OB_FAIL(stmt_hint_.assign(other.stmt_hint_))) {
     LOG_WARN("assign stmt hint failed", K(ret));
   } else if (OB_FAIL(autoinc_params_.assign(other.autoinc_params_))) {
@@ -1036,11 +1023,11 @@ int ObDMLStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
       LOG_WARN("failed to iterate joined table expr", K(ret));
     } else { /*do nothing*/ }
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < semi_infos_.count(); i++) {
-    if (OB_ISNULL(semi_infos_.at(i))) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < from_clause_.semi_infos_.count(); i++) {
+    if (OB_ISNULL(from_clause_.semi_infos_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null semi info", K(ret));
-    } else if (OB_FAIL(visitor.visit(semi_infos_.at(i)->semi_conditions_,
+    } else if (OB_FAIL(visitor.visit(from_clause_.semi_infos_.at(i)->semi_conditions_,
                                      SCOPE_SEMI_INFO))) {
       LOG_WARN("failed to visitor semi conditions", K(ret));
     } else { /*do nothing*/ }
@@ -1052,7 +1039,7 @@ int ObDMLStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
     } else { /*do nothing*/ }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(visitor.visit(condition_exprs_, SCOPE_WHERE))) {
+    if (OB_FAIL(visitor.visit(from_clause_.condition_exprs_, SCOPE_WHERE))) {
       LOG_WARN("failed to visit condition exprs", K(ret));
     } else if (NULL != limit_count_expr_ &&
                OB_FAIL(visitor.visit(limit_count_expr_, SCOPE_LIMIT))) {
@@ -1528,9 +1515,9 @@ int ObDMLStmt::update_table_item_id(const ObDMLStmt &other,
       } else { /*do nothing*/ }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObTransformUtils::update_table_id_for_from_item(other.from_items_,
+      if (OB_FAIL(ObTransformUtils::update_table_id_for_from_item(other.from_clause_.from_items_,
                                                                   old_table_id, new_table_id,
-                                                                  from_items_))) {
+                                                                  from_clause_.from_items_))) {
         LOG_WARN("failed to update table id for from item", K(ret));
       } else if (OB_FAIL(ObTransformUtils::update_table_id_for_joined_tables(other.joined_tables_,
                                                                              old_table_id, new_table_id,
@@ -1545,9 +1532,9 @@ int ObDMLStmt::update_table_item_id(const ObDMLStmt &other,
                                                                                       new_table_id,
                                                                                       check_constraint_items_))) {
         LOG_WARN("failed to update table id for part array", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::update_table_id_for_semi_info(other.semi_infos_,
+      } else if (OB_FAIL(ObTransformUtils::update_table_id_for_semi_info(other.from_clause_.semi_infos_,
                                                                          old_table_id, new_table_id,
-                                                                         semi_infos_))) {
+                                                                         from_clause_.semi_infos_))) {
         LOG_WARN("failed to update table id for semi_info", K(ret));
       } else if (OB_FAIL(ObTransformUtils::update_table_id_for_column_item(other.column_items_,
                                                                            old_table_id, new_table_id,
@@ -2519,11 +2506,11 @@ int ObDMLStmt::remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
     if (OB_ISNULL(expr = column_items_.at(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (expr->is_explicited_reference()) {
+    } else if (expr->is_explicited_reference() || expr->is_rowkey_column()) {
       need_remove = false;
     } else if (explicit_for_col) {
       need_remove = true;
-    } else if (expr->is_rowkey_column() || expr->is_spatial_generated_column()) {
+    } else if (expr->is_spatial_generated_column()) {
       need_remove = false;
     } else if (OB_FAIL(is_referred_by_partitioning_expr(expr, is_referred))) {
       LOG_WARN("failed to check whether is referred by partitioning expr", K(ret));
@@ -2827,10 +2814,10 @@ int ObDMLStmt::get_all_table_item_by_tname(const ObSQLSessionInfo *session_info,
 bool ObDMLStmt::is_semi_left_table(const uint64_t table_id)
 {
   bool bret = false;
-  int64_t num = semi_infos_.count();
+  int64_t num = from_clause_.semi_infos_.count();
   for (int64_t i = 0; !bret && i < num; ++i) {
-    if (semi_infos_.at(i) != NULL) {
-      bret = ObOptimizerUtil::find_item(semi_infos_.at(i)->left_table_ids_, table_id);
+    if (from_clause_.semi_infos_.at(i) != NULL) {
+      bret = ObOptimizerUtil::find_item(from_clause_.semi_infos_.at(i)->left_table_ids_, table_id);
     }
   }
   return bret;
@@ -2839,10 +2826,10 @@ bool ObDMLStmt::is_semi_left_table(const uint64_t table_id)
 SemiInfo *ObDMLStmt::get_semi_info_by_id(const uint64_t semi_id)
 {
   SemiInfo *semi_info = NULL;
-  int64_t num = semi_infos_.count();
+  int64_t num = from_clause_.semi_infos_.count();
   for (int64_t i = 0; i < num; ++i) {
-    if (semi_infos_.at(i) != NULL && semi_infos_.at(i)->semi_id_ == semi_id) {
-      semi_info = semi_infos_.at(i);
+    if (from_clause_.semi_infos_.at(i) != NULL && from_clause_.semi_infos_.at(i)->semi_id_ == semi_id) {
+      semi_info = from_clause_.semi_infos_.at(i);
       break;
     }
   }
@@ -2919,7 +2906,7 @@ int ObDMLStmt::get_table_item_by_id(ObIArray<uint64_t> &table_ids,
   return ret;
 }
 
-TableItem* ObDMLStmt::get_table_item(const FromItem item)
+TableItem* ObDMLStmt::get_table_item(const FromItem &item)
 {
   TableItem *ret = NULL;
   if (item.is_joined_) {
@@ -2930,7 +2917,7 @@ TableItem* ObDMLStmt::get_table_item(const FromItem item)
   return ret;
 }
 
-const TableItem* ObDMLStmt::get_table_item(const FromItem item) const
+const TableItem* ObDMLStmt::get_table_item(const FromItem &item) const
 {
   const TableItem *ret = NULL;
   if (item.is_joined_) {
@@ -3706,9 +3693,9 @@ int ObDMLStmt::get_from_tables(ObSqlBitSet<> &table_set) const
 {
   int ret = OB_SUCCESS;
   int32_t bit_id = OB_INVALID_INDEX;
-  for (int64_t i = 0; OB_SUCC(ret) && i < from_items_.count(); ++i) {
-    if (from_items_.at(i).is_joined_) {
-      const JoinedTable *table = get_joined_table(from_items_.at(i).table_id_);
+  for (int64_t i = 0; OB_SUCC(ret) && i < from_clause_.from_items_.count(); ++i) {
+    if (from_clause_.from_items_.at(i).is_joined_) {
+      const JoinedTable *table = get_joined_table(from_clause_.from_items_.at(i).table_id_);
       if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get joined table", K(ret));
@@ -3723,9 +3710,9 @@ int ObDMLStmt::get_from_tables(ObSqlBitSet<> &table_set) const
         }
       }
     } else if (OB_UNLIKELY(OB_INVALID_INDEX ==
-                                  (bit_id = get_table_bit_index(from_items_.at(i).table_id_)))) {
+                                  (bit_id = get_table_bit_index(from_clause_.from_items_.at(i).table_id_)))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid table bit index", K(ret), K(from_items_.at(i).table_id_), K(bit_id));
+      LOG_WARN("invalid table bit index", K(ret), K(from_clause_.from_items_.at(i).table_id_), K(bit_id));
     } else if (OB_FAIL(table_set.add_member(bit_id))) {
       LOG_WARN("failed to add member", K(ret));
     }
@@ -3736,9 +3723,9 @@ int ObDMLStmt::get_from_tables(ObSqlBitSet<> &table_set) const
 int ObDMLStmt::get_from_tables(common::ObIArray<TableItem *>& from_tables) const
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < from_items_.count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < from_clause_.from_items_.count(); ++i) {
     TableItem *table_item = NULL;
-    const FromItem &from_item = from_items_.at(i);
+    const FromItem &from_item = from_clause_.from_items_.at(i);
     if (from_item.is_joined_ &&
         OB_ISNULL(table_item = get_joined_table(from_item.table_id_))) {
       ret = OB_ERR_UNEXPECTED;
@@ -3757,8 +3744,8 @@ int ObDMLStmt::get_from_tables(common::ObIArray<TableItem *>& from_tables) const
 int ObDMLStmt::get_from_tables(common::ObIArray<int64_t>& table_ids) const
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < from_items_.count(); ++i) {
-    const FromItem &from_item = from_items_.at(i);
+  for (int64_t i = 0; OB_SUCC(ret) && i < from_clause_.from_items_.count(); ++i) {
+    const FromItem &from_item = from_clause_.from_items_.at(i);
     if (OB_FAIL(table_ids.push_back(from_item.table_id_))) {
       LOG_WARN("failed to push back", K(ret));
     }
@@ -3770,11 +3757,11 @@ int ObDMLStmt::get_from_table(int64_t from_idx, TableItem* &from_table) const
 {
   int ret = OB_SUCCESS;
   from_table = NULL;
-  if (OB_UNLIKELY(from_idx < 0 || from_idx > from_items_.count())) {
+  if (OB_UNLIKELY(from_idx < 0 || from_idx > from_clause_.from_items_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("from table idx invalid", K(ret), K(from_idx));
   } else {
-    const FromItem &from_item = from_items_.at(from_idx);
+    const FromItem &from_item = from_clause_.from_items_.at(from_idx);
     if (from_item.is_joined_ &&
         OB_ISNULL(from_table = get_joined_table(from_item.table_id_))) {
       ret = OB_ERR_UNEXPECTED;
@@ -3791,11 +3778,11 @@ int ObDMLStmt::get_from_table(int64_t from_idx, TableItem* &from_table) const
 int ObDMLStmt::get_from_item_rel_ids(int64_t from_idx, ObSqlBitSet<> &rel_ids) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(from_idx < 0 || from_idx > from_items_.count())) {
+  if (OB_UNLIKELY(from_idx < 0 || from_idx > from_clause_.from_items_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("from table idx invalid", K(ret), K(from_idx));
   } else {
-    const FromItem &from_item = from_items_.at(from_idx);
+    const FromItem &from_item = from_clause_.from_items_.at(from_idx);
     TableItem *table_item = NULL;
     if (from_item.is_joined_ &&
         OB_ISNULL(table_item = get_joined_table(from_item.table_id_))) {
@@ -4305,8 +4292,8 @@ int ObDMLStmt::get_column_exprs(ObIArray<TableItem *> &table_items,
 int64_t ObDMLStmt::get_from_item_idx(uint64_t table_id) const
 {
   int64_t idx = -1;
-  for (int64_t i = 0; i < from_items_.count(); ++i) {
-    if (table_id == from_items_.at(i).table_id_) {
+  for (int64_t i = 0; i < from_clause_.from_items_.count(); ++i) {
+    if (table_id == from_clause_.from_items_.at(i).table_id_) {
       idx = i;
       break;
     }
@@ -4542,7 +4529,7 @@ int ObDMLStmt::update_column_item_rel_id()
 
 int ObDMLStmt::reset_from_item(const common::ObIArray<FromItem> &from_items)
 {
-  return from_items_.assign(from_items);
+  return from_clause_.from_items_.assign(from_items);
 }
 
 int ObDMLStmt::reset_table_item(const common::ObIArray<TableItem*> &table_items)
@@ -4633,7 +4620,7 @@ int ObDMLStmt::get_equal_set_conditions(ObIArray<ObRawExpr *> &conditions,
 {
   int ret = OB_SUCCESS;
   UNUSED(check_having);
-  if (OB_FAIL(append(conditions, condition_exprs_))) {
+  if (OB_FAIL(append(conditions, from_clause_.condition_exprs_))) {
     LOG_WARN("failed to append conditions", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < joined_tables_.count(); ++i) {
@@ -4643,13 +4630,13 @@ int ObDMLStmt::get_equal_set_conditions(ObIArray<ObRawExpr *> &conditions,
         LOG_WARN("failed to extract equal condition from joined table", K(ret));
       }
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < semi_infos_.count(); ++i) {
-      if (OB_ISNULL(semi_infos_.at(i))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < from_clause_.semi_infos_.count(); ++i) {
+      if (OB_ISNULL(from_clause_.semi_infos_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret));
-      } else if (semi_infos_.at(i)->is_anti_join()) {
+      } else if (from_clause_.semi_infos_.at(i)->is_anti_join()) {
         /* do nothing */
-      } else if (OB_FAIL(append(conditions, semi_infos_.at(i)->semi_conditions_))) {
+      } else if (OB_FAIL(append(conditions, from_clause_.semi_infos_.at(i)->semi_conditions_))) {
         LOG_WARN("failed to append conditions", K(ret));
       }
     }
@@ -4670,7 +4657,7 @@ int ObDMLStmt::get_where_scope_conditions(ObIArray<ObRawExpr *> &conditions,
   visitor.checker_ = &expr_checker;
   if (OB_FAIL(expr_checker.init())) {
     LOG_WARN("init relexpr checker failed", K(ret));
-  } else if (!outer_semi_only && OB_FAIL(append(conditions, condition_exprs_))) {
+  } else if (!outer_semi_only && OB_FAIL(append(conditions, from_clause_.condition_exprs_))) {
     LOG_WARN("failed to append conditions", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < joined_tables_.count(); ++i) {
@@ -4679,11 +4666,11 @@ int ObDMLStmt::get_where_scope_conditions(ObIArray<ObRawExpr *> &conditions,
         LOG_WARN("failed to get join condition expr ", K(ret));
       }
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < semi_infos_.count(); ++i) {
-      if (OB_ISNULL(semi_infos_.at(i))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < from_clause_.semi_infos_.count(); ++i) {
+      if (OB_ISNULL(from_clause_.semi_infos_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret));
-      } else if (OB_FAIL(append(conditions, semi_infos_.at(i)->semi_conditions_))) {
+      } else if (OB_FAIL(append(conditions, from_clause_.semi_infos_.at(i)->semi_conditions_))) {
         LOG_WARN("failed to append conditions", K(ret));
       }
     }

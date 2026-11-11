@@ -152,7 +152,7 @@ struct MViewRefreshReport
       allocator_(&allocator)
   {}
 
-  int build(MViewReportContext &ctx);
+  int build(MViewReportContext &ctx, const bool need_final_plan_info);
   int append_text(common::ObSqlString &out, const common::ObTimeZoneInfo *tz) const;
   int append_json(common::ObSqlString &out) const;
 };

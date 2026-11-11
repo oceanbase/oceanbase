@@ -1430,6 +1430,7 @@
 # 12616: __all_mview_dep  # BASE_TABLE_NAME
 # 12617: __all_virtual_mview_refresh_pending_task
 # 12617: __all_mview_refresh_pending_task  # BASE_TABLE_NAME
+# 12628: __all_virtual_mview_refresh_timer
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT

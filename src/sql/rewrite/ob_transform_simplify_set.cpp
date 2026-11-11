@@ -243,7 +243,7 @@ int ObTransformSimplifySet::add_limit_order_distinct_for_union(const common::ObI
     LOG_WARN("null pointer passed to transform", K(stmt), K(ret));
   } else if (stmt->is_select_stmt()
              && static_cast<ObSelectStmt*>(stmt)->is_set_stmt()
-             && ObSelectStmt::UNION == static_cast<ObSelectStmt*>(stmt)->get_set_op()) {
+             && ObSetRelation::UNION == static_cast<ObSelectStmt*>(stmt)->get_set_op()) {
     select_stmt = static_cast<ObSelectStmt*>(stmt);
     if (OB_FAIL(is_calc_found_rows_for_union(parent_stmts, stmt, is_calc))) {
       LOG_WARN("fail to judge calc found rows for union", K(ret));
@@ -290,7 +290,7 @@ int ObTransformSimplifySet::is_calc_found_rows_for_union(const common::ObIArray<
   } else {
     ObSelectStmt *top_union_stmt = NULL;
     if (stmt->is_select_stmt() && stmt->is_set_stmt() &&
-        ObSelectStmt::UNION == static_cast<ObSelectStmt*>(stmt)->get_set_op()) {
+        ObSetRelation::UNION == static_cast<ObSelectStmt*>(stmt)->get_set_op()) {
       top_union_stmt = static_cast<ObSelectStmt*>(stmt);
     } else { /* do nothing*/ }
     for (int64_t i = parent_stmts.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
@@ -299,7 +299,7 @@ int ObTransformSimplifySet::is_calc_found_rows_for_union(const common::ObIArray<
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("stmt is null", K(ret));
       } else if (stmt->is_select_stmt() && stmt->is_set_stmt() &&
-                 ObSelectStmt::UNION == static_cast<ObSelectStmt*>(stmt)->get_set_op()) {
+                 ObSetRelation::UNION == static_cast<ObSelectStmt*>(stmt)->get_set_op()) {
         top_union_stmt = static_cast<ObSelectStmt*>(stmt);
       } else {
         break;
@@ -381,9 +381,9 @@ int ObTransformSimplifySet::pruning_set_query(common::ObIArray<ObParentDMLStmt> 
   if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null pointer", K(ret));
-  } else if (select_stmt->get_set_op() == ObSelectStmt::UNION ||
-              select_stmt->get_set_op() == ObSelectStmt::EXCEPT ||
-              select_stmt->get_set_op() == ObSelectStmt::INTERSECT) {
+  } else if (select_stmt->get_set_op() == ObSetRelation::UNION ||
+              select_stmt->get_set_op() == ObSetRelation::EXCEPT ||
+              select_stmt->get_set_op() == ObSetRelation::INTERSECT) {
     // add removable child_stmt in remove_list.
     ObSEArray<int64_t, 4> remove_list;
     for (int64_t i = 0 ; OB_SUCC(ret) && i < select_stmt->get_set_query().count(); i++) {
@@ -440,7 +440,7 @@ int ObTransformSimplifySet::remove_set_query_in_stmt(ObSelectStmt *&select_stmt,
     // index of the stmt, that should add constraints.
 
     switch (select_stmt->get_set_op()) {
-      case ObSelectStmt::UNION: {
+      case ObSetRelation::UNION: {
         if (select_stmt->is_recursive_union() && select_stmt->get_set_query().count() == 2) {
           // recursive cte, the fake table branch is always at left.
           if (remove_list.count() == 1 && remove_list.at(0) == 0) {
@@ -489,7 +489,7 @@ int ObTransformSimplifySet::remove_set_query_in_stmt(ObSelectStmt *&select_stmt,
         }
         break;
       }
-      case ObSelectStmt::INTERSECT: {
+      case ObSetRelation::INTERSECT: {
         if (OB_UNLIKELY(select_stmt->get_set_query().count() != 2)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("branches num of intersect should be 2", K(ret));
@@ -514,7 +514,7 @@ int ObTransformSimplifySet::remove_set_query_in_stmt(ObSelectStmt *&select_stmt,
         }
         break;
       } 
-      case ObSelectStmt::EXCEPT: {
+      case ObSetRelation::EXCEPT: {
         if (OB_UNLIKELY(select_stmt->get_set_query().count() != 2)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("branches num of except should be 2", K(ret));

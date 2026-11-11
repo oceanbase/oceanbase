@@ -10,6 +10,10 @@
 
 namespace oceanbase
 {
+namespace common
+{
+class ObMySQLProxy;
+}
 namespace sql
 {
 class ObExecContext;
@@ -50,12 +54,12 @@ public:
                                            uint64_t &mview_id,
                                            share::schema::ObMVRefreshMethod &refresh_method);
 
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
   // Polling helpers for DBMS_MVIEW.REFRESH sync-wait loop.
   // Polls __all_mview_refresh_pending_task until done, then reads
   // __all_mview_refresh_run_stats.result. Returns the task error code on
   // failure, OB_TIMEOUT on timeout, or OB_SUCCESS.
-  static int wait_mview_refresh(sql::ObExecContext &ctx,
+  static int wait_mview_refresh(common::ObMySQLProxy *sql_proxy,
                                 uint64_t tenant_id,
                                 int64_t refresh_id,
                                 uint64_t mview_id);
@@ -68,7 +72,7 @@ public:
   static int check_nested_mview_refresh_privilege(sql::ObExecContext &ctx,
                                                   uint64_t tenant_id,
                                                   uint64_t mview_id);
-  static int load_refresh_run_stats_error_message(sql::ObExecContext &ctx,
+  static int load_refresh_run_stats_error_message(common::ObMySQLProxy *sql_proxy,
                                                   uint64_t tenant_id,
                                                   int64_t refresh_id);
 };

@@ -26,7 +26,8 @@ public:
     : ObDDLHelper(schema_service, tenant_id, "[parallel create materialized view]", external_trans, enable_ddl_parallel), // 虚基
       ObCreateViewHelper(schema_service, tenant_id, arg, res, external_trans, enable_ddl_parallel),
       ObTableHelper(schema_service, tenant_id, "[parallel create materialized view]", external_trans, enable_ddl_parallel),
-      task_record_() {}
+      task_record_(),
+      use_mview_timer_(false) {}
   virtual ~ObCreateMaterializedViewHelper() {}
 
 protected:
@@ -45,8 +46,10 @@ private:
   int append_generate_schema_for_mv_();
   int generate_container_table_schema_();
   int create_schemas_for_mv_();
+  int insert_mview_dependency_info_(share::schema::ObSchemaGetterGuard &schema_guard);
 private:
   ObDDLTaskRecord task_record_;
+  bool use_mview_timer_;
 };
 
 } // end namespace rootserver

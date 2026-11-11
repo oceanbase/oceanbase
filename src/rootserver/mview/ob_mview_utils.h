@@ -126,6 +126,12 @@ public:
                                  const share::schema::ObTableSchema *base_table_schema,
                                  ObIArray<uint64_t> &relevent_mviews,
                                  const uint64_t excluded_mview_id = OB_INVALID_ID);
+  static int fetch_mview_build_info(common::ObISQLClient &sql_client,
+                                    const uint64_t tenant_id,
+                                    const uint64_t mview_id,
+                                    uint64_t &define_user_id,
+                                    share::schema::ObMViewBuildMode &build_mode,
+                                    bool &is_mview_available);
 };
 
 class ObMViewAutoMlogEventInfo

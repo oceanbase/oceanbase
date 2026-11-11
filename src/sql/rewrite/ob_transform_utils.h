@@ -1185,13 +1185,13 @@ public:
                                      ObIArray<ObRawExpr*> &removed_exprs);
 
   static int create_set_stmt(ObTransformerCtx *ctx,
-                             const ObSelectStmt::SetOperator set_type,
+                             const ObSetRelation::SetOperator set_type,
                              const bool is_distinct,
                              ObIArray<ObSelectStmt*> &child_stmts,
                              ObSelectStmt *&union_stmt);
 
   static int create_set_stmt(ObTransformerCtx *ctx,
-                             const ObSelectStmt::SetOperator set_type,
+                             const ObSetRelation::SetOperator set_type,
                              const bool is_distinct,
                              ObSelectStmt *left_stmt,
                              ObSelectStmt *right_stmt,
@@ -1387,6 +1387,20 @@ public:
 
   static int pull_up_subquery(ObDMLStmt *parent_stmt,
                               ObSelectStmt *child_stmt);
+
+  static int add_all_rowkey_columns_to_stmt(ObTransformerCtx &ctx,
+                                            ObDMLStmt *stmt,
+                                            bool &trans_happened);
+
+  static int add_all_rowkey_columns_to_stmt(ObTransformerCtx &ctx,
+                                            const share::schema::ObTableSchema &table_schema,
+                                            const TableItem &table_item,
+                                            ObDMLStmt &stmt,
+                                            ObIArray<ColumnItem> &column_items);
+
+  static int get_rowkey_column_ids(ObTransformerCtx &ctx,
+                                   const share::schema::ObTableSchema &table_schema,
+                                   ObIArray<uint64_t> &rowkey_column_ids);
 
   static int right_join_to_left(ObDMLStmt *stmt);
 
@@ -2197,6 +2211,9 @@ public:
                                       ObIArray<ObRawExpr*> &const_constraint_exprs);
   static int deduplicate_exec_params_for_set_stmt(ObSelectStmt *set_stmt,
                                                   ObIArray<ObExecParamRawExpr *> &exec_params);
+  static int transform_to_full_group_by(ObTransformerCtx &ctx,
+                                        ObDMLStmt *stmt,
+                                        bool &trans_happened);
 
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,

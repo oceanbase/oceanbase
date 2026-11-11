@@ -132,9 +132,11 @@ public:
   int print_values_table(const TableItem &table_item, bool no_print_alias);
   int print_values_table_to_union_all(const TableItem &table_item, bool no_print_alias);
   int print_table(const TableItem *table_item,
-                  bool no_print_alias = false);
+                  bool no_print_alias = false,
+                  bool print_cte = false);
   int print_table_with_transpose(const TableItem *table_item);
-  int print_table_with_subquery(const TableItem *table_item);
+  int print_table_with_subquery(const TableItem *table_item,
+                                bool print_cte = false);
   int print_base_table(const TableItem *table_item);
   int prepare_dblink_hint(ObQueryHint &query_hint_dblink);
   int print_hint();

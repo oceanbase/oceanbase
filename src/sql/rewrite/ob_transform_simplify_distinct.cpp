@@ -162,7 +162,7 @@ int ObTransformSimplifyDistinct::remove_child_stmt_distinct(ObSelectStmt *set_st
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected stmt", K(ret));
   } else if (!set_stmt->is_set_distinct() ||
-             ObSelectStmt::RECURSIVE == set_stmt->get_set_op()) {
+             ObSetRelation::RECURSIVE == set_stmt->get_set_op()) {
     /*do nothing*/
     OPT_TRACE("union all or recurisve union can not remove distinct");
   } else {
@@ -205,7 +205,7 @@ int ObTransformSimplifyDistinct::try_remove_child_stmt_distinct(ObSelectStmt *st
     } else {
       OPT_TRACE("stmt has rownum");
     }
-  } else if (ObSelectStmt::RECURSIVE == stmt->get_set_op() || stmt->has_limit()) {
+  } else if (ObSetRelation::RECURSIVE == stmt->get_set_op() || stmt->has_limit()) {
     /*do nothing*/
     OPT_TRACE("is recursive union or stmt has limit");
   } else {

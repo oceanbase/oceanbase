@@ -18752,13 +18752,38 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12622: __all_virtual_backup_archive_piece_task
 
 # 12623: __all_virtual_backup_archive_piece_task_history
-
 # 12624: __all_virtual_tenant_memstore_diagnose_info
 # 12625: __all_virtual_jvm_status
 # 12626: __all_virtual_java_udf_stats
 # 12627: __all_virtual_ext_plugin_info
-# 12628: __all_virtual_mview_refresh_timer
+
+def_table_schema(
+  owner = 'dingjincheng.djc',
+  table_name = '__all_virtual_mview_refresh_timer',
+  table_id = '12628',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns = ['gmt_modified'],
+  rowkey_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('group_id', 'int'),
+    ('mview_id', 'int'),
+  ],
+  normal_columns = [
+    ('next_trigger_time', 'timestamp'),
+    ('group_interval', 'int'),
+    ('expected_interval', 'int'),
+    ('schedule_interval', 'int'),
+    ('last_start_time', 'timestamp'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 12629: __all_virtual_proxy_ls_location
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################

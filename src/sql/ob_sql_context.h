@@ -823,6 +823,22 @@ private:
 
 };
 
+struct ObRtMViewInfo
+{
+  ObRtMViewInfo();
+  ObRtMViewInfo(const uint64_t mview_id,
+                const int64_t last_refresh_ts_us);
+
+  static bool find(const common::ObIArray<ObRtMViewInfo> &rt_mview_infos,
+                   const uint64_t mview_id,
+                   ObRtMViewInfo &rt_mview_info);
+
+  TO_STRING_KV(K_(mview_id), K_(last_refresh_ts_us));
+
+  uint64_t mview_id_;
+  int64_t last_refresh_ts_us_;
+};
+
 struct ObQueryCtx
 {
 public:
@@ -880,6 +896,7 @@ public:
       pl_sql_transpiled_exprs_(allocator),
       forbid_pl_sql_transpiler_(false),
       is_mview_refresh_sql_(false),
+      rt_mview_infos_(allocator),
       has_dml_trigger_(false)
   {
   }
@@ -934,6 +951,7 @@ public:
     pl_sql_transpiled_exprs_.reuse();
     forbid_pl_sql_transpiler_ = false;
     is_mview_refresh_sql_ = false;
+    rt_mview_infos_.reuse();
     has_dml_trigger_ = false;
   }
 
@@ -1077,6 +1095,7 @@ public:
   ObSqlArray<ObUDFRawExpr *> pl_sql_transpiled_exprs_;
   bool forbid_pl_sql_transpiler_ = false;
   bool is_mview_refresh_sql_;
+  ObSqlArray<ObRtMViewInfo> rt_mview_infos_;
   bool has_dml_trigger_;
 };
 

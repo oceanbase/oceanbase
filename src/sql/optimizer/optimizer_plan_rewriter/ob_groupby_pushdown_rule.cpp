@@ -743,7 +743,7 @@ int ObGroupByPushDownPlanRewriter::visit_set(ObLogSet *set,
   } else if (set->is_recursive_union()) {
     can_transform = false;
     OPT_TRACE("set is recursive union, can not push through");
-  } else if (!(ObSelectStmt::UNION == set->get_set_op() && !set->is_set_distinct())) {
+  } else if (!(ObSetRelation::UNION == set->get_set_op() && !set->is_set_distinct())) {
     // only union all
     can_transform = false;
     OPT_TRACE("set is not union all, can not push through");

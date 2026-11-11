@@ -10,6 +10,9 @@
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+#include "rootserver/mview/ob_mview_pending_task_utils.h"
+#endif
 
 namespace oceanbase
 {
@@ -96,9 +99,13 @@ int ObMviewAlterService::alter_mview_or_mlog_in_trans(obrpc::ObAlterTableArg &al
   } else {
     ObDDLSQLTransaction trans(schema_service);
     ObDDLOperator ddl_operator(*schema_service, *sql_proxy);
+    bool need_schedule_update = false;
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+    const uint64_t notify_mview_id = orig_table_schema->get_table_id();
+#endif
     if (OB_FAIL(trans.start(sql_proxy, tenant_id, schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(schema_version));
-    } else if (orig_table_schema->is_materialized_view() && OB_FAIL(alter_mview_attributes(tenant_id, orig_table_schema, alter_table_arg, ddl_operator, schema_guard, trans))) {
+    } else if (orig_table_schema->is_materialized_view() && OB_FAIL(alter_mview_attributes(tenant_id, orig_table_schema, alter_table_arg, ddl_operator, schema_guard, trans, need_schedule_update))) {
       LOG_WARN("failed to alter mview attributes", KR(ret), K(alter_table_arg));
     } else if (alter_table_arg.is_alter_mlog_attributes_ && OB_FAIL(alter_mlog_attributes(tenant_id, orig_table_schema, alter_table_arg, ddl_operator, schema_guard, trans))) {
       LOG_WARN("failed to alter mlog attributes", KR(ret), K(alter_table_arg));
@@ -112,6 +119,15 @@ int ObMviewAlterService::alter_mview_or_mlog_in_trans(obrpc::ObAlterTableArg &al
         ret = is_commit ? temp_ret : ret;
       }
     }
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+    if (OB_SUCC(ret) && is_commit && orig_table_schema->is_materialized_view() && need_schedule_update) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(ObMViewPendingTaskUtils::reschedule_mview_timer(tenant_id, notify_mview_id))) {
+        LOG_WARN("[MVIEW_TIMER] failed to notify mview timer after alter mview",
+                 KR(tmp_ret), K(tenant_id), K(notify_mview_id));
+      }
+    }
+#endif
   }
 
   return ret;
@@ -122,14 +138,17 @@ int ObMviewAlterService::alter_mview_attributes(
     obrpc::ObAlterTableArg &alter_table_arg,
     ObDDLOperator &ddl_operator,
     ObSchemaGetterGuard &schema_guard,
-    ObDDLSQLTransaction &trans)
+    ObDDLSQLTransaction &trans,
+    bool &need_schedule_update)
 {
+  need_schedule_update = false;
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
   obrpc::ObAlterMViewArg &mv_arg = alter_table_arg.alter_mview_arg_;
   const ObSimpleDatabaseSchema *db_schema = NULL;
   const ObTableSchema *container_table_schema = NULL;
   ObMViewInfo mview_info;
+  bool use_mview_timer = false;
 
   if (OB_ISNULL(orig_table_schema) || !mv_arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -162,6 +181,10 @@ int ObMviewAlterService::alter_mview_attributes(
   } else if (OB_FAIL(ObMViewInfo::fetch_mview_info(
                  trans, tenant_id, orig_table_schema->get_table_id(), mview_info, true))) {
     LOG_WARN("failed to fetch mview info", KR(ret), "mview_id", orig_table_schema->get_table_id());
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+  } else if (OB_FAIL(ObMViewPendingTaskUtils::is_mview_timer_sched_enabled(tenant_id, use_mview_timer))) {
+    LOG_WARN("failed to check mview timer schedule", KR(ret), K(tenant_id));
+#endif
   } else {
     HEAP_VAR(ObTableSchema, new_mview_schema)
     {
@@ -173,8 +196,10 @@ int ObMviewAlterService::alter_mview_attributes(
         LOG_WARN("failed to assign schema", K(ret));
       } else {
         bool need_alter_mview_schema = false;
-        bool need_alter_mview_refresh_job = false;
         bool need_alter_mview_info = false;
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+        bool refresh_interval_changed = false;
+#endif
 
         if (mv_arg.is_alter_on_query_computation()) {
           // if (mv_arg.enable_on_query_computation_ != mview_schema->mv_on_query_computation()) {
@@ -210,18 +235,61 @@ int ObMviewAlterService::alter_mview_attributes(
           LOG_WARN("alter the refresh method of materialized view is not supported yet", KR(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter the refresh method of materialized view is");
         }
+
+        if (mv_arg.is_alter_refresh_mode()) {
+
+          if (OB_UNLIKELY(!use_mview_timer)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("changing refresh mode requires mview timer", KR(ret), K(tenant_id), K(mview_info.get_mview_id()));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "changing refresh mode without mview timer is");
+          } else if (ObMVRefreshMode::NEVER == mv_arg.get_refresh_mode()) {
+            mview_info.set_refresh_mode(ObMVRefreshMode::NEVER);
+            need_alter_mview_info = true;
+            need_schedule_update = true;
+          } else if (ObMVRefreshMode::DEMAND == mv_arg.get_refresh_mode()) {
+            mview_info.set_refresh_mode(ObMVRefreshMode::DEMAND);
+            mview_info.set_refresh_scheduler_suspended(false);
+            need_alter_mview_info = true;
+            need_schedule_update = true;
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("alter refresh mode is only supported for never and demand", KR(ret), K(mv_arg));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter the refresh mode of materialized view is");
+          }
+        }
+
+        if (mv_arg.is_alter_sched_suspended()) {
+          if (OB_UNLIKELY(!use_mview_timer)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("suspend scheduler requires mview timer", KR(ret), K(tenant_id), K(mview_info.get_mview_id()));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "suspend scheduler without mview timer is");
+          } else {
+            mview_info.set_refresh_scheduler_suspended(true);
+            need_alter_mview_info = true;
+            need_schedule_update = true;
+          }
+        }
         if (mv_arg.is_alter_refresh_start()) {
           if (mv_arg.get_start_time().get_timestamp() != mview_info.get_refresh_start()) {
             mview_info.set_refresh_start(mv_arg.get_start_time().get_timestamp());
             need_alter_mview_info = true;
-            need_alter_mview_refresh_job = true;
+            need_schedule_update = true;
           }
         }
         if (mv_arg.is_alter_refresh_next()) {
-          if (0 != mview_info.get_refresh_next().compare(mv_arg.get_next_time_expr())) {
+          if (0 != mview_info.get_refresh_next().compare(mv_arg.get_next_time_expr())
+              || mview_info.get_refresh_interval() != mv_arg.get_refresh_interval()) {
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+            refresh_interval_changed =
+                mview_info.get_refresh_interval() != mv_arg.get_refresh_interval();
+#endif
             mview_info.set_refresh_next(mv_arg.get_next_time_expr());
+            mview_info.set_refresh_interval(mv_arg.get_refresh_interval());
+            mview_info.set_refresh_timeout_us(
+                ObMViewSchedJobUtils::calc_default_refresh_timeout_us(
+                    mv_arg.get_refresh_interval()));
             need_alter_mview_info = true;
-            need_alter_mview_refresh_job = true;
+            need_schedule_update = true;
           }
         }
         if (mv_arg.is_alter_refresh_dop()) {
@@ -239,7 +307,7 @@ int ObMviewAlterService::alter_mview_attributes(
           if (mv_arg.get_nested_refresh_mode() != mview_info.get_nested_refresh_mode()) {
             mview_info.set_nested_refresh_mode(mv_arg.get_nested_refresh_mode());
             need_alter_mview_info = true;
-            need_alter_mview_refresh_job = true;
+            need_schedule_update = true;
           }
         }
         if (mv_arg.is_alter_compat_version()) {
@@ -250,8 +318,17 @@ int ObMviewAlterService::alter_mview_attributes(
         }
 
         ObSchemaGuardWrapper schema_guard_wrapper(tenant_id, &ddl_operator.get_multi_schema_service());
-        if (OB_FAIL(schema_guard_wrapper.init(schema_guard))) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(schema_guard_wrapper.init(schema_guard))) {
           LOG_WARN("fail to init schema guard wrapper", KR(ret), K(tenant_id));
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+        } else if (refresh_interval_changed
+                   && OB_FAIL(ObMVDepUtils::check_mview_refresh_interval_order(
+                          trans, tenant_id, orig_table_schema->get_table_id(),
+                          mview_info.get_refresh_interval()))) {
+          LOG_WARN("failed to check mview refresh interval order", KR(ret), K(tenant_id),
+                   K(mview_info));
+#endif
         } else if (OB_FAIL(ddl_operator.alter_table_options(schema_guard_wrapper, new_container_schema,
                                                      *container_table_schema, false, trans))) {
           LOG_WARN("failed to update container schema", KR(ret), K(new_mview_schema));
@@ -259,7 +336,8 @@ int ObMviewAlterService::alter_mview_attributes(
                    OB_FAIL(ddl_operator.alter_table_options(schema_guard_wrapper, new_mview_schema,
                                                             *orig_table_schema, false, trans))) {
           LOG_WARN("failed to update mview schema", KR(ret), K(new_mview_schema));
-        } else if (need_alter_mview_refresh_job &&
+        } else if (need_schedule_update &&
+                   !mview_info.get_refresh_job().empty() &&
                    OB_FAIL(ObMViewSchedJobUtils::replace_mview_refresh_job(
                        trans, mview_info, db_schema->get_database_name_str(),
                        orig_table_schema->get_table_name_str(), mv_arg.get_exec_env()))) {
@@ -269,7 +347,7 @@ int ObMviewAlterService::alter_mview_attributes(
           LOG_WARN("failed to update mview attributes", KR(ret), K(mview_info));
         }
         LOG_INFO("[ALTER MVIEW] alter mview attributes", KR(ret), K(mv_arg), K(mview_info),
-                 K(need_alter_mview_schema), K(need_alter_mview_refresh_job),
+                 K(need_alter_mview_schema), K(need_schedule_update),
                  K(need_alter_mview_info));
       }
     }

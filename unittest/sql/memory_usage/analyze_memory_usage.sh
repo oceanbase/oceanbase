@@ -1,17 +1,23 @@
 #!/bin/bash
 
-BRANCH=${1:-master}
-
 GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 if [ -z "$GIT_ROOT" ]; then
     echo "ERROR: not inside a git repository" >&2
     exit 1
 fi
-cd "$GIT_ROOT"
+cd "$GIT_ROOT" || exit 1
+
+# Use the workspace merge target rather than the current task branch.
+BRANCH=$(cat .obdev/target_branch 2>/dev/null)
+if [ -z "$BRANCH" ]; then
+    echo "ERROR: cannot get target branch from .obdev/target_branch" >&2
+    exit 1
+fi
+echo "target branch: $BRANCH"
 
 RESULT_DIR="unittest/sql/memory_usage/result"
 
-COMMIT=$(git merge-base HEAD origin/$BRANCH 2>/dev/null)
+COMMIT=$(git merge-base HEAD "origin/$BRANCH" 2>/dev/null)
 if [ -z "$COMMIT" ]; then
     echo "ERROR: cannot get merge-base with origin/$BRANCH" >&2
     exit 1

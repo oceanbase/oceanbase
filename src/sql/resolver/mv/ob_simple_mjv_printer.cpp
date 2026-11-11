@@ -43,7 +43,7 @@ int ObSimpleMJVPrinter::gen_real_time_view(ObSelectStmt *&sel_stmt)
     LOG_WARN("failed to append access delta stmts into set query", K(ret));
   } else {
     sel_stmt->assign_set_all();
-    sel_stmt->assign_set_op(ObSelectStmt::UNION);
+    sel_stmt->assign_set_op(ObSetRelation::UNION);
   }
   return ret;
 }

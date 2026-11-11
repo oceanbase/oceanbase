@@ -130,34 +130,41 @@ int ObSchemaPrinter::print_materialized_view_definition(const uint64_t tenant_id
       SHARE_SCHEMA_LOG(WARN, "fail to print materialized view column group", KR(ret), K(*container_table_schema));
     } else if (OB_FAIL(ObMViewInfo::fetch_mview_info(*GCTX.sql_proxy_, tenant_id, table_id, mview_info))) {
       SHARE_SCHEMA_LOG(WARN, "fail to fecth materialized view info", KR(ret), K(table_id));
+    } else if (!strict_compat_
+               && ObMViewBuildMode::DEFERRED == mview_info.get_build_mode()
+               && OB_FAIL(databuff_printf(buf, buf_len, pos, " BUILD DEFERRED "))) {  // todo: need adjust default build mode
+      SHARE_SCHEMA_LOG(WARN, "fail to print materialized view build mode", KR(ret));
     } else if (!strict_compat_) {
-      switch (mview_info.get_refresh_method()) {
-        case ObMVRefreshMethod::NEVER:
-          if (OB_FAIL(databuff_printf(buf, buf_len, pos, " NEVER REFRESH "))) {
-            SHARE_SCHEMA_LOG(WARN, "fail to print refresh method never", KR(ret));
-          }
-          break;
-        case ObMVRefreshMethod::COMPLETE:
-          if (OB_FAIL(databuff_printf(buf, buf_len, pos, " REFRESH COMPLETE "))) {
-            SHARE_SCHEMA_LOG(WARN, "fail to print refresh method complete", KR(ret));
-          }
-          break;
-        case ObMVRefreshMethod::FAST:
-          if (OB_FAIL(databuff_printf(buf, buf_len, pos, " REFRESH FAST "))) {
-            SHARE_SCHEMA_LOG(WARN, "fail to print refresh method fast", KR(ret));
-          }
-          break;
-        case ObMVRefreshMethod::FORCE:
-          if (OB_FAIL(databuff_printf(buf, buf_len, pos, " REFRESH FORCE "))) {
-            SHARE_SCHEMA_LOG(WARN, "fail to print refresh method force", KR(ret));
-          }
-          break;
-        default:
-          ret = OB_ERR_UNEXPECTED;
-          SHARE_SCHEMA_LOG(WARN, "unsupported refresh method", KR(ret), K(mview_info.get_refresh_method()));
-          break;
+      if (ObMVRefreshMode::NEVER == mview_info.get_refresh_mode()) {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, " NEVER REFRESH "))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to print refresh mode never", KR(ret));
+        }
+      } else {
+        switch (mview_info.get_refresh_method()) {
+          case ObMVRefreshMethod::COMPLETE:
+            if (OB_FAIL(databuff_printf(buf, buf_len, pos, " REFRESH COMPLETE "))) {
+              SHARE_SCHEMA_LOG(WARN, "fail to print refresh method complete", KR(ret));
+            }
+            break;
+          case ObMVRefreshMethod::FAST:
+            if (OB_FAIL(databuff_printf(buf, buf_len, pos, " REFRESH FAST "))) {
+              SHARE_SCHEMA_LOG(WARN, "fail to print refresh method fast", KR(ret));
+            }
+            break;
+          case ObMVRefreshMethod::NEVER: // Legacy; NEVER REFRESH depends on refresh mode only.
+          case ObMVRefreshMethod::FORCE:
+            if (OB_FAIL(databuff_printf(buf, buf_len, pos, " REFRESH FORCE "))) {
+              SHARE_SCHEMA_LOG(WARN, "fail to print refresh method force", KR(ret));
+            }
+            break;
+          default:
+            ret = OB_ERR_UNEXPECTED;
+            SHARE_SCHEMA_LOG(WARN, "unsupported refresh method", KR(ret), K(mview_info.get_refresh_method()));
+            break;
+        }
       }
-      if (OB_SUCC(ret) && mview_info.get_refresh_dop() > 0) {
+      if (OB_SUCC(ret) && ObMVRefreshMode::NEVER != mview_info.get_refresh_mode()
+          && mview_info.get_refresh_dop() > 0) {
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, "PARALLEL %ld ",
                                     mview_info.get_refresh_dop()))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print materialized view refresh parallel", KR(ret));
@@ -192,7 +199,8 @@ int ObSchemaPrinter::print_materialized_view_definition(const uint64_t tenant_id
       }
     }
     if (OB_SUCC(ret) && !strict_compat_) {
-      if (OB_NOT_NULL(mview_info.get_refresh_next().ptr())) {
+      if (ObMVRefreshMode::NEVER != mview_info.get_refresh_mode()
+          && OB_NOT_NULL(mview_info.get_refresh_next().ptr())) {
         if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                     "START WITH sysdate%s",
                                     is_oracle_mode ? " + 0" : "()"))) {

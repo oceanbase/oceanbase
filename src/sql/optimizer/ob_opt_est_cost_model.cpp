@@ -2375,13 +2375,13 @@ int ObOptEstCostModel::cost_hash_set(const ObCostHashSetInfo &info, double &cost
   int ret = OB_SUCCESS;
   double build_rows = 0.0;
   double probe_rows = 0.0;
-  if (ObSelectStmt::UNION == info.op_) {
+  if (ObSetRelation::UNION == info.op_) {
     build_rows = info.left_rows_ + info.right_rows_;
     probe_rows = info.left_rows_ + info.right_rows_;
-  } else if (ObSelectStmt::INTERSECT == info.op_) {
+  } else if (ObSetRelation::INTERSECT == info.op_) {
     build_rows = info.left_rows_;
     probe_rows = info.left_rows_ + info.right_rows_;
-  } else if (ObSelectStmt::EXCEPT == info.op_) {
+  } else if (ObSetRelation::EXCEPT == info.op_) {
     build_rows = info.left_rows_;
     probe_rows = info.left_rows_ + info.right_rows_;
   }

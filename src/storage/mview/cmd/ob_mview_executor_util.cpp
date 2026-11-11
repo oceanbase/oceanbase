@@ -7,9 +7,11 @@
 
 #include "storage/mview/cmd/ob_mview_executor_util.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
-#include "rootserver/mview/ob_mview_pending_task_define.h"
-#include "rootserver/mview/ob_mview_pending_task_manager.h"
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+#include "lib/mysqlclient/ob_mysql_transaction.h"
+#include "observer/ob_server_struct.h"
+#include "rootserver/mview/ob_mview_pending_task_utils.h"
+#include "share/schema/ob_mview_info.h"
 #endif
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_compatibility_control.h"
@@ -243,7 +245,8 @@ bool ObMViewExecutorUtil::is_mview_refresh_retry_ret_code(int ret_code)
   return OB_OLD_SCHEMA_VERSION == ret_code || OB_EAGAIN == ret_code ||
          OB_INVALID_QUERY_TIMESTAMP == ret_code || OB_TASK_EXPIRED == ret_code ||
          OB_REPLICA_NOT_READABLE == ret_code || OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST == ret_code ||
-         OB_SCHEMA_ERROR == ret_code ||
+         OB_SCHEMA_ERROR == ret_code || OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH == ret_code ||
+         OB_SERVER_IS_INIT == ret_code ||
          is_master_changed_error(ret_code) || is_partition_change_error(ret_code) ||
          is_ddl_stmt_packet_retry_err(ret_code);
 }
@@ -343,58 +346,23 @@ int ObMViewExecutorUtil::resolve_mview_list_and_method(ObSchemaGetterGuard *sche
   return ret;
 }
 
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
-int ObMViewExecutorUtil::wait_mview_refresh(sql::ObExecContext &ctx,
-                                           uint64_t tenant_id,
-                                           int64_t refresh_id,
-                                           uint64_t mview_id)
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+int ObMViewExecutorUtil::wait_mview_refresh(common::ObMySQLProxy *sql_proxy,
+                                            uint64_t tenant_id,
+                                            int64_t refresh_id,
+                                            uint64_t mview_id)
 {
   int ret = OB_SUCCESS;
-  ObMySQLProxy *sql_proxy = nullptr;
   const int64_t POLL_INTERVAL_US = 100 * 1000L;
   bool done = false;
-  ObSqlString sql;
-  if (OB_ISNULL(sql_proxy = ctx.get_sql_proxy())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql proxy is null", KR(ret));
-  } else if (OB_FAIL(sql.assign_fmt("SELECT status FROM %s"
-                                     " WHERE tenant_id = 0 AND refresh_id = %ld AND mview_id = %lu",
-                                     OB_ALL_MVIEW_REFRESH_PENDING_TASK_TNAME,
-                                     refresh_id, mview_id))) {
-    LOG_WARN("fail to assemble pending task poll sql", KR(ret), K(refresh_id), K(mview_id));
-  }
-  // Poll pending task table by primary key until the row is gone or terminal.
   while (OB_SUCC(ret) && !done) {
     if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("worker interrupted during sync wait", KR(ret));
-    } else {
-      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-        if (OB_FAIL(sql_proxy->read(res, tenant_id, sql.ptr()))) {
-          LOG_WARN("fail to query pending task", KR(ret), K(refresh_id), K(mview_id));
-        } else if (OB_ISNULL(res.get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("mysql result is null", KR(ret), K(refresh_id), K(mview_id));
-        } else if (OB_FAIL(res.get_result()->next())) {
-          if (OB_ITER_END == ret) {
-            // Row deleted — task finished and was recycled.
-            ret = OB_SUCCESS;
-            done = true;
-          } else {
-            LOG_WARN("failed to get result", KR(ret), K(refresh_id), K(mview_id));
-          }
-        } else {
-          int64_t status = 0;
-          EXTRACT_INT_FIELD_MYSQL(*res.get_result(), "status", status, int64_t);
-          if (OB_SUCC(ret)) {
-            done = (status == rootserver::MV_TASK_SUCCESS
-                    || status == rootserver::MV_TASK_FAILED
-                    || status == rootserver::MV_TASK_CANCELLED);
-          }
-        }
-      }
-      if (OB_SUCC(ret) && !done) {
-        ob_usleep(POLL_INTERVAL_US);
-      }
+    } else if (OB_FAIL(rootserver::ObMViewPendingTaskUtils::probe_pending_task_terminal(
+                   sql_proxy, tenant_id, refresh_id, mview_id, done))) {
+      LOG_WARN("fail to probe pending task", KR(ret), K(refresh_id), K(mview_id));
+    } else if (!done) {
+      ob_usleep(POLL_INTERVAL_US);
     }
   }
   // When the loop exits abnormally (timeout / interrupt / poll failure),
@@ -402,20 +370,17 @@ int ObMViewExecutorUtil::wait_mview_refresh(sql::ObExecContext &ctx,
   // Preserve the original ret — kill is informational; failures are logged.
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
-    // The interrupted session must not execute the inner-SQL kill path itself;
-    // the RPC processor runs it on a clean thread in the target tenant's MTL.
-    obrpc::ObKillMViewRefreshArg arg;
-    arg.tenant_id_ = tenant_id;
-    arg.refresh_id_ = refresh_id;
-    if (OB_TMP_FAIL(rootserver::ObMViewPendingTaskManager::kill_refresh(arg))) {
-      LOG_WARN("kill mview refresh failed after abnormal sync wait exit", K(tmp_ret), K(tenant_id), K(refresh_id));
+    bool refresh_exists = false;
+    if (OB_TMP_FAIL(rootserver::ObMViewPendingTaskUtils::cancel_refresh(tenant_id, refresh_id, refresh_exists))) {
+      LOG_WARN("cancel mview refresh failed after abnormal sync wait exit",
+               K(tmp_ret), K(tenant_id), K(refresh_id));
     } else {
-      LOG_INFO("kill mview refresh issued after abnormal sync wait exit",
-                K(tenant_id), K(refresh_id), K(ret));
+      LOG_INFO("cancel mview refresh issued after abnormal sync wait exit",
+               K(tenant_id), K(refresh_id), K(ret));
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(load_refresh_run_stats_error_message(ctx, tenant_id, refresh_id))) {
+    if (OB_FAIL(load_refresh_run_stats_error_message(sql_proxy, tenant_id, refresh_id))) {
       LOG_WARN("fail to read mview refresh run stats", KR(ret), K(refresh_id));
     }
   }
@@ -423,13 +388,12 @@ int ObMViewExecutorUtil::wait_mview_refresh(sql::ObExecContext &ctx,
 }
 #endif
 
-int ObMViewExecutorUtil::load_refresh_run_stats_error_message(sql::ObExecContext &ctx,
+int ObMViewExecutorUtil::load_refresh_run_stats_error_message(common::ObMySQLProxy *sql_proxy,
                                                               uint64_t tenant_id,
                                                               int64_t refresh_id)
 {
   int ret = OB_SUCCESS;
-  ObMySQLProxy *sql_proxy = nullptr;
-  if (OB_ISNULL(sql_proxy = ctx.get_sql_proxy())) {
+  if (OB_ISNULL(sql_proxy)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == refresh_id)) {

@@ -13,6 +13,8 @@
 #include "lib/container/ob_bit_set.h"
 #include "lib/container/ob_vector.h"
 #include "sql/resolver/dml/ob_dml_stmt.h"
+#include "sql/resolver/dml/ob_relation_group.h"
+#include "sql/resolver/dml/ob_relation_set.h"
 #include "sql/resolver/ob_sql_array.h"
 #include "sql/ob_sql_temp_table.h"
 
@@ -191,70 +193,6 @@ struct ObSelectIntoItem
   static const char DEFAULT_FIELD_ESCAPED_CHAR;
 };
 
-struct ObGroupbyExpr
-{
-  ObGroupbyExpr(common::ObIAllocator &allocator)
-    : groupby_exprs_(allocator)
-  {
-  }
-  int assign(const ObGroupbyExpr& other) {
-    return groupby_exprs_.assign(other.groupby_exprs_);
-  }
-
-  TO_STRING_KV("grouping sets groupby expr", groupby_exprs_);
-  ObSqlArray<sql::ObRawExpr*> groupby_exprs_;
-};
-
-struct ObRollupItem
-{
-  ObRollupItem(common::ObIAllocator &allocator)
-  : rollup_list_exprs_(allocator)
-  {
-  }
-  int assign(const ObRollupItem& other) {
-    return rollup_list_exprs_.assign(other.rollup_list_exprs_);
-  }
-  int deep_copy(ObIRawExprCopier &expr_copier,
-                const ObRollupItem &other);
-  TO_STRING_KV("rollup list exprs", rollup_list_exprs_);
-  ObSqlArray<ObGroupbyExpr, true> rollup_list_exprs_;
-};
-
-struct ObCubeItem
-{
-  ObCubeItem(common::ObIAllocator &allocator) : cube_list_exprs_(allocator) { }
-  int assign(const ObCubeItem& other) {
-    return cube_list_exprs_.assign(other.cube_list_exprs_);
-  }
-  int deep_copy(ObIRawExprCopier &expr_copier,
-                const ObCubeItem &other);
-  TO_STRING_KV("cube list exprs", cube_list_exprs_);
-  ObSqlArray<ObGroupbyExpr, true> cube_list_exprs_;
-};
-
-struct ObGroupingSetsItem
-{
-  ObGroupingSetsItem(common::ObIAllocator &allocator)
-  : grouping_sets_exprs_(allocator),
-    rollup_items_(allocator),
-    cube_items_(allocator),
-    pruned_grouping_set_ids_(allocator)
-  {
-  }
-  int assign(const ObGroupingSetsItem& other);
-  int deep_copy(ObIRawExprCopier &expr_copier,
-                const ObGroupingSetsItem &other);
-  TO_STRING_KV("grouping sets exprs", grouping_sets_exprs_, K_(rollup_items), K_(cube_items),
-               K_(pruned_grouping_set_ids));
-  ObSqlArray<ObGroupbyExpr, true> grouping_sets_exprs_;
-  ObSqlArray<ObRollupItem, true> rollup_items_;
-  ObSqlArray<ObCubeItem, true> cube_items_;
-  // select sum(a) from t group by grouping sets(b, c) having b > 1
-  // `grouping_sets_exprs_` will contain '[b], [c]'
-  // `pruned_grouping_sets_exprs_` will contain `[1]`
-  ObSqlArray<int64_t> pruned_grouping_set_ids_;
-};
-
 struct ForUpdateDMLInfo
 {
   ForUpdateDMLInfo(ObIAllocator &allocator)
@@ -292,41 +230,9 @@ struct ForUpdateDMLInfo
 
 namespace sql
 {
-class ObSelectStmt : public ObDMLStmt
+class ObSelectStmt : public ObDMLStmt, public ObRelation
 {
 public:
-  enum SetOperator
-  {
-    NONE = 0,
-    UNION,
-    INTERSECT,
-    EXCEPT,
-    RECURSIVE,
-    SET_OP_NUM,
-  };
-
-  static const char *set_operator_str(SetOperator op) {
-    static const char *set_operator_name[SET_OP_NUM + 1] =
-    {
-      "none",
-      "union",
-      "intersect",
-      "except",
-      "recursive",
-      "unknown",
-    };
-    static const char *set_operator_name_oracle[SET_OP_NUM + 1] =
-    {
-      "none",
-      "union",
-      "intersect",
-      "minus",
-      "unknown",
-      "unknown",
-    };
-    return lib::is_oracle_mode() ? set_operator_name_oracle[op] : set_operator_name[op];
-  }
-
   class ObShowStmtCtx
   {
   public:
@@ -380,21 +286,21 @@ public:
   int iterate_cube_items(ObIArray<ObCubeItem> &cube_items, ObStmtExprVisitor &visitor);
   int update_stmt_table_id(ObIAllocator *allocator, const ObSelectStmt &other, bool need_update_qb_name = true);
   int64_t get_select_item_size() const { return select_items_.count(); }
-  int64_t get_group_expr_size() const { return group_exprs_.count(); }
-  int64_t get_rollup_expr_size() const { return rollup_exprs_.count(); }
-  int64_t get_grouping_sets_items_size() const { return grouping_sets_items_.count(); }
-  int64_t get_rollup_items_size() const { return rollup_items_.count(); }
-  int64_t get_cube_items_size() const { return cube_items_.count(); }
-  int64_t get_rollup_dir_size() const { return rollup_directions_.count(); }
-  int64_t get_aggr_item_size() const { return agg_items_.count(); }
-  int64_t get_having_expr_size() const { return having_exprs_.count(); }
+  int64_t get_group_expr_size() const { return group_clause_.group_exprs_.count(); }
+  int64_t get_rollup_expr_size() const { return group_clause_.rollup_exprs_.count(); }
+  int64_t get_grouping_sets_items_size() const { return group_clause_.grouping_sets_items_.count(); }
+  int64_t get_rollup_items_size() const { return group_clause_.rollup_items_.count(); }
+  int64_t get_cube_items_size() const { return group_clause_.cube_items_.count(); }
+  int64_t get_rollup_dir_size() const { return group_clause_.rollup_directions_.count(); }
+  int64_t get_aggr_item_size() const { return group_clause_.agg_items_.count(); }
+  int64_t get_having_expr_size() const { return group_clause_.having_exprs_.count(); }
   void set_recursive_union(bool is_recursive_union) { is_recursive_cte_ = is_recursive_union; }
   void set_breadth_strategy(bool is_breadth_search) { is_breadth_search_ = is_breadth_search; }
   void assign_distinct() { is_distinct_ = true; }
   void assign_all() { is_distinct_ = false; }
-  void assign_set_op(SetOperator op) { set_op_ = op; }
-  void assign_set_distinct() { is_set_distinct_ = true; }
-  void assign_set_all() { is_set_distinct_ = false; }
+  void assign_set_op(ObSetRelation::SetOperator op) { set_clause_.assign_set_op(op); }
+  void assign_set_distinct() { set_clause_.assign_set_distinct(); }
+  void assign_set_all() { set_clause_.assign_set_all(); }
   void set_is_from_show_stmt(bool is_from_show_stmt) { show_stmt_ctx_.is_from_show_stmt_ = is_from_show_stmt; }
   void set_global_scope(bool global_scope) { show_stmt_ctx_.global_scope_ = global_scope; }
   void set_tenant_id(uint64_t tenant_id) { show_stmt_ctx_.tenant_id_ = tenant_id; }
@@ -414,7 +320,7 @@ public:
   bool is_distinct() const { return is_distinct_; }
   bool is_recursive_union() const { return is_recursive_cte_;}
   bool is_breadth_search() const { return is_breadth_search_;}
-  bool is_set_distinct() const { return is_set_distinct_; }
+  bool is_set_distinct() const { return set_clause_.is_set_distinct(); }
   bool is_from_show_stmt() const { return show_stmt_ctx_.is_from_show_stmt_; }
   // view
   void set_is_view_stmt(bool is_view_stmt, uint64_t view_ref_id)
@@ -464,11 +370,11 @@ public:
   bool has_reverse_link() const { return has_reverse_link_; }
   // return single row
   inline bool is_single_set_query() const { return get_aggr_item_size() > 0 &&
-                                                   group_exprs_.empty() &&
-                                                   rollup_exprs_.empty() &&
-                                                   grouping_sets_items_.empty() &&
-                                                   rollup_items_.empty() &&
-                                                   cube_items_.empty(); }
+                                                   group_clause_.group_exprs_.empty() &&
+                                                   group_clause_.rollup_exprs_.empty() &&
+                                                   group_clause_.grouping_sets_items_.empty() &&
+                                                   group_clause_.rollup_items_.empty() &&
+                                                   group_clause_.cube_items_.empty(); }
   inline bool has_rollup() const { return (get_rollup_expr_size() + get_rollup_items_size()) > 0; };
   inline bool has_cube() const { return get_cube_items_size() > 0; };
   inline bool has_grouping_sets() const { return get_grouping_sets_items_size() > 0; }
@@ -476,7 +382,7 @@ public:
   inline bool has_distinct() const { return is_distinct(); }
   inline bool has_having() const { return (get_having_expr_size() > 0); }
   inline bool has_rollup_dir() const { return (get_rollup_dir_size() > 0); }
-  SetOperator get_set_op() const { return set_op_; }
+  ObSetRelation::SetOperator get_set_op() const { return set_clause_.get_set_op(); }
   void set_from_pivot(const bool value) { is_from_pivot_ = value; }
   bool is_from_pivot() const { return is_from_pivot_; }
   bool has_hidden_rowid() const;
@@ -495,12 +401,12 @@ public:
   int get_select_exprs(ObIArray<ObRawExpr*> &select_exprs);
   int get_select_exprs(ObIArray<ObRawExpr*> &select_exprs) const;
   int get_select_exprs_without_lob(ObIArray<ObRawExpr*> &select_exprs) const;
-  const common::ObIArray<ObAggFunRawExpr*> &get_aggr_items() const { return agg_items_; }
-  common::ObIArray<ObAggFunRawExpr*> &get_aggr_items() { return agg_items_; }
-  ObAggFunRawExpr *get_aggr_item(int64_t index) const { return agg_items_[index]; }
-  ObAggFunRawExpr *get_aggr_item(int64_t index) { return agg_items_[index]; }
-  common::ObIArray<ObRawExpr*> &get_having_exprs() { return having_exprs_; }
-  const common::ObIArray<ObRawExpr*> &get_having_exprs() const { return having_exprs_; }
+  const common::ObIArray<ObAggFunRawExpr*> &get_aggr_items() const { return group_clause_.agg_items_; }
+  common::ObIArray<ObAggFunRawExpr*> &get_aggr_items() { return group_clause_.agg_items_; }
+  ObAggFunRawExpr *get_aggr_item(int64_t index) const { return group_clause_.agg_items_[index]; }
+  ObAggFunRawExpr *get_aggr_item(int64_t index) { return group_clause_.agg_items_[index]; }
+  common::ObIArray<ObRawExpr*> &get_having_exprs() { return group_clause_.having_exprs_; }
+  const common::ObIArray<ObRawExpr*> &get_having_exprs() const { return group_clause_.having_exprs_; }
   common::ObIArray<ObRawExpr*> &get_start_with_exprs() { return start_with_exprs_; }
   const common::ObIArray<ObRawExpr*> &get_start_with_exprs() const { return start_with_exprs_; }
   void reset_start_with_exprs() { start_with_exprs_.reset(); }
@@ -533,39 +439,39 @@ public:
     set_has_prior(false);
     set_order_siblings(false);
   }
-  const common::ObIArray<ObRawExpr*> &get_group_exprs() const { return group_exprs_; }
-  common::ObIArray<ObRawExpr *> &get_group_exprs() { return group_exprs_; }
-  const common::ObIArray<ObRawExpr*> &get_rollup_exprs() const { return rollup_exprs_; }
-  common::ObIArray<ObRawExpr *> &get_rollup_exprs() { return rollup_exprs_; }
+  const common::ObIArray<ObRawExpr*> &get_group_exprs() const { return group_clause_.group_exprs_; }
+  common::ObIArray<ObRawExpr *> &get_group_exprs() { return group_clause_.group_exprs_; }
+  const common::ObIArray<ObRawExpr*> &get_rollup_exprs() const { return group_clause_.rollup_exprs_; }
+  common::ObIArray<ObRawExpr *> &get_rollup_exprs() { return group_clause_.rollup_exprs_; }
   const common::ObIArray<ObGroupingSetsItem> &get_grouping_sets_items() const {
-    return grouping_sets_items_; }
-  common::ObIArray<ObGroupingSetsItem> &get_grouping_sets_items() { return grouping_sets_items_; }
-  const common::ObIArray<ObRollupItem> &get_rollup_items() const { return rollup_items_; }
-  common::ObIArray<ObRollupItem> &get_rollup_items() { return rollup_items_; }
-  const common::ObIArray<ObCubeItem> &get_cube_items() const { return cube_items_; }
-  common::ObIArray<ObCubeItem> &get_cube_items() { return cube_items_; }
+    return group_clause_.grouping_sets_items_; }
+  common::ObIArray<ObGroupingSetsItem> &get_grouping_sets_items() { return group_clause_.grouping_sets_items_; }
+  const common::ObIArray<ObRollupItem> &get_rollup_items() const { return group_clause_.rollup_items_; }
+  common::ObIArray<ObRollupItem> &get_rollup_items() { return group_clause_.rollup_items_; }
+  const common::ObIArray<ObCubeItem> &get_cube_items() const { return group_clause_.cube_items_; }
+  common::ObIArray<ObCubeItem> &get_cube_items() { return group_clause_.cube_items_; }
   bool is_expr_in_groupings_sets_item(const ObRawExpr *expr) const;
   bool is_expr_in_rollup_items(const ObRawExpr *expr) const;
   bool is_expr_in_cube_items(const ObRawExpr *expr) const;
-  const common::ObIArray<ObOrderDirection> &get_rollup_dirs() const { return rollup_directions_; }
-  common::ObIArray<ObOrderDirection> &get_rollup_dirs() { return rollup_directions_; }
+  const common::ObIArray<ObOrderDirection> &get_rollup_dirs() const { return group_clause_.rollup_directions_; }
+  common::ObIArray<ObOrderDirection> &get_rollup_dirs() { return group_clause_.rollup_directions_; }
   ObSelectIntoItem* get_select_into() const { return into_item_; }
   int init_group_clause_capacity(int64_t rollup_num, int64_t cube_num, int64_t grouping_num);
-  int add_group_expr(ObRawExpr* expr) { return group_exprs_.push_back(expr); }
-  int add_rollup_expr(ObRawExpr* expr) { return rollup_exprs_.push_back(expr); }
+  int add_group_expr(ObRawExpr* expr) { return group_clause_.group_exprs_.push_back(expr); }
+  int add_rollup_expr(ObRawExpr* expr) { return group_clause_.rollup_exprs_.push_back(expr); }
   int add_grouping_sets_item(ObGroupingSetsItem &grouping_sets_item)
   {
-    return grouping_sets_items_.push_back(grouping_sets_item);
+    return group_clause_.grouping_sets_items_.push_back(grouping_sets_item);
   }
-  int add_rollup_item(ObRollupItem &rollup_item) { return rollup_items_.push_back(rollup_item); }
-  int add_cube_item(ObCubeItem &cube_item) { return cube_items_.push_back(cube_item); }
-  int add_rollup_dir(ObOrderDirection dir) { return rollup_directions_.push_back(dir); }
+  int add_rollup_item(ObRollupItem &rollup_item) { return group_clause_.rollup_items_.push_back(rollup_item); }
+  int add_cube_item(ObCubeItem &cube_item) { return group_clause_.cube_items_.push_back(cube_item); }
+  int add_rollup_dir(ObOrderDirection dir) { return group_clause_.rollup_directions_.push_back(dir); }
   int add_agg_item(ObAggFunRawExpr &agg_expr)
   {
     agg_expr.set_explicited_reference();
-    return agg_items_.push_back(&agg_expr);
+    return group_clause_.agg_items_.push_back(&agg_expr);
   }
-  int add_having_expr(ObRawExpr *expr) { return having_exprs_.push_back(expr); }
+  int add_having_expr(ObRawExpr *expr) { return group_clause_.having_exprs_.push_back(expr); }
   bool has_for_update() const;
   bool is_skip_locked() const;
   common::ObIArray<ObColumnRefRawExpr*> &get_for_update_columns() { return for_update_columns_; }
@@ -585,9 +491,10 @@ public:
   virtual bool has_link_table() const
   {
     bool bret = ObDMLStmt::has_link_table();
-    for (int64_t i = 0; !bret && i < set_query_.count(); i++) {
-      if (OB_NOT_NULL(set_query_.at(i))) {
-        bret = set_query_.at(i)->has_link_table();
+    const common::ObIArray<ObSelectStmt *> &set_queries = get_set_query();
+    for (int64_t i = 0; !bret && i < set_queries.count(); i++) {
+      if (OB_NOT_NULL(set_queries.at(i))) {
+        bret = set_queries.at(i)->has_link_table();
       }
     }
     return bret;
@@ -599,11 +506,9 @@ public:
                          ObColumnRefRawExpr &ret_expr) const;
   int add_select_item(SelectItem &item);
   void clear_select_item() { select_items_.reset(); }
-  void clear_aggr_item() { agg_items_.reset(); }
+  void clear_aggr_item() { group_clause_.agg_items_.reset(); }
   int reset_select_item(const common::ObIArray<SelectItem > &sorted_select_items);
   int check_aggr_and_winfunc(ObRawExpr &expr);
-  //@hualong unused code
-  //static  const char *get_set_op_type_str(SetOperator set_op);
   DECLARE_VIRTUAL_TO_STRING;
   int do_to_string(char *buf, const int64_t buf_len, int64_t &pos) const;
   /**
@@ -617,7 +522,7 @@ public:
   int get_same_win_func_item(const ObRawExpr *expr, ObWinFunRawExpr *&win_expr);
   void set_match_topk(bool is_match) { is_match_topk_ = is_match; }
   bool is_match_topk() const { return is_match_topk_; }
-  bool is_set_stmt() const { return NONE != set_op_; }
+  bool is_set_stmt() const { return !set_clause_.is_empty(); }
   int get_child_stmt_size(int64_t &child_size) const;
   int get_child_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const;
   int set_child_stmt(const int64_t child_num, ObSelectStmt* child_stmt);
@@ -663,12 +568,13 @@ public:
   bool contain_nested_aggr() const;
 
   int get_set_stmt_size(int64_t &size) const;
-  common::ObIArray<ObSelectStmt*> &get_set_query() { return set_query_; }
-  const common::ObIArray<ObSelectStmt*> &get_set_query() const { return set_query_; }
-  int add_set_query(ObSelectStmt* stmt)  { return set_query_.push_back(stmt); }
+  common::ObIArray<ObSelectStmt*> &get_set_query() { return set_clause_.get_set_query(); }
+  const common::ObIArray<ObSelectStmt*> &get_set_query() const
+  { return set_clause_.get_set_query(); }
+  int add_set_query(ObSelectStmt* stmt)  { return set_clause_.add_set_query(stmt); }
   int set_set_query(const int64_t index, ObSelectStmt *stmt);
   inline ObSelectStmt* get_set_query(const int64_t index) const
-  { return OB_LIKELY(index >= 0 && index < set_query_.count()) ? set_query_.at(index) : NULL; }
+  { return set_clause_.get_set_query(index); }
   inline ObSelectStmt* get_set_query(const int64_t index)
   { return const_cast<ObSelectStmt *>(static_cast<const ObSelectStmt&>(*this).get_set_query(index)); }
   const ObSelectStmt* get_real_stmt() const;
@@ -705,9 +611,14 @@ public:
   }
   uint64_t get_for_update_table_id() const { return for_update_cursor_table_id_; }
 
+  virtual RelationType get_relation_type() const override { return RelationType::SELECT; }
+  // Returns all non-empty clause relations in computation order
+  int get_non_empty_clauses(ObIArray<ObRelation *> &clauses);
+
 private:
-  SetOperator set_op_;
   /* these var is only used for recursive union */
+  // set clause relation node for UNION/INTERSECT/EXCEPT stmts
+  ObSetRelation set_clause_;
   bool is_recursive_cte_;
   bool is_breadth_search_;
   /* These fields are only used by normal select */
@@ -719,30 +630,16 @@ private:
   ObSqlArray<ColumnItem> cycle_by_items_;
   ObSqlArray<ObRawExpr*> cte_exprs_;
   ObSqlArray<SelectItem> select_items_;
-  ObSqlArray<ObRawExpr*> group_exprs_;
-  ObSqlArray<ObRawExpr*> rollup_exprs_;
-  ObSqlArray<ObRawExpr*> having_exprs_;
-  ObSqlArray<ObAggFunRawExpr*> agg_items_;
   ObSqlArray<ObWinFunRawExpr*> win_func_exprs_;
   //a child set of the filters in the parent stmts, only used for partition topn sort
   ObSqlArray<ObRawExpr*> qualify_filters_;
   ObSqlArray<ObRawExpr*> start_with_exprs_;
   ObSqlArray<ObRawExpr*> connect_by_exprs_;
   ObSqlArray<ObRawExpr*> connect_by_prior_exprs_;
-  //这个结构仅仅是在mysql模式下的rollup语句中才有意义。比如下面这条语句
-  //select a,b,sum(d) from t group by a desc, b asc with rollup.
-  ObSqlArray<ObOrderDirection> rollup_directions_;
-  ObSqlArray<ObGroupingSetsItem, true> grouping_sets_items_;
-  ObSqlArray<ObRollupItem, true> rollup_items_;
-  ObSqlArray<ObCubeItem, true> cube_items_;
+  ObGroupRelation group_clause_;
 
   // for oracle mode only, for stmt print only
   ObSqlArray<ObColumnRefRawExpr*> for_update_columns_;
-
-  /* These fields are only used by set select */
-  bool is_set_distinct_;
-  /* for set stmt child stmt*/
-  ObSqlArray<ObSelectStmt*> set_query_;
 
   /* for hierarchical query with for update */
   ObSqlArray<ForUpdateDMLInfo*> for_update_dml_info_;

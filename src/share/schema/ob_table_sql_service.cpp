@@ -3227,7 +3227,7 @@ int ObTableSqlService::gen_mview_dml(
                                                  exec_tenant_id, table.get_table_id())))
         || OB_FAIL(dml.add_column("refresh_mode", mv_refresh_info->refresh_mode_))
         || OB_FAIL(dml.add_column("refresh_method", mv_refresh_info->refresh_method_))
-        || OB_FAIL(dml.add_column("build_mode", ObMViewBuildMode::IMMEDIATE))
+        || OB_FAIL(dml.add_column("build_mode", static_cast<int64_t>(mv_refresh_info->build_mode_)))
         || OB_FAIL(dml.add_column("last_refresh_scn", 0))) {
       LOG_WARN("add column failed", KR(ret));
     }

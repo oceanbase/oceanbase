@@ -1264,6 +1264,8 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("arg_max");
     case T_FUN_ANY:
       SET_SYMBOL_IF_EMPTY("any");
+    case T_FUN_ANY_VALUE:
+      SET_SYMBOL_IF_EMPTY("any_value");
     case T_FUN_ARBITRARY:
       SET_SYMBOL_IF_EMPTY("arbitrary");
     case T_FUN_AVG_WEIGHTED:
@@ -4380,10 +4382,12 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
        }
        DATA_PRINTF(")");
        if (OB_SUCC(ret)) {
-         if (expr->is_from_first()) {
-           DATA_PRINTF(" from first");
-         } else {
-           DATA_PRINTF(" from last");
+         if (T_WIN_FUN_NTH_VALUE == type) {
+           if (expr->is_from_first()) {
+             DATA_PRINTF(" from first");
+           } else {
+             DATA_PRINTF(" from last");
+           }
          }
          if (expr->is_ignore_null()) {
            DATA_PRINTF(" ignore nulls");

@@ -2235,7 +2235,7 @@ int ObTransformSubqueryUnnest::anyall_expand_or_create_union_query_ref(
   union_query_ref = NULL;
   ObSelectStmt *union_stmt = NULL;
   if (OB_FAIL(ObTransformUtils::create_set_stmt(ctx_,
-                                                ObSelectStmt::UNION,
+                                                ObSetRelation::UNION,
                                                 false /* not distinct (UNION ALL) */,
                                                 child_stmts,
                                                 union_stmt))) {

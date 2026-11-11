@@ -18,11 +18,8 @@ class ObAlterMviewUtils
 {
 public:
   static int resolve_mv_options(const ParseNode &node,
-                                ObSQLSessionInfo *session_info,
                                 ObAlterTableStmt *alter_table_stmt,
                                 const share::schema::ObTableSchema *table_schema,
-                                ObSchemaGetterGuard *schema_guard,
-                                common::ObIAllocator *allocator,
                                 ObResolverParams &resolver_params);
 
   static int resolve_mlog_options(const ParseNode &node,
@@ -44,6 +41,12 @@ public:
   static int check_complete_refresh_min_interval(const uint64_t tenant_id,
                                                  const uint64_t mview_id,
                                                  const int64_t period_sec);
+
+private:
+  static int resolve_mv_refresh_info(const ParseNode &node,
+                                     const uint64_t mview_id,
+                                     ObResolverParams &resolver_params,
+                                     obrpc::ObAlterMViewArg &alter_mview_arg);
 };
 
 } // namespace sql

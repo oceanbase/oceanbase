@@ -117,6 +117,7 @@ public:
                                            int64_t &timestamp);
   static int calc_date_expression(dbms_scheduler::ObDBMSSchedJobInfo &job_info,
                                   int64_t &next_date_ts);
+  static int64_t calc_default_refresh_timeout_us(const int64_t refresh_interval);
 
   static int resolve_date_expr_to_timestamp(sql::ObResolverParams &params,
                                             sql::ObSQLSessionInfo &session,
@@ -136,17 +137,6 @@ public:
 
   static int disable_and_stop_job(const uint64_t tenant_id,
                                   const uint64_t mview_id);
-
-  // Parallel to disable_and_stop_job: kill any new-framework in-flight refresh
-  // tasks of the given mview. Used by DDL (drop materialized view / drop
-  // database) so any refresh transaction holding the OBJ_TYPE_MATERIALIZED_VIEW
-  // EXCLUSIVE in-trans lock is killed and rolled back before DDL tries to take
-  // that lock. Goes through MTL -> pending_task_manager which routes a single
-  // RPC carrying mview_id to the SYS_LS leader for batch cancellation.
-  static int kill_mview_refreshes(const uint64_t tenant_id,
-                                  const uint64_t mview_id,
-                                  const bool is_drop);
-
 
   static int set_mview_refresh_params(const uint64_t tenant_id,
                                       const uint64_t mview_id,

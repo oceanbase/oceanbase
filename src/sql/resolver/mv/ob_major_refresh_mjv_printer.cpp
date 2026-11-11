@@ -122,7 +122,7 @@ int ObMajorRefreshMJVPrinter::gen_real_time_view(ObSelectStmt *&sel_stmt)
     LOG_WARN("failed to set set query", K(ret));
   } else {
     sel_stmt->assign_set_all();
-    sel_stmt->assign_set_op(ObSelectStmt::UNION);
+    sel_stmt->assign_set_op(ObSetRelation::UNION);
   }
   return ret;
 }
@@ -414,12 +414,21 @@ int ObMajorRefreshMJVPrinter::create_mr_rt_mv_access_mv_from_table(ObSelectStmt 
   if (OB_UNLIKELY(2 != mv_def_stmt_.get_table_items().count())
       || OB_ISNULL(orig_left_table = mv_def_stmt_.get_table_item(0))
       || OB_ISNULL(orig_right_table = mv_def_stmt_.get_table_item(1))
-      || OB_UNLIKELY(1 != orig_joined_tables.count()) || OB_ISNULL(orig_joined_tables.at(0))) {
+      || OB_UNLIKELY(orig_joined_tables.count() > 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected major refresh mview", K(ret), K(mv_def_stmt_.get_table_items()),
                                               K(orig_joined_tables));
-  } else if (OB_FAIL(append(all_conds, orig_joined_tables.at(0)->get_join_conditions()))
-             || OB_FAIL(append(all_conds, mv_def_stmt_.get_condition_exprs()))) {
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < orig_joined_tables.count(); ++i) {
+    if (OB_ISNULL(orig_joined_tables.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("joined table is null", K(ret), K(orig_joined_tables));
+    } else if (OB_FAIL(append(all_conds, orig_joined_tables.at(i)->get_join_conditions()))) {
+      LOG_WARN("failed to append join conditions", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(append(all_conds, mv_def_stmt_.get_condition_exprs()))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(all_conds, exprs))) {
     LOG_WARN("failed to extract column exprs", K(ret), K(all_conds));

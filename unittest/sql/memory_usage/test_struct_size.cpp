@@ -157,11 +157,10 @@ TEST_F(TestSQLCompile, stmt_member_size)
     PRINT_MEMBER_SIZE(of_result, limit_percent_expr_);
     PRINT_MEMBER_SIZE(of_result, has_fetch_);
     PRINT_MEMBER_SIZE(of_result, is_fetch_with_ties_);
-    PRINT_MEMBER_SIZE(of_result, from_items_);
     PRINT_MEMBER_SIZE(of_result, part_expr_items_);
     PRINT_MEMBER_SIZE(of_result, joined_tables_);
     PRINT_MEMBER_SIZE(of_result, stmt_hint_);
-    PRINT_MEMBER_SIZE(of_result, semi_infos_);
+    PRINT_MEMBER_SIZE(of_result, from_clause_);
     PRINT_MEMBER_SIZE(of_result, autoinc_params_);
     PRINT_MEMBER_SIZE(of_result, is_calc_found_rows_);
     PRINT_MEMBER_SIZE(of_result, has_top_limit_);
@@ -171,7 +170,6 @@ TEST_F(TestSQLCompile, stmt_member_size)
     PRINT_MEMBER_SIZE(of_result, sequence_infos_);
     PRINT_MEMBER_SIZE(of_result, table_items_);
     PRINT_MEMBER_SIZE(of_result, column_items_);
-    PRINT_MEMBER_SIZE(of_result, condition_exprs_);
     PRINT_MEMBER_SIZE(of_result, pseudo_column_like_exprs_);
     PRINT_MEMBER_SIZE(of_result, tables_hash_);
     PRINT_MEMBER_SIZE(of_result, subquery_exprs_);
@@ -190,7 +188,7 @@ TEST_F(TestSQLCompile, stmt_member_size)
     PRINT_SIZE(of_result, ObSelectStmt)
     PRINT_SIZE(of_result, ObDMLStmt)
     total_size = sizeof(ObDMLStmt);
-    PRINT_MEMBER_SIZE(of_result, set_op_);
+    PRINT_MEMBER_SIZE(of_result, set_clause_);
     PRINT_MEMBER_SIZE(of_result, is_recursive_cte_);
     PRINT_MEMBER_SIZE(of_result, is_breadth_search_);
     PRINT_MEMBER_SIZE(of_result, is_distinct_);
@@ -199,22 +197,13 @@ TEST_F(TestSQLCompile, stmt_member_size)
     PRINT_MEMBER_SIZE(of_result, cycle_by_items_);
     PRINT_MEMBER_SIZE(of_result, cte_exprs_);
     PRINT_MEMBER_SIZE(of_result, select_items_);
-    PRINT_MEMBER_SIZE(of_result, group_exprs_);
-    PRINT_MEMBER_SIZE(of_result, rollup_exprs_);
-    PRINT_MEMBER_SIZE(of_result, having_exprs_);
-    PRINT_MEMBER_SIZE(of_result, agg_items_);
     PRINT_MEMBER_SIZE(of_result, win_func_exprs_);
     PRINT_MEMBER_SIZE(of_result, qualify_filters_);
     PRINT_MEMBER_SIZE(of_result, start_with_exprs_);
     PRINT_MEMBER_SIZE(of_result, connect_by_exprs_);
     PRINT_MEMBER_SIZE(of_result, connect_by_prior_exprs_);
-    PRINT_MEMBER_SIZE(of_result, rollup_directions_);
-    PRINT_MEMBER_SIZE(of_result, grouping_sets_items_);
-    PRINT_MEMBER_SIZE(of_result, rollup_items_);
-    PRINT_MEMBER_SIZE(of_result, cube_items_);
+    PRINT_MEMBER_SIZE(of_result, group_clause_);
     PRINT_MEMBER_SIZE(of_result, for_update_columns_);
-    PRINT_MEMBER_SIZE(of_result, is_set_distinct_);
-    PRINT_MEMBER_SIZE(of_result, set_query_);
     PRINT_MEMBER_SIZE(of_result, for_update_dml_info_);
     PRINT_MEMBER_SIZE(of_result, show_stmt_ctx_);
     PRINT_MEMBER_SIZE(of_result, is_view_stmt_);

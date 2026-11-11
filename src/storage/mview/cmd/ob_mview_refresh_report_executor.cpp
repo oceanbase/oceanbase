@@ -68,7 +68,7 @@ int ObMViewRefreshReportExecutor::execute(ObExecContext &ctx,
           LOG_WARN("fail to alloc report", KR(ret));
         } else {
           report = new (mem) MViewRefreshReport(allocator);
-          if (OB_FAIL(report->build(context))) {
+          if (OB_FAIL(report->build(context, 0 != arg.format_.case_compare("JSON")))) {
             LOG_WARN("fail to build report", KR(ret), K(refresh_id));
           } else {
             const ObTimeZoneInfo *sys_tz_info = session_info->get_timezone_info();

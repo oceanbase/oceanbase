@@ -72,6 +72,25 @@ public:
             refresh_mode_ == ObMVRefreshMode::MAJOR_COMPACTION);
   }
 
+  // A nonzero valid SCN indicates that the initial refresh has committed.
+  bool initial_refresh_finished() const
+  {
+    return 0 != last_refresh_scn_ && UINT64_MAX != last_refresh_scn_;
+  }
+
+  bool is_refresh_scheduler_suspended() const
+  {
+    return 0 != (refresh_flags_ & REFRESH_SCHEDULER_SUSPENDED_FLAG);
+  }
+  void set_refresh_scheduler_suspended(const bool suspended)
+  {
+    if (suspended) {
+      refresh_flags_ |= REFRESH_SCHEDULER_SUSPENDED_FLAG;
+    } else {
+      refresh_flags_ &= ~REFRESH_SCHEDULER_SUSPENDED_FLAG;
+    }
+  }
+
   int gen_insert_mview_dml(const uint64_t exec_tenant_id, ObDMLSqlSplicer &dml) const;
   int gen_update_mview_attribute_dml(const uint64_t exec_tenant_id, ObDMLSqlSplicer &dml) const;
   int gen_update_mview_last_refresh_info_dml(const uint64_t exec_tenant_id,
@@ -105,6 +124,10 @@ public:
                                                       const uint64_t tenant_id, bool &contains);
   static int contains_major_refresh_mview(ObISQLClient &sql_client,
                                           const uint64_t tenant_id, bool &contains);
+  static int check_all_mviews_fast_refreshable(ObISQLClient &sql_client,
+                                               const uint64_t tenant_id,
+                                               const ObIArray<uint64_t> &mview_ids,
+                                               bool &can_all_mviews_fast_refresh);
 
   static int update_mview_data_sync_scn(ObISQLClient &sql_client, uint64_t tenant_id,
                                         ObMViewInfo &mview_info, const uint64_t refresh_scn);
@@ -120,6 +143,12 @@ public:
   static int check_satisfy_target_data_sync_scn(const ObMViewInfo &mview_info,
                                                 const uint64_t target_data_sync_ts,
                                                 bool &satisfy);
+  static int check_consistent_refresh_satisfied(ObISQLClient &sql_client,
+                                                const uint64_t tenant_id,
+                                                const uint64_t mview_id,
+                                                const uint64_t target_data_sync_ts,
+                                                const uint64_t snapshot_version,
+                                                bool &satisfied);
   static int get_mview_id_from_container_id(ObISQLClient &sql_client, const uint64_t tenant_id,
                                             const uint64_t container_id, uint64_t &mview_id);
   static int set_mview_purge_barrier(ObISQLClient &sql_client, const uint64_t tenant_id,
@@ -149,14 +178,10 @@ public:
 
 public:
   static constexpr char *MVIEW_REFRESH_JOB_PREFIX = const_cast<char *>("MVIEW_REFRESH$J_");
-
-private:
-  static int check_consistent_refresh_satisfied(ObISQLClient &sql_client,
-                                                const uint64_t tenant_id,
-                                                const uint64_t mview_id,
-                                                const uint64_t target_data_sync_ts,
-                                                const uint64_t snapshot_version,
-                                                bool &satisfied);
+  enum ObMViewRefreshFlag : uint64_t
+  {
+    REFRESH_SCHEDULER_SUSPENDED_FLAG = 1ULL << 0,
+  };
 
 private:
   uint64_t tenant_id_;
@@ -178,7 +203,7 @@ private:
   bool is_synced_;
   ObMVNestedRefreshMode nested_refresh_mode_;
   uint64_t compat_version_;
-  int64_t refresh_interval_;
+  int64_t refresh_interval_;      // microseconds
   int64_t refresh_timeout_us_;
   uint64_t refresh_flags_;
 };

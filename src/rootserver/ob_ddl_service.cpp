@@ -78,6 +78,10 @@
 #include "sql/resolver/mv/ob_alter_mview_utils.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "sql/resolver/mv/ob_mv_dep_utils.h"
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+#include "rootserver/mview/ob_mview_pending_task_utils.h"
+#include "storage/mview/ob_mview_sched_job_utils.h"
+#endif
 #include "rootserver/mview/ob_mview_alter_service.h"
 #include "storage/tablet/ob_tablet_binding_helper.h"
 #include "share/ob_dynamic_partition_manager.h"
@@ -6379,9 +6383,11 @@ int ObDDLService::lock_tables_of_database_for_drop(
         if (OB_FAIL(ObMViewSchedJobUtils::disable_and_stop_job(
                     tenant_id, table_schema->get_table_id()))) {
             LOG_WARN("fail to disable and stop job", K(ret));
-        } else if (OB_FAIL(ObMViewSchedJobUtils::kill_mview_refreshes(
-                    tenant_id, table_schema->get_table_id(), true))) {
-          LOG_WARN("fail to kill mview refreshes", K(ret));
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+        } else if (OB_FAIL(ObMViewPendingTaskUtils::cancel_refresh_for_drop(
+                    tenant_id, table_schema->get_table_id()))) {
+          LOG_WARN("fail to cancel refresh tasks for drop", K(ret));
+#endif
         } else if (OB_FAIL(lock_mview(trans, *table_schema))) {
           LOG_WARN("fail to lock mview", KR(ret), KPC(table_schema));
         }
@@ -20708,6 +20714,7 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
                 if (is_based_schema_version_consistent) {
                   new_mview_table_schema.set_object_status(ObObjectStatus::VALID);
                   new_mview_table_schema.set_max_dependency_version(max_dependency_version);
+                  new_mview_table_schema.set_mv_available(ObMVAvailableFlag::IS_MV_AVAILABLE);
                 } else {
                   new_mview_table_schema.set_object_status(ObObjectStatus::INVALID);
                   new_mview_table_schema.set_max_dependency_version(OB_INVALID_VERSION);
@@ -24399,6 +24406,9 @@ int ObDDLService::flashback_table_from_recyclebin(const ObFlashBackTableFromRecy
   uint64_t database_id = OB_INVALID_ID;
   bool is_match = false;
   ObArenaAllocator allocator(ObModIds::OB_RS_PARTITION_TABLE_TEMP);
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+  uint64_t flashback_mview_id = OB_INVALID_ID;
+#endif
 
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", K(ret));
@@ -24459,6 +24469,11 @@ int ObDDLService::flashback_table_from_recyclebin(const ObFlashBackTableFromRecy
              K(database_id));
   }
   if (OB_SUCC(ret)) {
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+    if (table_schema->is_materialized_view()) {
+      flashback_mview_id = table_schema->get_table_id();
+    }
+#endif
     uint64_t new_db_id = OB_INVALID_ID;
     uint64_t synonym_id = OB_INVALID_ID;
     lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
@@ -24557,6 +24572,15 @@ int ObDDLService::flashback_table_from_recyclebin(const ObFlashBackTableFromRecy
         LOG_WARN("publish_schema failed", K(ret));
       }
     }
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+    if (OB_SUCC(ret) && OB_INVALID_ID != flashback_mview_id) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(ObMViewPendingTaskUtils::activate_mview_timer(tenant_id, flashback_mview_id))) {
+        LOG_WARN("[MVIEW_TIMER] failed to activate mview timer after flashback mview",
+                 KR(tmp_ret), K(tenant_id), K(flashback_mview_id));
+      }
+    }
+#endif
   }
   return ret;
 }
@@ -24906,6 +24930,33 @@ int ObDDLService::flashback_database_in_trans(const ObDatabaseSchema &db_schema,
   return ret;
 }
 
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+static int get_mview_ids_in_database(const uint64_t tenant_id,
+                                     const ObIArray<uint64_t> &table_ids,
+                                     ObSchemaGetterGuard &schema_guard,
+                                     ObIArray<uint64_t> &mview_ids)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
+    const ObSimpleTableSchemaV2 *table_schema = NULL;
+    if (OB_FAIL(schema_guard.get_simple_table_schema(
+            tenant_id, table_ids.at(i), table_schema))) {
+      LOG_WARN("[MVIEW_TIMER] failed to get table schema in database",
+               KR(ret), K(tenant_id), "table_id", table_ids.at(i));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("[MVIEW_TIMER] table schema is null in database",
+               KR(ret), K(tenant_id), "table_id", table_ids.at(i));
+    } else if (table_schema->is_materialized_view() &&
+               OB_FAIL(mview_ids.push_back(table_schema->get_table_id()))) {
+      LOG_WARN("[MVIEW_TIMER] failed to record mview id in database",
+               KR(ret), K(tenant_id), KPC(table_schema));
+    }
+  }
+  return ret;
+}
+#endif
+
 int ObDDLService::flashback_database(const ObFlashBackDatabaseArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -24928,7 +24979,7 @@ int ObDDLService::flashback_database(const ObFlashBackDatabaseArg &arg)
     LOG_WARN("database schema is not in recyclebin", K(ret), K(arg), K(*database_schema));
   } else {
     ObString new_db_name;
-    if (!arg.new_db_name_.empty()) {
+    if (OB_SUCC(ret) && !arg.new_db_name_.empty()) {
       bool is_db_exist = false;
       if (OB_FAIL(schema_guard.check_database_exist(arg.tenant_id_,
                                                     arg.new_db_name_,
@@ -24955,6 +25006,16 @@ int ObDDLService::flashback_database(const ObFlashBackDatabaseArg &arg)
         LOG_WARN("publish_schema failed", K(ret));
       }
     }
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+    if (OB_SUCC(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      const uint64_t database_id = database_schema->get_database_id();
+      if (OB_TMP_FAIL(ObMViewPendingTaskUtils::activate_mview_timers_in_database(tenant_id, database_id))) {
+        LOG_WARN("[MVIEW_TIMER] failed to activate mview timers after flashback database",
+                 KR(tmp_ret), K(tenant_id), K(database_id));
+      }
+    }
+#endif
   }
   return ret;
 }
@@ -25604,6 +25665,10 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
     ObDDLSQLTransaction trans(schema_service_);
     DropTableIdHashSet drop_table_set;
     const int64_t drop_table_count = drop_table_arg.tables_.count();
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+    ObArray<uint64_t> dropped_mview_ids;
+    bool is_drop_table_committed = false;
+#endif
     if (OB_FAIL(drop_table_set.create(drop_table_count))) {
       LOG_WARN("fail to add create ObHashSet", KR(ret));
     } else if (TMP_TABLE == drop_table_arg.table_type_
@@ -25666,9 +25731,11 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
           if (OB_FAIL(ObMViewSchedJobUtils::disable_and_stop_job(
                       tenant_id, table_schema->get_table_id()))) {
             LOG_WARN("fail to disable and stop job", K(ret));
-          } else if (OB_FAIL(ObMViewSchedJobUtils::kill_mview_refreshes(
-                      tenant_id, table_schema->get_table_id(), true))) {
-            LOG_WARN("fail to kill mview refreshes", K(ret));
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+          } else if (OB_FAIL(ObMViewPendingTaskUtils::cancel_refresh_for_drop(
+                      tenant_id, table_schema->get_table_id()))) {
+            LOG_WARN("fail to cancel refresh tasks for drop", K(ret));
+#endif
           } else if (OB_FAIL(schema_guard.get_table_schema(
                              tenant_id, container_table_id, container_table_schema))) {
             LOG_WARN("failed to get table schema", KR(ret), K(tenant_id), K(container_table_id));
@@ -25681,6 +25748,13 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
           } else if (OB_FAIL(lock_table(trans, *container_table_schema))) {
             LOG_WARN("fail to lock_table", KR(ret), KPC(container_table_schema));
           } else {
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+            int tmp_ret = OB_SUCCESS;
+            if (OB_TMP_FAIL(dropped_mview_ids.push_back(table_schema->get_table_id()))) {
+              LOG_WARN("[MVIEW_TIMER] failed to record dropped mview id",
+                       KR(tmp_ret), K(tenant_id), KPC(table_schema));
+            }
+#endif
             ObSEArray<sql::ObMVDepInfo, 16> mv_dep_infos;
             if (OB_FAIL(sql::ObMVDepUtils::get_mview_dep_infos(trans,
                                                                tenant_id,
@@ -26035,12 +26109,26 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
     //but __all_table failed, and we should refresh schema to see t1 dropped
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
-      bool commit = OB_SUCC(ret);
+      const bool commit = OB_SUCC(ret);
       if (OB_SUCCESS != (temp_ret = trans.end(commit))) {
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
         LOG_WARN("trans end failed", K(commit), K(temp_ret));
       }
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+      if (OB_SUCC(ret) && commit) {
+        is_drop_table_committed = true;
+      }
+#endif
     }
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+    if (is_drop_table_committed) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(ObMViewPendingTaskUtils::unregister_mview_timers(tenant_id, dropped_mview_ids))) {
+        LOG_WARN("[MVIEW_TIMER] failed to unregister mview timers after drop mview",
+                 KR(tmp_ret), K(tenant_id));
+      }
+    }
+#endif
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = publish_schema(tenant_id))) {
       ret = tmp_ret;
@@ -27758,6 +27846,10 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
   ObDDLSQLTransaction trans(schema_service_);
   uint64_t table_count = 0;
   ObArray<uint64_t> table_ids;
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+  ObArray<uint64_t> dropped_mview_ids;
+  bool is_drop_database_committed = false;
+#endif
   ObSchemaGetterGuard schema_guard;
   const ObDatabaseSchema *db_schema = NULL;
   ObTabletAutoincCacheCleaner tablet_autoinc_cleaner(tenant_id);
@@ -27804,6 +27896,14 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else {
       ObDDLSQLTransaction &actual_trans = OB_ISNULL(ora_user_trans) ? trans : *ora_user_trans;
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(get_mview_ids_in_database(
+              tenant_id, table_ids, schema_guard, dropped_mview_ids))) {
+        LOG_WARN("[MVIEW_TIMER] failed to get mview ids before drop database",
+                 KR(tmp_ret), K(tenant_id), KPC(db_schema));
+      }
+#endif
       // lock table when drop data table
       if (OB_FAIL(lock_tables_of_database_for_drop(*db_schema, actual_trans))) {
         LOG_WARN("lock tables of database", K(ret));
@@ -27865,11 +27965,27 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
 
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+    const bool is_commit = OB_SUCC(ret);
+    if (OB_SUCCESS != (temp_ret = trans.end(is_commit))) {
+      LOG_WARN("trans end failed", "is_commit", is_commit, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
     }
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+    if (OB_SUCC(ret) && is_commit) {
+      is_drop_database_committed = true;
+    }
+#endif
   }
+
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+  if (is_drop_database_committed) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(ObMViewPendingTaskUtils::unregister_mview_timers(tenant_id, dropped_mview_ids))) {
+      LOG_WARN("[MVIEW_TIMER] failed to unregister mview timers after drop database",
+               KR(tmp_ret), K(tenant_id));
+    }
+  }
+#endif
 
   if (OB_SUCC(ret)) {
     affected_row = table_count;

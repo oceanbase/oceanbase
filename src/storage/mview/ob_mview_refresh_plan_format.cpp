@@ -6,9 +6,11 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/mview/ob_mview_refresh_plan_format.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/monitor/ob_sql_plan.h"
+#include "lib/allocator/page_arena.h"
+#include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "lib/utility/utility.h"
 #include "share/diagnosis/ob_sql_monitor_statname.h"
+#include "share/ob_server_struct.h"
 #include "share/ob_time_utility2.h"
 #include "lib/json_type/ob_json_tree.h"
 #include "lib/json_type/ob_json_parse.h"
@@ -33,7 +35,7 @@ namespace
 {
 
 // Column indices for the JOIN query result, must match SELECT order.
-// Only columns actually used by format_merged_plan_table() are selected.
+// Only columns actually used by the report rendering are selected.
 // FARM COMPAT WHITELIST: this enum is a file-local index into the JOIN result
 // columns and is never serialized, so cross-version ID placeholders are not
 // required.
@@ -88,41 +90,10 @@ enum PlanColumnIdx // FARM COMPAT WHITELIST
   COL_OTHER_XML,
   COL_OPTIMIZER,
   COL_PARTITION_START,
-  COL_PARTITION_STOP
-};
-
-// Per-operator monitor data (timestamps, DOP, skew metrics) from plan monitor,
-// stored alongside ObSqlPlanItem* in a parallel array since ObSqlPlanItem
-// has no such fields.
-struct MViewPlanMonitorTime {
-  int64_t open_time_;
-  int64_t close_time_;
-  int64_t dop_;
-  int64_t max_rows_;
-  int64_t sum_db_time_;
-  int64_t starts_;
-  int64_t max_wa_mem_;
-  char *server_;
-
-  MViewPlanMonitorTime()
-      : open_time_(0),
-        close_time_(0),
-        dop_(0),
-        max_rows_(0),
-        sum_db_time_(0),
-        starts_(0),
-        max_wa_mem_(0),
-        server_(NULL)
-  {}
-
-  TO_STRING_KV(K_(open_time),
-               K_(close_time),
-               K_(dop),
-               K_(max_rows),
-               K_(sum_db_time),
-               K_(starts),
-               K_(max_wa_mem),
-               KP_(server));
+  COL_PARTITION_STOP,
+  // Extra trailing column selected only when the join query is built without
+  // the plan hash filter (live observation reads the hash back instead).
+  COL_PLAN_HASH
 };
 
 // Display column definitions — single source of truth for column count and headers.
@@ -158,10 +129,6 @@ static const char TREE_BRANCH[]   = "├─";
 static const int64_t TREE_BRANCH_LEN = ARRAYSIZEOF(TREE_BRANCH) - 1;
 static const char TREE_CORNER[]   = "└─";
 static const int64_t TREE_CORNER_LEN = ARRAYSIZEOF(TREE_CORNER) - 1;
-
-// Number of OTHERSTAT slots per operator in __ALL_VIRTUAL_SQL_PLAN_MONITOR
-// (fixed at 10 by ObMonitorNode definition).
-static const int64_t OTHERSTAT_SLOT_COUNT = 10;
 
 // Whitelist of OTHERSTAT IDs relevant to mview refresh troubleshooting.
 // Only these stats are shown in operator detail output to keep it concise.
@@ -236,19 +203,6 @@ static int get_plan_row_pad_width(const MViewPlanRowVals &row, int64_t col, int 
   }
   return pad_width;
 }
-
-struct MViewPlanOtherStat {
-  int64_t ids_[OTHERSTAT_SLOT_COUNT];
-  int64_t values_[OTHERSTAT_SLOT_COUNT];
-
-  MViewPlanOtherStat()
-  {
-    MEMSET(ids_, 0, sizeof(ids_));
-    MEMSET(values_, 0, sizeof(values_));
-  }
-
-  TO_STRING_KV("slot_count", static_cast<int64_t>(OTHERSTAT_SLOT_COUNT));
-};
 
 /**
  * Read an int column from result, treating NULL/overflow as 0.
@@ -332,11 +286,11 @@ static int mview_read_plan_info_from_result(common::ObIAllocator &allocator,
                                             common::sqlclient::ObMySQLResult &mysql_result,
                                             ObSqlPlanItem &plan_info,
                                             MViewPlanMonitorTime &monitor_time,
-                                            MViewPlanOtherStat &other_stat,
-                                            char *&server_str)
+                                            MViewPlanOtherStat &other_stat)
 {
   int ret = OB_SUCCESS;
   int64_t int_val = 0;
+  char *server_str = NULL;
   int64_t server_len = 0;
 
   if (OB_FAIL(read_result_varchar(allocator,
@@ -385,6 +339,7 @@ static int mview_read_plan_info_from_result(common::ObIAllocator &allocator,
     LOG_WARN("fail to read max_wa_mem", KR(ret));
   } else if (OB_FAIL(read_result_varchar(allocator, mysql_result, COL_SERVER, server_str, server_len))) {
     LOG_WARN("fail to read server", KR(ret));
+  } else if (OB_FALSE_IT(monitor_time.server_.assign_ptr(server_str, static_cast<int32_t>(server_len)))) {
   } else if (OB_FAIL(read_result_varchar(allocator, mysql_result, COL_FILTER_PREDICATES,
                                          plan_info.filter_predicates_,
                                          plan_info.filter_predicates_len_))) {
@@ -415,7 +370,7 @@ static int mview_read_plan_info_from_result(common::ObIAllocator &allocator,
     LOG_WARN("fail to read partition_stop", KR(ret));
   }
 
-  for (int64_t s = 0; OB_SUCC(ret) && s < OTHERSTAT_SLOT_COUNT; ++s) {
+  for (int64_t s = 0; OB_SUCC(ret) && s < MVIEW_PLAN_OTHERSTAT_SLOT_COUNT; ++s) {
     if (OB_FAIL(read_result_simple_int(mysql_result, COL_OTHERSTAT_1_ID + s * 2, other_stat.ids_[s]))) {
       LOG_WARN("fail to read otherstat id", KR(ret), K(s));
     } else if (OB_FAIL(read_result_simple_int(mysql_result, COL_OTHERSTAT_1_VALUE + s * 2, other_stat.values_[s]))) {
@@ -456,7 +411,9 @@ static int alloc_time_string(common::ObIAllocator &allocator, int64_t usec, cons
   int ret = OB_SUCCESS;
   char buf[64];
   int64_t pos = 0;
-  if (OB_FAIL(share::ObTimeUtility2::usec_to_str(usec, buf, sizeof(buf), pos))) {
+  if (0 == usec) {
+    ret = alloc_cstring(allocator, "-", 1, out);
+  } else if (OB_FAIL(share::ObTimeUtility2::usec_to_str(usec, buf, sizeof(buf), pos))) {
     LOG_WARN("fail to format usec to string", KR(ret), K(usec));
   } else {
     ret = alloc_cstring(allocator, buf, pos, out);
@@ -681,8 +638,8 @@ static int fill_plan_row_vals(common::ObIAllocator &allocator,
   } else if (OB_FAIL(alloc_int64_string(allocator, mtime.max_wa_mem_, row.vals_[MCOL_MAX_WA_MEM]))) {
     LOG_WARN("fail to alloc max_wa_mem string", KR(ret));
   } else if (OB_FAIL(alloc_cstring(allocator,
-                                   mtime.server_,
-                                   OB_NOT_NULL(mtime.server_) ? STRLEN(mtime.server_) : 0,
+                                   mtime.server_.ptr(),
+                                   mtime.server_.length(),
                                    row.vals_[MCOL_SERVER]))) {
     LOG_WARN("fail to alloc server string", KR(ret));
   }
@@ -738,7 +695,7 @@ static int format_operator_detail_stats(const ObIArray<ObSqlPlanItem *> &plan_in
     const MViewPlanOtherStat &ostat = other_stats.at(i);
     if (OB_NOT_NULL(item)) {
       bool has_op_header = false;
-      for (int64_t s = 0; OB_SUCC(ret) && s < OTHERSTAT_SLOT_COUNT; ++s) {
+      for (int64_t s = 0; OB_SUCC(ret) && s < MVIEW_PLAN_OTHERSTAT_SLOT_COUNT; ++s) {
         int64_t stat_id = ostat.ids_[s];
         if (is_whitelisted_otherstat(stat_id)) {
           if (!has_header) {
@@ -949,6 +906,10 @@ static const char *const JK_SPECIAL_PREDICATES = "special_predicates";
 static const char *const JK_PARTITION_START = "partition_start";
 static const char *const JK_PARTITION_STOP = "partition_stop";
 static const char *const JK_IS_LAST_CHILD = "is_last_child";
+static const char *const JK_CPU_TIME = "cpu_time";
+static const char *const JK_IO_WAIT_TIME = "io_wait_time";
+static const char *const JK_DISK_READS = "disk_reads";
+static const char *const JK_MEMORY_USED = "memory_used";
 
 static int add_int_member(common::ObIAllocator &alloc,
                           ObJsonObject *obj,
@@ -1127,6 +1088,10 @@ static int add_string_member(common::ObIAllocator &alloc,
 
 int build_mview_plan_hash_json(common::ObIAllocator &allocator,
                                uint64_t plan_hash,
+                               int64_t cpu_time,
+                               int64_t io_wait_time,
+                               int64_t disk_reads,
+                               int64_t memory_used,
                                ObSqlString &result_json)
 {
   int ret = OB_SUCCESS;
@@ -1137,6 +1102,14 @@ int build_mview_plan_hash_json(common::ObIAllocator &allocator,
     LOG_WARN("fail to alloc hash-only plan json containers", KR(ret), KP(root), KP(ops));
   } else if (OB_FAIL(add_uint_member(allocator, root, JK_PLAN_HASH, plan_hash))) {
     LOG_WARN("fail to add plan_hash", KR(ret));
+  } else if (OB_FAIL(add_int_member(allocator, root, JK_CPU_TIME, cpu_time))) {
+    LOG_WARN("fail to add cpu_time", KR(ret));
+  } else if (OB_FAIL(add_int_member(allocator, root, JK_IO_WAIT_TIME, io_wait_time))) {
+    LOG_WARN("fail to add io_wait_time", KR(ret));
+  } else if (OB_FAIL(add_int_member(allocator, root, JK_DISK_READS, disk_reads))) {
+    LOG_WARN("fail to add disk_reads", KR(ret));
+  } else if (OB_FAIL(add_int_member(allocator, root, JK_MEMORY_USED, memory_used))) {
+    LOG_WARN("fail to add memory_used", KR(ret));
   } else if (OB_FAIL(root->add(ObString::make_string(JK_OPERATORS), ops))) {
     LOG_WARN("fail to add operators", KR(ret));
   } else {
@@ -1150,15 +1123,12 @@ int build_mview_plan_hash_json(common::ObIAllocator &allocator,
   return ret;
 }
 
-namespace
-{
-
 static int format_merged_plan_json(common::ObIAllocator &alloc,
-                                   uint64_t plan_hash,
-                                   const ObIArray<ObSqlPlanItem *> &plan_infos,
-                                   const ObIArray<MViewPlanMonitorTime> &monitor_times,
-                                   const ObIArray<MViewPlanOtherStat> &other_stats,
-                                   const ObIArray<const char *> &server_strs,
+                                   const MViewStmtPlanInfo &plan,
+                                   int64_t cpu_time,
+                                   int64_t io_wait_time,
+                                   int64_t disk_reads,
+                                   int64_t memory_used,
                                    ObSqlString &out_json)
 {
   int ret = OB_SUCCESS;
@@ -1167,25 +1137,32 @@ static int format_merged_plan_json(common::ObIAllocator &alloc,
   if (OB_ISNULL(root) || OB_ISNULL(ops)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc json containers", KR(ret), KP(root), KP(ops));
-  } else if (OB_FAIL(add_uint_member(alloc, root, JK_PLAN_HASH, plan_hash))) {
+  } else if (OB_FAIL(add_uint_member(alloc, root, JK_PLAN_HASH, plan.plan_hash_))) {
     LOG_WARN("fail to add plan_hash", KR(ret));
+  } else if (OB_FAIL(add_int_member(alloc, root, JK_CPU_TIME, cpu_time))) {
+    LOG_WARN("fail to add cpu_time", KR(ret));
+  } else if (OB_FAIL(add_int_member(alloc, root, JK_IO_WAIT_TIME, io_wait_time))) {
+    LOG_WARN("fail to add io_wait_time", KR(ret));
+  } else if (OB_FAIL(add_int_member(alloc, root, JK_DISK_READS, disk_reads))) {
+    LOG_WARN("fail to add disk_reads", KR(ret));
+  } else if (OB_FAIL(add_int_member(alloc, root, JK_MEMORY_USED, memory_used))) {
+    LOG_WARN("fail to add memory_used", KR(ret));
   }
   if (OB_FAIL(ret)) {
-  } else if (plan_infos.count() != monitor_times.count()
-             || plan_infos.count() != other_stats.count()) {
+  } else if (plan.plan_infos_.count() != plan.monitor_times_.count()
+             || plan.plan_infos_.count() != plan.other_stats_.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("plan_infos/monitor_times/other_stats count mismatch",
-             KR(ret), K(plan_infos.count()), K(monitor_times.count()), K(other_stats.count()));
+             KR(ret), K(plan.plan_infos_.count()), K(plan.monitor_times_.count()), K(plan.other_stats_.count()));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < plan_infos.count(); ++i) {
-    const ObSqlPlanItem *item = plan_infos.at(i);
+  for (int64_t i = 0; OB_SUCC(ret) && i < plan.plan_infos_.count(); ++i) {
+    const ObSqlPlanItem *item = plan.plan_infos_.at(i);
     if (OB_ISNULL(item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null plan item", KR(ret), K(i));
     } else {
-      const MViewPlanMonitorTime &mtime = monitor_times.at(i);
-      const MViewPlanOtherStat &ostat = other_stats.at(i);
-      const char *server_str = NULL;
+      const MViewPlanMonitorTime &mtime = plan.monitor_times_.at(i);
+      const MViewPlanOtherStat &ostat = plan.other_stats_.at(i);
       ObJsonObject *op = OB_NEWx(ObJsonObject, &alloc, &alloc);
       ObJsonArray *os_arr = OB_NEWx(ObJsonArray, &alloc, &alloc);
       if (OB_ISNULL(op) || OB_ISNULL(os_arr)) {
@@ -1214,10 +1191,9 @@ static int format_merged_plan_json(common::ObIAllocator &alloc,
       } else if (OB_FAIL(add_int_member(alloc, op, JK_SUM_DB_TIME, mtime.sum_db_time_))) {
       } else if (OB_FAIL(add_int_member(alloc, op, JK_STARTS, mtime.starts_))) {
       } else if (OB_FAIL(add_int_member(alloc, op, JK_MAX_WA_MEM, mtime.max_wa_mem_))) {
-      } else if (OB_FALSE_IT(server_str = (i < server_strs.count()) ? server_strs.at(i) : NULL)) {
-      } else if (OB_NOT_NULL(server_str) && server_str[0] != '\0'
-                 && OB_FAIL(add_string_member(alloc, op, JK_SERVER, server_str,
-                                              strlen(server_str)))) {
+      } else if (!mtime.server_.empty()
+                 && OB_FAIL(add_string_member(alloc, op, JK_SERVER, mtime.server_.ptr(),
+                                              mtime.server_.length()))) {
         LOG_WARN("fail to add server to op", KR(ret));
       } else if (OB_NOT_NULL(item->filter_predicates_) && item->filter_predicates_len_ > 0
                  && OB_FAIL(add_string_member(alloc, op, JK_FILTER_PREDICATES,
@@ -1245,7 +1221,7 @@ static int format_merged_plan_json(common::ObIAllocator &alloc,
                                               item->partition_stop_len_))) {
         LOG_WARN("fail to add partition_stop", KR(ret));
       }
-      for (int64_t s = 0; OB_SUCC(ret) && s < OTHERSTAT_SLOT_COUNT; ++s) {
+      for (int64_t s = 0; OB_SUCC(ret) && s < MVIEW_PLAN_OTHERSTAT_SLOT_COUNT; ++s) {
         if (0 != ostat.ids_[s] || 0 != ostat.values_[s]) {
           ObJsonObject *pair = OB_NEWx(ObJsonObject, &alloc, &alloc);
           if (OB_ISNULL(pair)) {
@@ -1269,45 +1245,18 @@ static int format_merged_plan_json(common::ObIAllocator &alloc,
   if (OB_SUCC(ret)) {
     if (OB_FAIL(root->add(ObString::make_string(JK_OPERATORS), ops))) {
       LOG_WARN("fail to add operators to root", KR(ret));
+    } else if (!plan.outline_data_.empty()
+               && OB_FAIL(add_string_member(alloc,
+                                            root,
+                                            JK_OUTLINE_DATA,
+                                            plan.outline_data_.ptr(),
+                                            plan.outline_data_.length()))) {
+      LOG_WARN("fail to add outline_data to root", KR(ret));
     }
-    // Root-level outline_data from first operator's other_xml.
-    if (OB_SUCC(ret) && plan_infos.count() > 0 && OB_NOT_NULL(plan_infos.at(0))) {
-      const ObSqlPlanItem *first = plan_infos.at(0);
-      if (OB_NOT_NULL(first->other_xml_) && first->other_xml_len_ > 0) {
-        if (OB_FAIL(add_string_member(alloc, root, JK_OUTLINE_DATA,
-                                      first->other_xml_, first->other_xml_len_))) {
-          LOG_WARN("fail to add outline_data to root", KR(ret));
-        }
-      }
-    }
-    // optimization_info: only TABLE SCAN operators carry optimizer_, so
-    // collect from all plan items instead of just the first one.
-    if (OB_SUCC(ret)) {
-      ObSqlString opt_buf;
-      for (int64_t i = 0; OB_SUCC(ret) && i < plan_infos.count(); ++i) {
-        if (OB_NOT_NULL(plan_infos.at(i))
-            && OB_NOT_NULL(plan_infos.at(i)->optimizer_)
-            && plan_infos.at(i)->optimizer_len_ > 0) {
-          if (!opt_buf.empty()
-              && OB_FAIL(opt_buf.append("\n"))) {
-            LOG_WARN("fail to append optimizer info separator", KR(ret), K(i));
-          } else if (OB_FAIL(opt_buf.append(plan_infos.at(i)->optimizer_,
-                                            plan_infos.at(i)->optimizer_len_))) {
-            LOG_WARN("fail to append optimizer info", KR(ret), K(i));
-          }
-        }
-      }
-      if (OB_SUCC(ret) && !opt_buf.empty()) {
-        // opt_buf is an ObSqlString on ObMalloc whose scope ends before
-        // root->print(), so copy it onto the arena to keep it valid.
-        const char *opt_str = NULL;
-        if (OB_FAIL(alloc_cstring(alloc, opt_buf.ptr(), opt_buf.length(), opt_str))) {
-          LOG_WARN("fail to copy optimization_info to arena", KR(ret));
-        } else if (OB_FAIL(add_string_member(alloc, root, JK_OPTIMIZATION_INFO,
-                                             opt_str, opt_buf.length()))) {
-          LOG_WARN("fail to add optimization_info to root", KR(ret));
-        }
-      }
+    if (OB_SUCC(ret) && !plan.optimization_info_.empty()
+        && OB_FAIL(add_string_member(alloc, root, JK_OPTIMIZATION_INFO,
+                                     plan.optimization_info_.ptr(), plan.optimization_info_.length()))) {
+      LOG_WARN("fail to add optimization_info to root", KR(ret));
     }
     if (OB_SUCC(ret)) {
       ObJsonBuffer j_buf(&alloc);
@@ -1399,31 +1348,21 @@ static int read_json_string_member(common::ObIAllocator &alloc,
   return ret;
 }
 
-// Root-level metadata extracted from plan JSON for rendering.
-struct MViewPlanRootInfo {
-  char *outline_data_;
-  int64_t outline_data_len_;
-  char *optimization_info_;
-  int64_t optimization_info_len_;
-  MViewPlanRootInfo()
-    : outline_data_(NULL), outline_data_len_(0),
-      optimization_info_(NULL), optimization_info_len_(0)
-  {}
-};
 
-// Inverse of format_merged_plan_json(): populate plan_infos/monitor_times/other_stats from JSON.
-static int parse_merged_plan_json(common::ObIAllocator &alloc,
-                                  const ObString &plan_json,
-                                  uint64_t &plan_hash,
-                                  ObIArray<ObSqlPlanItem *> &plan_infos,
-                                  ObIArray<MViewPlanMonitorTime> &monitor_times,
-                                  ObIArray<MViewPlanOtherStat> &other_stats,
-                                  MViewPlanRootInfo *root_info,
-                                  bool need_predicates)
+int parse_mview_plan(common::ObIAllocator &alloc,
+                     const ObString &plan_json,
+                     MViewStmtPlanInfo &plan)
 {
   int ret = OB_SUCCESS;
-  plan_hash = 0;
   ObJsonNode *root_node = NULL;
+  char *root_str = NULL;
+  int64_t root_str_len = 0;
+  plan.plan_hash_ = 0;
+  plan.plan_infos_.reset();
+  plan.monitor_times_.reset();
+  plan.other_stats_.reset();
+  plan.outline_data_.reset();
+  plan.optimization_info_.reset();
   if (plan_json.empty()) {
     // Empty plan is valid — leave outputs empty.
   } else if (OB_FAIL(ObJsonParser::get_tree(&alloc, plan_json, root_node))) {
@@ -1433,19 +1372,17 @@ static int parse_merged_plan_json(common::ObIAllocator &alloc,
     LOG_WARN("plan json root is not object", KR(ret));
   } else {
     ObJsonObject *root_obj = static_cast<ObJsonObject *>(root_node);
-    if (OB_FAIL(read_json_uint_member(root_obj, JK_PLAN_HASH, plan_hash))) {
+    if (OB_FAIL(read_json_uint_member(root_obj, JK_PLAN_HASH, plan.plan_hash_))) {
       LOG_WARN("fail to read plan_hash", KR(ret));
-    }
-    if (OB_SUCC(ret) && OB_NOT_NULL(root_info)) {
-      if (OB_FAIL(read_json_string_member(alloc, root_obj, JK_OUTLINE_DATA,
-                                          root_info->outline_data_,
-                                          root_info->outline_data_len_))) {
-        LOG_WARN("fail to read outline_data", KR(ret));
-      } else if (OB_FAIL(read_json_string_member(alloc, root_obj, JK_OPTIMIZATION_INFO,
-                                                  root_info->optimization_info_,
-                                                  root_info->optimization_info_len_))) {
-        LOG_WARN("fail to read optimization_info", KR(ret));
-      }
+    } else if (OB_FAIL(read_json_string_member(alloc, root_obj, JK_OUTLINE_DATA,
+                                              root_str, root_str_len))) {
+      LOG_WARN("fail to read outline_data", KR(ret));
+    } else if (OB_FALSE_IT(plan.outline_data_.assign_ptr(root_str, static_cast<int32_t>(root_str_len)))) {
+    } else if (OB_FAIL(read_json_string_member(alloc, root_obj, JK_OPTIMIZATION_INFO,
+                                              root_str, root_str_len))) {
+      LOG_WARN("fail to read optimization_info", KR(ret));
+    } else {
+      plan.optimization_info_.assign_ptr(root_str, static_cast<int32_t>(root_str_len));
     }
     if (OB_SUCC(ret)) {
       ObJsonNode *ops_node = root_obj->get_value(ObString::make_string(JK_OPERATORS));
@@ -1472,6 +1409,7 @@ static int parse_merged_plan_json(common::ObIAllocator &alloc,
               MViewPlanMonitorTime mtime;
               MViewPlanOtherStat ostat;
               int64_t int_val = 0;
+              char *server_str = NULL;
               int64_t server_len = 0;
               if (OB_FAIL(read_json_int_member(op_obj, JK_ID, int_val))) {
               } else if (OB_FALSE_IT(item->id_ = static_cast<int>(int_val))) {
@@ -1498,34 +1436,30 @@ static int parse_merged_plan_json(common::ObIAllocator &alloc,
               } else if (OB_FAIL(read_json_int_member(op_obj, JK_SUM_DB_TIME, mtime.sum_db_time_))) {
               } else if (OB_FAIL(read_json_int_member(op_obj, JK_STARTS, mtime.starts_))) {
               } else if (OB_FAIL(read_json_int_member(op_obj, JK_MAX_WA_MEM, mtime.max_wa_mem_))) {
-              } else if (OB_FAIL(read_json_string_member(alloc, op_obj, JK_SERVER, mtime.server_, server_len))) {
-              } else if (need_predicates
-                         && OB_FAIL(read_json_string_member(alloc, op_obj, JK_FILTER_PREDICATES,
-                                                            item->filter_predicates_,
-                                                            item->filter_predicates_len_))) {
-              } else if (need_predicates
-                         && OB_FAIL(read_json_string_member(alloc, op_obj, JK_STARTUP_PREDICATES,
-                                                            item->startup_predicates_,
-                                                            item->startup_predicates_len_))) {
-              } else if (need_predicates
-                         && OB_FAIL(read_json_string_member(alloc, op_obj, JK_SPECIAL_PREDICATES,
-                                                            item->special_predicates_,
-                                                            item->special_predicates_len_))) {
-              } else if (need_predicates
-                         && OB_FAIL(read_json_string_member(alloc, op_obj, JK_PARTITION_START,
-                                                            item->partition_start_,
-                                                            item->partition_start_len_))) {
-              } else if (need_predicates
-                         && OB_FAIL(read_json_string_member(alloc, op_obj, JK_PARTITION_STOP,
-                                                            item->partition_stop_,
-                                                            item->partition_stop_len_))) {
+              } else if (OB_FAIL(read_json_string_member(alloc, op_obj, JK_SERVER, server_str, server_len))) {
+              } else if (OB_FALSE_IT(mtime.server_.assign_ptr(server_str, static_cast<int32_t>(server_len)))) {
+              } else if (OB_FAIL(read_json_string_member(alloc, op_obj, JK_FILTER_PREDICATES,
+                                                         item->filter_predicates_,
+                                                         item->filter_predicates_len_))) {
+              } else if (OB_FAIL(read_json_string_member(alloc, op_obj, JK_STARTUP_PREDICATES,
+                                                         item->startup_predicates_,
+                                                         item->startup_predicates_len_))) {
+              } else if (OB_FAIL(read_json_string_member(alloc, op_obj, JK_SPECIAL_PREDICATES,
+                                                         item->special_predicates_,
+                                                         item->special_predicates_len_))) {
+              } else if (OB_FAIL(read_json_string_member(alloc, op_obj, JK_PARTITION_START,
+                                                         item->partition_start_,
+                                                         item->partition_start_len_))) {
+              } else if (OB_FAIL(read_json_string_member(alloc, op_obj, JK_PARTITION_STOP,
+                                                         item->partition_stop_,
+                                                         item->partition_stop_len_))) {
               }
               if (OB_SUCC(ret)) {
                 ObJsonNode *os_node = op_obj->get_value(ObString::make_string(JK_OTHER_STATS));
                 if (OB_NOT_NULL(os_node) && ObJsonNodeType::J_ARRAY == os_node->json_type()) {
                   ObJsonArray *os_arr = static_cast<ObJsonArray *>(os_node);
                   const int64_t pair_count = static_cast<int64_t>(os_arr->element_count());
-                  for (int64_t s = 0; OB_SUCC(ret) && s < pair_count && s < OTHERSTAT_SLOT_COUNT; ++s) {
+                  for (int64_t s = 0; OB_SUCC(ret) && s < pair_count && s < MVIEW_PLAN_OTHERSTAT_SLOT_COUNT; ++s) {
                     ObJsonNode *pair_node = os_arr->get_value(s);
                     if (OB_ISNULL(pair_node) || ObJsonNodeType::J_OBJECT != pair_node->json_type()) {
                       LOG_WARN("plan json otherstat pair is null or not object, skip", K(s));
@@ -1539,11 +1473,11 @@ static int parse_merged_plan_json(common::ObIAllocator &alloc,
                 }
               }
               if (OB_FAIL(ret)) {
-              } else if (OB_FAIL(plan_infos.push_back(item))) {
+              } else if (OB_FAIL(plan.plan_infos_.push_back(item))) {
                 LOG_WARN("fail to push back plan item", KR(ret));
-              } else if (OB_FAIL(monitor_times.push_back(mtime))) {
+              } else if (OB_FAIL(plan.monitor_times_.push_back(mtime))) {
                 LOG_WARN("fail to push back monitor time", KR(ret));
-              } else if (OB_FAIL(other_stats.push_back(ostat))) {
+              } else if (OB_FAIL(plan.other_stats_.push_back(ostat))) {
                 LOG_WARN("fail to push back other stat", KR(ret));
               }
             }
@@ -1646,59 +1580,17 @@ static int format_predicate_information(const ObIArray<ObSqlPlanItem *> &plan_in
   return ret;
 }
 
-// Aggregate per-operator data into step-level resource metrics. See header.
-static int aggregate_resources_from_arrays(const ObIArray<ObSqlPlanItem *> &plan_infos,
-                                           const ObIArray<MViewPlanMonitorTime> &monitor_times,
-                                           const ObIArray<MViewPlanOtherStat> &other_stats,
-                                           int64_t &cpu_time,
-                                           int64_t &io_wait_time,
-                                           int64_t &disk_reads,
-                                           int64_t &memory_used)
-{
-  int ret = OB_SUCCESS;
-  cpu_time = 0;
-  io_wait_time = 0;
-  disk_reads = 0;
-  memory_used = 0;
-  if (plan_infos.count() != monitor_times.count()
-      || plan_infos.count() != other_stats.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("plan_infos/monitor_times/other_stats count mismatch",
-             KR(ret), K(plan_infos.count()), K(monitor_times.count()), K(other_stats.count()));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < plan_infos.count(); ++i) {
-    const ObSqlPlanItem *item = plan_infos.at(i);
-    if (OB_ISNULL(item)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null plan item", KR(ret), K(i));
-    } else {
-      const MViewPlanMonitorTime &mtime = monitor_times.at(i);
-      const MViewPlanOtherStat &ostat = other_stats.at(i);
-      cpu_time += mtime.sum_db_time_;
-      io_wait_time += item->io_cost_;
-      if (mtime.max_wa_mem_ > memory_used) {
-        memory_used = mtime.max_wa_mem_;
-      }
-      for (int64_t s = 0; s < OTHERSTAT_SLOT_COUNT; ++s) {
-        if (sql::ObSqlMonitorStatIds::IO_READ_BYTES == ostat.ids_[s]) {
-          disk_reads += ostat.values_[s];
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-}  // anonymous namespace
-
-int get_mview_stmt_execution_plan(ObExecContext &ctx,
-                                  uint64_t tenant_id,
+int get_mview_stmt_execution_plan(uint64_t tenant_id,
                                   const ObString &sql_id,
                                   const ObString &trace_id,
                                   const ObString &svr_ip,
                                   int64_t svr_port,
                                   uint64_t plan_id,
                                   uint64_t plan_hash,
+                                  int64_t cpu_time,
+                                  int64_t io_wait_time,
+                                  int64_t disk_reads,
+                                  int64_t memory_used,
                                   ObSqlString &result_json)
 {
   int ret = OB_SUCCESS;
@@ -1707,219 +1599,394 @@ int get_mview_stmt_execution_plan(ObExecContext &ctx,
     LOG_WARN("unexpected null pointer", KR(ret), KP(GCTX.sql_proxy_));
   } else {
     ObArenaAllocator allocator("MvExecPlan", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
-
-    // Query monitor + plan via LEFT JOIN so all plan operators are included.
-    ObSEArray<ObSqlPlanItem *, 16> plan_infos;
-    ObSEArray<MViewPlanMonitorTime, 2> monitor_times;
-    ObSEArray<MViewPlanOtherStat, 1> other_stats;
-    ObSEArray<const char *, 16> server_strs;
-    ObSqlString join_sql;
-    // Use LEFT JOIN so all plan operators are included even when the
-    // current statement didn't produce monitor data for some of them.
-    // IFNULL defaults missing monitor columns to 0.
-    if (OB_FAIL(join_sql.assign_fmt("SELECT "
-                                    "A.OPERATOR, A.OBJECT_ALIAS, A.ID, A.DEPTH, A.CARDINALITY, A.COST, "
-                                    "IFNULL(D.REAL_CARD, 0), IFNULL(D.REAL_COST, 0), "
-                                    "IFNULL(D.CPU_COST, 0), IFNULL(D.IO_COST, 0), "
-                                    "IFNULL(D.OPEN_TIME, 0), IFNULL(D.CLOSE_TIME, 0), "
-                                    "IFNULL(D.DOP, 0), IFNULL(D.MAX_ROWS, 0), IFNULL(D.SUM_DB_TIME, 0), "
-                                    "IFNULL(D.STARTS, 0), IFNULL(D.MAX_WA_MEM, 0), "
-                                    "IFNULL(D.OS1_ID, 0), IFNULL(D.OS1_VAL, 0), "
-                                    "IFNULL(D.OS2_ID, 0), IFNULL(D.OS2_VAL, 0), "
-                                    "IFNULL(D.OS3_ID, 0), IFNULL(D.OS3_VAL, 0), "
-                                    "IFNULL(D.OS4_ID, 0), IFNULL(D.OS4_VAL, 0), "
-                                    "IFNULL(D.OS5_ID, 0), IFNULL(D.OS5_VAL, 0), "
-                                    "IFNULL(D.OS6_ID, 0), IFNULL(D.OS6_VAL, 0), "
-                                    "IFNULL(D.OS7_ID, 0), IFNULL(D.OS7_VAL, 0), "
-                                    "IFNULL(D.OS8_ID, 0), IFNULL(D.OS8_VAL, 0), "
-                                    "IFNULL(D.OS9_ID, 0), IFNULL(D.OS9_VAL, 0), "
-                                    "IFNULL(D.OS10_ID, 0), IFNULL(D.OS10_VAL, 0), "
-                                    "D.SERVER, "
-                                    "A.FILTER_PREDICATES, A.STARTUP_PREDICATES, "
-                                    "A.SPECIAL_PREDICATES, A.OTHER_XML, A.OPTIMIZER, "
-                                    "A.PARTITION_START, A.PARTITION_STOP "
-                                    "FROM OCEANBASE.__ALL_VIRTUAL_SQL_PLAN A "
-                                    "LEFT JOIN "
-                                    "(SELECT PLAN_LINE_ID, "
-                                    " CAST(SUM(OUTPUT_ROWS) AS SIGNED) REAL_CARD, "
-                                    " CAST(MAX(GREATEST((DB_TIME - USER_IO_WAIT_TIME), 0)) AS SIGNED) CPU_COST, "
-                                    " CAST(MAX(USER_IO_WAIT_TIME) AS SIGNED) IO_COST, "
-                                    " CAST((UNIX_TIMESTAMP(MAX(LAST_CHANGE_TIME)) - UNIX_TIMESTAMP(MIN(FIRST_CHANGE_TIME))) * 1000000 AS SIGNED) REAL_COST, "
-                                    " CAST(UNIX_TIMESTAMP(MIN(FIRST_REFRESH_TIME))*1000000 AS SIGNED) OPEN_TIME, "
-                                    " CAST(UNIX_TIMESTAMP(MAX(LAST_REFRESH_TIME))*1000000 AS SIGNED) CLOSE_TIME, "
-                                    " CAST(COUNT(*) AS SIGNED) DOP, "
-                                    " CAST(MAX(OUTPUT_ROWS) AS SIGNED) MAX_ROWS, "
-                                    " CAST(SUM(GREATEST((DB_TIME - USER_IO_WAIT_TIME), 0)) AS SIGNED) SUM_DB_TIME, "
-                                    " CAST(SUM(STARTS) AS SIGNED) STARTS, "
-                                    " CAST(MAX(WORKAREA_MAX_MEM) AS SIGNED) MAX_WA_MEM, "
-                                    " CAST(MAX(OTHERSTAT_1_ID) AS SIGNED) OS1_ID, CAST(SUM(OTHERSTAT_1_VALUE) AS "
-                                    "SIGNED) OS1_VAL, "
-                                    " CAST(MAX(OTHERSTAT_2_ID) AS SIGNED) OS2_ID, CAST(SUM(OTHERSTAT_2_VALUE) AS "
-                                    "SIGNED) OS2_VAL, "
-                                    " CAST(MAX(OTHERSTAT_3_ID) AS SIGNED) OS3_ID, CAST(SUM(OTHERSTAT_3_VALUE) AS "
-                                    "SIGNED) OS3_VAL, "
-                                    " CAST(MAX(OTHERSTAT_4_ID) AS SIGNED) OS4_ID, CAST(SUM(OTHERSTAT_4_VALUE) AS "
-                                    "SIGNED) OS4_VAL, "
-                                    " CAST(MAX(OTHERSTAT_5_ID) AS SIGNED) OS5_ID, CAST(SUM(OTHERSTAT_5_VALUE) AS "
-                                    "SIGNED) OS5_VAL, "
-                                    " CAST(MAX(OTHERSTAT_6_ID) AS SIGNED) OS6_ID, CAST(SUM(OTHERSTAT_6_VALUE) AS "
-                                    "SIGNED) OS6_VAL, "
-                                    " CAST(MAX(OTHERSTAT_7_ID) AS SIGNED) OS7_ID, CAST(SUM(OTHERSTAT_7_VALUE) AS "
-                                    "SIGNED) OS7_VAL, "
-                                    " CAST(MAX(OTHERSTAT_8_ID) AS SIGNED) OS8_ID, CAST(SUM(OTHERSTAT_8_VALUE) AS "
-                                    "SIGNED) OS8_VAL, "
-                                    " CAST(MAX(OTHERSTAT_9_ID) AS SIGNED) OS9_ID, CAST(SUM(OTHERSTAT_9_VALUE) AS "
-                                    "SIGNED) OS9_VAL, "
-                                    " CAST(MAX(OTHERSTAT_10_ID) AS SIGNED) OS10_ID, CAST(SUM(OTHERSTAT_10_VALUE) AS "
-                                    "SIGNED) OS10_VAL, "
-                                    " GROUP_CONCAT(DISTINCT CONCAT(SVR_IP, ':', SVR_PORT) SEPARATOR ',') AS SERVER "
-                                    " FROM OCEANBASE.__ALL_VIRTUAL_SQL_PLAN_MONITOR "
-                                    " WHERE TENANT_ID = %lu AND TRACE_ID = '%.*s' AND SQL_ID = '%.*s' "
-                                    " GROUP BY PLAN_LINE_ID"
-                                    ") D "
-                                    "ON A.ID = D.PLAN_LINE_ID "
-                                    "WHERE A.TENANT_ID = %lu AND A.SVR_IP = '%.*s' AND A.SVR_PORT = %ld "
-                                    "AND A.PLAN_ID = %lu AND A.PLAN_HASH = %lu "
-                                    "ORDER BY A.ID",
-                                    tenant_id,
-                                    trace_id.length(), trace_id.ptr(),
-                                    sql_id.length(), sql_id.ptr(),
-                                    tenant_id,
-                                    svr_ip.length(), svr_ip.ptr(),
-                                    svr_port,
-                                    plan_id,
-                                    plan_hash))) {
-      LOG_WARN("fail to build join query", KR(ret));
-    } else {
-      SMART_VAR(ObMySQLProxy::MySQLResult, res)
-      {
-        sqlclient::ObMySQLResult *mysql_result = NULL;
-        if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id, join_sql.ptr()))) {
-          LOG_WARN("fail to execute join query", KR(ret), K(join_sql));
-        } else if (OB_ISNULL(mysql_result = res.get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("null mysql result", KR(ret));
-        }
-        while (OB_SUCC(ret) && OB_SUCC(mysql_result->next())) {
-          void *buf = NULL;
-          ObSqlPlanItem *plan_info = NULL;
-          MViewPlanMonitorTime mtime;
-          MViewPlanOtherStat ostat;
-          if (OB_ISNULL(buf = allocator.alloc(sizeof(ObSqlPlanItem)))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("failed to allocate memory", KR(ret));
-          } else {
-            plan_info = new(buf) ObSqlPlanItem();
-            // arena-allocated; destructor intentionally skipped, arena recycles all memory
-            char *server_str = NULL;
-            if (OB_FAIL(mview_read_plan_info_from_result(allocator, *mysql_result, *plan_info, mtime, ostat, server_str))) {
-              LOG_WARN("failed to read plan info", KR(ret));
-            } else if (OB_FAIL(plan_infos.push_back(plan_info))) {
-              LOG_WARN("failed to push back plan info", KR(ret));
-            } else if (OB_FAIL(monitor_times.push_back(mtime))) {
-              LOG_WARN("failed to push back monitor time", KR(ret));
-            } else if (OB_FAIL(other_stats.push_back(ostat))) {
-              LOG_WARN("failed to push back other stat", KR(ret));
-            } else if (OB_FAIL(server_strs.push_back(server_str))) {
-              LOG_WARN("failed to push back server str", KR(ret));
-            }
-          }
-        }
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-        }
-      }
-    }
-
-    if (OB_SUCC(ret) && plan_infos.count() > 0) {
-      if (OB_FAIL(compute_is_last_child(plan_infos))) {
-        LOG_WARN("fail to compute plan tree child flags", KR(ret));
-      } else if (OB_FAIL(format_merged_plan_json(allocator,
-                                                 plan_hash,
-                                                 plan_infos,
-                                                 monitor_times,
-                                                 other_stats,
-                                                 server_strs,
-                                                 result_json))) {
-        LOG_WARN("fail to format plan json", KR(ret));
-      }
+    MViewStmtPlanInfo *plan = NULL;
+    if (OB_ISNULL(plan = OB_NEWx(MViewStmtPlanInfo, &allocator, allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate statement plan", KR(ret));
+    } else if (OB_FAIL(query_mview_plan(*GCTX.sql_proxy_,
+                                       tenant_id,
+                                       trace_id,
+                                       sql_id,
+                                       svr_ip,
+                                       svr_port,
+                                       plan_id,
+                                       true /*filter_plan_hash*/,
+                                       plan_hash,
+                                       false /*only_realtime*/,
+                                       allocator,
+                                       *plan))) {
+      LOG_WARN("fail to capture plan monitor rows", KR(ret));
+    } else if (plan->plan_infos_.count() > 0
+               && OB_FAIL(serialize_mview_plan(allocator, *plan, cpu_time, io_wait_time,
+                                               disk_reads, memory_used, result_json))) {
+      LOG_WARN("fail to build plan json", KR(ret));
     }
   }
+  return ret;
+}
 
+/**
+ * Build the plan-cache LEFT JOIN monitor-aggregate query shared by the
+ * persisted final-plan capture and the live running-plan observation.
+ * only_realtime restricts monitor rows to REQUEST_ID < 0 (in-flight
+ * execution); filter_plan_hash adds AND A.PLAN_HASH = ... because the final
+ * capture knows the executed hash while the live observation does not and
+ * reads it back from the extra A.PLAN_HASH select column instead.
+ */
+static int build_plan_monitor_join_sql(const uint64_t tenant_id,
+                                       const ObString &trace_id,
+                                       const ObString &sql_id,
+                                       const ObString &svr_ip,
+                                       const int64_t svr_port,
+                                       const uint64_t plan_id,
+                                       const bool filter_plan_hash,
+                                       const uint64_t plan_hash,
+                                       const bool only_realtime,
+                                       ObSqlString &join_sql)
+{
+  int ret = OB_SUCCESS;
+  const char *realtime_filter = only_realtime ? " AND REQUEST_ID < 0" : "";
+  const char *plan_hash_column = filter_plan_hash ? "" : ", A.PLAN_HASH";
+  const char *cpu_time_expr = only_realtime ? "DB_TIME" : "GREATEST((DB_TIME - USER_IO_WAIT_TIME), 0)";
+  // Use LEFT JOIN so all plan operators are included even when the
+  // current statement didn't produce monitor data for some of them.
+  // IFNULL defaults missing monitor columns to 0.
+  if (OB_FAIL(join_sql.assign_fmt("SELECT "
+                                  "A.OPERATOR, A.OBJECT_ALIAS, A.ID, A.DEPTH, A.CARDINALITY, A.COST, "
+                                  "IFNULL(D.REAL_CARD, 0), IFNULL(D.REAL_COST, 0), "
+                                  "IFNULL(D.CPU_COST, 0), IFNULL(D.IO_COST, 0), "
+                                  "IFNULL(D.OPEN_TIME, 0), IFNULL(D.CLOSE_TIME, 0), "
+                                  "IFNULL(D.DOP, 0), IFNULL(D.MAX_ROWS, 0), IFNULL(D.SUM_DB_TIME, 0), "
+                                  "IFNULL(D.STARTS, 0), IFNULL(D.MAX_WA_MEM, 0), "
+                                  "IFNULL(D.OS1_ID, 0), IFNULL(D.OS1_VAL, 0), "
+                                  "IFNULL(D.OS2_ID, 0), IFNULL(D.OS2_VAL, 0), "
+                                  "IFNULL(D.OS3_ID, 0), IFNULL(D.OS3_VAL, 0), "
+                                  "IFNULL(D.OS4_ID, 0), IFNULL(D.OS4_VAL, 0), "
+                                  "IFNULL(D.OS5_ID, 0), IFNULL(D.OS5_VAL, 0), "
+                                  "IFNULL(D.OS6_ID, 0), IFNULL(D.OS6_VAL, 0), "
+                                  "IFNULL(D.OS7_ID, 0), IFNULL(D.OS7_VAL, 0), "
+                                  "IFNULL(D.OS8_ID, 0), IFNULL(D.OS8_VAL, 0), "
+                                  "IFNULL(D.OS9_ID, 0), IFNULL(D.OS9_VAL, 0), "
+                                  "IFNULL(D.OS10_ID, 0), IFNULL(D.OS10_VAL, 0), "
+                                  "D.SERVER, "
+                                  "A.FILTER_PREDICATES, A.STARTUP_PREDICATES, "
+                                  "A.SPECIAL_PREDICATES, A.OTHER_XML, A.OPTIMIZER, "
+                                  "A.PARTITION_START, A.PARTITION_STOP%s "
+                                  "FROM OCEANBASE.__ALL_VIRTUAL_SQL_PLAN A "
+                                  "LEFT JOIN "
+                                  "(SELECT PLAN_LINE_ID, "
+                                  " CAST(SUM(OUTPUT_ROWS) AS SIGNED) REAL_CARD, "
+                                  " CAST(MAX(%s) AS SIGNED) CPU_COST, "
+                                  " CAST(MAX(USER_IO_WAIT_TIME) AS SIGNED) IO_COST, "
+                                  " CAST(GREATEST("
+                                  "(UNIX_TIMESTAMP("
+                                  "CASE WHEN SUM(OUTPUT_ROWS) > 0 AND MAX(LAST_CHANGE_TIME) IS NOT NULL "
+                                  "THEN MAX(LAST_CHANGE_TIME) "
+                                  "WHEN MAX(LAST_REFRESH_TIME) IS NOT NULL "
+                                  "THEN MAX(LAST_REFRESH_TIME) "
+                                  "ELSE NULL END) "
+                                  "- UNIX_TIMESTAMP(MAX(MIN(CASE WHEN PLAN_LINE_ID = 0 "
+                                  "THEN FIRST_REFRESH_TIME END)) OVER ()) "
+                                  ") * 1000000, 0) AS SIGNED) REAL_COST, "
+                                  " CAST(UNIX_TIMESTAMP(MIN(FIRST_REFRESH_TIME))*1000000 AS SIGNED) OPEN_TIME, "
+                                  " CAST(UNIX_TIMESTAMP(MAX(LAST_REFRESH_TIME))*1000000 AS SIGNED) CLOSE_TIME, "
+                                  " CAST(COUNT(*) AS SIGNED) DOP, "
+                                  " CAST(MAX(OUTPUT_ROWS) AS SIGNED) MAX_ROWS, "
+                                  " CAST(SUM(%s) AS SIGNED) SUM_DB_TIME, "
+                                  " CAST(SUM(STARTS) AS SIGNED) STARTS, "
+                                  " CAST(MAX(WORKAREA_MAX_MEM) AS SIGNED) MAX_WA_MEM, "
+                                  " CAST(MAX(OTHERSTAT_1_ID) AS SIGNED) OS1_ID, CAST(SUM(OTHERSTAT_1_VALUE) AS "
+                                  "SIGNED) OS1_VAL, "
+                                  " CAST(MAX(OTHERSTAT_2_ID) AS SIGNED) OS2_ID, CAST(SUM(OTHERSTAT_2_VALUE) AS "
+                                  "SIGNED) OS2_VAL, "
+                                  " CAST(MAX(OTHERSTAT_3_ID) AS SIGNED) OS3_ID, CAST(SUM(OTHERSTAT_3_VALUE) AS "
+                                  "SIGNED) OS3_VAL, "
+                                  " CAST(MAX(OTHERSTAT_4_ID) AS SIGNED) OS4_ID, CAST(SUM(OTHERSTAT_4_VALUE) AS "
+                                  "SIGNED) OS4_VAL, "
+                                  " CAST(MAX(OTHERSTAT_5_ID) AS SIGNED) OS5_ID, CAST(SUM(OTHERSTAT_5_VALUE) AS "
+                                  "SIGNED) OS5_VAL, "
+                                  " CAST(MAX(OTHERSTAT_6_ID) AS SIGNED) OS6_ID, CAST(SUM(OTHERSTAT_6_VALUE) AS "
+                                  "SIGNED) OS6_VAL, "
+                                  " CAST(MAX(OTHERSTAT_7_ID) AS SIGNED) OS7_ID, CAST(SUM(OTHERSTAT_7_VALUE) AS "
+                                  "SIGNED) OS7_VAL, "
+                                  " CAST(MAX(OTHERSTAT_8_ID) AS SIGNED) OS8_ID, CAST(SUM(OTHERSTAT_8_VALUE) AS "
+                                  "SIGNED) OS8_VAL, "
+                                  " CAST(MAX(OTHERSTAT_9_ID) AS SIGNED) OS9_ID, CAST(SUM(OTHERSTAT_9_VALUE) AS "
+                                  "SIGNED) OS9_VAL, "
+                                  " CAST(MAX(OTHERSTAT_10_ID) AS SIGNED) OS10_ID, CAST(SUM(OTHERSTAT_10_VALUE) AS "
+                                  "SIGNED) OS10_VAL, "
+                                  " GROUP_CONCAT(DISTINCT CONCAT(SVR_IP, ':', SVR_PORT) SEPARATOR ',') AS SERVER "
+                                  " FROM OCEANBASE.__ALL_VIRTUAL_SQL_PLAN_MONITOR "
+                                  " WHERE TENANT_ID = %lu AND TRACE_ID = '%.*s' AND SQL_ID = '%.*s'%s "
+                                  " GROUP BY PLAN_LINE_ID"
+                                  ") D "
+                                  "ON A.ID = D.PLAN_LINE_ID "
+                                  "WHERE A.TENANT_ID = %lu AND A.SVR_IP = '%.*s' AND A.SVR_PORT = %ld "
+                                  "AND A.PLAN_ID = %lu",
+                                  plan_hash_column,
+                                  cpu_time_expr,
+                                  cpu_time_expr,
+                                  tenant_id,
+                                  trace_id.length(), trace_id.ptr(),
+                                  sql_id.length(), sql_id.ptr(),
+                                  realtime_filter,
+                                  tenant_id,
+                                  svr_ip.length(), svr_ip.ptr(),
+                                  svr_port,
+                                  plan_id))) {
+    LOG_WARN("fail to build join query", KR(ret));
+  } else if (filter_plan_hash
+             && OB_FAIL(join_sql.append_fmt(" AND A.PLAN_HASH = %lu", plan_hash))) {
+    LOG_WARN("fail to append plan hash filter", KR(ret));
+  } else if (OB_FAIL(join_sql.append(" ORDER BY A.ID"))) {
+    LOG_WARN("fail to append join query order", KR(ret));
+  }
+  return ret;
+}
+
+/**
+ * Execute the plan-monitor join query and read all operator rows.
+ * When read_plan_hash is true the query must carry the extra A.PLAN_HASH
+ * select column (see build_plan_monitor_join_sql) and the hash is read back
+ * from the last row.
+ */
+static int execute_plan_monitor_query(ObMySQLProxy &sql_proxy,
+                                      const uint64_t tenant_id,
+                                      const ObSqlString &join_sql,
+                                      ObIAllocator &allocator,
+                                      const bool read_plan_hash,
+                                      MViewStmtPlanInfo &plan)
+{
+  int ret = OB_SUCCESS;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res)
+  {
+    sqlclient::ObMySQLResult *mysql_result = NULL;
+    if (OB_FAIL(sql_proxy.read(res, tenant_id, join_sql.ptr()))) {
+      LOG_WARN("fail to execute join query", KR(ret), K(join_sql));
+    } else if (OB_ISNULL(mysql_result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null mysql result", KR(ret));
+    }
+    while (OB_SUCC(ret) && OB_SUCC(mysql_result->next())) {
+      void *buf = NULL;
+      ObSqlPlanItem *plan_info = NULL;
+      MViewPlanMonitorTime mtime;
+      MViewPlanOtherStat ostat;
+      if (OB_ISNULL(buf = allocator.alloc(sizeof(ObSqlPlanItem)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", KR(ret));
+      } else {
+        plan_info = new(buf) ObSqlPlanItem();
+        // arena-allocated; destructor intentionally skipped, arena recycles all memory
+        if (OB_FAIL(mview_read_plan_info_from_result(allocator, *mysql_result, *plan_info, mtime, ostat))) {
+          LOG_WARN("failed to read plan info", KR(ret));
+        } else if (read_plan_hash
+                   && OB_FAIL(mysql_result->get_uint(COL_PLAN_HASH, plan.plan_hash_))) {
+          LOG_WARN("failed to read plan hash column", KR(ret));
+        } else if (OB_FAIL(plan.plan_infos_.push_back(plan_info))) {
+          LOG_WARN("failed to push back plan info", KR(ret));
+        } else if (OB_FAIL(plan.monitor_times_.push_back(mtime))) {
+          LOG_WARN("failed to push back monitor time", KR(ret));
+        } else if (OB_FAIL(plan.other_stats_.push_back(ostat))) {
+          LOG_WARN("failed to push back other stat", KR(ret));
+        }
+      }
+    }
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
+int query_mview_plan(ObMySQLProxy &sql_proxy,
+                     const uint64_t tenant_id,
+                     const ObString &trace_id,
+                     const ObString &sql_id,
+                     const ObString &svr_ip,
+                     const int64_t svr_port,
+                     const uint64_t plan_id,
+                     const bool filter_plan_hash,
+                     const uint64_t plan_hash,
+                     const bool only_realtime,
+                     ObIAllocator &allocator,
+                     MViewStmtPlanInfo &plan)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString join_sql;
+  ObSqlString opt_buf;
+  plan.plan_hash_ = filter_plan_hash ? plan_hash : 0;
+  plan.plan_infos_.reset();
+  plan.monitor_times_.reset();
+  plan.other_stats_.reset();
+  plan.outline_data_.reset();
+  plan.optimization_info_.reset();
+  if (OB_FAIL(build_plan_monitor_join_sql(tenant_id,
+                                          trace_id,
+                                          sql_id,
+                                          svr_ip,
+                                          svr_port,
+                                          plan_id,
+                                          filter_plan_hash,
+                                          plan_hash,
+                                          only_realtime,
+                                          join_sql))) {
+    LOG_WARN("fail to build plan monitor join query", KR(ret));
+  } else if (OB_FAIL(execute_plan_monitor_query(sql_proxy,
+                                                tenant_id,
+                                                join_sql,
+                                                allocator,
+                                                !filter_plan_hash,
+                                                plan))) {
+    LOG_WARN("fail to query plan monitor join rows", KR(ret));
+  } else {
+    if (plan.plan_infos_.count() > 0 && OB_NOT_NULL(plan.plan_infos_.at(0))) {
+      const ObSqlPlanItem *first = plan.plan_infos_.at(0);
+      if (OB_NOT_NULL(first->other_xml_) && first->other_xml_len_ > 0) {
+        plan.outline_data_.assign_ptr(first->other_xml_, static_cast<int32_t>(first->other_xml_len_));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < plan.plan_infos_.count(); ++i) {
+      const ObSqlPlanItem *item = plan.plan_infos_.at(i);
+      if (OB_NOT_NULL(item) && OB_NOT_NULL(item->optimizer_) && item->optimizer_len_ > 0) {
+        if (!opt_buf.empty() && OB_FAIL(opt_buf.append("\n"))) {
+          LOG_WARN("fail to append optimizer info separator", KR(ret), K(i));
+        } else if (OB_FAIL(opt_buf.append(item->optimizer_, item->optimizer_len_))) {
+          LOG_WARN("fail to append optimizer info", KR(ret), K(i));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(opt_buf.length() > INT32_MAX)) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("optimization info exceeds string length range", KR(ret), K(opt_buf.length()));
+    } else if (!opt_buf.empty()
+               && OB_FAIL(ob_write_string(allocator, opt_buf.string(), plan.optimization_info_))) {
+      LOG_WARN("fail to copy optimization_info to arena", KR(ret));
+    }
+  }
   return ret;
 }
 
 int render_mview_plan_text(common::ObIAllocator &allocator,
-                           const ObString &plan_json,
-                           uint64_t &plan_hash,
+                           const MViewStmtPlanInfo &plan,
                            ObSqlString &result_text)
 {
   int ret = OB_SUCCESS;
-  plan_hash = 0;
-  ObSEArray<ObSqlPlanItem *, 16> plan_infos;
-  ObSEArray<MViewPlanMonitorTime, 2> monitor_times;
-  ObSEArray<MViewPlanOtherStat, 1> other_stats;
-  MViewPlanRootInfo root_info;
-  if (OB_FAIL(parse_merged_plan_json(allocator, plan_json, plan_hash,
-                                     plan_infos, monitor_times, other_stats,
-                                     &root_info,
-                                     true /*need_predicates*/))) {
-    LOG_WARN("fail to parse plan json", KR(ret));
-  } else if (0 == plan_infos.count()) {
-    // Hash-only: operators array is empty, plan_hash returned via out param.
-  } else if (OB_FAIL(compute_is_last_child(plan_infos))) {
-    LOG_WARN("fail to compute plan tree child flags", KR(ret));
-  } else if (OB_FAIL(format_merged_plan_table(allocator, plan_infos, monitor_times, result_text))) {
-    LOG_WARN("fail to format merged plan table", KR(ret));
-  } else if (OB_FAIL(format_operator_detail_stats(plan_infos, other_stats, result_text))) {
-    LOG_WARN("fail to format operator detail stats", KR(ret));
-  } else if (OB_FAIL(format_predicate_information(plan_infos, result_text))) {
-    LOG_WARN("fail to format predicate information", KR(ret));
-  } else {
-    if (OB_NOT_NULL(root_info.outline_data_) && root_info.outline_data_len_ > 0) {
-      if (OB_FAIL(result_text.append_fmt("\nOutline Data:\n  %.*s\n",
-                                         static_cast<int>(root_info.outline_data_len_),
-                                         root_info.outline_data_))) {
-        LOG_WARN("fail to append outline data", KR(ret));
-      }
-    }
-    if (OB_SUCC(ret) && OB_NOT_NULL(root_info.optimization_info_)
-        && root_info.optimization_info_len_ > 0) {
-      if (OB_FAIL(result_text.append_fmt("\nOptimization Info:\n  %.*s\n",
-                                         static_cast<int>(root_info.optimization_info_len_),
-                                         root_info.optimization_info_))) {
-        LOG_WARN("fail to append optimization info", KR(ret));
-      }
-    }
+  if (0 == plan.plan_infos_.count()) {
+    // Hash-only plans have no operator tree or detail sections to render.
+  } else if (OB_FAIL(render_mview_plan_body(allocator, plan, result_text))) {
+    LOG_WARN("fail to format plan items", KR(ret));
+  } else if (!plan.outline_data_.empty()
+             && OB_FAIL(result_text.append_fmt("\nOutline Data:\n  %.*s\n",
+                                                plan.outline_data_.length(),
+                                                plan.outline_data_.ptr()))) {
+    LOG_WARN("fail to append outline data", KR(ret));
+  } else if (!plan.optimization_info_.empty()
+             && OB_FAIL(result_text.append_fmt("\nOptimization Info:\n  %.*s\n",
+                                                plan.optimization_info_.length(),
+                                                plan.optimization_info_.ptr()))) {
+    LOG_WARN("fail to append optimization info", KR(ret));
   }
   return ret;
 }
 
-int aggregate_mview_plan_resources(common::ObIAllocator &allocator,
-                                   const ObString &plan_json,
-                                   int64_t &cpu_time,
-                                   int64_t &io_wait_time,
-                                   int64_t &disk_reads,
-                                   int64_t &memory_used)
+int parse_mview_plan_resources(common::ObIAllocator &allocator,
+                               const ObString &plan_json,
+                               int64_t &cpu_time,
+                               int64_t &io_wait_time,
+                               int64_t &disk_reads,
+                               int64_t &memory_used)
 {
   int ret = OB_SUCCESS;
   cpu_time = 0;
   io_wait_time = 0;
   disk_reads = 0;
   memory_used = 0;
-  uint64_t plan_hash = 0;
-  ObSEArray<ObSqlPlanItem *, 16> plan_infos;
-  ObSEArray<MViewPlanMonitorTime, 2> monitor_times;
-  ObSEArray<MViewPlanOtherStat, 1> other_stats;
-  if (OB_FAIL(parse_merged_plan_json(allocator, plan_json, plan_hash,
-                                     plan_infos, monitor_times, other_stats,
-                                     NULL,
-                                     false /*need_predicates*/))) {
-    LOG_WARN("fail to parse plan json for aggregation", KR(ret));
-  } else if (OB_FAIL(aggregate_resources_from_arrays(plan_infos, monitor_times, other_stats,
-                                                    cpu_time, io_wait_time, disk_reads,
-                                                    memory_used))) {
-    LOG_WARN("fail to aggregate resources", KR(ret));
+  ObJsonNode *root_node = NULL;
+  if (plan_json.empty()) {
+    // Empty plan is valid — leave outputs at 0.
+  } else if (OB_FAIL(ObJsonParser::get_tree(&allocator, plan_json, root_node))) {
+    LOG_WARN("fail to parse plan json", KR(ret), K(plan_json));
+  } else if (OB_ISNULL(root_node) || ObJsonNodeType::J_OBJECT != root_node->json_type()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("plan json root is not object", KR(ret));
+  } else {
+    ObJsonObject *root_obj = static_cast<ObJsonObject *>(root_node);
+    if (OB_FAIL(read_json_int_member(root_obj, JK_CPU_TIME, cpu_time))) {
+      LOG_WARN("fail to read cpu_time", KR(ret));
+    } else if (OB_FAIL(read_json_int_member(root_obj, JK_IO_WAIT_TIME, io_wait_time))) {
+      LOG_WARN("fail to read io_wait_time", KR(ret));
+    } else if (OB_FAIL(read_json_int_member(root_obj, JK_DISK_READS, disk_reads))) {
+      LOG_WARN("fail to read disk_reads", KR(ret));
+    } else if (OB_FAIL(read_json_int_member(root_obj, JK_MEMORY_USED, memory_used))) {
+      LOG_WARN("fail to read memory_used", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int capture_mview_live_plan(ObMySQLProxy &sql_proxy,
+                            const uint64_t tenant_id,
+                            const ObString &trace_id,
+                            const ObString &sql_id,
+                            const ObString &svr_ip,
+                            const int64_t svr_port,
+                            const uint64_t plan_id,
+                            ObIAllocator &allocator,
+                            MViewStmtPlanInfo &plan)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(query_mview_plan(sql_proxy,
+                               tenant_id,
+                               trace_id,
+                               sql_id,
+                               svr_ip,
+                               svr_port,
+                               plan_id,
+                               false /*filter_plan_hash*/,
+                               0 /*plan_hash*/,
+                               true /*only_realtime*/,
+                               allocator,
+                               plan))) {
+    LOG_WARN("fail to capture live plan rows", KR(ret));
+  }
+  return ret;
+}
+
+
+int serialize_mview_plan(ObIAllocator &allocator,
+                         const MViewStmtPlanInfo &plan,
+                         int64_t cpu_time,
+                         int64_t io_wait_time,
+                         int64_t disk_reads,
+                         int64_t memory_used,
+                         ObSqlString &result_json)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(compute_is_last_child(plan.plan_infos_))) {
+    LOG_WARN("fail to compute plan tree child flags", KR(ret));
+  } else if (OB_FAIL(format_merged_plan_json(allocator, plan, cpu_time, io_wait_time,
+                                             disk_reads, memory_used, result_json))) {
+    LOG_WARN("fail to format merged plan json", KR(ret));
+  }
+  return ret;
+}
+
+// Shared detail rendering: child flags + plan table + operator stats + predicates.
+int render_mview_plan_body(ObIAllocator &allocator,
+                            const MViewStmtPlanInfo &plan,
+                            ObSqlString &result_text)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(compute_is_last_child(plan.plan_infos_))) {
+    LOG_WARN("fail to compute plan tree child flags", KR(ret));
+  } else if (OB_FAIL(format_merged_plan_table(allocator, plan.plan_infos_, plan.monitor_times_, result_text))) {
+    LOG_WARN("fail to format merged plan table", KR(ret));
+  } else if (OB_FAIL(format_operator_detail_stats(plan.plan_infos_, plan.other_stats_, result_text))) {
+    LOG_WARN("fail to format operator detail stats", KR(ret));
+  } else if (OB_FAIL(format_predicate_information(plan.plan_infos_, result_text))) {
+    LOG_WARN("fail to format predicate information", KR(ret));
   }
   return ret;
 }

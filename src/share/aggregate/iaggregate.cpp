@@ -134,6 +134,7 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
         INIT_AGGREGATE_CASE(T_FUN_KEEP_WM_CONCAT, wm_concat, i);
         INIT_AGGREGATE_CASE(T_FUN_INNER_PREFIX_MAX, string_prefix_max, i);
         INIT_AGGREGATE_CASE(T_FUN_ANY, any, i);
+        INIT_AGGREGATE_CASE(T_FUN_ANY_VALUE, any, i);
         INIT_AGGREGATE_CASE(T_FUN_ARBITRARY, any, i);
         INIT_AGGREGATE_CASE(T_FUN_SYS_COUNT_INROW, count, i);
         INIT_AGGREGATE_CASE(T_FUN_SYS_EXT_MIN, min, i);
@@ -250,6 +251,7 @@ static int32_t agg_cell_tmp_res_size(RuntimeContext &agg_ctx, int64_t agg_col_id
   } else {
     switch (info.get_expr_type()) {
     case T_FUN_ANY:
+    case T_FUN_ANY_VALUE:
     case T_FUN_ARBITRARY:
     case T_FUN_INNER_PREFIX_MIN:
     case T_FUN_INNER_PREFIX_MAX:

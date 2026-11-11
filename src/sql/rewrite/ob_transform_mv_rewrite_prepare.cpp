@@ -377,7 +377,9 @@ int ObTransformMVRewritePrepare::quick_rewrite_check(const ObSQLSessionInfo &ses
 {
   int ret = OB_SUCCESS;
   is_valid = false;
-  if (OB_FAIL(ObMVProvider::check_mview_dep_session_vars(mv_schema, session_info, false, is_valid))) {
+  if (OB_UNLIKELY(!mv_schema.mv_available())) {
+    LOG_TRACE("[MV_REWRITE] materialized view is unavailable", K(mv_schema.get_table_name()));
+  } else if (OB_FAIL(ObMVProvider::check_mview_dep_session_vars(mv_schema, session_info, false, is_valid))) {
     LOG_WARN("failed to check mview dep session vars", K(ret));
   } else if (!is_valid) {
     LOG_TRACE("[MV_REWRITE] materialized view dependency session variables not matched", K(mv_schema.get_table_name()));

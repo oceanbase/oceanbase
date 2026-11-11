@@ -28,7 +28,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview
     IN     mv_name                VARCHAR(65535),
     IN     method                 VARCHAR(65535) DEFAULT NULL,
     IN     refresh_parallel       INT            DEFAULT 0,
-    IN     nested                 BOOLEAN        DEFAULT FALSE,
+    IN     nested                 BOOLEAN        DEFAULT TRUE,
     IN     nested_refresh_mode    VARCHAR(65535) DEFAULT NULL,
     -- TEMPORARY v2 (task 0036): async param, see dbms_mview_mysql.sql
     IN     async                  BOOLEAN        DEFAULT FALSE,
@@ -46,23 +46,24 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview
   END;
 
   FUNCTION refresh_report(
-    IN     refresh_id             INT            DEFAULT NULL,
+    IN     refresh_id             BIGINT         DEFAULT NULL,
     IN     mv_name                VARCHAR(65535) DEFAULT NULL,
     IN     tenant_id              INT            DEFAULT NULL,
     IN     format                 VARCHAR(65535) DEFAULT 'TEXT')
   RETURN TEXT;
   PRAGMA INTERFACE(C, DBMS_MVIEW_MYSQL_REFRESH_REPORT);
 
-  PROCEDURE do_kill_refresh(
-    IN     refresh_id              BIGINT);
-  PRAGMA INTERFACE(C, DBMS_MVIEW_MYSQL_KILL_REFRESH);
-
   PROCEDURE kill_refresh(
     IN     refresh_id              BIGINT)
   BEGIN
-    COMMIT;
-    CALL do_kill_refresh(refresh_id);
+    DECLARE ignored_refresh_exists BIGINT DEFAULT NULL;
+    SET ignored_refresh_exists = kill_refresh(refresh_id);
   END;
+
+  FUNCTION kill_refresh(
+    IN     refresh_id              BIGINT)
+  RETURN BIGINT;
+  PRAGMA INTERFACE(C, DBMS_MVIEW_MYSQL_KILL_REFRESH);
 
   PROCEDURE set_refresh_params(
     IN     mv_name                VARCHAR(65535),

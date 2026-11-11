@@ -38,6 +38,9 @@ ob_set_subtarget(ob_sql common_mixed
   privilege_check/ob_privilege_check.cpp
   privilege_check/ob_ai_model_priv_util.cpp
   resolver/mv/ob_mv_checker.cpp
+  resolver/mv/ob_mv_checker_utils.cpp
+  resolver/mv/ob_mv_printer_checker.cpp
+  resolver/mv/ob_mv_major_refresh_checker.cpp
   resolver/mv/ob_mv_compat_control.cpp
   resolver/mv/ob_mv_provider.cpp
   resolver/mv/ob_mv_printer.cpp
@@ -1655,6 +1658,12 @@ ob_set_subtarget(ob_sql resolver_dml
   resolver/dml/ob_raw_expr_sets.cpp
   resolver/dml/ob_select_resolver.cpp
   resolver/dml/ob_select_stmt.cpp
+  resolver/dml/ob_relation_traverser.cpp
+  resolver/dml/ob_relation.cpp
+  resolver/dml/ob_relation_from.cpp
+  resolver/dml/ob_relation_group.cpp
+  resolver/dml/ob_relation_set.cpp
+  resolver/dml/ob_joined_table.cpp
   resolver/dml/ob_sequence_namespace_checker.cpp
   resolver/dml/ob_sql_hint.cpp
   resolver/dml/ob_stmt_expr_visitor.cpp

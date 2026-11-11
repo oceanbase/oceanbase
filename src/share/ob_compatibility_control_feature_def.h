@@ -92,4 +92,7 @@ DEF_COMPAT_CONTROL_FEATURE(MYSQL_USER_HOST_MATCH_PRIORITY,
     "Select the most specific matching host for MySQL accounts",
     MOCK_CLUSTER_VERSION_4_4_2_3, CLUSTER_VERSION_4_5_0_0,
     CLUSTER_VERSION_5_0_2_0)
+DEF_COMPAT_CONTROL_FEATURE(ANY_VALUE_AS_AGG_FUNC,
+    "Whether to treat ANY_VALUE as an aggregate function",
+    CLUSTER_VERSION_5_0_2_0)
 #endif

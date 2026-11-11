@@ -9,6 +9,10 @@
 #include "rootserver/ddl_task/ob_build_mview_task.h"
 #include "rootserver/ob_root_service.h"
 #include "rootserver/mview/ob_mview_utils.h"
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+#include "rootserver/mview/ob_mview_pending_task_utils.h"
+#endif
+#include "storage/mview/cmd/ob_mview_executor_util.h"
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "share/schema/ob_mview_info.h"
 #include "storage/tx/ob_ts_mgr.h"
@@ -27,6 +31,7 @@ ObBuildMViewTask::ObBuildMViewTask()
       mview_table_id_(target_object_id_),
       root_service_(nullptr),
       mview_complete_refresh_task_id_(0),
+      mview_pending_refresh_id_(0),
       has_build_mlog_(false)
 {
 }
@@ -209,7 +214,6 @@ int ObBuildMViewTask::process()
 int ObBuildMViewTask::clean_on_fail()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *mview_schema = nullptr;
   const ObDatabaseSchema *database_schema = nullptr;
@@ -264,7 +268,7 @@ int ObBuildMViewTask::clean_on_fail()
           ->to(GCTX.self_addr())
           .timeout(ddl_rpc_timeout)
           .drop_table(drop_table_arg, drop_table_res))) {
-        LOG_WARN("failed to drop materialized view", KR(tmp_ret), K(drop_table_arg));
+        LOG_WARN("failed to drop materialized view", KR(ret), K(drop_table_arg));
       } else {
         LOG_INFO("materialized view is successfully dropped",
             K(drop_table_arg), K(drop_table_res));
@@ -339,9 +343,15 @@ int ObBuildMViewTask::build_mlog()
       LOG_WARN("failed to check build mlog status", KR(ret));
     } else if (!is_build_mlog_finished) {
       // by pass
-    } else if (OB_FAIL(update_based_schema_obj_info())) {
-      LOG_WARN("failed to update based schema object info", KR(ret));
     }
+  }
+  // Creating the MV may update attributes of its base tables (for example,
+  // table_referenced_by_mv_flag) even when automatic mlog maintenance is
+  // disabled. Refresh the recorded versions before complete refresh so that
+  // these changes made by the CREATE MV task are not treated as concurrent DDL.
+  if (OB_SUCC(ret) && is_build_mlog_finished
+      && OB_FAIL(update_based_schema_obj_info())) {
+    LOG_WARN("failed to update based schema object info", KR(ret));
   }
   if (OB_FAIL(ret) || is_build_mlog_finished) {
     DEBUG_SYNC(BUILD_MVIEW_AFTER_BUILD_MLOG);
@@ -358,7 +368,7 @@ ERRSIM_POINT_DEF(ERRSIM_BUILD_MLOG_ERROR);
 int ObBuildMViewTask::build_mlog_impl(const obrpc::ObMVRequiredColumnsInfo &required_columns_info)
 {
   int ret = OB_SUCCESS;
-  const uint64_t base_table_id = required_columns_info.base_table_id_;
+  uint64_t base_table_id = required_columns_info.base_table_id_;
   const ObIArray<uint64_t> &required_columns = required_columns_info.required_columns_;
   ObSEArray<ObString, 16> missing_columns;
   ObSchemaGetterGuard schema_guard;
@@ -375,9 +385,13 @@ int ObBuildMViewTask::build_mlog_impl(const obrpc::ObMVRequiredColumnsInfo &requ
     LOG_WARN("failed to get tenant schema guard", KR(ret));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, base_table_id, base_table_schema))) {
     LOG_WARN("failed to get base table schema", KR(ret), K(base_table_id));
+  } else if (OB_NOT_NULL(base_table_schema) && base_table_schema->is_materialized_view()
+             && OB_FAIL(schema_guard.get_table_schema(tenant_id_, base_table_schema->get_data_table_id(), base_table_schema))) {
+    LOG_WARN("failed to get current mview container schema", KR(ret), KPC(base_table_schema));
   } else if (OB_ISNULL(base_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("base table schema is null", KR(ret));
+  } else if (OB_FALSE_IT(base_table_id = base_table_schema->get_table_id())) {
   } else if (base_table_schema->has_mlog_table()) {
     bool has_mlog_task = false;
     if ((OB_FAIL(schema_guard.get_table_schema(tenant_id_, base_table_schema->get_mlog_tid(), mlog_schema)))) {
@@ -617,37 +631,82 @@ int ObBuildMViewTask::start_refresh_mview_task()
 {
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BUILD_MVIEW_BEFORE_COMPLETE_REFRESH);
+  bool build_deferred = false;
+  uint64_t define_user_id = OB_INVALID_ID;
+  share::schema::ObMViewBuildMode build_mode = share::schema::ObMViewBuildMode::MAX;
+  bool is_mview_available = false;
+  bool is_refresh_queuing_enabled = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (ObDDLTaskStatus::START_REFRESH_MVIEW_TASK != task_status_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("task status not match", KR(ret), K(task_status_));
-  } else if (ATOMIC_LOAD(&mview_complete_refresh_task_id_) == 0) {
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else if (OB_FAIL(ObMViewUtils::fetch_mview_build_info(*GCTX.sql_proxy_,
+                                                          tenant_id_,
+                                                          mview_table_id_,
+                                                          define_user_id,
+                                                          build_mode,
+                                                          is_mview_available))) {
+    LOG_WARN("failed to fetch mview build info", KR(ret), K_(tenant_id), K_(mview_table_id));
+  } else if (OB_UNLIKELY(is_mview_available)) {
+    LOG_INFO("mview already available, skip scheduling initial refresh",
+             K(tenant_id_), K(mview_table_id_));
+  } else if (share::schema::ObMViewBuildMode::DEFERRED == build_mode) {
+    build_deferred = true;
+  } else if (0 != ATOMIC_LOAD(&mview_complete_refresh_task_id_)
+             || 0 != ATOMIC_LOAD(&mview_pending_refresh_id_)) {
+    // do nothing
+  } else if (OB_UNLIKELY(ERRSIM_START_REFRESH_MVIEW_TASK_ERROR)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("errsim ERRSIM_START_REFRESH_MVIEW_TASK_ERROR", KR(ret));
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+  } else if (OB_FAIL(ObMViewPendingTaskUtils::is_initial_refresh_queuing_enabled(tenant_id_,
+                                                                      is_refresh_queuing_enabled))) {
+    LOG_WARN("failed to check whether initial refresh queuing is enabled", KR(ret), K_(tenant_id));
+  } else if (is_refresh_queuing_enabled) {
+    int64_t refresh_id = OB_INVALID_ID;
+    if (OB_FAIL(ObMViewPendingTaskUtils::schedule_initial_mview_refresh(tenant_id_,
+                                                                        define_user_id,
+                                                                        mview_table_id_,
+                                                                        parallelism_,
+                                                                        refresh_id))) {
+      LOG_WARN("failed to schedule initial mview refresh", KR(ret));
+    } else if (OB_FAIL(set_mview_pending_refresh_id(refresh_id))) {
+      LOG_WARN("failed to set mview pending refresh id", KR(ret), K(refresh_id));
+    }
+    LOG_INFO("start mview complete refresh", K(mview_pending_refresh_id_));
+#endif
+  } else if (OB_FAIL(set_mview_purge_barrier())) {
+    LOG_WARN("failed to set mview purge barrier", KR(ret));
+  } else {
     ObMViewCompleteRefreshRes res;
-    if (OB_FAIL(set_mview_purge_barrier())) {
-      LOG_WARN("failed to set mview purge barrier", KR(ret));
-    } else if (OB_UNLIKELY(ERRSIM_START_REFRESH_MVIEW_TASK_ERROR)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("errsim ERRSIM_START_REFRESH_MVIEW_TASK_ERROR", KR(ret));
-    } else if (OB_FAIL(mview_complete_refresh(res))) {
+    if (OB_FAIL(mview_complete_refresh(res))) {
       LOG_WARN("failed to do mview complete refresh", KR(ret));
     } else {
-      LOG_INFO("start mview complete refresh", K(mview_complete_refresh_task_id_));
       if (OB_FAIL(set_mview_complete_refresh_task_id(res.task_id_))) {
-        LOG_WARN("fail to set mview_complete_refresh_task_id", KR(ret));
+        LOG_WARN("fail to set mview complete refresh task id", KR(ret));
       }
+      LOG_INFO("start mview complete refresh", K(mview_complete_refresh_task_id_));
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !build_deferred && OB_UNLIKELY(is_mview_available)) {
+    // Refresh finished before this tick (e.g. RS failover after swap).
+  } else if (OB_SUCC(ret) && !build_deferred) {
     if (OB_FAIL(update_task_message())) {
       LOG_WARN("fail to update task message", KR(ret));
     }
   }
 
-  (void)switch_status(ObDDLTaskStatus::WAIT_CHILD_TASK_FINISH, true, ret);
-  LOG_INFO("start refresh mview task finished", KR(ret), K(*this));
+  (void)switch_status((is_mview_available || build_deferred) ? ObDDLTaskStatus::TAKE_EFFECT
+                                                             : ObDDLTaskStatus::WAIT_CHILD_TASK_FINISH,
+                        true, ret);
+  LOG_INFO("start refresh mview task finished", KR(ret), K(build_deferred),
+           K(mview_complete_refresh_task_id_), K(mview_pending_refresh_id_), K(*this));
   return ret;
 }
 
@@ -705,9 +764,11 @@ int ObBuildMViewTask::update_task_message()
   common::ObArenaAllocator allocator("ObBuildMVTask");
   const int64_t serialize_param_size = get_serialize_param_size();
 
-  if (ATOMIC_LOAD(&mview_complete_refresh_task_id_) <= 0) {
+  if (ATOMIC_LOAD(&mview_complete_refresh_task_id_) <= 0
+      && ATOMIC_LOAD(&mview_pending_refresh_id_) <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("mview_complete_refresh_task_id_ should not be 0", KR(ret), K(mview_complete_refresh_task_id_));
+    LOG_WARN("at least one refresh id must be set", KR(ret),
+             K(mview_complete_refresh_task_id_), K(mview_pending_refresh_id_));
   } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(serialize_param_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", KR(ret), K(serialize_param_size));
@@ -735,7 +796,24 @@ int ObBuildMViewTask::set_mview_complete_refresh_task_id(const int64_t task_id)
   } else if (!ATOMIC_CAS(&mview_complete_refresh_task_id_, 0, task_id)) {
     if (mview_complete_refresh_task_id_ != task_id) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("mview_complete_refresh_task_id_ must = task_id", KR(ret), K(mview_complete_refresh_task_id_), K(task_id));
+      LOG_WARN("mview_complete_refresh_task_id_ must = task_id", KR(ret),
+               K(mview_complete_refresh_task_id_), K(task_id));
+    }
+  }
+  return ret;
+}
+
+int ObBuildMViewTask::set_mview_pending_refresh_id(const int64_t refresh_id)
+{
+  int ret = OB_SUCCESS;
+  if (refresh_id <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("refresh_id should not be 0", KR(ret), K(refresh_id));
+  } else if (!ATOMIC_CAS(&mview_pending_refresh_id_, 0, refresh_id)) {
+    if (mview_pending_refresh_id_ != refresh_id) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mview_pending_refresh_id_ must = refresh_id", KR(ret),
+               K(mview_pending_refresh_id_), K(refresh_id));
     }
   }
   return ret;
@@ -744,7 +822,10 @@ int ObBuildMViewTask::set_mview_complete_refresh_task_id(const int64_t task_id)
 int ObBuildMViewTask::on_child_task_prepare(const int64_t task_id)
 {
   int ret = OB_SUCCESS;
-  if (task_id <= 0) {
+  const bool is_pending_path = (0 < ATOMIC_LOAD(&mview_pending_refresh_id_));
+  if (is_pending_path) {
+    // Pending-task path has no child DDL task; callback is a no-op.
+  } else if (task_id <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("task_id should not be 0", KR(ret), K(task_id));
   } else if (ATOMIC_LOAD(&mview_complete_refresh_task_id_) == 0) {
@@ -754,10 +835,11 @@ int ObBuildMViewTask::on_child_task_prepare(const int64_t task_id)
     }
   } else if (task_id != mview_complete_refresh_task_id_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("mview_complete_refresh_task_id_ must = task_id", KR(ret), K(mview_complete_refresh_task_id_), K(task_id));
+    LOG_ERROR("mview_complete_refresh_task_id_ must = task_id", KR(ret),
+              K(mview_complete_refresh_task_id_), K(task_id));
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !is_pending_path) {
     if (ATOMIC_LOAD(&task_status_) == ObDDLTaskStatus::START_REFRESH_MVIEW_TASK) {
       ret = OB_EAGAIN;
       LOG_INFO("wait build mview status to promote", K(mview_complete_refresh_task_id_));
@@ -776,9 +858,7 @@ int ObBuildMViewTask::wait_child_task_finish()
   } else if (ObDDLTaskStatus::WAIT_CHILD_TASK_FINISH != task_status_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("task status not match", KR(ret), K(task_status_));
-  }
-
-  if (OB_SUCC(ret)) {
+  } else if (0 < ATOMIC_LOAD(&mview_complete_refresh_task_id_)) {
     ObAddr unused_addr;
     int64_t unused_user_msg_len = 0;
     ObDDLErrorMessageTableOperator::ObBuildDDLErrorMessage error_message;
@@ -797,6 +877,36 @@ int ObBuildMViewTask::wait_child_task_finish()
       }
       state_finished = true;
     }
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+  } else if (0 < ATOMIC_LOAD(&mview_pending_refresh_id_)) {
+    // task_can_retry() is false outside BUILD_MLOG: propagating probe ret would FAIL the DDL.
+    // Swallow transient probe errors so the framework re-ticks; advance only on terminal + run_stats read.
+    const int64_t refresh_id = ATOMIC_LOAD(&mview_pending_refresh_id_);
+    bool is_terminal = false;
+    if (OB_UNLIKELY(refresh_id <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid refresh id for pending task wait", KR(ret), K(refresh_id));
+    } else {
+      const int probe_ret = ObMViewPendingTaskUtils::probe_pending_task_terminal(GCTX.sql_proxy_,
+                                                                                 tenant_id_,
+                                                                                 refresh_id,
+                                                                                 mview_table_id_,
+                                                                                 is_terminal);
+      if (OB_SUCCESS != probe_ret) {
+        LOG_WARN("probe pending task failed, will retry next tick",
+                 KR(probe_ret), K_(tenant_id), K(refresh_id), K_(mview_table_id));
+      } else if (is_terminal) {
+        if (OB_FAIL(storage::ObMViewExecutorUtil::load_refresh_run_stats_error_message(
+                GCTX.sql_proxy_, tenant_id_, refresh_id))) {
+          LOG_WARN("mview refresh failed or run_stats unreadable", KR(ret),
+                   K_(tenant_id), K(refresh_id));
+        }
+        state_finished = true;
+      }
+    }
+#endif
+  } else {
+    state_finished = true;
   }
 
   if (state_finished || OB_FAIL(ret)) {
@@ -812,6 +922,7 @@ int ObBuildMViewTask::enable_mview()
   int ret = OB_SUCCESS;
   bool state_finished = false;
   ObDDLTaskStatus next_status = ObDDLTaskStatus::SUCCESS;
+  bool is_mview_timer_sched_enabled = false;
   if (IS_NOT_INIT || OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), KP(GCTX.schema_service_));
@@ -849,31 +960,22 @@ int ObBuildMViewTask::enable_mview()
       // mlog may be dropped/replaced by concurrent ddl, we should try again
       ret = OB_EAGAIN;
       LOG_WARN("mlog is not valid", KR(ret));
-    } else if (mview_schema->mv_available()) {
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+    } else if (OB_FAIL(ObMViewPendingTaskUtils::is_mview_timer_sched_enabled(tenant_id_, is_mview_timer_sched_enabled))) {
+      LOG_WARN("failed to check mview timer schedule", KR(ret), K_(tenant_id), K(mview_table_id_));
+    } else if (is_mview_timer_sched_enabled
+               && OB_FAIL(ObMViewPendingTaskUtils::activate_mview_timer(tenant_id_, mview_table_id_))) {
+      LOG_WARN("failed to activate mview timer", KR(ret), K(tenant_id_), K(mview_table_id_));
+#endif
+    } else if (mview_schema->mv_available() ||
+               (0 == ATOMIC_LOAD(&mview_complete_refresh_task_id_)
+                && 0 == ATOMIC_LOAD(&mview_pending_refresh_id_))) {
       state_finished = true;
-      LOG_INFO("build_mview_task enable_mview mview status is already valid",
-          K(mview_schema->get_table_mode()));
-    } else {
-      ObUpdateMViewStatusArg arg;
-      arg.mview_table_id_ = mview_schema->get_table_id();
-      arg.mv_available_flag_ = ObMVAvailableFlag::IS_MV_AVAILABLE;
-      arg.exec_tenant_id_ = tenant_id_;
-      arg.in_offline_ddl_white_list_ = mview_schema->get_table_state_flag() != TABLE_STATE_NORMAL;
-      int64_t ddl_rpc_timeout = 0;
-      if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_,
-          mview_schema->get_table_id(), ddl_rpc_timeout))) {
-        LOG_WARN("failed to get ddl rpc timeout", KR(ret));
-      } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
-      } else if (OB_FAIL(GCTX.rs_rpc_proxy_
-          ->to(GCTX.self_addr())
-          .timeout(ddl_rpc_timeout)
-          .update_mview_status(arg))) {
-        LOG_WARN("failed to update mview status", KR(ret), K(arg));
-      }
+      LOG_INFO("build_mview_task enable_mview finished applying mview state",
+               K(mview_schema->get_table_mode()));
     }
   }
+
 
   if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
     state_finished = true;
@@ -891,6 +993,7 @@ int ObBuildMViewTask::check_mlog_valid(bool &is_valid)
   int ret = OB_SUCCESS;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
   uint64_t data_version = 0;
+  ObSchemaGetterGuard schema_guard;
   is_valid = true;
 
   const ObSEArray<obrpc::ObMVRequiredColumnsInfo, 8> &required_columns_infos = arg_.required_columns_infos_;
@@ -904,24 +1007,24 @@ int ObBuildMViewTask::check_mlog_valid(bool &is_valid)
     // no need to check
   } else if (required_columns_infos.empty()) {
     // no need to check
+  } else if (OB_ISNULL(root_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root_service_ is null", KR(ret));
+  } else if (OB_FAIL(root_service_->get_ddl_service()
+                         .get_tenant_schema_guard_with_version_in_inner_table(tenant_id_,
+                                                                              schema_guard))) {
+    LOG_WARN("failed to get tenant schema guard", KR(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < required_columns_infos.count(); ++i) {
       const obrpc::ObMVRequiredColumnsInfo &required_columns_info = required_columns_infos.at(i);
-      const uint64_t base_table_id = required_columns_info.base_table_id_;
       const ObSEArray<uint64_t, 16> &required_columns = required_columns_info.required_columns_;
-      ObSchemaGetterGuard schema_guard;
-      const ObTableSchema *base_table_schema = nullptr;
-      const ObTableSchema *mlog_schema = nullptr;
-      if (root_service_ == nullptr) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("root_service_ is null", KR(ret));
-      } else if (OB_FAIL(root_service_->get_ddl_service()
-                             .get_tenant_schema_guard_with_version_in_inner_table(tenant_id_,
-                                                                                  schema_guard))) {
-        LOG_WARN("failed to get tenant schema guard", KR(ret));
-      } else if (OB_FAIL(
-                     schema_guard.get_table_schema(tenant_id_, base_table_id, base_table_schema))) {
-        LOG_WARN("failed to get base table schema", KR(ret), K(base_table_id));
+      const ObTableSchema *base_table_schema = NULL;
+      const ObTableSchema *mlog_schema = NULL;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, required_columns_info.base_table_id_, base_table_schema))) {
+        LOG_WARN("failed to get base table schema", KR(ret), K(required_columns_info.base_table_id_));
+      } else if (OB_NOT_NULL(base_table_schema) && base_table_schema->is_materialized_view()
+                 && OB_FAIL(schema_guard.get_table_schema(tenant_id_, base_table_schema->get_data_table_id(), base_table_schema))) {
+        LOG_WARN("failed to get current mview container schema", KR(ret), KPC(base_table_schema));
       } else if (OB_ISNULL(base_table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("base table schema is null", KR(ret));
@@ -1012,7 +1115,8 @@ int ObBuildMViewTask::serialize_params_to_message(char *buf, const int64_t buf_l
   } else if (OB_FAIL(arg_.serialize(buf, buf_len, pos))) {
     LOG_WARN("serialize create index arg failed", KR(ret));
   } else {
-    LST_DO_CODE(OB_UNIS_ENCODE, mview_complete_refresh_task_id_);
+    LST_DO_CODE(OB_UNIS_ENCODE, mview_complete_refresh_task_id_,
+                                mview_pending_refresh_id_);
   }
   return ret;
 }
@@ -1039,7 +1143,17 @@ int ObBuildMViewTask::deserialize_params_from_message(
     LST_DO_CODE(OB_UNIS_DECODE, mview_complete_refresh_task_id);
     if (mview_complete_refresh_task_id > 0) {
       if (OB_FAIL(set_mview_complete_refresh_task_id(mview_complete_refresh_task_id))) {
-        LOG_WARN("fail to set mview_complete_refresh_task_id", KR(ret));
+        LOG_WARN("fail to set mview complete refresh task id", KR(ret));
+      }
+    }
+    // Trailing field: pre-upgrade messages lack it; absence implies legacy DDL path.
+    if (OB_SUCC(ret) && pos < data_len) {
+      int64_t pending_refresh_id = 0;
+      LST_DO_CODE(OB_UNIS_DECODE, pending_refresh_id);
+      if (pending_refresh_id > 0) {
+        if (OB_FAIL(set_mview_pending_refresh_id(pending_refresh_id))) {
+          LOG_WARN("fail to set mview pending refresh id", KR(ret));
+        }
       }
     }
   }
@@ -1050,6 +1164,7 @@ int64_t ObBuildMViewTask::get_serialize_param_size() const
 {
   return arg_.get_serialize_size()
       + serialization::encoded_length_i64(mview_complete_refresh_task_id_)
+      + serialization::encoded_length_i64(mview_pending_refresh_id_)
       + ObDDLTask::get_serialize_param_size();
 }
 

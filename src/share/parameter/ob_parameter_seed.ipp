@@ -3360,6 +3360,10 @@ DEF_BOOL(_enable_mlog_compaction_purge, OB_TENANT_PARAMETER, "True",
          "enable/disable mlog purge by compaction",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_enable_mlog_seq_first_rowkey, OB_TENANT_PARAMETER, "True",
+         "enable/disable placing SEQUENCE$$ as the first rowkey column of a newly created mlog",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_INT(approx_count_distinct_precision, OB_TENANT_PARAMETER, "10", "[4, 16]",
         "specify the result accuracy of approx_count_distinct",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

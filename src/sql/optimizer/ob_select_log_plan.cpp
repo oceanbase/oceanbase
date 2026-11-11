@@ -2903,7 +2903,7 @@ int ObSelectLogPlan::candi_allocate_set(const ObIArray<ObSelectLogPlan*> &child_
     if (OB_FAIL(candi_allocate_recursive_union(child_plans))) {
       LOG_WARN("failed to allocate recursive union", K(ret));
     }
-  } else if (ObSelectStmt::UNION == select_stmt->get_set_op() &&
+  } else if (ObSetRelation::UNION == select_stmt->get_set_op() &&
             (!select_stmt->is_set_distinct() || child_plans.count() > 2)) {
     // generate union all or union distinct with more than two children plans
     if (OB_FAIL(candi_allocate_union_all(child_plans))) {
@@ -3768,7 +3768,7 @@ int ObSelectLogPlan::allocate_union_all_as_top(const ObIArray<ObLogicalOperator*
     LOG_WARN("failed to init set exprs for log_set");
   } else {
     set_op->assign_set_distinct(false);
-    set_op->assign_set_op(ObSelectStmt::UNION);
+    set_op->assign_set_op(ObSetRelation::UNION);
     set_op->set_algo_type(SetAlgo::MERGE_SET);
     set_op->set_distributed_algo(dist_set_method);
     set_op->assign_set_is_distinct_pushed_down(is_distinct_pushed_down);
@@ -4188,7 +4188,7 @@ int ObSelectLogPlan::candi_allocate_distinct_set(const ObIArray<ObSelectLogPlan*
 int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
                                                  const ObIArray<ObRawExpr*> &left_set_keys,
                                                  const ObIArray<ObRawExpr*> &right_set_keys,
-                                                 const ObSelectStmt::SetOperator set_op,
+                                                 const ObSetRelation::SetOperator set_op,
                                                  const SetAlgo set_method,
                                                  ObLogicalOperator &left_child,
                                                  ObLogicalOperator &right_child,
@@ -4260,7 +4260,7 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
     bool is_compatible = false;
     if (left_sharding->is_distributed() && right_sharding->is_match_all() &&
         !right_child.get_contains_das_op() && !right_child.get_contains_fake_cte() &&
-        (ObSelectStmt::INTERSECT == set_op || ObSelectStmt::EXCEPT == set_op) &&
+        (ObSetRelation::INTERSECT == set_op || ObSetRelation::EXCEPT == set_op) &&
         OB_FAIL(left_child.check_sharding_compatible_with_reduce_expr(left_set_keys, is_compatible))) {
       LOG_WARN("failed to check sharding compatible with reduce expr", K(ret));
     } else if (is_compatible) {
@@ -4277,7 +4277,7 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
     bool is_compatible = false;
     if (right_sharding->is_distributed() && left_sharding->is_match_all() &&
         !left_child.get_contains_das_op() && !left_child.get_contains_fake_cte() &&
-        ObSelectStmt::INTERSECT == set_op &&
+        ObSetRelation::INTERSECT == set_op &&
         OB_FAIL(right_child.check_sharding_compatible_with_reduce_expr(right_set_keys, is_compatible))) {
       LOG_WARN("failed to check sharding compatible with reduce expr", K(ret));
     } else if (is_compatible) {
@@ -4630,7 +4630,7 @@ int ObSelectLogPlan::check_if_set_match_rehash(const EqualSets &equal_sets,
 int ObSelectLogPlan::generate_merge_set_plans(const EqualSets &equal_sets,
                                               const ObIArray<ObRawExpr*> &left_set_keys,
                                               const ObIArray<ObRawExpr*> &right_set_keys,
-                                              const ObSelectStmt::SetOperator set_op,
+                                              const ObSetRelation::SetOperator set_op,
                                               ObIArray<ObSEArray<CandidatePlan, 16>> &left_candidate_list,
                                               ObIArray<ObSEArray<CandidatePlan, 16>> &right_candidate_list,
                                               const bool ignore_hint,
@@ -4711,7 +4711,7 @@ int ObSelectLogPlan::inner_generate_merge_set_plans(const EqualSets &equal_sets,
                                                     const ObIArray<ObRawExpr*> &left_set_keys,
                                                     const ObIArray<ObRawExpr*> &right_set_keys,
                                                     const ObIArray<MergeKeyInfo*> &left_merge_keys,
-                                                    const ObSelectStmt::SetOperator set_op,
+                                                    const ObSetRelation::SetOperator set_op,
                                                     ObIArray<CandidatePlan> &left_candidates,
                                                     ObIArray<CandidatePlan> &right_candidates,
                                                     const bool ignore_hint,
@@ -5135,7 +5135,7 @@ int ObSelectLogPlan::create_merge_set_plan(const EqualSets &equal_sets,
                                            ObLogicalOperator *right_child,
                                            const ObIArray<ObRawExpr*> &left_set_keys,
                                            const ObIArray<ObRawExpr*> &right_set_keys,
-                                           const ObSelectStmt::SetOperator set_op,
+                                           const ObSetRelation::SetOperator set_op,
                                            const DistAlgo dist_set_method,
                                            const ObIArray<ObOrderDirection> &order_directions,
                                            const ObIArray<int64_t> &map_array,
@@ -5247,13 +5247,13 @@ int ObSelectLogPlan::create_merge_set_plan(const EqualSets &equal_sets,
 }
 
 int ObSelectLogPlan::get_allowed_branch_order(const bool ignore_hint,
-                                              const ObSelectStmt::SetOperator set_op,
+                                              const ObSetRelation::SetOperator set_op,
                                               bool &no_swap,
                                               bool &swap)
 {
   int ret = OB_SUCCESS;
   no_swap = true;
-  swap = ObSelectStmt::EXCEPT != set_op;
+  swap = ObSetRelation::EXCEPT != set_op;
   bool hint_valid = false;
   bool need_swap = false;
   if (ignore_hint) {
@@ -5274,7 +5274,7 @@ int ObSelectLogPlan::get_allowed_branch_order(const bool ignore_hint,
 int ObSelectLogPlan::generate_hash_set_plans(const EqualSets &equal_sets,
                                              const ObIArray<ObRawExpr*> &left_set_keys,
                                              const ObIArray<ObRawExpr*> &right_set_keys,
-                                             const ObSelectStmt::SetOperator set_op,
+                                             const ObSetRelation::SetOperator set_op,
                                              const ObIArray<CandidatePlan> &left_best_plans,
                                              const ObIArray<CandidatePlan> &right_best_plans,
                                              const bool ignore_hint,
@@ -5311,7 +5311,7 @@ int ObSelectLogPlan::generate_hash_set_plans(const EqualSets &equal_sets,
 int ObSelectLogPlan::inner_generate_hash_set_plans(const EqualSets &equal_sets,
                                                    const ObIArray<ObRawExpr*> &left_set_keys,
                                                    const ObIArray<ObRawExpr*> &right_set_keys,
-                                                   const ObSelectStmt::SetOperator set_op,
+                                                   const ObSetRelation::SetOperator set_op,
                                                    const ObIArray<CandidatePlan> &left_best_plans,
                                                    const ObIArray<CandidatePlan> &right_best_plans,
                                                    const bool ignore_hint,
@@ -5374,7 +5374,7 @@ int ObSelectLogPlan::create_hash_set_plan(const EqualSets &equal_sets,
                                           ObLogicalOperator *right_child,
                                           const ObIArray<ObRawExpr*> &left_set_keys,
                                           const ObIArray<ObRawExpr*> &right_set_keys,
-                                          const ObSelectStmt::SetOperator set_op,
+                                          const ObSetRelation::SetOperator set_op,
                                           DistAlgo dist_set_method,
                                           CandidatePlan &hash_plan)
 {
@@ -5633,7 +5633,7 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
                                                ObLogicalOperator &right_child,
                                                const ObIArray<ObRawExpr*> &left_set_keys,
                                                const ObIArray<ObRawExpr*> &right_set_keys,
-                                               const ObSelectStmt::SetOperator set_op,
+                                               const ObSetRelation::SetOperator set_op,
                                                DistAlgo set_method,
                                                ObExchangeInfo &left_exch_info,
                                                ObExchangeInfo &right_exch_info)
@@ -5698,8 +5698,8 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
                                                           right_child,
                                                           left_exch_info))) {
       LOG_WARN("failed to compute repartition distribution info", K(ret));
-    } else if (ObSelectStmt::SetOperator::UNION == set_op ||
-               ObSelectStmt::SetOperator::EXCEPT == set_op) {
+    } else if (ObSetRelation::UNION == set_op ||
+               ObSetRelation::EXCEPT == set_op) {
       ObPQDistributeMethod::Type dist_method = ObPQDistributeMethod::RANDOM;
       bool is_unique = false;
       if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(left_set_keys,
@@ -5730,7 +5730,7 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
                                                            left_child,
                                                            right_exch_info))) {
       LOG_WARN("failed to compute repartition distribution info", K(ret));
-    } else if (ObSelectStmt::SetOperator::UNION == set_op) {
+    } else if (ObSetRelation::UNION == set_op) {
       ObPQDistributeMethod::Type dist_method = ObPQDistributeMethod::RANDOM;
       bool is_unique = false;
       if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(right_set_keys,
@@ -5763,8 +5763,8 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
                                                       right_child,
                                                       left_exch_info))) {
       LOG_WARN("failed to compute repartition distribution info", K(ret));
-    } else if (ObSelectStmt::SetOperator::UNION == set_op ||
-               ObSelectStmt::SetOperator::EXCEPT == set_op) {
+    } else if (ObSetRelation::UNION == set_op ||
+               ObSetRelation::EXCEPT == set_op) {
       ObPQDistributeMethod::Type dist_method = ObPQDistributeMethod::RANDOM;
       bool is_unique = false;
       if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(left_set_keys,
@@ -5822,7 +5822,7 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
                                                       left_child,
                                                       right_exch_info))) {
       LOG_WARN("failed to compute repartition distribution info", K(ret));
-    } else if (ObSelectStmt::SetOperator::UNION == set_op) {
+    } else if (ObSetRelation::UNION == set_op) {
       ObPQDistributeMethod::Type dist_method = ObPQDistributeMethod::RANDOM;
       bool is_unique = false;
       if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(right_set_keys,

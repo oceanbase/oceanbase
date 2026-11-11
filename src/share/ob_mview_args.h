@@ -25,40 +25,32 @@ public:
   common::ObObj start_time_;
   ObString next_time_expr_;
   ObString exec_env_;
+  // unused, keep for serialization compatibility
   int64_t parallel_;
   int64_t refresh_dop_;
   share::schema::ObMVNestedRefreshMode nested_refresh_mode_;
   uint64_t compat_version_;
-  int64_t refresh_interval_;
+  int64_t refresh_interval_; // microseconds
   share::schema::ObMViewBuildMode build_mode_;
   bool sched_suspended_;
 
-  ObMVRefreshInfo() :
-  refresh_method_(share::schema::ObMVRefreshMethod::NEVER),
-  refresh_mode_(share::schema::ObMVRefreshMode::DEMAND),
-  start_time_(),
-  next_time_expr_(),
-  exec_env_(),
-  parallel_(OB_INVALID_COUNT),
-  refresh_dop_(0),
-  nested_refresh_mode_(share::schema::ObMVNestedRefreshMode::INDIVIDUAL),
-  compat_version_(0),
-  refresh_interval_(0),
-  build_mode_(share::schema::ObMViewBuildMode::IMMEDIATE),
-  sched_suspended_(false) {}
+  ObMVRefreshInfo()
+  {
+    reset();
+  }
 
   void reset() {
-    refresh_method_ = share::schema::ObMVRefreshMethod::NEVER;
-    refresh_mode_ = share::schema::ObMVRefreshMode::DEMAND;
+    refresh_method_ = share::schema::ObMVRefreshMethod::MAX;
+    refresh_mode_ = share::schema::ObMVRefreshMode::MAX;
     start_time_.reset();
     next_time_expr_.reset();
     exec_env_.reset();
-    parallel_ = OB_INVALID_COUNT;
-    refresh_dop_ = 0;
-    nested_refresh_mode_ = share::schema::ObMVNestedRefreshMode::INDIVIDUAL;
-    compat_version_ = 0;
-    refresh_interval_ = 0;
-    build_mode_ = share::schema::ObMViewBuildMode::IMMEDIATE;
+    parallel_ = -1;
+    refresh_dop_ = -1;
+    nested_refresh_mode_ = share::schema::ObMVNestedRefreshMode::MAX;
+    compat_version_ = OB_INVALID_VERSION;
+    refresh_interval_ = OB_INVALID_TIMESTAMP;
+    build_mode_ = share::schema::ObMViewBuildMode::MAX;
     sched_suspended_ = false;
   }
 
@@ -99,15 +91,16 @@ public:
   : base_table_id_(OB_INVALID_ID)
   {
   }
-  ObMVRequiredColumnsInfo(const uint64_t base_table_id, const ObSEArray<uint64_t, 16> &required_columns)
+  ObMVRequiredColumnsInfo(const uint64_t base_object_id, const ObSEArray<uint64_t, 16> &required_columns)
   {
-    base_table_id_ = base_table_id;
+    base_table_id_ = base_object_id;
     required_columns_.assign(required_columns);
   }
   int assign(const ObMVRequiredColumnsInfo &other);
   TO_STRING_KV(K_(base_table_id), K_(required_columns));
 
 public:
+  // Stable base object ID: table ID for a normal table, MView ID (not the container table ID) for a materialized view.
   uint64_t base_table_id_;
   ObSEArray<uint64_t, 16> required_columns_;
 };
@@ -231,6 +224,8 @@ public:
   bool is_valid() const;
   void reset();
   int assign(const ObMViewRefreshInfo &other);
+  int64_t get_deep_copy_size() const { return select_sql_.length(); }
+  int deep_copy(const ObMViewRefreshInfo &other, char *buf, const int64_t buf_size);
   TO_STRING_KV(K_(mview_table_id),
                K_(last_refresh_scn),
                K_(refresh_scn),
@@ -335,6 +330,11 @@ public:
     is_alter_refresh_method_ = true;
     refresh_method_ = refresh_method;
   }
+  void set_refresh_mode(share::schema::ObMVRefreshMode refresh_mode)
+  {
+    is_alter_refresh_mode_ = true;
+    refresh_mode_ = refresh_mode;
+  }
   void set_refresh_dop(int64_t refresh_dop)
   {
     is_alter_refresh_dop_ = true;
@@ -349,6 +349,10 @@ public:
   {
     is_alter_refresh_next_ = true;
     next_time_expr_ = next_time_expr;
+  }
+  void set_refresh_interval(int64_t refresh_interval)
+  {
+    refresh_interval_ = refresh_interval;
   }
   void set_alter_nested_refresh_mode(const share::schema::ObMVNestedRefreshMode nested_refresh_mode)
   {
@@ -366,6 +370,13 @@ public:
     is_alter_compat_version_ = true;
     compat_version_ = compat_version;
   }
+  void set_sched_suspended()
+  {
+    is_alter_sched_suspended_ = true;
+    sched_suspended_ = true;
+  }
+  bool is_alter_sched_suspended() const { return is_alter_sched_suspended_; }
+  bool is_sched_suspended() const { return sched_suspended_; }
   const ObString &get_exec_env() const { return exec_env_; }
   bool is_alter_on_query_computation() const { return is_alter_on_query_computation_; }
   bool get_enable_on_query_computation() const { return enable_on_query_computation_; }
@@ -373,6 +384,8 @@ public:
   bool get_enable_query_rewrite() const { return enable_query_rewrite_; }
   bool is_alter_refresh_method() const { return is_alter_refresh_method_; }
   share::schema::ObMVRefreshMethod get_refresh_method() const { return refresh_method_; }
+  bool is_alter_refresh_mode() const { return is_alter_refresh_mode_; }
+  share::schema::ObMVRefreshMode get_refresh_mode() const { return refresh_mode_; }
   bool is_alter_refresh_dop() const { return is_alter_refresh_dop_; }
   int64_t get_refresh_dop() const { return refresh_dop_; }
   bool is_alter_refresh_start() const { return is_alter_refresh_start_; }
@@ -386,6 +399,7 @@ public:
   int64_t get_table_dop() const { return table_dop_; }
   bool is_alter_compat_version() const { return is_alter_compat_version_; }
   uint64_t get_compat_version() const { return compat_version_; }
+  int64_t get_refresh_interval() const { return refresh_interval_; }
 private:
   ObString exec_env_;
   bool is_alter_on_query_computation_;
@@ -407,7 +421,7 @@ private:
   int64_t table_dop_;
   bool is_alter_compat_version_;
   uint64_t compat_version_;
-  int64_t refresh_interval_;
+  int64_t refresh_interval_; // microseconds
   bool is_alter_sched_suspended_;
   bool sched_suspended_;
   bool is_alter_refresh_mode_;

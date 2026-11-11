@@ -116,7 +116,7 @@ int64_t ObInsertStmt::to_string(char *buf, const int64_t buf_len) const
   } else {
     J_KV(N_STMT_TYPE, ((int)stmt_type_),
          N_TABLE, table_items_,
-         N_FROM, from_items_,
+         N_FROM, get_from_items(),
          N_PARTITION_EXPR, part_expr_items_,
          N_IS_IGNORE, ignore_,
          N_COLUMN_CONV_FUNCTION, table_info_.column_conv_exprs_,

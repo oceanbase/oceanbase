@@ -715,7 +715,7 @@ int ObTransformPredicateMoveAround::check_pullup_predicates(ObSelectStmt *stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is not a set stmt", K(ret));
   } else if (OB_FALSE_IT(context.init(&stmt->get_query_ctx()->calculable_items_))) {
-  } else if (stmt->get_set_op() == ObSelectStmt::UNION && !stmt->is_recursive_union()) {
+  } else if (stmt->get_set_op() == ObSetRelation::UNION && !stmt->is_recursive_union()) {
     //找出同构谓词
     for (int64_t i = 0; OB_SUCC(ret) && i < left_pullup_preds.count(); ++i) {
       bool find = false;
@@ -738,7 +738,7 @@ int ObTransformPredicateMoveAround::check_pullup_predicates(ObSelectStmt *stmt,
     } else if (OB_FAIL(append(expr_constraints_, context.expr_cons_info_))) {
       LOG_WARN("append expr cons info failed", K(ret));
     } else {/*do nothing*/}
-  } else if (stmt->get_set_op() == ObSelectStmt::INTERSECT) {
+  } else if (stmt->get_set_op() == ObSetRelation::INTERSECT) {
     //合并谓词
     for (int64_t i = 0; OB_SUCC(ret) && i < left_pullup_preds.count(); ++i) {
       bool find = false;
@@ -773,7 +773,7 @@ int ObTransformPredicateMoveAround::check_pullup_predicates(ObSelectStmt *stmt,
     } else if (OB_FAIL(append(expr_constraints_, context.expr_cons_info_))) {
       LOG_WARN("append expr cons info failed", K(ret));
     } else {/*do nothing*/}
-  } else if (stmt->get_set_op() == ObSelectStmt::EXCEPT) {
+  } else if (stmt->get_set_op() == ObSetRelation::EXCEPT) {
     if (OB_FAIL(append(output_pullup_preds, left_pullup_preds))) {
       LOG_WARN("append pullup preds failed", K(ret));
     } else {/*do nothing*/}
@@ -1571,7 +1571,7 @@ int ObTransformPredicateMoveAround::pushdown_into_set_stmt(ObSelectStmt *stmt,
                                                false_cond_exists))) {
         LOG_WARN("failed to check false condition", K(ret));
       } else if (!false_cond_exists && OB_FAIL(pushdown_into_set_stmt(child_query.at(i),
-                                                stmt->get_set_op() == ObSelectStmt::UNION ?
+                                                stmt->get_set_op() == ObSetRelation::UNION ?
                                                 dummy_pullup_preds : pullup_preds,
                                                 input_preds, stmt))) {
         LOG_WARN("failed to pushdown into set stmt", K(ret));
@@ -1605,7 +1605,7 @@ int ObTransformPredicateMoveAround::check_pushdown_predicates(ObSelectStmt *stmt
     LOG_WARN("stmt is not a set stmt", K(ret));
   } else if (stmt->is_recursive_union()) {
     /*do nothing*/
-  } else if (stmt->get_set_op() == ObSelectStmt::UNION) {
+  } else if (stmt->get_set_op() == ObSetRelation::UNION) {
     //对于未成功下推的谓词，需要合并加回上层
     for (int64_t i = 0; OB_SUCC(ret) && i < right_pushdown_preds.count(); ++i) {
       if (ObPredicateDeduce::find_equal_expr(left_pushdown_preds, right_pushdown_preds.at(i))) {
@@ -1617,7 +1617,7 @@ int ObTransformPredicateMoveAround::check_pushdown_predicates(ObSelectStmt *stmt
     if (OB_SUCC(ret) && OB_FAIL(output_pushdown_preds.assign(left_pushdown_preds))) {
       LOG_WARN("assign predicated failed", K(ret));
     } else {/*do nothing*/}
-  } else if (stmt->get_set_op() == ObSelectStmt::INTERSECT) {
+  } else if (stmt->get_set_op() == ObSetRelation::INTERSECT) {
     //对于左右两侧均未成功下推的谓词，需要加回上层
     output_pushdown_preds.reset();
     for (int64_t i = 0; OB_SUCC(ret) && i < right_pushdown_preds.count(); ++i) {
@@ -1627,7 +1627,7 @@ int ObTransformPredicateMoveAround::check_pushdown_predicates(ObSelectStmt *stmt
         LOG_WARN("push back preds failed", K(ret));
       } else {/*do nothing*/}
     }
-  } else if (stmt->get_set_op() == ObSelectStmt::EXCEPT) {
+  } else if (stmt->get_set_op() == ObSetRelation::EXCEPT) {
     //对于左侧未成功下推的谓词，需要加回上层
     if (OB_FAIL(output_pushdown_preds.assign(left_pushdown_preds))) {
       LOG_WARN("assign predicated failed", K(ret));

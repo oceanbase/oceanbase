@@ -67,7 +67,7 @@ int ObMergeStmtPrinter::print()
       LOG_WARN("failed to print target table", K(ret));
     }
     DATA_PRINTF(" using ");
-    if (OB_SUCC(ret) && print_table(source_table)) {
+    if (OB_SUCC(ret) && print_table(source_table, false, true)) {
       LOG_WARN("failed to print source table", K(ret));
     }
     DATA_PRINTF(" on ( ");

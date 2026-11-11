@@ -3294,6 +3294,7 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_STDDEV_SAMP || \
                          ((op) >= T_FUN_ARG_MIN && (op) <= T_FUN_ARG_MAX) || \
                          (op) == T_FUN_ANY || \
+                         (op) == T_FUN_ANY_VALUE || \
                          (op) == T_FUN_ARBITRARY || \
                          (op) == T_FUN_AVG_WEIGHTED || \
                          (op) == T_FUN_SYS_COUNT_INROW || \

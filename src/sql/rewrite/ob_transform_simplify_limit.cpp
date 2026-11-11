@@ -284,7 +284,7 @@ int ObTransformSimplifyLimit::check_can_pushdown_limit_order(ObSelectStmt& upper
       OB_ISNULL(view_stmt = table->ref_query_) ||
       view_stmt->is_hierarchical_query() || 
       !view_stmt->is_set_stmt() ||
-      ObSelectStmt::UNION != view_stmt->get_set_op()) {
+      ObSetRelation::UNION != view_stmt->get_set_op()) {
     can_push = false;
   } else if (view_stmt->has_limit() ||
              NULL == upper_stmt.get_limit_expr() ||

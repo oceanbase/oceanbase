@@ -21,16 +21,20 @@ namespace oceanbase
 namespace unittest
 {
 
-// Row that mirrors the 16 columns of the load_tasks_batch SELECT.
-// Field order matches the array initializer convention used by the tests.
-// svr_ip/svr_port were added in the session_id commit; all initializers must
-// supply them explicitly (nullptr/0 for tasks that were never dispatched).
+// Row that mirrors the 15 columns of the load_tasks_batch SELECT.
+// Field order matches build_load_tasks_sql column order:
+//   refresh_id, mview_id, seq, target_data_sync_scn, status, flags, skip_cnt,
+//   retry_count, next_retry_ts, refresh_method, refresh_parallel, start_time_ts,
+//   svr_ip, svr_port, timeout_us
+// next_retry_ts_is_null is test-only (models NULL next_retry_ts from SQL).
 struct FakeRow
 {
   // Read via get_int(name, int64_t&)
   int64_t  refresh_id;
   int64_t  mview_id;
   int64_t  seq;
+  // Read via get_uint(name, uint64_t&)
+  uint64_t target_data_sync_scn;
   int64_t  status;
   int64_t  flags;
   int64_t  skip_cnt;
@@ -38,19 +42,13 @@ struct FakeRow
   int64_t  next_retry_ts;
   int64_t  refresh_method;
   int64_t  refresh_parallel;
-  int64_t  gmt_create_ts;
-  int64_t  gmt_modified_ts;
-  // dep_mview_id nullable; when dep_is_null is true get_int returns OB_ERR_NULL_VALUE
-  int64_t  dep_mview_id;
-  bool     dep_is_null;
-  // Read via get_uint(name, uint64_t&)
-  uint64_t target_data_sync_scn;
-  // next_retry_ts is read with EXTRACT_INT_FIELD_MYSQL_SKIP_RET; null is silently 0
-  bool     next_retry_ts_is_null;
-  // svr_ip/svr_port added in session_id commit (new columns on pending task table).
-  // nullptr → EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET treats as NULL → svr_addr_.reset().
+  int64_t  start_time_ts;
+  // Read via get_varchar/get_int for svr addr; nullptr → svr_addr_.reset().
   const char *svr_ip;
   int64_t     svr_port;
+  int64_t     timeout_us;
+  // next_retry_ts is read with EXTRACT_INT_FIELD_MYSQL_SKIP_RET; null is silently 0
+  bool     next_retry_ts_is_null;
 
   // Required so ObSEArray<FakeRow>::to_string() can be instantiated.
   int64_t to_string(char *, const int64_t) const { return 0; }
@@ -67,6 +65,7 @@ public:
     int ret = common::OB_SUCCESS;
     rows_.reset();
     cursor_ = -1;
+    min_scn_mode_ = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
       if (OB_FAIL(rows_.push_back(rows[i]))) {
         // propagate
@@ -75,14 +74,33 @@ public:
     return ret;
   }
 
-  void clear() { rows_.reset(); cursor_ = -1; }
+  void clear() { rows_.reset(); cursor_ = -1; min_scn_mode_ = false; }
   void reset_cursor() { cursor_ = -1; }
 
+  void set_min_scn_result(uint64_t min_scn, bool is_null)
+  {
+    min_scn_mode_ = true;
+    min_scn_has_row_ = true;
+    min_scn_ = min_scn;
+    min_scn_is_null_ = is_null;
+    cursor_ = -1;
+  }
+
+  void set_empty_min_scn_result()
+  {
+    min_scn_mode_ = true;
+    min_scn_has_row_ = false;
+    cursor_ = -1;
+  }
+
   // ---------------------------------------------------------------- core
-  int64_t get_column_count() const override { return 16; }
+  int64_t get_column_count() const override { return 15; }
   int close() override { return common::OB_SUCCESS; }
   int next() override
   {
+    if (min_scn_mode_) {
+      return (++cursor_ < (min_scn_has_row_ ? 1 : 0)) ? common::OB_SUCCESS : common::OB_ITER_END;
+    }
     return (++cursor_ < rows_.count()) ? common::OB_SUCCESS : common::OB_ITER_END;
   }
 
@@ -106,13 +124,9 @@ public:
     }
     else if (0 == strcmp(col_name, "refresh_method"))   v = r.refresh_method;
     else if (0 == strcmp(col_name, "refresh_parallel")) v = r.refresh_parallel;
-    else if (0 == strcmp(col_name, "gmt_create_ts"))    v = r.gmt_create_ts;
-    else if (0 == strcmp(col_name, "gmt_modified_ts"))  v = r.gmt_modified_ts;
-    else if (0 == strcmp(col_name, "dep_mview_id")) {
-      if (r.dep_is_null) return common::OB_ERR_NULL_VALUE;
-      v = r.dep_mview_id;
-    }
-    else if (0 == strcmp(col_name, "svr_port")) v = r.svr_port;
+    else if (0 == strcmp(col_name, "start_time_ts"))    v = r.start_time_ts;
+    else if (0 == strcmp(col_name, "svr_port"))       v = r.svr_port;
+    else if (0 == strcmp(col_name, "timeout_us"))      v = r.timeout_us;
     else {
       return common::OB_ERR_COLUMN_NOT_FOUND;
     }
@@ -121,6 +135,19 @@ public:
 
   int get_uint(const char *col_name, uint64_t &v) const override
   {
+    if (min_scn_mode_) {
+      if (cursor_ != 0 || !min_scn_has_row_) {
+        return common::OB_ERR_UNEXPECTED;
+      }
+      if (0 == strcmp(col_name, "min_scn")) {
+        if (min_scn_is_null_) {
+          return common::OB_ERR_NULL_VALUE;
+        }
+        v = min_scn_;
+        return common::OB_SUCCESS;
+      }
+      return common::OB_ERR_COLUMN_NOT_FOUND;
+    }
     if (cursor_ < 0 || cursor_ >= rows_.count()) {
       return common::OB_ERR_UNEXPECTED;
     }
@@ -218,6 +245,10 @@ private:
 
   common::ObSEArray<FakeRow, 16> rows_;
   int64_t cursor_;
+  bool min_scn_mode_ = false;
+  bool min_scn_has_row_ = false;
+  uint64_t min_scn_ = 0;
+  bool min_scn_is_null_ = false;
 };
 
 // Plug a FakeMySQLResult into ObMySQLProxy::ReadResult via placement-new on its

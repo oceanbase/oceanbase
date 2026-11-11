@@ -29,11 +29,12 @@ public:
                                 const share::schema::ObTableSchema &base_table_schema);
   int add_base_table_part_key_columns(common::ObRowDesc &row_desc,
                                       const share::schema::ObTableSchema &base_table_schema);
+  int add_sequence_column();
+  // special columns are the trailing non-rowkey meta columns of a mlog: DMLTYPE$$ and OLD_NEW$$
   int add_special_columns();
   int construct_mlog_table_columns(share::schema::ObTableSchema &mlog_schema);
 private:
   int check_column_type(const ObColumnSchemaV2 &column_schema);
-  int add_sequence_column();
   int add_dmltype_column();
   int add_old_new_column();
   int implicit_add_base_table_part_key_columns(
@@ -90,6 +91,11 @@ private:
                         const share::schema::ObTableSchema &base_table_schema,
                         share::schema::ObTableSchema &mlog_schema);
   static int check_enable_mlog_compaction_purge(const uint64_t tenant_id, bool &is_enable);
+  static int check_enable_mlog_seq_first_rowkey(const uint64_t tenant_id, bool &is_enable);
+  // decide whether SEQUENCE$$ is placed as the first rowkey column of the mlog to create
+  int check_seq_first_rowkey(ObSchemaGetterGuard &schema_guard,
+                             const share::schema::ObTableSchema &base_table_schema,
+                             bool &seq_first_rowkey);
 
 private:
   ObDDLService &ddl_service_;

@@ -1051,6 +1051,9 @@ int ObEvalCostHelper::fill_helper(const ObPhysicalPlanCtx &phy_plan_ctx,
   // query context
   question_marks_count_ = query_ctx.question_marks_count_;
   calculable_items_count_ = query_ctx.calculable_items_.count();
+  all_expr_constraints_count_ = query_ctx.all_expr_constraints_.count();
+  all_plan_const_param_constraints_count_ = query_ctx.all_plan_const_param_constraints_.count();
+  all_equal_param_constraints_count_ = query_ctx.all_equal_param_constraints_.count();
   if (OB_FAIL(try_trans_helper_.fill_helper(&query_ctx))) {
     LOG_WARN("failed to fill try trans helper", K(ret));
   }
@@ -1074,12 +1077,18 @@ int ObEvalCostHelper::recover_context(ObPhysicalPlanCtx &phy_plan_ctx,
                                       ObTransformerCtx &trans_ctx)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   common::hash::ObHashMap<uint64_t, ObObj, common::hash::NoPthreadDefendMode> &cache = query_ctx.calculable_expr_results_;
 
   // query context
   query_ctx.question_marks_count_ = phy_plan_ctx.get_param_store().count();
+  ObOptimizerUtil::revert_items(query_ctx.all_expr_constraints_, all_expr_constraints_count_);
+  ObOptimizerUtil::revert_items(query_ctx.all_plan_const_param_constraints_,
+                                all_plan_const_param_constraints_count_);
+  ObOptimizerUtil::revert_items(query_ctx.all_equal_param_constraints_,
+                                all_equal_param_constraints_count_);
   if (OB_FAIL(try_trans_helper_.recover(&query_ctx))) {
-    LOG_WARN("failed to fill try trans helper", K(ret));
+    LOG_WARN("failed to recover try trans helper", K(ret));
   }
 
   // transform context
@@ -1104,11 +1113,10 @@ int ObEvalCostHelper::recover_context(ObPhysicalPlanCtx &phy_plan_ctx,
         uint64_t key = reinterpret_cast<uint64_t>(raw_expr);
         if (!raw_expr->has_flag(IS_CONST_EXPR)) {
           // do nothing
-        } else if (OB_FAIL(cache.erase_refactored(key))) {
-          if (OB_HASH_NOT_EXIST != ret) {
-            LOG_WARN("failed to erase refactored", K(ret));
-          } else {
-            ret = OB_SUCCESS;
+        } else if (OB_TMP_FAIL(cache.erase_refactored(key))) {
+          if (OB_HASH_NOT_EXIST != tmp_ret) {
+            LOG_WARN("failed to erase refactored", K(tmp_ret));
+            ret = COVER_SUCC(tmp_ret);
           }
         }
       }

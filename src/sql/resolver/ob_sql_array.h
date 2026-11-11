@@ -8,6 +8,7 @@
 #include <typeinfo>
 #include "lib/container/ob_iarray.h"
 #include "lib/utility/ob_template_utils.h"
+#include "lib/utility/utility.h"
 
 namespace oceanbase
 {

@@ -330,7 +330,7 @@ int ObSelectResolver::do_resolve_set_query_in_recursive_cte(const ParseNode &par
     } else if (is_oracle_mode && OB_FAIL(check_cte_set_types(*select_stmt->get_set_query(0),
                                                              *select_stmt->get_set_query(1)))) {
       LOG_WARN("check cte set types", K(ret));
-    } else if ((select_stmt->is_set_distinct() || ObSelectStmt::UNION != select_stmt->get_set_op())
+    } else if ((select_stmt->is_set_distinct() || ObSetRelation::UNION != select_stmt->get_set_op())
                && (lib::is_oracle_mode()
                 || GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_2_3_0
                 || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0
@@ -541,7 +541,7 @@ int ObSelectResolver::check_set_child_stmt_pullup(const ObSelectStmt &child_stmt
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("got unexpected param", K(ret));
   } else if (child_stmt.is_set_stmt() &&
-             ObSelectStmt::UNION == select_stmt->get_set_op() &&
+             ObSetRelation::UNION == select_stmt->get_set_op() &&
              child_stmt.get_set_op() == select_stmt->get_set_op() &&
              child_stmt.is_set_distinct() == select_stmt->is_set_distinct() &&
              !child_stmt.has_order_by() &&
@@ -579,7 +579,7 @@ int ObSelectResolver::check_udt_set_query()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (select_stmt->is_set_stmt()) {
-    if (select_stmt->get_set_op() == ObSelectStmt::UNION && !select_stmt->is_set_distinct()) {
+    if (select_stmt->get_set_op() == ObSetRelation::UNION && !select_stmt->is_set_distinct()) {
       // UNION ALL
       // do nothing
     } else {
@@ -640,17 +640,17 @@ int ObSelectResolver::set_stmt_set_type(ObSelectStmt *select_stmt,
     select_stmt->assign_set_distinct();
     switch (set_node->type_) {
     case T_SET_UNION:
-      select_stmt->assign_set_op(ObSelectStmt::UNION);
+      select_stmt->assign_set_op(ObSetRelation::UNION);
       break;
     case T_SET_UNION_ALL:
-      select_stmt->assign_set_op(ObSelectStmt::UNION);
+      select_stmt->assign_set_op(ObSetRelation::UNION);
       select_stmt->assign_set_all();
       break;
     case T_SET_INTERSECT:
-      select_stmt->assign_set_op(ObSelectStmt::INTERSECT);
+      select_stmt->assign_set_op(ObSetRelation::INTERSECT);
       break;
     case T_SET_EXCEPT:
-      select_stmt->assign_set_op(ObSelectStmt::EXCEPT);
+      select_stmt->assign_set_op(ObSetRelation::EXCEPT);
       break;
     default:
       ret = OB_ERR_OPERATOR_UNKNOWN;
@@ -669,12 +669,12 @@ int ObSelectResolver::is_set_type_same(const ObSelectStmt &select_stmt,
   is_type_same = false;
   if (OB_ISNULL(set_node)) {
     /*do nothing*/
-  } else if ((ObSelectStmt::INTERSECT == select_stmt.get_set_op()
+  } else if ((ObSetRelation::INTERSECT == select_stmt.get_set_op()
               && T_SET_INTERSECT == set_node->type_)
-             || (ObSelectStmt::EXCEPT == select_stmt.get_set_op()
+             || (ObSetRelation::EXCEPT == select_stmt.get_set_op()
                  && T_SET_EXCEPT == set_node->type_)) {
     is_type_same = true;
-  } else if (ObSelectStmt::UNION == select_stmt.get_set_op()) {
+  } else if (ObSetRelation::UNION == select_stmt.get_set_op()) {
     if (T_SET_UNION == set_node->type_) {
       is_type_same = select_stmt.is_set_distinct();
     } else if (T_SET_UNION_ALL == set_node->type_) {
@@ -1305,7 +1305,7 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
 
   /* normal select */
   if (OB_SUCC(ret)) {
-    select_stmt->assign_set_op(ObSelectStmt::NONE);
+    select_stmt->assign_set_op(ObSetRelation::NONE);
   }
   OZ( resolve_query_options(parse_tree.children_[PARSE_SELECT_DISTINCT]) );
   if (OB_SUCC(ret) && is_only_full_group_by_on(session_info_->get_sql_mode())) {
@@ -1374,6 +1374,12 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   OZ( resolve_sensitive_rule(select_stmt) );
   OZ( resolve_into_clause(ObResolverUtils::get_select_into_node(parse_tree)) );
   OZ( resolve_for_update_clause(parse_tree.children_[PARSE_SELECT_FOR_UPD]) );
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(convert_scalar_any_value(select_stmt))) {
+      LOG_WARN("failed to convert scalar any value", K(ret));
+    }
+  }
 
   if (OB_SUCC(ret)) {
     bool has_flashback_query = false;
@@ -8540,7 +8546,7 @@ int ObSelectResolver::try_resolve_values_table_from_union(const ParseNode &parse
         select_stmt->assign_all();
       }
       select_stmt->assign_set_all();
-      select_stmt->assign_set_op(ObSelectStmt::NONE);
+      select_stmt->assign_set_op(ObSetRelation::NONE);
     }
     if (OB_SUCC(ret)) {
       resolve_happened = true;
@@ -8917,6 +8923,62 @@ int ObSelectResolver::check_stmt_has_same_table_name(bool &has_same_name)
           }
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObSelectResolver::convert_scalar_any_value(ObSelectStmt *select_stmt)
+{
+  int ret = OB_SUCCESS;
+  bool need_transform = false;
+  ObSEArray<ObRawExpr *, 4> old_exprs;
+  ObSEArray<ObRawExpr *, 4> new_exprs;
+  if (OB_ISNULL(select_stmt) || OB_ISNULL(params_.expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), KP(select_stmt), KP(params_.expr_factory_));
+  } else if (!has_nested_aggr_ && is_mysql_mode() && select_stmt->is_scala_group_by()) {
+    need_transform = true;
+    for (int64_t i = 0; OB_SUCC(ret) && need_transform && i < select_stmt->get_aggr_item_size(); ++i) {
+      ObAggFunRawExpr *aggr_expr = select_stmt->get_aggr_item(i);
+      if (OB_ISNULL(aggr_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("aggregate expr is null", K(ret), K(i));
+      } else if (T_FUN_ANY_VALUE != aggr_expr->get_expr_type()) {
+        need_transform = false;
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && need_transform && i < select_stmt->get_aggr_item_size(); ++i) {
+    ObAggFunRawExpr *aggr_expr = select_stmt->get_aggr_item(i);
+    ObSysFunRawExpr *sys_any_value_expr = NULL;
+    if (OB_ISNULL(aggr_expr) || OB_UNLIKELY(1 != aggr_expr->get_real_param_count()) ||
+        OB_ISNULL(aggr_expr->get_real_param_exprs().at(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid any_value aggregate expr", K(ret), K(i), KP(aggr_expr));
+    } else if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_FUN_SYS_ANY_VALUE,
+                                                               sys_any_value_expr))) {
+      LOG_WARN("failed to create any_value system function", K(ret));
+    } else if (OB_ISNULL(sys_any_value_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("any_value system function is null", K(ret));
+    } else if (OB_FAIL(sys_any_value_expr->set_param_expr(aggr_expr->get_real_param_exprs().at(0)))) {
+      LOG_WARN("failed to set any_value parameter", K(ret));
+    } else if (OB_FAIL(old_exprs.push_back(aggr_expr))) {
+      LOG_WARN("failed to add old any_value expr", K(ret));
+    } else if (OB_FAIL(new_exprs.push_back(sys_any_value_expr))) {
+      LOG_WARN("failed to add new any_value expr", K(ret));
+    } else {
+      sys_any_value_expr->set_expr_type(T_FUN_SYS_ANY_VALUE);
+      sys_any_value_expr->set_func_name(ObString::make_string(N_ANY_VAL));
+    }
+  }
+  if (OB_SUCC(ret) && need_transform) {
+    if (OB_FAIL(select_stmt->replace_relation_exprs(old_exprs, new_exprs))) {
+      LOG_WARN("failed to replace any_value aggregate exprs", K(ret));
+    } else {
+      select_stmt->clear_aggr_item();
+      standard_group_checker_.set_has_group(false);
     }
   }
   return ret;

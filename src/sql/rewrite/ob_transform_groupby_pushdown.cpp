@@ -304,7 +304,7 @@ int ObTransformGroupByPushdown::check_union_stmt_valid(ObSelectStmt &stmt,
   } else if (OB_ISNULL(union_stmt = sub_query_table_item->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
-  } else if (ObSelectStmt::UNION != union_stmt->get_set_op()) {
+  } else if (ObSetRelation::UNION != union_stmt->get_set_op()) {
     is_valid = false;
     OPT_TRACE("child stmt type is not union, can not transform");
   } else if (union_stmt->has_recursive_cte()) {
@@ -470,7 +470,7 @@ int ObTransformGroupByPushdown::get_union_stmt(ObSelectStmt *parent_stmt,
                       parent_stmt->get_from_item(0))) ||
         !sub_query_table_item->is_generated_table() ||
         OB_ISNULL(union_stmt = sub_query_table_item->ref_query_) ||
-        ObSelectStmt::UNION != union_stmt->get_set_op()) {
+        ObSetRelation::UNION != union_stmt->get_set_op()) {
       got = false;
     } else {
       got = true;

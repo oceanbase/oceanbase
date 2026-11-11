@@ -16,7 +16,7 @@ using namespace oceanbase::sql::log_op_def;
 
 const char *ObLogSet::get_name() const
 {
-  static const char *set_op_all[ObSelectStmt::SET_OP_NUM + 1] =
+  static const char *set_op_all[ObSetRelation::SET_OP_NUM + 1] =
   {
     "NONE",
     "UNION ALL",
@@ -25,14 +25,14 @@ const char *ObLogSet::get_name() const
     "RECURSIVE UNION ALL",
     "RECURSIVE UNION DISTINCT",
   };
-  static const char *merge_set_op_distinct[ObSelectStmt::SET_OP_NUM] =
+  static const char *merge_set_op_distinct[ObSetRelation::SET_OP_NUM] =
   {
     "NONE",
     "MERGE UNION DISTINCT",
     "MERGE INTERSECT DISTINCT",
     "MERGE EXCEPT DISTINCT",
   };
-  static const char *hash_set_op_distinct[ObSelectStmt::SET_OP_NUM] =
+  static const char *hash_set_op_distinct[ObSetRelation::SET_OP_NUM] =
   {
     "NONE",
     "HASH UNION DISTINCT",
@@ -40,12 +40,12 @@ const char *ObLogSet::get_name() const
     "HASH EXCEPT DISTINCT",
   };
   const char *ret_char = "Unknown type";
-  if (set_op_ >= 0 && set_op_ < ObSelectStmt::SET_OP_NUM
+  if (set_op_ >= 0 && set_op_ < ObSetRelation::SET_OP_NUM
       && set_algo_ != INVALID_SET_ALGO) {
     ret_char = !is_distinct_ ? set_op_all[set_op_] :
                (HASH_SET == set_algo_ ? hash_set_op_distinct[set_op_] : merge_set_op_distinct[set_op_]);
     if (is_recursive_union_) {
-      ret_char = is_distinct_ ? set_op_all[ObSelectStmt::SetOperator::RECURSIVE + 1] : set_op_all[ObSelectStmt::SetOperator::RECURSIVE];
+      ret_char = is_distinct_ ? set_op_all[ObSetRelation::RECURSIVE + 1] : set_op_all[ObSetRelation::RECURSIVE];
     }
   } else { /* Do nothing */ }
   return ret_char;
@@ -84,13 +84,13 @@ int ObLogSet::compute_const_exprs()
       OB_ISNULL(right_child = get_child(second_child))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpect null", K(ret), K(my_plan_), K(left_child), K(right_child));
-  } else if ((ObSelectStmt::EXCEPT == get_set_op() || ObSelectStmt::INTERSECT == get_set_op())
+  } else if ((ObSetRelation::EXCEPT == get_set_op() || ObSetRelation::INTERSECT == get_set_op())
              && OB_FAIL(append(output_const_exprs_, left_child->get_output_const_exprs()))) {
     LOG_WARN("failed to append exprs", K(ret));
-  } else if (ObSelectStmt::INTERSECT == get_set_op() &&
+  } else if (ObSetRelation::INTERSECT == get_set_op() &&
              OB_FAIL(append(output_const_exprs_, right_child->get_output_const_exprs()))) {
     LOG_WARN("failed to append exprs", K(ret));
-  } else if (ObSelectStmt::UNION == get_set_op()) {
+  } else if (ObSetRelation::UNION == get_set_op()) {
     //union, left/right 均为 const 且值相等添加 const, 暂不维护
     //union 可能有多于两个分支
   } else {
@@ -112,9 +112,9 @@ int ObLogSet::compute_equal_set()
     // do nothing
   } else if (OB_FAIL(get_equal_set_conditions(ordering_eset_conditions))) {
     LOG_WARN("failed to get equal set conditions", K(ret));
-  } else if (ObSelectStmt::UNION == get_set_op()) {
+  } else if (ObSetRelation::UNION == get_set_op()) {
     // do nothing
-  } else if (ObSelectStmt::EXCEPT == get_set_op()) {
+  } else if (ObSetRelation::EXCEPT == get_set_op()) {
     if (OB_FAIL(temp_ordering_esets.assign(
                   get_child(first_child)->get_output_equal_sets()))) {
       LOG_WARN("failed to get ordering output equal sets", K(ret));
@@ -208,10 +208,10 @@ int ObLogSet::compute_fd_item_set()
                                                         select_exprs))) {
   } else if (OB_FAIL(fd_item_set->push_back(fd_item))) {
     LOG_WARN("failed to push back fd item", K(ret));
-  } else if ((ObSelectStmt::INTERSECT == set_op_ || ObSelectStmt::EXCEPT == set_op_) &&
+  } else if ((ObSetRelation::INTERSECT == set_op_ || ObSetRelation::EXCEPT == set_op_) &&
             OB_FAIL(append_child_fd_item_set(*fd_item_set, left_child->get_fd_item_set()))) {
     LOG_WARN("failed to append fd item set", K(ret));
-  } else if (ObSelectStmt::INTERSECT == set_op_ &&
+  } else if (ObSetRelation::INTERSECT == set_op_ &&
             OB_FAIL(append_child_fd_item_set(*fd_item_set, right_child->get_fd_item_set()))) {
     LOG_WARN("failed to append fd item set", K(ret));
   } else if (OB_FAIL(deduce_const_exprs_and_ft_item_set(*fd_item_set))) {
@@ -287,12 +287,12 @@ int ObLogSet::compute_one_row_info()
       OB_ISNULL(right_child = get_child(ObLogicalOperator::second_child))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(left_child), K(right_child), K(ret));
-  } else if (set_op_ == ObSelectStmt::UNION || is_recursive_union()) {
+  } else if (set_op_ == ObSetRelation::UNION || is_recursive_union()) {
     set_is_at_most_one_row(false);
-  } else if (set_op_ == ObSelectStmt::INTERSECT) {
+  } else if (set_op_ == ObSetRelation::INTERSECT) {
     set_is_at_most_one_row(
         (left_child->get_is_at_most_one_row() || right_child->get_is_at_most_one_row()));
-  } else if (set_op_ == ObSelectStmt::EXCEPT) {
+  } else if (set_op_ == ObSetRelation::EXCEPT) {
     set_is_at_most_one_row(left_child->get_is_at_most_one_row());
   } else { /*do nothing*/ }
   return ret;
@@ -325,7 +325,7 @@ int ObLogSet::compute_sharding_info()
     strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
   } else if ((DistAlgo::DIST_PARTITION_WISE == set_dist_algo_ ||
               DistAlgo::DIST_EXT_PARTITION_WISE == set_dist_algo_) &&
-            (ObSelectStmt::UNION == set_op_) && !is_set_distinct()) {
+            (ObSetRelation::UNION == set_op_) && !is_set_distinct()) {
     is_partition_wise_ = true;
     strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
   } else if (DistAlgo::DIST_SET_PARTITION_WISE == set_dist_algo_) {
@@ -343,8 +343,8 @@ int ObLogSet::compute_sharding_info()
     inherit_sharding_index_ = ObLogicalOperator::second_child;
   } else if (DistAlgo::DIST_NONE_PARTITION == set_dist_algo_) {
     is_partition_wise_ = false;
-    if (ObSelectStmt::INTERSECT == set_op_
-        || ObSelectStmt::EXCEPT == set_op_) {
+    if (ObSetRelation::INTERSECT == set_op_
+        || ObSetRelation::EXCEPT == set_op_) {
       strong_sharding_ = first_child->get_strong_sharding();
       inherit_sharding_index_ = ObLogicalOperator::first_child;
     } else {
@@ -353,7 +353,7 @@ int ObLogSet::compute_sharding_info()
     }
   } else if (DistAlgo::DIST_PARTITION_NONE == set_dist_algo_) {
     is_partition_wise_ = false;
-    if (ObSelectStmt::INTERSECT == set_op_) {
+    if (ObSetRelation::INTERSECT == set_op_) {
       strong_sharding_ = second_child->get_strong_sharding();
       inherit_sharding_index_ = ObLogicalOperator::second_child;
     } else {
@@ -466,8 +466,8 @@ int ObLogSet::get_re_est_cost_infos(const EstimateCostInfo &param,
     } else if (OB_FAIL(cost_infos.push_back(ObBasicCostInfo(cur_child_card, cur_child_cost,
                                                             child->get_width())))) {
       LOG_WARN("push back child's cost info failed", K(ret));
-    } else if (ObSelectStmt::UNION == get_set_op() && !is_set_distinct()) {
-      ObSelectStmt::SetOperator set_type = is_recursive_union() ? ObSelectStmt::RECURSIVE : ObSelectStmt::UNION;
+    } else if (ObSetRelation::UNION == get_set_op() && !is_set_distinct()) {
+      ObSetRelation::SetOperator set_type = is_recursive_union() ? ObSetRelation::RECURSIVE : ObSetRelation::UNION;
       if (0 == i) {
         card = cur_child_card;
       } else {
@@ -475,7 +475,7 @@ int ObLogSet::get_re_est_cost_infos(const EstimateCostInfo &param,
       }
       child_cost += cur_child_cost;
     } else {
-      ObSelectStmt::SetOperator set_type = is_recursive_union() ? ObSelectStmt::RECURSIVE : get_set_op();
+      ObSetRelation::SetOperator set_type = is_recursive_union() ? ObSetRelation::RECURSIVE : get_set_op();
       double cur_child_ndv = child_ndv_.at(i);
       if (need_scale_ndv) {
         cur_child_ndv = std::min(
@@ -802,13 +802,13 @@ int ObLogSet::get_pure_set_exprs_internal(ObIArray<ObRawExpr *> &set_exprs)
 int ObLogSet::allocate_startup_expr_post()
 {
   int ret = OB_SUCCESS;
-  if (ObSelectStmt::UNION == set_op_) {
+  if (ObSetRelation::UNION == set_op_) {
     //do nothing
-  } else if (ObSelectStmt::INTERSECT == set_op_) {
+  } else if (ObSetRelation::INTERSECT == set_op_) {
     if (OB_FAIL(ObLogicalOperator::allocate_startup_expr_post())) {
       LOG_WARN("failed to allocate startup expr post", K(ret));
     }
-  } else if (ObSelectStmt::EXCEPT == set_op_) {
+  } else if (ObSetRelation::EXCEPT == set_op_) {
     if (OB_FAIL(ObLogicalOperator::allocate_startup_expr_post(first_child))) {
       LOG_WARN("failed to allocate startup expr post", K(ret));
     }
@@ -1031,8 +1031,8 @@ int ObLogSet::get_card_without_filter(double &card)
   card = 0.0;
   for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
     const ObLogicalOperator *child = get_child(i);
-    if (ObSelectStmt::UNION == get_set_op() && !is_set_distinct()) {
-      ObSelectStmt::SetOperator set_type = is_recursive_union() ? ObSelectStmt::RECURSIVE : ObSelectStmt::UNION;
+    if (ObSetRelation::UNION == get_set_op() && !is_set_distinct()) {
+      ObSetRelation::SetOperator set_type = is_recursive_union() ? ObSetRelation::RECURSIVE : ObSetRelation::UNION;
       if (0 == i) {
         card = child->get_card();
       } else {
@@ -1041,7 +1041,7 @@ int ObLogSet::get_card_without_filter(double &card)
     } else if (0 == i) {
       card = child_ndv_.at(i);
     } else {
-      ObSelectStmt::SetOperator set_type = is_recursive_union() ? ObSelectStmt::RECURSIVE : get_set_op();
+      ObSetRelation::SetOperator set_type = is_recursive_union() ? ObSetRelation::RECURSIVE : get_set_op();
       if (0 == i) {
         card = child_ndv_.at(i);
       } else {

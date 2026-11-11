@@ -1637,7 +1637,7 @@ int ObTransformSimplifySubquery::subquery_can_be_eliminated_in_exists(const ObIt
   } else if (stmt->is_recursive_union_branch()) {
     // do not eliminate left branch of recursive union
   } else if (stmt->is_set_stmt()) {
-    if (ObSelectStmt::UNION == stmt->get_set_op() && !stmt->is_recursive_union()) {
+    if (ObSetRelation::UNION == stmt->get_set_op() && !stmt->is_recursive_union()) {
       const ObIArray<ObSelectStmt*> &child_stmts = stmt->get_set_query();
       //loop child stmts and if one of them can be eliminated, then eliminate the whole set_stmt
       for (int64_t i = 0; OB_SUCC(ret) && !can_be_eliminated && i < child_stmts.count(); ++i) {
@@ -1702,8 +1702,8 @@ int ObTransformSimplifySubquery::select_items_can_be_simplified(const ObItemType
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is invalid", K(ret), K(stmt));
   } else if (stmt->is_set_stmt() &&
-             (ObSelectStmt::INTERSECT == stmt->get_set_op() ||
-              ObSelectStmt::EXCEPT == stmt->get_set_op() ||
+             (ObSetRelation::INTERSECT == stmt->get_set_op() ||
+              ObSetRelation::EXCEPT == stmt->get_set_op() ||
               stmt->is_recursive_union())) {
     //do nothing
   } else if (OB_FAIL(check_limit(op_type, stmt, has_limit))) {
@@ -1876,7 +1876,7 @@ int ObTransformSimplifySubquery::simplify_select_items(ObDMLStmt *stmt,
     LOG_WARN("Checking if select list can be eliminated in subquery failed", K(ret));
   } else if (!can_be_simplified) {
     //do nothing
-  } else if (ObSelectStmt::UNION == subquery->get_set_op() && !subquery->is_recursive_union()) {
+  } else if (ObSetRelation::UNION == subquery->get_set_op() && !subquery->is_recursive_union()) {
     ObIArray<ObSelectStmt*> &child_stmts = subquery->get_set_query();
     ObSEArray<bool, 4> child_happened;
     for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {

@@ -103,7 +103,7 @@ private:
   // it's safe to skip pulling up preds from its children stmts
   OB_INLINE bool skip_pullup_preds_from_set_children(ObSelectStmt *stmt, ObIArray<int64_t> &sel_ids)
   {
-    return ObSelectStmt::UNION == stmt->get_set_op()
+    return ObSetRelation::UNION == stmt->get_set_op()
            && !stmt->is_recursive_union()
            && sel_ids.empty();
   }

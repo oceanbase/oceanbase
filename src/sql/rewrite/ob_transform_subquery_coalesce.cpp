@@ -1490,7 +1490,7 @@ int ObTransformSubqueryCoalesce::transform_or_expr(ObDMLStmt *stmt,
       if (OB_FAIL(compare_ctx.append_constraints_to_query_ctx(*stmt->get_query_ctx()))) {
         LOG_WARN("failed to append constraints to query ctx", K(ret));
       } else if (OB_FAIL(ObTransformUtils::create_set_stmt(ctx_,
-                                                          ObSelectStmt::UNION,
+                                                          ObSetRelation::UNION,
                                                           false, 
                                                           subqueries, 
                                                           union_stmt))) {

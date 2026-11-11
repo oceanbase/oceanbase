@@ -7340,7 +7340,8 @@ int ObOptimizerUtil::check_oracle_mode_set_type_validity(bool is_ps_prepare_stag
       || (left_type.is_geometry() && right_type.is_geometry())
       || (left_type.is_lob_locator() && right_type.is_lob_locator() && left_type.get_collation_type() == right_type.get_collation_type())
       || ((ob_is_user_defined_sql_type(left_type.get_type()) || ob_is_user_defined_pl_type(left_type.get_type()))
-            && (ob_is_user_defined_sql_type(right_type.get_type()) || ob_is_user_defined_pl_type(right_type.get_type()))))) {
+            && (ob_is_user_defined_sql_type(right_type.get_type()) || ob_is_user_defined_pl_type(right_type.get_type())))
+      || (left_type.is_uint64() && right_type.is_uint64())  /* __pk_increment UNION NULL UNION __pk_increment */ )) {
       // || (left_type.is_lob() && right_type.is_lob() && !is_distinct))) {
       // Originally, cases like "select clob from t union all select blob from t" return errorif (is_ps_prepare_stage) {
     if (is_ps_prepare_stage) {
@@ -8538,7 +8539,7 @@ int ObOptimizerUtil::get_set_op_remain_filter(const ObSelectStmt &stmt,
     /*do nothing*/
   } else if (first_child) {
     ret = output_pushdown_preds.assign(child_pushdown_preds);
-  } else if (stmt.get_set_op() == ObSelectStmt::UNION) {
+  } else if (stmt.get_set_op() == ObSetRelation::UNION) {
     //对于未成功下推的谓词, 取并集反回上层
     for (int64_t i = 0; OB_SUCC(ret) && i < child_pushdown_preds.count(); ++i) {
       if (ObOptimizerUtil::find_equal_expr(output_pushdown_preds, child_pushdown_preds.at(i))) {
@@ -8547,7 +8548,7 @@ int ObOptimizerUtil::get_set_op_remain_filter(const ObSelectStmt &stmt,
         LOG_WARN("push back preds failed", K(ret));
       } else {/*do nothing*/}
     }
-  } else if (stmt.get_set_op() == ObSelectStmt::INTERSECT) {
+  } else if (stmt.get_set_op() == ObSetRelation::INTERSECT) {
     //对于未成功下推的谓词，取交集返回上层
     ObSEArray<ObRawExpr*, 4> pushdown_preds;
     for (int64_t i = 0; OB_SUCC(ret) && i < child_pushdown_preds.count(); ++i) {
@@ -9525,6 +9526,7 @@ int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
              T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == aggr_type ||
              T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE == aggr_type ||
              T_FUN_ANY == aggr_type ||
+             T_FUN_ANY_VALUE == aggr_type ||
              T_FUN_ARBITRARY == aggr_type ||
              T_FUN_SYS_BIT_AND == aggr_type ||
              T_FUN_SYS_BIT_OR == aggr_type ||
@@ -11326,7 +11328,7 @@ int ObOptimizerUtil::check_can_batch_rescan(const ObLogicalOperator *op,
       LOG_WARN("failed to check can batch rescan for op child", K(ret));
     }
   } else if (log_op_def::LOG_SET == op->get_type()) {
-    can_batch_rescan = ObSelectStmt::UNION == static_cast<const ObLogSet*>(op)->get_set_op()
+    can_batch_rescan = ObSetRelation::UNION == static_cast<const ObLogSet*>(op)->get_set_op()
                       || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0;
     for (int64_t i = 0; OB_SUCC(ret) && can_batch_rescan && i < op->get_num_of_child(); ++i) {
       if (OB_FAIL(SMART_CALL(check_can_batch_rescan(op->get_child(i), rescan_params, for_nlj, can_batch_rescan)))) {

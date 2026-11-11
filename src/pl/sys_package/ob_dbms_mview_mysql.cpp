@@ -9,8 +9,10 @@
 #include "pl/ob_pl.h"
 #include "lib/worker.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "rootserver/mview/ob_mview_maintenance_service.h"
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+#include "rootserver/mview/ob_mview_pending_task_utils.h"
+#endif
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_rpc_struct.h"
 #include "storage/mview/cmd/ob_mview_executor_util.h"
@@ -146,14 +148,8 @@ int ObDBMSMViewMysql::refresh(ObPLExecCtx &pl_ctx, ParamStore &params, ObObj &re
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument for materialized view refresh", K(ret));
     }
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
-    // tenant_config must be read after tenant_id is populated (TENANT_CONF(OB_INVALID_TENANT_ID) always returns invalid).
-    ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-    const bool refresh_queuing_enabled = ((data_version >= MOCK_DATA_VERSION_4_4_2_2 &&
-                                         data_version < DATA_VERSION_4_5_0_0) ||
-                                        data_version >= DATA_VERSION_4_6_1_0) &&
-                                        tenant_config.is_valid() &&
-                                        tenant_config->_enable_mv_refresh_queuing;
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+    bool refresh_queuing_enabled = false;
     // DBMS_SCHEDULER-driven refreshes must not block the scheduler worker — force async.
     if (OB_SUCC(ret) && nullptr != ctx.get_my_session()->get_job_info()) {
       async = true;
@@ -162,10 +158,12 @@ int ObDBMSMViewMysql::refresh(ObPLExecCtx &pl_ctx, ParamStore &params, ObObj &re
   UNUSEDx(async, force);
 #endif
     if (OB_FAIL(ret)) {
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+    } else if (OB_FAIL(rootserver::ObMViewPendingTaskUtils::is_refresh_queuing_enabled(
+                   tenant_id, refresh_queuing_enabled))) {
+      LOG_WARN("failed to check whether refresh queuing is enabled", KR(ret), K(tenant_id));
     } else if (refresh_queuing_enabled) {
       share::schema::ObMVRefreshMethod refresh_method = share::schema::ObMVRefreshMethod::MAX;
-    rootserver::ObMViewMaintenanceService *mview_maintenance_service = MTL(rootserver::ObMViewMaintenanceService*);
       obrpc::ObScheduleMViewRefreshArg schedule_arg;
       obrpc::ObScheduleMViewRefreshResult schedule_result;
       const int64_t worker_deadline = THIS_WORKER.get_timeout_ts();
@@ -173,14 +171,11 @@ int ObDBMSMViewMysql::refresh(ObPLExecCtx &pl_ctx, ParamStore &params, ObObj &re
       schedule_arg.timeout_us_ = (worker_deadline > now) ? (worker_deadline - now) : 0;
       schedule_arg.tenant_id_ = tenant_id;
       schedule_arg.run_user_id_ = ctx.get_my_session()->get_priv_user_id();
-      schedule_arg.is_nested_ = params.count() > ObDBMSMViewRefreshParam::NESTED
-                                && params.at(ObDBMSMViewRefreshParam::NESTED).get_bool();
+      schedule_arg.is_nested_ = (params.count() <= ObDBMSMViewRefreshParam::NESTED
+                                 || params.at(ObDBMSMViewRefreshParam::NESTED).get_bool());
       schedule_arg.refresh_parallel_ = params.at(ObDBMSMViewRefreshParam::REFRESH_PARALLEL).get_int();
       schedule_arg.force_ = force;
-      if (OB_ISNULL(mview_maintenance_service) || OB_ISNULL(mview_maintenance_service->get_pending_task_manager())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("mview maintenance service is null", KR(ret));
-      } else if (OB_FAIL(ObMViewExecutorUtil::resolve_mview_list_and_method(
+      if (OB_FAIL(ObMViewExecutorUtil::resolve_mview_list_and_method(
                           ctx.get_sql_ctx()->schema_guard_,
                           ctx.get_my_session(),
                           params.at(ObDBMSMViewRefreshParam::MV_LIST).get_varchar(),
@@ -198,17 +193,20 @@ int ObDBMSMViewMysql::refresh(ObPLExecCtx &pl_ctx, ParamStore &params, ObObj &re
                  && OB_FAIL(ObMViewExecutorUtil::check_refresh_mview_privilege(
                         ctx, tenant_id, schedule_arg.mview_id_))) {
         LOG_WARN("fail to check refresh privilege", KR(ret));
-      } else if (OB_FAIL(mview_maintenance_service->get_pending_task_manager()->schedule_mview_refresh(
+      } else if (OB_FAIL(rootserver::ObMViewPendingTaskUtils::schedule_mview_refresh(
                             schedule_arg, schedule_result))) {
         int tmp_ret = OB_SUCCESS;
         LOG_WARN("fail to schedule mview refresh", KR(ret), K(schedule_arg));
-        if (OB_TMP_FAIL(ObMViewExecutorUtil::load_refresh_run_stats_error_message(ctx,
+        if (OB_TMP_FAIL(ObMViewExecutorUtil::load_refresh_run_stats_error_message(ctx.get_sql_proxy(),
                                                                                   tenant_id,
                                                                                   schedule_result.refresh_id_))) {
           LOG_WARN("fail to read mview refresh run stats", KR(tmp_ret), K(schedule_result.refresh_id_));
         }
       } else if (!async
-                 && OB_FAIL(ObMViewExecutorUtil::wait_mview_refresh(ctx, tenant_id, schedule_result.refresh_id_, schedule_arg.mview_id_))) {
+                 && OB_FAIL(ObMViewExecutorUtil::wait_mview_refresh(ctx.get_sql_proxy(),
+                                                                   tenant_id,
+                                                                   schedule_result.refresh_id_,
+                                                                   schedule_arg.mview_id_))) {
         LOG_WARN("fail to wait mview refresh", KR(ret), K(schedule_result.refresh_id_), K(schedule_arg.mview_id_));
       }
       LOG_TRACE("schedule mview refresh", KR(ret), K(schedule_arg), K(schedule_result));
@@ -236,7 +234,7 @@ int ObDBMSMViewMysql::refresh(ObPLExecCtx &pl_ctx, ParamStore &params, ObObj &re
 
 /*
 FUNCTION refresh_report(
-    IN     refresh_id          INT            DEFAULT NULL,
+    IN     refresh_id          BIGINT         DEFAULT NULL,
     IN     mv_name             VARCHAR(65535) DEFAULT NULL,
     IN     tenant_id           INT            DEFAULT NULL,
     IN     format              VARCHAR(65535) DEFAULT 'TEXT')
@@ -361,13 +359,13 @@ int ObDBMSMViewMysql::refresh_report(ObPLExecCtx &pl_ctx, ParamStore &params, Ob
 }
 
 /*
-PROCEDURE kill(IN refresh_id BIGINT);
+FUNCTION kill(IN refresh_id BIGINT) RETURN BIGINT;
 */
 int ObDBMSMViewMysql::kill(ObPLExecCtx &pl_ctx, ParamStore &params, ObObj &result)
 {
-  UNUSED(result);
   int ret = OB_SUCCESS;
-#ifndef OB_BUILD_MV_REFRESH_QUEUEING
+  result.set_null();
+#ifndef OB_BUILD_MV_CLOSE_MODULES
   // Refresh queuing is closed-source; without it there is no queued refresh to kill.
   UNUSEDx(pl_ctx, params);
   ret = OB_NOT_SUPPORTED;
@@ -398,11 +396,12 @@ int ObDBMSMViewMysql::kill(ObPLExecCtx &pl_ctx, ParamStore &params, ObObj &resul
       LOG_WARN("fail to check kill privilege", KR(ret));
     } else {
       const int64_t refresh_id = params.at(0).get_int();
-      obrpc::ObKillMViewRefreshArg arg;
-      arg.tenant_id_ = tenant_id;
-      arg.refresh_id_ = refresh_id;
-      if (OB_FAIL(rootserver::ObMViewPendingTaskManager::kill_refresh(arg))) {
-        LOG_WARN("fail to kill mview refresh", KR(ret), K(tenant_id), K(refresh_id));
+      bool refresh_exists = false;
+      if (OB_FAIL(rootserver::ObMViewPendingTaskUtils::cancel_refresh(
+              tenant_id, refresh_id, refresh_exists))) {
+        LOG_WARN("fail to cancel mview refresh", KR(ret), K(tenant_id), K(refresh_id));
+      } else {
+        result.set_int(refresh_exists ? 1 : 0);
       }
     }
   }
@@ -485,6 +484,7 @@ int ObDBMSMViewMysql::set_refresh_params(ObPLExecCtx &pl_ctx, ParamStore &params
   }
   return ret;
 }
+
 /*
 FUNCTION explain_refresh(
     IN     mv_name                VARCHAR(65535),

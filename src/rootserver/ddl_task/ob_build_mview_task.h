@@ -39,7 +39,11 @@ public:
                                               const int64_t buf_size,
                                               int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
-  virtual bool task_can_retry() const override { return share::ObDDLTaskStatus::BUILD_MLOG == task_status_; } //build mview task should not retry except build_mlog phase
+  virtual bool task_can_retry() const override
+  {
+    return share::ObDDLTaskStatus::BUILD_MLOG == task_status_
+           || share::ObDDLTaskStatus::TAKE_EFFECT == task_status_;
+  }
   int on_child_task_prepare(const int64_t task_id);
 
 private:
@@ -57,6 +61,7 @@ private:
   int update_task_message();
   int set_mview_complete_refresh_task_id(const int64_t task_id);
   int set_mview_purge_barrier();
+  int set_mview_pending_refresh_id(const int64_t refresh_id);
   int check_mlog_valid(bool &is_valid);
 
 private:
@@ -65,6 +70,7 @@ private:
   ObRootService *root_service_;
   obrpc::ObMViewCompleteRefreshArg arg_;
   int64_t mview_complete_refresh_task_id_;
+  int64_t mview_pending_refresh_id_;
   bool has_build_mlog_;
   ObSEArray<ObMViewAutoMlogEventInfo, 8> build_mlog_events_;
 };

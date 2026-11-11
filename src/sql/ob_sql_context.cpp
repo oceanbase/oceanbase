@@ -22,6 +22,33 @@ using namespace share::schema;
 namespace sql
 {
 
+ObRtMViewInfo::ObRtMViewInfo()
+  : mview_id_(OB_INVALID_ID),
+    last_refresh_ts_us_(0)
+{
+}
+
+ObRtMViewInfo::ObRtMViewInfo(const uint64_t mview_id,
+                             const int64_t last_refresh_ts_us)
+  : mview_id_(mview_id),
+    last_refresh_ts_us_(last_refresh_ts_us)
+{
+}
+
+bool ObRtMViewInfo::find(const ObIArray<ObRtMViewInfo> &rt_mview_infos,
+                         const uint64_t mview_id,
+                         ObRtMViewInfo &rt_mview_info)
+{
+  bool found = false;
+  for (int64_t i = 0; !found && i < rt_mview_infos.count(); ++i) {
+    if (mview_id == rt_mview_infos.at(i).mview_id_) {
+      rt_mview_info = rt_mview_infos.at(i);
+      found = true;
+    }
+  }
+  return found;
+}
+
 bool LocationConstraint::operator==(const LocationConstraint &other) const {
   return key_ == other.key_ && phy_loc_type_ == other.phy_loc_type_ && constraint_flags_ == other.constraint_flags_ ;
 }

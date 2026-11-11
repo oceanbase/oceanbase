@@ -14,11 +14,15 @@
 #include "sql/resolver/mv/ob_outer_join_mjv_printer.h"
 #include "sql/resolver/mv/ob_outer_join_mav_printer.h"
 #include "sql/resolver/mv/ob_union_all_mv_printer.h"
+#include "sql/resolver/mv/ob_mv_compat_control.h"
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+#include "sql/resolver/mv/ob_mv_refresh_helper.h"
+#endif
 #include "sql/rewrite/ob_transformer_impl.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/rewrite/ob_expand_aggregate_utils.h"
+#include "sql/ob_sql_context.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/resolver/mv/ob_mv_dep_utils.h"
 #include "share/schema/ob_mview_info.h"
 #include "observer/ob_server_struct.h"
 
@@ -44,12 +48,53 @@ ObMVProvider::~ObMVProvider()
   }
 }
 
+int ObMVProvider::align_mv_stmt_output_column_names(ObSelectStmt *stmt,
+                                                    const ObTableSchema &container_table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null stmt", K(ret));
+  } else {
+    const int64_t select_item_count = stmt->get_select_item_size();
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_item_count; ++i) {
+      SelectItem &select_item = stmt->get_select_item(i);
+      const ObColumnSchemaV2 *column_schema =
+          container_table_schema.get_column_schema(OB_APP_MIN_COLUMN_ID + i);
+      if (OB_ISNULL(select_item.expr_) || OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null select expression or column schema", K(ret), K(i),
+                 KP(select_item.expr_), KP(column_schema));
+      } else {
+        select_item.alias_name_ = column_schema->get_column_name_str();
+        select_item.is_real_alias_ = true;
+        select_item.expr_->set_alias_column_name(select_item.alias_name_);
+      }
+    }
+    // Set branches are printed independently and must use the same physical output names.
+    if (OB_SUCC(ret) && stmt->is_set_stmt()) {
+      ObIArray<ObSelectStmt *> &set_queries = stmt->get_set_query();
+      for (int64_t i = 0; OB_SUCC(ret) && i < set_queries.count(); ++i) {
+        ObSelectStmt *set_query = set_queries.at(i);
+        if (OB_ISNULL(set_query) ||
+            OB_UNLIKELY(select_item_count != set_query->get_select_item_size())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected set query", K(ret), K(i), K(select_item_count), KPC(set_query));
+        } else if (OB_FAIL(SMART_CALL(align_mv_stmt_output_column_names(set_query, container_table_schema)))) {
+          LOG_WARN("failed to align set query output column names", K(ret), K(i));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 // 1. resolve mv definition and get stmt
 // 2. check refresh type by stmt
 int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
                                    ObSchemaGetterGuard *schema_guard,
                                    const RtMvCheckType rt_expand_type,
-                                   ObTableReferencedColumnsInfo *table_referenced_columns_info /* = NULL */)
+                                   const uint64_t compat_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
@@ -84,7 +129,6 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
         ObDMLStmt *trans_stmt = NULL;
         ObQueryCtx *query_ctx = NULL;
         ObSchemaChecker schema_checker;
-        ObSEArray<std::pair<ObRawExpr*, int64_t>, 8> fast_refresh_dependent_columns;
         SMART_VARS_2((ObExecContext, exec_ctx, alloc), (ObPhysicalPlanCtx, phy_plan_ctx, alloc)) {
           LinkExecCtxGuard link_guard(*session_info, exec_ctx);
           // add empty sql ctx
@@ -94,7 +138,6 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
           exec_ctx.set_my_session(session_info);
           exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
           bool is_vars_matched = false;
-          bool can_fast_refresh = true;
           if (OB_ISNULL(query_ctx = stmt_factory_->get_query_ctx())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected null", K(ret), K(query_ctx));
@@ -121,52 +164,35 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
                                               *mv_schema_,
                                               view_stmt))) {
             LOG_WARN("failed to gen mv stmt", K(ret));
+          } else if (OB_FAIL(align_mv_stmt_output_column_names(view_stmt, *mv_container_schema_))) {
+            LOG_WARN("failed to align mv output column names", K(ret));
           } else if (OB_FALSE_IT(trans_stmt = view_stmt)) {
-          } else if (OB_FAIL(transform_mv_def_stmt(trans_stmt,
-                                                  &alloc,
-                                                  &schema_checker,
-                                                  session_info,
-                                                  expr_factory_,
-                                                  stmt_factory_))) {
-            LOG_WARN("failed to transform mv stmt", K(ret));
-          } else if (OB_ISNULL(mv_def_stmt_ = static_cast<ObSelectStmt *>(trans_stmt))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null stmt", K(ret));
-          } else if (OB_FAIL(ObMVChecker::pre_process_view_stmt(expr_factory_, session_info, *mv_def_stmt_))) {
-            LOG_WARN("failed to pre process view stmt", K(ret));
-          } else if (OB_UNLIKELY(NEED_RT_EXPAND == rt_expand_type && !mv_schema_->mv_on_query_computation())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("need to check rt expand, but the mview is not defined with on query computation", KR(ret));
-          } else if (OB_FAIL(ObMVChecker::check_mv_fast_refresh_type(mv_def_stmt_,
-                                                                     false,
-                                                                     &alloc,
-                                                                     &schema_checker,
-                                                                     stmt_factory_,
-                                                                     expr_factory_,
-                                                                     session_info,
-                                                                     *mv_container_schema_,
-                                                                     rt_expand_type > NO_NEED_RT_EXPAND && mv_schema_->mv_on_query_computation() /*is_rt_expand*/,
-                                                                     refreshable_type_,
-                                                                     fast_refreshable_note_,
-                                                                     fast_refresh_dependent_columns,
-                                                                     table_referenced_columns_info,
-                                                                     &checker_info_))) {
-            LOG_WARN("failed to check mv fast refresh type", K(ret));
-          } else if (!IS_VALID_FAST_REFRESH_TYPE(refreshable_type_)) {
-            LOG_TRACE("mv not support fast refresh", K_(refreshable_type), K(mv_schema_->get_table_name()));
-          } else if (!fast_refresh_dependent_columns.empty()) {
-            refreshable_type_ = OB_MV_COMPLETE_REFRESH;
-            fast_refreshable_note_.error_.assign_fmt("missing fast refresh dependent columns in the SELECT list");
-            LOG_TRACE("mv not support fast refresh, need additional dependent columns", K(mv_schema_->get_table_name()), K(fast_refresh_dependent_columns));
-          } else if (OB_FAIL(check_fast_refresh_dep_consistency(tenant_id,
-                                                                mview_id_,
-                                                                query_ctx->reference_obj_tables_,
-                                                                can_fast_refresh))) {
-            LOG_WARN("failed to check fast refresh dep consistency", K(ret));
-          } else if (!can_fast_refresh) {
-            refreshable_type_ = OB_MV_COMPLETE_REFRESH;
-            fast_refreshable_note_.error_.assign_fmt("mview dependencies have changed since creation");
-            LOG_TRACE("mv not support fast refresh, dependencies changed", K(mv_schema_->get_table_name()));
+          } else {
+            const ObMVCheckerParams checker_params{alloc,
+                                                   schema_checker,
+                                                   *stmt_factory_,
+                                                   *expr_factory_,
+                                                   *session_info,
+                                                   *mv_schema_,
+                                                   *mv_container_schema_,
+                                                   compat_version,
+                                                   rt_expand_type > NO_NEED_RT_EXPAND && mv_schema_->mv_on_query_computation(),
+                                                   false /* for_create_mview */};
+            if (OB_UNLIKELY(NEED_RT_EXPAND == rt_expand_type && !mv_schema_->mv_on_query_computation())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("need to check rt expand, but the mview is not defined with on query computation", KR(ret));
+            } else if (OB_FAIL(ObMVChecker::prepare_mv_stmt_and_check_refresh_type(checker_params,
+                                                                                   trans_stmt,
+                                                                                   checker_result_))) {
+              LOG_WARN("failed to check mv fast refresh type", K(ret));
+            } else if (OB_ISNULL(mv_def_stmt_ = static_cast<ObSelectStmt *>(trans_stmt))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get unexpected null stmt", K(ret));
+            } else if (!IS_VALID_FAST_REFRESH_TYPE(checker_result_.get_refresh_type())) {
+              LOG_TRACE("mv not support fast refresh",
+                        K(checker_result_.get_refresh_type()),
+                        K(mv_schema_->get_table_name()));
+            }
           }
           exec_ctx.set_physical_plan_ctx(NULL);
         }
@@ -174,6 +200,7 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
     }
   }
   if (OB_SUCC(ret)) {
+    compat_version_ = compat_version;
     inited_ = true;
   }
   return ret;
@@ -219,9 +246,8 @@ int ObMVProvider::print_mv_operators(ObSQLSessionInfo *session_info,
 {
   int ret = OB_SUCCESS;
   ObQueryCtx *query_ctx = NULL;
+  ObSchemaChecker schema_checker;
   operators.reuse();
-  int64_t rt_mv_last_refresh_ts = 0;
-  uint64_t compat_version = (NULL != refresh_info) ? refresh_info->compat_version_ : 0;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("mv provider is not inited", K(ret));
@@ -229,106 +255,149 @@ int ObMVProvider::print_mv_operators(ObSQLSessionInfo *session_info,
              || OB_ISNULL(mem_ctx_) || OB_ISNULL(stmt_factory_) || OB_ISNULL(expr_factory_)
              || OB_ISNULL(session_info) || OB_ISNULL(query_ctx = mv_def_stmt_->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(mv_def_stmt_), K(mv_schema_), K(mv_container_schema_), K(stmt_factory_), K(expr_factory_), K(session_info), K(query_ctx));
-  } else if (NULL == refresh_info) {
-    // for rt_expand that lacks refresh_info: fetch the mview's last_refresh_scn
-    share::schema::ObMViewInfo mview_info;
-    share::SCN scn;
-    if (OB_ISNULL(GCTX.sql_proxy_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sql proxy is null", K(ret));
-    } else if (OB_FAIL(share::schema::ObMViewInfo::fetch_mview_info(*GCTX.sql_proxy_,
-                                                                    session_info->get_effective_tenant_id(),
-                                                                    mview_id_,
-                                                                    mview_info))) {
-      LOG_WARN("failed to fetch mview info", K(ret), K(mview_id_));
-    } else if (OB_FALSE_IT(compat_version = mview_info.get_compat_version())) {
-    } else if (OB_FAIL(scn.convert_for_sql(mview_info.get_last_refresh_scn()))) {
-      LOG_WARN("failed to convert scn", K(ret), K(mview_info.get_last_refresh_scn()));
-    } else if (scn.is_valid()) {
-      rt_mv_last_refresh_ts = scn.convert_to_ts();
-    }
+    LOG_WARN("get unexpected null", K(ret), K(mv_def_stmt_), K(mv_schema_), K(mv_container_schema_),
+             K(stmt_factory_), K(expr_factory_), K(session_info), K(query_ctx));
+  } else if (OB_FAIL(schema_checker.init(query_ctx->sql_schema_guard_,
+                          (session_info->get_session_type() != ObSQLSessionInfo::INNER_SESSION
+                          ? session_info->get_sessid_for_table() : OB_INVALID_ID)))) {
+    LOG_WARN("failed to init schema checker", K(ret));
   }
   if (OB_SUCC(ret)) {
     ObIAllocator &alloc = mem_ctx_->get_arena_allocator();
+    ObTransformerCtx trans_ctx;
     ObMVPrinterCtx mv_printer_ctx(alloc,
                                   *session_info,
                                   *stmt_factory_,
                                   *expr_factory_,
-                                  compat_version,
+                                  compat_version_,
+                                  trans_ctx,
                                   refresh_info);
-    mv_printer_ctx.rt_mv_last_refresh_ts_ = rt_mv_last_refresh_ts;
-    query_ctx->get_query_hint_for_update().reset();
-    switch (refreshable_type_) {
-      case OB_MV_FAST_REFRESH_SIMPLE_MAV: {
-        ObSimpleMAVPrinter printer(mv_printer_ctx,
-                                   *mv_schema_,
-                                   *mv_container_schema_,
-                                   *mv_def_stmt_,
-                                   checker_info_.mlog_tables_);
-        if (OB_FAIL(printer.print_mv_operators(str_alloc, operators))) {
-          LOG_WARN("failed to print simple mav operator stmts", K(ret));
-        }
-        break;
+    trans_ctx.allocator_ = &alloc;
+    trans_ctx.schema_checker_ = &schema_checker;
+    trans_ctx.session_info_ = session_info;
+    trans_ctx.exec_ctx_ = session_info->get_cur_exec_ctx();
+    trans_ctx.stmt_factory_ = stmt_factory_;
+    trans_ctx.expr_factory_ = expr_factory_;
+    trans_ctx.sql_schema_guard_ = &query_ctx->sql_schema_guard_;
+    mv_printer_ctx.rt_mv_last_refresh_ts_ = rt_mv_last_refresh_ts_;
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+    bool enable_fast_refresh_with_cur_time = false;
+    bool enable_simplify_aggr_dep = false;
+    const ObOptParamHint &opt_params = query_ctx->get_global_hint().opt_params_;
+    if (OB_MV_FAST_REFRESH_GENERAL == checker_result_.get_refresh_type()) {
+      if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_FAST_REFRESH_WITH_CUR_TIME,
+                                                enable_fast_refresh_with_cur_time))) {
+        LOG_WARN("failed to get current time fast refresh option", K(ret));
+      } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_FAST_REFRESH_SIMPLIFY_AGGR_DEP,
+                                                       enable_simplify_aggr_dep))) {
+        LOG_WARN("failed to get simplify aggregate dependency option", K(ret));
       }
-      case OB_MV_FAST_REFRESH_SIMPLE_MJV: {
-        ObSimpleMJVPrinter printer(mv_printer_ctx, *mv_schema_, *mv_container_schema_, *mv_def_stmt_, checker_info_.mlog_tables_);
-        if (OB_FAIL(printer.print_mv_operators(str_alloc, operators))) {
-          LOG_WARN("failed to print simple mjv operator stmts", K(ret));
+    }
+#endif
+    if (OB_SUCC(ret)) {
+      query_ctx->get_query_hint_for_update().reset();
+      query_ctx->stmt_count_ = 0;
+      switch (checker_result_.get_refresh_type()) {
+        case OB_MV_FAST_REFRESH_SIMPLE_MAV: {
+          ObSimpleMAVPrinter printer(mv_printer_ctx,
+                                     *mv_schema_,
+                                     *mv_container_schema_,
+                                     *mv_def_stmt_,
+                                     checker_result_.get_mlog_tables());
+          if (OB_FAIL(printer.print_mv_operators(str_alloc, operators))) {
+            LOG_WARN("failed to print simple mav operator stmts", K(ret));
+          }
+          break;
         }
-        break;
-      }
-      case OB_MV_FAST_REFRESH_SIMPLE_JOIN_MAV: {
-        ObSimpleJoinMAVPrinter printer(mv_printer_ctx,
-                                       *mv_schema_,
-                                       *mv_container_schema_,
-                                       *mv_def_stmt_,
-                                       checker_info_.mlog_tables_);
-        if (OB_FAIL(printer.print_mv_operators(str_alloc, operators))) {
-          LOG_WARN("failed to print simple join mav operator stmts", K(ret));
+        case OB_MV_FAST_REFRESH_SIMPLE_MJV: {
+          ObSimpleMJVPrinter printer(mv_printer_ctx,
+                                     *mv_schema_,
+                                     *mv_container_schema_,
+                                     *mv_def_stmt_,
+                                     checker_result_.get_mlog_tables());
+          if (OB_FAIL(printer.print_mv_operators(str_alloc, operators))) {
+            LOG_WARN("failed to print simple mjv operator stmts", K(ret));
+          }
+          break;
         }
-        break;
-      }
-      case OB_MV_FAST_REFRESH_MAJOR_REFRESH_MJV: {
-        ObMajorRefreshMJVPrinter printer(mv_printer_ctx, *mv_schema_, *mv_container_schema_, *mv_def_stmt_);
-        if (OB_FAIL(printer.print_mv_operators(str_alloc, operators))) {
-          LOG_WARN("failed to print major refresh mjv operator stmts", K(ret));
+        case OB_MV_FAST_REFRESH_SIMPLE_JOIN_MAV: {
+          ObSimpleJoinMAVPrinter printer(mv_printer_ctx,
+                                         *mv_schema_,
+                                         *mv_container_schema_,
+                                         *mv_def_stmt_,
+                                         checker_result_.get_mlog_tables());
+          if (OB_FAIL(printer.print_mv_operators(str_alloc, operators))) {
+            LOG_WARN("failed to print simple join mav operator stmts", K(ret));
+          }
+          break;
         }
-        break;
-      }
-      case OB_MV_FAST_REFRESH_OUTER_JOIN_MJV: {
-        ObOuterJoinMJVPrinter printer(mv_printer_ctx, *mv_schema_, *mv_container_schema_, *mv_def_stmt_, checker_info_.mlog_tables_);
-        if (OB_FAIL(printer.print_mv_operators(str_alloc, operators))) {
-          LOG_WARN("failed to print simple outer join mjv operator stmts", K(ret));
+        case OB_MV_FAST_REFRESH_MAJOR_REFRESH_MJV: {
+          ObMajorRefreshMJVPrinter printer(mv_printer_ctx, *mv_schema_, *mv_container_schema_, *mv_def_stmt_);
+          if (OB_FAIL(printer.print_mv_operators(str_alloc, operators))) {
+            LOG_WARN("failed to print major refresh mjv operator stmts", K(ret));
+          }
+          break;
         }
-        break;
-      }
-      case OB_MV_FAST_REFRESH_UNION_ALL: {
-        ObUnionAllMVPrinter printer(mv_printer_ctx, *mv_schema_, *mv_container_schema_,
-                                    *mv_def_stmt_,
-                                    checker_info_.union_all_marker_idx_,
-                                    checker_info_.child_refresh_types_,
-                                    checker_info_.mlog_tables_);
-        if (OB_FAIL(printer.print_mv_operators(str_alloc, operators))) {
-          LOG_WARN("failed to print union all operator stmts", K(ret));
+        case OB_MV_FAST_REFRESH_OUTER_JOIN_MJV: {
+          // Used when RELATION_BASED_FAST_REFRESH is disabled.
+          ObOuterJoinMJVPrinter printer(mv_printer_ctx,
+                                        *mv_schema_,
+                                        *mv_container_schema_,
+                                        *mv_def_stmt_,
+                                        checker_result_.get_mlog_tables());
+          if (OB_FAIL(printer.print_mv_operators(str_alloc, operators))) {
+            LOG_WARN("failed to print simple outer join mjv operator stmts", K(ret));
+          }
+          break;
         }
-        break;
-      }
-      case OB_MV_FAST_REFRESH_OUTER_JOIN_MAV: {
-        ObOuterJoinMAVPrinter printer(mv_printer_ctx,
+        case OB_MV_FAST_REFRESH_UNION_ALL: {
+          // Used when RELATION_BASED_FAST_REFRESH is disabled.
+          ObUnionAllMVPrinter printer(mv_printer_ctx,
                                       *mv_schema_,
                                       *mv_container_schema_,
                                       *mv_def_stmt_,
-                                      checker_info_.mlog_tables_);
-        if (OB_FAIL(printer.print_mv_operators(str_alloc, operators))) {
-          LOG_WARN("failed to print outer join mav operator stmts", K(ret));
+                                      checker_result_.get_union_all_marker_idx(),
+                                      checker_result_.get_child_refresh_types(),
+                                      checker_result_.get_mlog_tables());
+          if (OB_FAIL(printer.print_mv_operators(str_alloc, operators))) {
+            LOG_WARN("failed to print union all operator stmts", K(ret));
+          }
+          break;
         }
-        break;
-      }
-      default:  {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected refresh type", K(ret), K(refreshable_type_));
-        break;
+        case OB_MV_FAST_REFRESH_OUTER_JOIN_MAV: {
+          ObOuterJoinMAVPrinter printer(mv_printer_ctx,
+                                        *mv_schema_,
+                                        *mv_container_schema_,
+                                        *mv_def_stmt_,
+                                        checker_result_.get_mlog_tables());
+          if (OB_FAIL(printer.print_mv_operators(str_alloc, operators))) {
+            LOG_WARN("failed to print outer join mav operator stmts", K(ret));
+          }
+          break;
+        }
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+        case OB_MV_FAST_REFRESH_GENERAL: {
+          mv_printer_ctx.update_as_insert_delete_ = false;
+          ObMVRefreshHelper printer(mv_printer_ctx,
+                                    *mv_schema_,
+                                    *mv_container_schema_,
+                                    *mv_def_stmt_,
+                                    checker_result_,
+                                    false /* for_create_mview */,
+                                    mv_printer_ctx.for_rt_expand() && mv_schema_->mv_on_query_computation(),
+                                    enable_fast_refresh_with_cur_time,
+                                    enable_simplify_aggr_dep);
+          if (OB_FAIL(printer.print_mv_operators(str_alloc, operators))) {
+            LOG_WARN("failed to print relation-based mv operator stmts", K(ret));
+          }
+          break;
+        }
+#endif
+        default:  {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected refresh type", K(ret), K(checker_result_.get_refresh_type()));
+          break;
+        }
       }
     }
   }
@@ -339,23 +408,43 @@ int ObMVProvider::check_mv_refreshable(const uint64_t tenant_id,
                                        const uint64_t mview_id,
                                        ObSQLSessionInfo *session_info,
                                        ObSchemaGetterGuard *schema_guard,
+                                       uint64_t compat_version,
                                        bool &can_fast_refresh,
                                        FastRefreshableNotes &note)
 {
   int ret = OB_SUCCESS;
+  share::schema::ObMViewInfo mview_info;
   can_fast_refresh = false;
   ObMVProvider mv_provider(mview_id);
-  if (OB_FAIL(mv_provider.init_mv_provider(session_info, schema_guard, DEPENDS_ON_SCHEMA))) {
+  if (OB_INVALID_VERSION == compat_version) {
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sql proxy is null", K(ret));
+    } else if (OB_FAIL(share::schema::ObMViewInfo::fetch_mview_info(*GCTX.sql_proxy_,
+                                                                    tenant_id,
+                                                                    mview_id,
+                                                                    mview_info))) {
+      LOG_WARN("failed to fetch mview info", K(ret), K(tenant_id), K(mview_id));
+    } else {
+      compat_version = mview_info.get_compat_version();
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(mv_provider.init_mv_provider(session_info,
+                                                  schema_guard,
+                                                  DEPENDS_ON_SCHEMA,
+                                                  compat_version))) {
     LOG_WARN("fail to init mv provider", KR(ret), K(tenant_id));
-  } else if (OB_UNLIKELY(ObMVRefreshableType::OB_MV_REFRESH_INVALID == mv_provider.refreshable_type_)) {
+  } else if (OB_UNLIKELY(ObMVRefreshableType::OB_MV_REFRESH_INVALID
+                         == mv_provider.checker_result_.get_refresh_type())) {
     // column type for mv is changed after it is created
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("can not refresh mv", K(ret), K(mv_provider.refreshable_type_));
+    LOG_WARN("can not refresh mv", K(ret), K(mv_provider.checker_result_.get_refresh_type()));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "refresh mv after column types change is");
-  } else if (OB_FAIL(note.error_.assign(mv_provider.fast_refreshable_note_.error_))) {
+  } else if (OB_FAIL(note.error_.assign(mv_provider.checker_result_.get_note().error_))) {
     LOG_WARN("fail to assign ObSqlString", K(ret));
   } else {
-    can_fast_refresh = IS_VALID_FAST_REFRESH_TYPE(mv_provider.refreshable_type_);
+    can_fast_refresh = IS_VALID_FAST_REFRESH_TYPE(mv_provider.checker_result_.get_refresh_type());
   }
   return ret;
 }
@@ -363,6 +452,8 @@ int ObMVProvider::check_mv_refreshable(const uint64_t tenant_id,
 int ObMVProvider::get_mlog_mv_refresh_infos(ObSQLSessionInfo *session_info,
                                             ObSchemaGetterGuard *schema_guard,
                                             const ObMVRefreshMethod refresh_method,
+                                            const bool initial_refresh_finished,
+                                            const uint64_t compat_version,
                                             ObIArray<ObDependencyInfo> &dep_infos,
                                             ObIArray<uint64_t> &tables_need_mlog,
                                             bool &can_fast_refresh)
@@ -373,7 +464,10 @@ int ObMVProvider::get_mlog_mv_refresh_infos(ObSQLSessionInfo *session_info,
   uint64_t data_version = 0;
   dep_infos.reuse();
   tables_need_mlog.reuse();
-  if (OB_FAIL(init_mv_provider(session_info, schema_guard, NO_NEED_RT_EXPAND))) {
+  if (OB_FAIL(init_mv_provider(session_info,
+                               schema_guard,
+                               NO_NEED_RT_EXPAND,
+                               compat_version))) {
     LOG_WARN("failed to init mv provider", K(ret));
   } else if (OB_ISNULL(mv_def_stmt_) || OB_ISNULL(query_ctx = mv_def_stmt_->get_query_ctx())
              || OB_ISNULL(session_info)) {
@@ -386,79 +480,31 @@ int ObMVProvider::get_mlog_mv_refresh_infos(ObSQLSessionInfo *session_info,
                                                                   || (data_version >= DATA_VERSION_4_5_1_0) /* need_nested_dep */,
                                                                   dep_infos))) {
     LOG_WARN("failed to collect dep infos", K(ret));
-  } else if (OB_UNLIKELY(ObMVRefreshableType::OB_MV_REFRESH_INVALID == refreshable_type_)) {
+  } else if (OB_UNLIKELY(ObMVRefreshableType::OB_MV_REFRESH_INVALID == checker_result_.get_refresh_type())) {
     // column type for mv is changed after it is created
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("can not refresh mv", K(ret), K(refreshable_type_));
+    LOG_WARN("can not refresh mv", K(ret), K(checker_result_.get_refresh_type()));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "refresh mv after column types change is");
-  } else if (!IS_VALID_FAST_REFRESH_TYPE(refreshable_type_)) {
+  } else if (!IS_VALID_FAST_REFRESH_TYPE(checker_result_.get_refresh_type())) {
     can_fast_refresh = false;
-  } else if (ObMVRefreshMethod::FAST != refresh_method
-             && ObMVRefreshMethod::FORCE != refresh_method) {
+  } else if (ObMVRefreshMethod::FAST != refresh_method && ObMVRefreshMethod::FORCE != refresh_method) {
     LOG_INFO("skip fast refresh check as refresh method is not fast or force", K(refresh_method));
     can_fast_refresh = false;
     if (OB_ISNULL(get_error_str().ptr())) {
-      fast_refreshable_note_.error_.assign_fmt("materialized view is defined with complete refresh");
+      checker_result_.get_note().error_.assign_fmt("materialized view is defined with complete refresh");
+    }
+  } else if (!initial_refresh_finished) {
+    LOG_INFO("mview not refreshed yet, disable fast refresh", K_(mview_id), K(refresh_method));
+    can_fast_refresh = false;
+    if (OB_ISNULL(get_error_str().ptr())) {
+      checker_result_.get_note().error_.assign_fmt("initial refresh of the materialized view has not been completed yet");
     }
   } else {
     can_fast_refresh = true;
   }
 
-  if (OB_SUCC(ret) && can_fast_refresh
-      && OB_FAIL(collect_tables_need_mlog(mv_def_stmt_, tables_need_mlog))) {
+  if (OB_SUCC(ret) && can_fast_refresh && OB_FAIL(collect_tables_need_mlog(mv_def_stmt_, tables_need_mlog))) {
     LOG_WARN("failed to collect tables need mlog", K(ret));
-  }
-  return ret;
-}
-
-int ObMVProvider::check_fast_refresh_dep_consistency(const uint64_t tenant_id,
-                                                     const uint64_t mview_id,
-                                                     const ObReferenceObjTable &ref_objs,
-                                                     bool &can_fast_refresh)
-{
-  int ret = OB_SUCCESS;
-  can_fast_refresh = true;
-  uint64_t data_version = 0;
-  ObSEArray<ObDependencyInfo, 8> dependency_infos;
-  ObSEArray<ObMVDepInfo, 8> previous_mv_dep_infos;
-  if (OB_ISNULL(GCTX.sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql proxy is null", KR(ret));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-    LOG_WARN("failed to get data version", K(ret));
-  } else if (OB_FAIL(ObDependencyInfo::collect_dep_infos_for_view(ref_objs,
-                                                                  data_version >= MOCK_DATA_VERSION_4_4_2_0 /* need_nested_dep */,
-                                                                  dependency_infos))) {
-    LOG_WARN("failed to collect dep infos", K(ret));
-  } else if (OB_FAIL(ObMVDepUtils::get_mview_dep_infos(*GCTX.sql_proxy_,
-                                                       tenant_id,
-                                                       mview_id,
-                                                       previous_mv_dep_infos,
-                                                       false /* ignore_udt_udf */))) {
-    LOG_WARN("fail to parse mview ref infos", KR(ret), K(tenant_id), K(mview_id));
-  } else if (previous_mv_dep_infos.count() > dependency_infos.count()) {
-    can_fast_refresh = false;
-    LOG_INFO("dependency num not match", K(dependency_infos), K(previous_mv_dep_infos));
-  }
-
-  // check dependency consistent
-  for (int64_t i = 0; OB_SUCC(ret) && can_fast_refresh && i < dependency_infos.count(); ++i) {
-    const share::schema::ObDependencyInfo &dep = dependency_infos.at(i);
-    if (i >= previous_mv_dep_infos.count()) {
-      // For fast refresh mview with user-defined proctime view, tables in that view
-      // were not recorded in previous_mv_dep_infos in earlier versions and
-      // dep_obj_id was recorded as a valid id. For upgrades from that version, skip.
-      if (OB_INVALID_ID == dep.get_dep_obj_id()) {
-        can_fast_refresh = false;
-        LOG_INFO("dependency num not match", K(i), K(dependency_infos));
-      }
-    } else if (dep.get_ref_obj_id() != previous_mv_dep_infos.at(i).p_obj_) {
-      can_fast_refresh = false;
-      LOG_INFO("dependency changed", K(i), K(dep), K(previous_mv_dep_infos.at(i)));
-    } else if (previous_mv_dep_infos.at(i).is_complete_refresh_only_) {
-      can_fast_refresh = false;
-      LOG_INFO("dependency is complete refresh only", K(i), K(dep), K(previous_mv_dep_infos.at(i)));
-    }
   }
   return ret;
 }
@@ -469,12 +515,20 @@ int ObMVProvider::get_major_refresh_operators(ObSQLSessionInfo *session_info,
                                               ObIArray<ObString> &operators)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(init_mv_provider(session_info, schema_guard, NO_NEED_RT_EXPAND))) {
+  if (OB_FAIL(init_mv_provider(session_info, schema_guard, NO_NEED_RT_EXPAND, 0))) {
     LOG_WARN("failed to init mv provider", K(ret));
-  } else if (OB_ISNULL(mv_def_stmt_) || OB_ISNULL(mv_schema_)
-             || OB_ISNULL(mv_container_schema_)) {
+  } else if (OB_ISNULL(mv_def_stmt_) || OB_ISNULL(mv_schema_) || OB_ISNULL(mv_container_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(mv_def_stmt_), K(mv_schema_), K(mv_container_schema_));
+  } else if (OB_UNLIKELY(!mv_container_schema_->mv_major_refresh()
+                         || OB_MV_FAST_REFRESH_MAJOR_REFRESH_MJV != checker_result_.get_refresh_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected major refresh checker result",
+             K(ret),
+             "mv_major_refresh",
+             mv_container_schema_->mv_major_refresh(),
+             "refresh_type",
+             checker_result_.get_refresh_type());
   } else if (OB_FAIL(print_mv_operators(session_info,
                                         &refresh_info,
                                         CURRENT_CONTEXT->get_arena_allocator(),
@@ -487,6 +541,45 @@ int ObMVProvider::get_major_refresh_operators(ObSQLSessionInfo *session_info,
   return ret;
 }
 
+int ObMVProvider::get_rt_mview_info(const share::schema::ObMViewInfo &mview_info,
+                                    ObIArray<ObRtMViewInfo> &rt_mview_infos,
+                                    ObRtMViewInfo &rt_mview_info) const
+{
+  int ret = OB_SUCCESS;
+  share::SCN refresh_scn;
+  int64_t last_refresh_ts_us = 0;
+  if (OB_UNLIKELY(mview_id_ != mview_info.get_mview_id())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected mview id", K(ret), K_(mview_id), K(mview_info));
+  } else if (ObRtMViewInfo::find(rt_mview_infos, mview_id_, rt_mview_info)) {
+    // do nothing
+  } else {
+    // Keep the reference SCN consistent with execution, which uses DATA_SYNC_SCN
+    // for a synchronized non-major MV.
+    const bool use_last_refresh_scn = !mview_info.get_is_synced()
+                                      || share::schema::ObMVRefreshMode::MAJOR_COMPACTION
+                                         == mview_info.get_refresh_mode();
+    const uint64_t effective_refresh_scn = use_last_refresh_scn ? mview_info.get_last_refresh_scn()
+                                                                : mview_info.get_data_sync_scn();
+    const bool has_valid_refresh_scn = 0 != effective_refresh_scn
+                                       && share::OB_INVALID_SCN_VAL != effective_refresh_scn;
+    if (!has_valid_refresh_scn) {
+      // do nothing
+    } else if (OB_FAIL(refresh_scn.convert_for_sql(effective_refresh_scn))) {
+      LOG_WARN("failed to convert refresh scn", K(ret), K(effective_refresh_scn));
+    } else {
+      last_refresh_ts_us = refresh_scn.convert_to_ts();
+    }
+    if (OB_SUCC(ret)) {
+      rt_mview_info = ObRtMViewInfo(mview_id_, last_refresh_ts_us);
+      if (OB_FAIL(rt_mview_infos.push_back(rt_mview_info))) {
+        LOG_WARN("failed to add rt mview info", K(ret), K(rt_mview_info));
+      }
+    }
+  }
+  return ret;
+}
+
 // expand_view will used to generate plan, need use alloc to deep copy the query str
 int ObMVProvider::get_real_time_mv_expand_view(const uint64_t tenant_id,
                                                const uint64_t mview_id,
@@ -494,20 +587,34 @@ int ObMVProvider::get_real_time_mv_expand_view(const uint64_t tenant_id,
                                                ObSchemaGetterGuard *schema_guard,
                                                ObIAllocator &alloc,
                                                ObString &expand_view,
-                                               bool &is_major_refresh_mview)
+                                               bool &is_major_refresh_mview,
+                                               ObIArray<ObRtMViewInfo> &rt_mview_infos)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObString, 1> operators;
   ObMVProvider mv_provider(mview_id);
+  share::schema::ObMViewInfo mview_info;
+  ObRtMViewInfo rt_mview_info;
   expand_view.reset();
   is_major_refresh_mview = false;
-  if (OB_FAIL(mv_provider.init_mv_provider(session_info, schema_guard, NEED_RT_EXPAND))) {
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", K(ret));
+  } else if (OB_FAIL(share::schema::ObMViewInfo::fetch_mview_info(*GCTX.sql_proxy_, tenant_id, mview_id, mview_info))) {
+    LOG_WARN("failed to fetch mview info", K(ret), K(mview_id));
+  } else if (OB_FAIL(mv_provider.init_mv_provider(session_info,
+                                                  schema_guard,
+                                                  NEED_RT_EXPAND,
+                                                  mview_info.get_compat_version()))) {
     LOG_WARN("failed to init mv provider", K(ret));
-  } else if (OB_UNLIKELY(!IS_VALID_FAST_REFRESH_TYPE(mv_provider.refreshable_type_))) {
+  } else if (OB_UNLIKELY(!IS_VALID_FAST_REFRESH_TYPE(mv_provider.checker_result_.get_refresh_type()))) {
     ret = OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE;
     LOG_WARN("mview can not on query computation", K(ret), K(mview_id));
+  } else if (OB_FAIL(mv_provider.get_rt_mview_info(mview_info, rt_mview_infos, rt_mview_info))) {
+    LOG_WARN("failed to get rt mview info", K(ret), K(mview_id));
+  } else if (OB_FALSE_IT(mv_provider.rt_mv_last_refresh_ts_ = rt_mview_info.last_refresh_ts_us_)) {
   } else if (OB_FAIL(mv_provider.print_mv_operators(session_info,
-                                                    NULL, // refresh_info
+                                                    NULL,  // refresh_info
                                                     alloc,
                                                     operators))) {
     LOG_WARN("failed to print mv operators", K(ret));
@@ -516,7 +623,7 @@ int ObMVProvider::get_real_time_mv_expand_view(const uint64_t tenant_id,
     LOG_WARN("unexpected empty operators", K(ret));
   } else {
     expand_view = operators.at(0);
-    is_major_refresh_mview = OB_MV_FAST_REFRESH_MAJOR_REFRESH_MJV == mv_provider.refreshable_type_;
+    is_major_refresh_mview = OB_MV_FAST_REFRESH_MAJOR_REFRESH_MJV == mv_provider.checker_result_.get_refresh_type();
     LOG_TRACE("finish generate rt mv expand view", K(mview_id), K(is_major_refresh_mview), K(expand_view));
   }
   return ret;
@@ -734,118 +841,13 @@ int ObMVProvider::get_complete_refresh_mview_str(const ObTableSchema &mv_schema,
                                                                               str_alloc,
                                                                               mview_str))) {
           LOG_WARN("failed to print complete refresh mview operator", K(ret));
+        } else if (OB_UNLIKELY(mview_str.empty())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected empty mview select sql", K(ret), K(tenant_id),
+                   "mview_id", mv_schema.get_table_id());
         }
         exec_ctx.set_physical_plan_ctx(NULL);
       }
-    }
-  }
-  return ret;
-}
-
-int ObMVProvider::transform_mv_def_stmt(ObDMLStmt *&mv_def_stmt,
-                                        ObIAllocator *allocator,
-                                        ObSchemaChecker *schema_checker,
-                                        ObSQLSessionInfo *session_info,
-                                        ObRawExprFactory *expr_factory,
-                                        ObStmtFactory *stmt_factory)
-{
-  int ret = OB_SUCCESS;
-  uint64_t rule_set = 0;
-  bool trans_happened = false;
-  if (OB_ISNULL(mv_def_stmt) || OB_ISNULL(allocator)
-      || OB_ISNULL(session_info) || OB_ISNULL(expr_factory)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(mv_def_stmt), K(allocator), K(session_info), K(expr_factory));
-  } else if (OB_FAIL(transform_preprocess_mv_def_stmt(mv_def_stmt,
-                                                      session_info,
-                                                      expr_factory))) {
-    LOG_WARN("failed to preprocess mv def stmt", K(ret), KPC(mv_def_stmt));
-  } else if (OB_FAIL(get_trans_rule_set(mv_def_stmt, rule_set))) {
-    LOG_WARN("failed to get trans rule set", K(ret), KPC(mv_def_stmt));
-  } else if (0 == rule_set) {
-    // do nothing
-  } else {
-    ObTransformerCtx trans_ctx;
-    ObTransformerImpl transformer(&trans_ctx);
-    trans_ctx.allocator_ = allocator;
-    trans_ctx.schema_checker_ = schema_checker;
-    trans_ctx.session_info_ = session_info;
-    trans_ctx.exec_ctx_ = session_info->get_cur_exec_ctx();
-    trans_ctx.expr_factory_ = expr_factory;
-    trans_ctx.stmt_factory_ = stmt_factory;
-    if (OB_FAIL(transformer.transform_rule_set(mv_def_stmt, rule_set, 1, trans_happened))) {
-      LOG_WARN("failed to transform mv def stmt", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObMVProvider::transform_preprocess_mv_def_stmt(ObDMLStmt *mv_def_stmt,
-                                                   ObSQLSessionInfo *session_info,
-                                                   ObRawExprFactory *expr_factory)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObSelectStmt*, 4> child_stmts;
-  if (OB_ISNULL(mv_def_stmt) || OB_ISNULL(session_info) || OB_ISNULL(expr_factory)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(mv_def_stmt), K(session_info), K(expr_factory));
-  } else if (OB_FAIL(mv_def_stmt->get_child_stmts(child_stmts))) {
-    LOG_WARN("failed to get child stmts", K(ret), KPC(mv_def_stmt));
-  } else if (OB_FAIL(ObTransformUtils::right_join_to_left(mv_def_stmt))) {
-    LOG_WARN("failed to transform right join to left", K(ret));
-  } else {
-    bool trans_happened = false;
-    ObExpandAggregateUtils expand_aggr_utils(*expr_factory,  session_info);
-    expand_aggr_utils.set_expand_for_mv();
-    if (OB_FAIL(expand_aggr_utils.expand_aggr_expr(mv_def_stmt, trans_happened))) {
-      LOG_WARN("failed to expand aggr expr", K(ret));
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
-    if (OB_FAIL(SMART_CALL(transform_preprocess_mv_def_stmt(child_stmts.at(i),
-                                                            session_info,
-                                                            expr_factory)))) {
-      LOG_WARN("failed to preprocess child stmt", K(ret), K(i), KPC(child_stmts.at(i)));
-    }
-  }
-  return ret;
-}
-
-int ObMVProvider::get_trans_rule_set(const ObDMLStmt *mv_def_stmt,
-                                     uint64_t &rule_set)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObSelectStmt*, 4> child_stmts;
-  ObSEArray<const JoinedTable*, 8> joined_table;
-  if (OB_ISNULL(mv_def_stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(mv_def_stmt));
-  } else if (OB_FAIL(mv_def_stmt->get_child_stmts(child_stmts))) {
-    LOG_WARN("failed to get child stmts", K(ret), KPC(mv_def_stmt));
-  } else if (OB_FAIL(append(joined_table, mv_def_stmt->get_joined_tables()))) {
-    LOG_WARN("failed to append joined tables", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
-    if (OB_FAIL(SMART_CALL(get_trans_rule_set(child_stmts.at(i), rule_set)))) {
-      LOG_WARN("failed to get trans rule set", K(ret), KPC(child_stmts.at(i)));
-    }
-  }
-  // check whether need ELIMINATE_OJ
-  while (OB_SUCC(ret) && (0 == (rule_set & 1L << ELIMINATE_OJ)) && !joined_table.empty()) {
-    const JoinedTable* table = NULL;
-    if (OB_FAIL(joined_table.pop_back(table))) {
-      LOG_WARN("failed to pop back joined table", K(ret));
-    } else if (OB_ISNULL(table) || OB_ISNULL(table->left_table_) || OB_ISNULL(table->right_table_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null table", K(ret), KPC(table));
-    } else if (!table->is_inner_join()) {
-      rule_set |= 1L << ELIMINATE_OJ;
-    } else if (table->left_table_->is_joined_table()
-               && OB_FAIL(joined_table.push_back(static_cast<const JoinedTable*>(table->left_table_)))) {
-      LOG_WARN("failed to append left joined tables", K(ret));
-    } else if (table->right_table_->is_joined_table()
-               && OB_FAIL(joined_table.push_back(static_cast<const JoinedTable*>(table->right_table_)))) {
-      LOG_WARN("failed to append right joined tables", K(ret));
     }
   }
   return ret;

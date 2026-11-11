@@ -24,6 +24,8 @@
 #include "sql/resolver/dml/ob_stmt_expr_visitor.h"
 #include "share/catalog/ob_catalog_properties.h"
 #include "share/vector_index/ob_vector_index_param.h"
+#include "sql/resolver/dml/ob_relation.h"
+#include "sql/resolver/dml/ob_relation_from.h"
 
 namespace oceanbase
 {
@@ -202,10 +204,11 @@ struct ObExtTableDef
   uint64_t external_location_id_;
 };
 
-struct TableItem
+struct TableItem : public ObRelation
 {
   TableItem(ObIAllocator &allocator)
-    : part_ids_(allocator),
+    : ObRelation(allocator),
+      part_ids_(allocator),
       part_names_(allocator),
       exec_params_(allocator)
   {
@@ -304,6 +307,7 @@ struct TableItem
     USING_TIMESTAMP,
     USING_SCN
   };
+  virtual RelationType get_relation_type() const override { return RelationType::TABLE; }
   //this table resolved from schema, is base table or alias from base table
   bool is_basic_table() const { return BASE_TABLE == type_ || ALIAS_TABLE == type_; }
   bool is_generated_table() const { return GENERATED_TABLE == type_; }
@@ -526,27 +530,6 @@ inline uint64_t ColumnItem::hash(uint64_t seed) const
   return seed;
 }
 
-struct FromItem
-{
-  FromItem()
-    : table_id_(common::OB_INVALID_ID),
-      link_table_id_(common::OB_INVALID_ID),
-      is_joined_(false)
-  {}
-  uint64_t   table_id_;
-  uint64_t   link_table_id_;
-  // false: it is the real table id
-  // true: it is the joined table id
-  bool      is_joined_;
-
-  bool operator ==(const FromItem &r) const
-  { return table_id_ == r.table_id_ && is_joined_ == r.is_joined_; }
-
-  int deep_copy(const FromItem &other);
-  TO_STRING_KV(N_TID, table_id_,
-               N_IS_JOIN, is_joined_);
-};
-
 struct JoinedTable : public TableItem
 {
   JoinedTable(ObIAllocator &allocator) :
@@ -564,6 +547,9 @@ struct JoinedTable : public TableItem
                 ObIRawExprCopier &expr_copier,
                 const JoinedTable &other);
   bool same_as(const JoinedTable &other) const;
+  virtual RelationType get_relation_type() const override { return RelationType::JOIN; }
+  bool is_multi_input() const override { return true; }
+  int get_input_relations(ObSelectStmt *stmt, ObIArray<ObRelation *> &inputs) override;
   bool is_inner_join() const { return INNER_JOIN == joined_type_; }
   bool is_left_join() const { return LEFT_OUTER_JOIN == joined_type_; }
   bool is_right_join() const { return RIGHT_OUTER_JOIN == joined_type_; }
@@ -590,35 +576,6 @@ struct JoinedTable : public TableItem
   ObSqlArray<uint64_t> single_table_ids_;
   ObSqlArray<ObRawExpr*> join_conditions_;
   bool is_straight_join_; // In MySQL mode, mark INNER JOIN as STRAIGHT_JOIN.
-};
-
-class SemiInfo
-{
-public:
-  SemiInfo(ObIAllocator &allocator, ObJoinType join_type = LEFT_SEMI_JOIN) :
-    join_type_(join_type),
-    semi_id_(common::OB_INVALID_ID),
-    right_table_id_(common::OB_INVALID_ID),
-    left_table_ids_(allocator),
-    semi_conditions_(allocator) {}
-  virtual ~SemiInfo() {};
-  int deep_copy(ObIRawExprCopier &copier,
-                const SemiInfo &other);
-  inline bool is_semi_join() const { return LEFT_SEMI_JOIN == join_type_ || RIGHT_SEMI_JOIN == join_type_; }
-  inline bool is_anti_join() const { return LEFT_ANTI_JOIN == join_type_ || RIGHT_ANTI_JOIN == join_type_; }
-  TO_STRING_KV(K_(join_type),
-               K_(semi_id),
-               K_(left_table_ids),
-               K_(right_table_id),
-               K_(semi_conditions));
-
-  ObJoinType join_type_;
-  uint64_t semi_id_;
-  //generate table create from subquery
-  uint64_t right_table_id_;
-  //table ids which involved right table in parent query
-  ObSqlArray<uint64_t> left_table_ids_;
-  ObSqlArray<ObRawExpr*> semi_conditions_;
 };
 
 struct PartExprItem
@@ -778,8 +735,8 @@ public:
                                     int64_t sub_num);
   int get_stmt_by_stmt_id(int64_t stmt_id, ObDMLStmt *&stmt);
 
-  int64_t get_from_item_size() const { return from_items_.count(); }
-  void clear_from_items() { from_items_.reuse(); }
+  int64_t get_from_item_size() const { return from_clause_.from_items_.count(); }
+  void clear_from_items() { from_clause_.from_items_.reuse(); }
   int add_from_item(uint64_t tid, bool is_joined = false)
   {
     int ret = common::OB_SUCCESS;
@@ -787,7 +744,7 @@ public:
       FromItem item;
       item.table_id_ = tid;
       item.is_joined_ = is_joined;
-      ret = from_items_.push_back(item);
+      ret = from_clause_.from_items_.push_back(item);
     } else {
       ret = common::OB_ERR_ILLEGAL_ID;
     }
@@ -802,11 +759,11 @@ public:
   static TableItem *create_table_item(common::ObIAllocator &allocator);
   static JoinedTable *create_joined_table(common::ObIAllocator &allocator);
   int merge_from_items(const ObDMLStmt &stmt);
-  const FromItem &get_from_item(int64_t index) const { return from_items_[index]; }
-  FromItem &get_from_item(int64_t index) { return from_items_[index]; }
+  const FromItem &get_from_item(int64_t index) const { return from_clause_.from_items_[index]; }
+  FromItem &get_from_item(int64_t index) { return from_clause_.from_items_[index]; }
   int64_t get_from_item_idx(uint64_t table_id) const;
-  common::ObIArray<FromItem> &get_from_items() { return from_items_; }
-  const common::ObIArray<FromItem> &get_from_items() const { return from_items_; }
+  common::ObIArray<FromItem> &get_from_items() { return from_clause_.from_items_; }
+  const common::ObIArray<FromItem> &get_from_items() const { return from_clause_.from_items_; }
   common::ObIArray<PartExprItem> &get_part_exprs() { return part_expr_items_; }
   const common::ObIArray<PartExprItem> &get_part_exprs() const{ return part_expr_items_; }
 
@@ -814,7 +771,7 @@ public:
   int get_json_table_exprs(ObIArray<ObRawExpr *> &json_table_exprs) const;
 
   int reset_from_item(const common::ObIArray<FromItem> &from_items);
-  void clear_from_item() { from_items_.reset(); }
+  void clear_from_item() { from_clause_.from_items_.reset(); }
   int reset_table_item(const common::ObIArray<TableItem*> &table_items);
   void clear_column_items();
 
@@ -846,11 +803,11 @@ public:
            get_from_item_size() > 1 ||
            (get_from_item_size() == 1 && get_from_item(0).is_joined_);
   }
-  int add_semi_info(SemiInfo* info) { return semi_infos_.push_back(info); }
+  int add_semi_info(SemiInfo* info) { return from_clause_.semi_infos_.push_back(info); }
   int remove_semi_info(SemiInfo* info);
-  inline common::ObIArray<SemiInfo*> &get_semi_infos() { return semi_infos_; }
-  inline const common::ObIArray<SemiInfo*> &get_semi_infos() const { return semi_infos_; }
-  inline int64_t get_semi_info_size() const { return semi_infos_.count(); }
+  inline common::ObIArray<SemiInfo*> &get_semi_infos() { return from_clause_.semi_infos_; }
+  inline const common::ObIArray<SemiInfo*> &get_semi_infos() const { return from_clause_.semi_infos_; }
+  inline int64_t get_semi_info_size() const { return from_clause_.semi_infos_.count(); }
   inline void set_limit_offset(ObRawExpr* limit, ObRawExpr* offset)
   {
     limit_count_expr_ = limit;
@@ -922,7 +879,7 @@ public:
     }
     return size;
   }
-  inline int64_t get_condition_size() const { return condition_exprs_.count(); }
+  inline int64_t get_condition_size() const { return from_clause_.condition_exprs_.count(); }
   void reset_table_items() { table_items_.reset(); }
   const ColumnItem *get_column_item(int64_t index) const
   {
@@ -989,8 +946,8 @@ public:
   int remove_table_item(const ObIArray<uint64_t> &tids, bool *remove_happened = NULL);
   int remove_table_info(const TableItem *table);
   int remove_table_info(const ObIArray<TableItem *> &table_items);
-  TableItem *get_table_item(const FromItem item);
-  const TableItem *get_table_item(const FromItem item) const;
+  TableItem *get_table_item(const FromItem &item);
+  const TableItem *get_table_item(const FromItem &item) const;
   int get_table_item_idx(const TableItem *child_table, int64_t &idx) const;
   int get_table_item_idx(const uint64_t table_id, int64_t &idx) const;
 
@@ -1038,10 +995,10 @@ public:
   int remove_column_item(ObIArray<uint64_t> &table_ids);
   int remove_column_item(const ObRawExpr *column_expr);
   int remove_column_item(const ObIArray<ObRawExpr *> &column_exprs);
-  const ObRawExpr *get_condition_expr(int64_t index) const { return condition_exprs_.at(index); }
-  ObRawExpr *get_condition_expr(int64_t index) { return condition_exprs_.at(index); }
-  common::ObIArray<ObRawExpr*> &get_condition_exprs() { return condition_exprs_; }
-  const common::ObIArray<ObRawExpr*> &get_condition_exprs() const { return condition_exprs_; }
+  const ObRawExpr *get_condition_expr(int64_t index) const { return from_clause_.condition_exprs_.at(index); }
+  ObRawExpr *get_condition_expr(int64_t index) { return from_clause_.condition_exprs_.at(index); }
+  common::ObIArray<ObRawExpr*> &get_condition_exprs() { return from_clause_.condition_exprs_; }
+  const common::ObIArray<ObRawExpr*> &get_condition_exprs() const { return from_clause_.condition_exprs_; }
   common::ObIArray<ObRawExpr *> &get_pseudo_column_like_exprs()
   { return pseudo_column_like_exprs_; }
   const common::ObIArray<ObRawExpr *> &get_pseudo_column_like_exprs() const
@@ -1074,8 +1031,9 @@ public:
   void clear_sequence() { sequence_infos_.reset(); }
   bool has_part_key_sequence() const { return has_part_key_sequence_; }
   void set_has_part_key_sequence(const bool v) { has_part_key_sequence_ = v; }
-  int add_condition_expr(ObRawExpr *expr) { return condition_exprs_.push_back(expr); }
-  int add_condition_exprs(const common::ObIArray<ObRawExpr*> &exprs) { return append(condition_exprs_, exprs); }
+  int add_condition_expr(ObRawExpr *expr) { return from_clause_.condition_exprs_.push_back(expr); }
+  int add_condition_exprs(const common::ObIArray<ObRawExpr*> &exprs)
+  { return append(from_clause_.condition_exprs_, exprs); }
   //move from ObStmt
   //user var
   bool is_contains_assignment() const {return is_contains_assignment_;}
@@ -1181,7 +1139,7 @@ public:
                N_PARTITION_EXPR, part_expr_items_,
                N_COLUMN, column_items_,
                "sequence_infos", sequence_infos_,
-               N_WHERE, condition_exprs_,
+               N_WHERE, from_clause_.condition_exprs_,
                N_ORDER_BY, order_items_,
                N_LIMIT, limit_count_expr_,
                N_OFFSET, limit_offset_expr_,
@@ -1346,12 +1304,11 @@ protected:
   bool has_fetch_;
   bool is_fetch_with_ties_;
   // table_references
-  ObSqlArray<FromItem> from_items_;
   ObSqlArray<PartExprItem> part_expr_items_;
   ObSqlArray<JoinedTable*> joined_tables_;
   ObStmtHint stmt_hint_;
   // semi info for semi join
-  ObSqlArray<SemiInfo*> semi_infos_;
+  ObFromRelation from_clause_;
 
   //move from ObStmt
   ObSqlArray<share::AutoincParam> autoinc_params_;  // auto-increment related
@@ -1371,7 +1328,6 @@ protected:
   // `table_items` 在resolve_from_clause的时候生成, 顺序是从SQL语句左到右push_back的.
   ObSqlArray<TableItem *> table_items_;
   ObSqlArray<ColumnItem> column_items_;
-  ObSqlArray<ObRawExpr *> condition_exprs_;
   // 存放共享的类伪列表达式, 我们认为除了一般的伪列表达式ObPseudoColumnRawExpr, rownum和sequence也属于伪列
   ObSqlArray<ObRawExpr *> pseudo_column_like_exprs_;
   ObDMLStmtTableHash tables_hash_;

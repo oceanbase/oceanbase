@@ -72,9 +72,7 @@ int MLogColumnUtils::check_column_type(
 int MLogColumnUtils::add_special_columns()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(add_sequence_column())) {
-    LOG_WARN("failed to add sequence column", KR(ret));
-  } else if (OB_FAIL(add_dmltype_column())) {
+  if (OB_FAIL(add_dmltype_column())) {
     LOG_WARN("failed to add dmltype column", KR(ret));
   } else if (OB_FAIL(add_old_new_column())) {
     LOG_WARN("failed to add old new column", KR(ret));
@@ -82,8 +80,6 @@ int MLogColumnUtils::add_special_columns()
   return ret;
 }
 
-// sequence_no is part of mlog's rowkey
-// its rowkey position will be set later
 int MLogColumnUtils::add_sequence_column()
 {
   int ret = OB_SUCCESS;
@@ -908,6 +904,7 @@ int ObMLogBuilder::set_table_columns(
 {
   int ret = OB_SUCCESS;
   bool is_table_with_logic_pk = false;
+  bool seq_first_rowkey = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMLogBuilder not init", KR(ret));
@@ -941,22 +938,45 @@ int ObMLogBuilder::set_table_columns(
         }
       }
 
-      // the primary key of a mlog is consist of:
-      // the base table pk + the base table part key + the mlog sequence no
+      // the primary key of a mlog is consist of the base table pk and part key and the mlog sequence no.
+      // seq_first_rowkey decides whether SEQUENCE$$ is placed before the base table pk columns.
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(mlog_column_utils_.add_base_table_pk_columns(
-          row_desc, schema_guard, base_table_schema))) {
-        LOG_WARN("failed to add base table pk columns", KR(ret));
-      } else if (OB_FAIL(mlog_column_utils_.add_base_table_columns(
-          create_mlog_arg.store_columns_, row_desc, base_table_schema))) {
-        LOG_WARN("failed to add base table columns", KR(ret));
-      } else if (OB_FAIL(mlog_column_utils_.add_base_table_part_key_columns(
-          row_desc, base_table_schema))) {
-        LOG_WARN("failed to add base table part key columns", KR(ret));
-      } else if (OB_FAIL(mlog_column_utils_.add_special_columns())) {
-        LOG_WARN("failed to add special columns", KR(ret));
-      } else if (OB_FAIL(mlog_column_utils_.construct_mlog_table_columns(mlog_schema))) {
-        LOG_WARN("failed to construct mlog table columns", KR(ret));
+      } else if (OB_FAIL(check_seq_first_rowkey(schema_guard, base_table_schema, seq_first_rowkey))) {
+        LOG_WARN("failed to check seq first rowkey", KR(ret));
+      } else if (seq_first_rowkey) {
+        // SEQUENCE$$ is placed before the base table pk columns as the first rowkey column
+        if (OB_FAIL(mlog_column_utils_.add_sequence_column())) {
+          LOG_WARN("failed to add sequence column", KR(ret));
+        } else if (OB_FAIL(mlog_column_utils_.add_base_table_pk_columns(row_desc, schema_guard, base_table_schema))) {
+          LOG_WARN("failed to add base table pk columns", KR(ret));
+        } else if (OB_FAIL(mlog_column_utils_.add_base_table_columns(create_mlog_arg.store_columns_,
+                                                                     row_desc,
+                                                                     base_table_schema))) {
+          LOG_WARN("failed to add base table columns", KR(ret));
+        } else if (OB_FAIL(mlog_column_utils_.add_base_table_part_key_columns(row_desc, base_table_schema))) {
+          LOG_WARN("failed to add base table part key columns", KR(ret));
+        } else if (OB_FAIL(mlog_column_utils_.add_special_columns())) {
+          LOG_WARN("failed to add special columns", KR(ret));
+        } else if (OB_FAIL(mlog_column_utils_.construct_mlog_table_columns(mlog_schema))) {
+          LOG_WARN("failed to construct mlog table columns", KR(ret));
+        }
+      } else {
+        // SEQUENCE$$ is appended after the base table pk and part key columns as the last rowkey column
+        if (OB_FAIL(mlog_column_utils_.add_base_table_pk_columns(row_desc, schema_guard, base_table_schema))) {
+          LOG_WARN("failed to add base table pk columns", KR(ret));
+        } else if (OB_FAIL(mlog_column_utils_.add_base_table_columns(create_mlog_arg.store_columns_,
+                                                                     row_desc,
+                                                                     base_table_schema))) {
+          LOG_WARN("failed to add base table columns", KR(ret));
+        } else if (OB_FAIL(mlog_column_utils_.add_base_table_part_key_columns(row_desc, base_table_schema))) {
+          LOG_WARN("failed to add base table part key columns", KR(ret));
+        } else if (OB_FAIL(mlog_column_utils_.add_sequence_column())) {
+          LOG_WARN("failed to add sequence column", KR(ret));
+        } else if (OB_FAIL(mlog_column_utils_.add_special_columns())) {
+          LOG_WARN("failed to add special columns", KR(ret));
+        } else if (OB_FAIL(mlog_column_utils_.construct_mlog_table_columns(mlog_schema))) {
+          LOG_WARN("failed to construct mlog table columns", KR(ret));
+        }
       }
     }
   }
@@ -995,6 +1015,57 @@ int ObMLogBuilder::check_enable_mlog_compaction_purge(const uint64_t tenant_id, 
     if (tenant_config.is_valid()) {
       is_enable = tenant_config->_enable_mlog_compaction_purge;
     }
+  }
+  return ret;
+}
+
+int ObMLogBuilder::check_enable_mlog_seq_first_rowkey(const uint64_t tenant_id, bool &is_enable)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  is_enable = false;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get data version", KR(ret), K(tenant_id));
+  } else if (data_version >= DATA_VERSION_5_0_2_0) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      is_enable = tenant_config->_enable_mlog_seq_first_rowkey;
+    }
+  }
+  return ret;
+}
+
+int ObMLogBuilder::check_seq_first_rowkey(ObSchemaGetterGuard &schema_guard,
+                                          const ObTableSchema &base_table_schema,
+                                          bool &seq_first_rowkey)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = base_table_schema.get_tenant_id();
+  const ObTableSchema *orig_mlog_schema = nullptr;
+  const ObColumnSchemaV2 *seq_column = nullptr;
+  seq_first_rowkey = false;
+  if (base_table_schema.has_mlog_table()) {
+    // REPLACE rebuild generates the new mlog schema from scratch. An existing mlog must keep
+    // its original rowkey order through its whole lifecycle, so inherit the rowkey order from
+    // the old mlog (still attached to the base table schema at this point) instead of applying
+    // the gate.
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, base_table_schema.get_mlog_tid(), orig_mlog_schema))) {
+      LOG_WARN("failed to get orig mlog schema", KR(ret), K(tenant_id), "mlog_tid", base_table_schema.get_mlog_tid());
+    } else if (OB_ISNULL(orig_mlog_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("orig mlog schema is null", KR(ret), K(tenant_id), "mlog_tid", base_table_schema.get_mlog_tid());
+    } else if (OB_ISNULL(seq_column = orig_mlog_schema->get_column_schema(OB_MLOG_SEQ_NO_COLUMN_ID))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("SEQUENCE$$ column not found in orig mlog schema",
+               KR(ret),
+               K(tenant_id),
+               "mlog_tid",
+               orig_mlog_schema->get_table_id());
+    } else {
+      seq_first_rowkey = (1 == seq_column->get_rowkey_position());
+    }
+  } else if (OB_FAIL(check_enable_mlog_seq_first_rowkey(tenant_id, seq_first_rowkey))) {
+    LOG_WARN("failed to check enable mlog seq first rowkey", KR(ret), K(tenant_id));
   }
   return ret;
 }

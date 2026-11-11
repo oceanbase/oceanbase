@@ -32,6 +32,9 @@ public:
 
   virtual int construct_transform_hint(ObDMLStmt &stmt, void *trans_params) override;
 
+  // True: treated as both heuristic and cost-based; false: treated as cost-based only.
+  static bool is_heuristic_and_cost_based_trans(const ObQueryCtx &query_ctx);
+
   struct StmtClassifyHelper {
     StmtClassifyHelper()
     :stmts_(),
@@ -340,6 +343,8 @@ public:
                              const ObIArray<ObRawExpr*> &second_exprs,
                              bool &is_equal);
 private:
+  bool allow_cost_based_trans(const ObQueryCtx &query_ctx, const ObQueryHint &query_hint) const;
+
   ObArenaAllocator allocator_;
   TempTableTransParam *trans_param_;
 };

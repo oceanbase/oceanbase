@@ -27,6 +27,7 @@ class ObDependencyInfo;
 }
 namespace sql
 {
+class ObSelectStmt;
 class ObMVDepInfo
 {
 public:
@@ -103,12 +104,6 @@ public:
       const uint64_t tenant_id,
       const uint64_t target_mview_id,
       common::ObIArray<uint64_t> &topo_ordered_mview_ids);
-  static int get_mview_ids_in_topo_refresh_order(
-      common::ObISQLClient &sql_client,
-      const uint64_t tenant_id,
-      const uint64_t target_mview_id,
-      common::ObIArray<uint64_t> &topo_ordered_mview_ids,
-      common::ObIArray<common::ObSEArray<uint64_t, 4>> &topo_ordered_dep_mview_ids);
   static int get_mds_locked_mview_ids(
       common::ObISQLClient &sql_client,
       const uint64_t tenant_id,
@@ -119,6 +114,17 @@ public:
                                     const uint64_t tenant_id,
                                     const uint64_t old_p_obj,
                                     const uint64_t new_p_obj);
+  static int check_dep_mview_refresh_interval_order(const ObSelectStmt &stmt,
+                                                    const uint64_t tenant_id,
+                                                    const int64_t refresh_interval);
+  static int check_mview_refresh_interval_order(common::ObISQLClient &sql_client,
+                                                const uint64_t tenant_id,
+                                                const common::ObIArray<uint64_t> &mview_ids,
+                                                const int64_t refresh_interval);
+  static int check_mview_refresh_interval_order(common::ObISQLClient &sql_client,
+                                                const uint64_t tenant_id,
+                                                const uint64_t mview_id,
+                                                const int64_t refresh_interval);
 
 private:
   static int fetch_mview_ids_by_sql(

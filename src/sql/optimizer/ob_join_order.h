@@ -2972,6 +2972,18 @@ struct MergeKeyInfoHelper
                             const uint64_t ref_table_id,
                             PathHelper &helper,
                             ObIArray<uint64_t> &valid_index_id);
+    int filter_indexes_by_flashback_query(const TableItem &table_item,
+                                          const uint64_t ref_table_id,
+                                          ObSqlSchemaGuard &schema_guard,
+                                          ObIArray<uint64_t> &valid_index_ids);
+    int get_flashback_query_snapshot(const TableItem &table_item,
+                                     const ObRawExpr &real_snapshot_expr,
+                                     int64_t &snapshot_ts_us,
+                                     bool &got_snapshot,
+                                     bool &is_static_snapshot);
+    int add_flashback_index_schema_constraint(const TableItem &table_item,
+                                              const int64_t index_schema_version,
+                                              const bool expect_index_available);
     int get_valid_index_ids_with_no_index_hint(ObSqlSchemaGuard &schema_guard,
                                                const uint64_t ref_table_id,
                                                uint64_t *tids,

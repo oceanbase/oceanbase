@@ -173,8 +173,8 @@ if(OB_BUILD_CLOSE_MODULES)
   # 日志存储压缩
   ob_define(OB_BUILD_LOG_STORAGE_COMPRESS ON)
 
-  # 物化视图刷新排队调度
-  ob_define(OB_BUILD_MV_REFRESH_QUEUEING ON)
+  # 物化视图闭源功能
+  ob_define(OB_BUILD_MV_CLOSE_MODULES ON)
 
   # 默认使用BABASSL
   ob_define(OB_USE_BABASSL ON)
@@ -254,8 +254,8 @@ if (OB_BUILD_JNI_ODPS)
  add_definitions(-DOB_BUILD_JNI_ODPS)
 endif()
 
-if(OB_BUILD_MV_REFRESH_QUEUEING)
-  add_definitions(-DOB_BUILD_MV_REFRESH_QUEUEING)
+if(OB_BUILD_MV_CLOSE_MODULES)
+  add_definitions(-DOB_BUILD_MV_CLOSE_MODULES)
 endif()
 
 if(OB_BUILD_WITH_EMPTY_LOAD_SCHEMA)

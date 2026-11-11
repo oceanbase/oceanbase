@@ -2957,7 +2957,7 @@ int ObLogicalOperator::gen_location_constraint(void *ctx)
       bool is_pdml = false;
       if (log_op_def::LOG_SET == get_type()) {
         ObLogSet *set_op = static_cast<ObLogSet *>(this);
-        is_union_all_set_pw = (ObSelectStmt::UNION == set_op->get_set_op() && !set_op->is_set_distinct()) ||
+        is_union_all_set_pw = (ObSetRelation::UNION == set_op->get_set_op() && !set_op->is_set_distinct()) ||
                               set_op->is_recursive_union();
         is_union_all_set_pw = is_union_all_set_pw && (DistAlgo::DIST_SET_PARTITION_WISE == set_op->get_distributed_algo());
         is_setop_ext_pw = (DistAlgo::DIST_EXT_PARTITION_WISE == set_op->get_distributed_algo());
@@ -4547,7 +4547,7 @@ int ObLogicalOperator::px_pipe_blocking_post(ObPxPipeBlockingCtx &ctx)
     if (OB_SUCC(ret)) {
       if (LOG_SET == get_type() && !got_in_exch) {
         ObLogSet *set_op = static_cast<ObLogSet *>(this);
-        bool is_union = ObSelectStmt::UNION == set_op->get_set_op();
+        bool is_union = ObSetRelation::UNION == set_op->get_set_op();
         if (is_union && max_dfo_child_idx > 0) {
           got_in_exch = true;
         }

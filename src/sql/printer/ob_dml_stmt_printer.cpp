@@ -250,7 +250,8 @@ int ObDMLStmtPrinter::print_from(bool need_from)
   return ret;
 }
 
-int ObDMLStmtPrinter::print_table_with_subquery(const TableItem *table_item)
+int ObDMLStmtPrinter::print_table_with_subquery(const TableItem *table_item,
+                                                bool print_cte/*default false*/)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table_item) ||
@@ -265,6 +266,7 @@ int ObDMLStmtPrinter::print_table_with_subquery(const TableItem *table_item)
     // `abs(c1)` would be an unknown column.
     const uint64_t subquery_print_params =
                            PRINT_BRACKET |
+                           (print_cte ? PRINT_CTE : 0) |
                            (stmt_->is_select_stmt() ? FORCE_COL_ALIAS : 0);
     if (table_item->is_lateral_table()) {
       DATA_PRINTF("lateral ");
@@ -486,7 +488,8 @@ int ObDMLStmtPrinter::print_table_with_transpose(const TableItem *table_item)
 }
 
 int ObDMLStmtPrinter::print_table(const TableItem *table_item,
-                                  bool no_print_alias/*default false*/)
+                                  bool no_print_alias/*default false*/,
+                                  bool print_cte/*default false*/)
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
@@ -650,7 +653,7 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
             DATA_PRINTF(" ");
             PRINT_IDENT_WITH_QUOT(table_item->alias_name_);
           }
-        } else if (OB_FAIL(print_table_with_subquery(table_item))) {
+        } else if (OB_FAIL(print_table_with_subquery(table_item, print_cte))) {
           LOG_WARN("failed to print table with subquery", K(ret));
         }
         break;

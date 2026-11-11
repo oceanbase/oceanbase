@@ -87,6 +87,9 @@ inline const char *ob_aggr_func_str(ObItemType aggr_func)
     case T_FUN_ANY:
       ret = "ANY";
       break;
+    case T_FUN_ANY_VALUE:
+      ret = "ANY_VALUE";
+      break;
     case T_FUN_ARBITRARY:
       ret = "ARBITRARY";
       break;

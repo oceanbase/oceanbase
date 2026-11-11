@@ -12937,6 +12937,11 @@ int ObResolverUtils::set_flashback_info_for_view(ObDMLStmt *stmt,
       } else if (cur_table->is_basic_table()) {
         cur_table->flashback_query_expr_ = flashback_query_expr;
         cur_table->flashback_query_type_ = flashback_query_type;
+      } else if (cur_table->is_temp_table()) {
+        // add CTE table to child stmts
+        if (NULL != cur_table->ref_query_ && OB_FAIL(add_var_to_array_no_dup(child_stmts, cur_table->ref_query_))) {
+          LOG_WARN("failed to add var to array no dup", K(ret), KPC(cur_table));
+        }
       } else { /* do nothing */ }
     }
     // 2. Then, recursively set the flashback property for the tables in the child statements

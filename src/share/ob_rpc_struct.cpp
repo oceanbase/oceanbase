@@ -15268,8 +15268,8 @@ OB_SERIALIZE_MEMBER(ObScheduleMViewRefreshArg, tenant_id_, run_user_id_, mview_i
                     timeout_us_, // FARM COMPAT WHITELIST
                     force_, is_initial_refresh_);
 OB_SERIALIZE_MEMBER(ObScheduleMViewRefreshResult, refresh_id_, ret_);
-OB_SERIALIZE_MEMBER(ObKillMViewRefreshArg, tenant_id_, refresh_id_, mview_id_, is_kill_by_mview_id_, is_drop_);
-OB_SERIALIZE_MEMBER(ObKillMViewRefreshResult, ret_);
+OB_SERIALIZE_MEMBER(ObCancelMViewRefreshArg, tenant_id_, refresh_id_, mview_id_, is_cancel_by_mview_id_, is_drop_);
+OB_SERIALIZE_MEMBER(ObCancelMViewRefreshResult, ret_, refresh_exists_);
 OB_SERIALIZE_MEMBER(ObNotifyMViewTimerArg, tenant_id_, mview_id_, op_type_, database_id_);
 OB_SERIALIZE_MEMBER(ObNotifyMViewTimerResult, ret_);
 

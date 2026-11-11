@@ -245,6 +245,7 @@
 #include "observer/virtual_table/ob_all_virtual_storage_cache_task.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_local_cache.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_mview_running_job.h"
+#include "observer/virtual_table/ob_all_virtual_mview_refresh_timer.h"
 #include "observer/virtual_table/ob_all_virtual_ls_migration_task.h"
 #include "observer/virtual_table/ob_all_virtual_ss_ls_tablet_reorg_info.h"
 #include "observer/virtual_table/ob_all_virtual_logservice_cluster_info.h"
@@ -3035,6 +3036,14 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             ObAllVirtualTenantMviewRunningJob *running_job = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualTenantMviewRunningJob, running_job))) {
               vt_iter = static_cast<ObVirtualTableIterator *>(running_job);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_MVIEW_REFRESH_TIMER_TID:
+          {
+            ObAllVirtualMViewRefreshTimer *refresh_timer = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualMViewRefreshTimer, refresh_timer))) {
+              vt_iter = static_cast<ObVirtualTableIterator *>(refresh_timer);
             }
             break;
           }

@@ -8,10 +8,13 @@
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_executor.h"
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
-#include "rootserver/mview/ob_mview_pending_task_manager.h"
+#include "rootserver/mview/ob_mview_maintenance_service.h"
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+#include "rootserver/mview/ob_mview_pending_task_utils.h"
 #endif
+#include "share/ob_cluster_version.h"
 #include "share/ob_global_stat_proxy.h"
+#include "share/ob_get_compat_mode.h"
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "share/schema/ob_mview_info.h"
 #include "share/schema/ob_mlog_info.h"
@@ -30,6 +33,24 @@ using namespace share::schema;
 using namespace sql;
 namespace storage
 {
+int64_t ObMViewSchedJobUtils::calc_default_refresh_timeout_us(
+    const int64_t refresh_interval)
+{
+  const int64_t default_max_refresh_timeout_us = 24LL * 60 * 60 * USECS_PER_SEC;
+  const int64_t default_min_refresh_timeout_us = 10LL * 60 * USECS_PER_SEC;
+  int64_t refresh_timeout_us = 0;
+  if (refresh_interval > 0
+      && refresh_interval <= default_min_refresh_timeout_us / 5) {
+    refresh_timeout_us = default_min_refresh_timeout_us;
+  } else if (refresh_interval <= 0
+             || refresh_interval >= default_max_refresh_timeout_us / 5) {
+    refresh_timeout_us = default_max_refresh_timeout_us;
+  } else {
+    refresh_timeout_us = refresh_interval * 5;
+  }
+  return refresh_timeout_us;
+}
+
 int ObMViewSchedJobUtils::generate_job_id(
     const uint64_t tenant_id,
     int64_t &job_id)
@@ -124,7 +145,10 @@ int ObMViewSchedJobUtils::get_owner_name_from_table_id_(
     ObSqlString sql;
     ObString user_name;
     ObString host_name;
-    if (OB_FAIL(sql.assign_fmt(
+    bool is_oracle_mode = false;
+    if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+      LOG_WARN("failed to get tenant compatibility mode", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(sql.assign_fmt(
             "SELECT t.define_user_id, u.user_name, u.host"
             " FROM %s.%s t JOIN %s.%s u ON t.define_user_id = u.user_id"
             " WHERE t.table_id = %lu LIMIT 1",
@@ -148,7 +172,7 @@ int ObMViewSchedJobUtils::get_owner_name_from_table_id_(
       EXTRACT_VARCHAR_FIELD_MYSQL(*result, "user_name", user_name);
       EXTRACT_VARCHAR_FIELD_MYSQL(*result, "host", host_name);
       if (OB_SUCC(ret) && !user_name.empty()) {
-        if (lib::is_oracle_mode()) {
+        if (is_oracle_mode) {
           if (OB_FAIL(ob_write_string(allocator, user_name, owner_name))) {
             LOG_WARN("failed to write owner name", KR(ret));
           }
@@ -182,9 +206,12 @@ int ObMViewSchedJobUtils::add_scheduler_job(
     const int64_t preserved_max_run_duration_sec)
 {
   int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
   if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+    LOG_WARN("failed to get tenant compatibility mode", KR(ret), K(tenant_id));
   } else {
     int64_t start_date_us = start_date.is_null() ? ObTimeUtility::current_time() : start_date.get_timestamp();
     int64_t end_date_us = 64060560000000000; // 4000-01-01
@@ -201,7 +228,7 @@ int ObMViewSchedJobUtils::add_scheduler_job(
       job_info.lowner_ = ObString("oceanbase");
       job_info.cowner_ = ObString("oceanbase");
       if (NULL == job_owner || job_owner->empty()) {
-        job_info.powner_ = lib::is_oracle_mode() ? ObString("SYS") : ObString("root@%");
+        job_info.powner_ = is_oracle_mode ? ObString("SYS") : ObString("root@%");
       } else {
         job_info.powner_ = *job_owner;
         job_info.user_id_ = job_owner_id;
@@ -216,7 +243,7 @@ int ObMViewSchedJobUtils::add_scheduler_job(
       job_info.enabled_ = 1;
       job_info.auto_drop_ = 0;
       job_info.exec_env_ = exec_env;
-      job_info.is_oracle_tenant_ = lib::is_oracle_mode();
+      job_info.is_oracle_tenant_ = is_oracle_mode;
       job_info.scheduler_flags_ = dbms_scheduler::ObDBMSSchedJobInfo::JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS; // for compat old version
       job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::MVIEW_JOB;
 
@@ -382,6 +409,7 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
   int ret = OB_SUCCESS;
   ObString refresh_job;
   ObArenaAllocator allocator("CreateMVTmp");
+  bool use_mview_timer = false;
   mview_info.reset();
   share::ObGlobalStatProxy stat_proxy(sql_client, tenant_id);
   share::SCN major_refresh_mv_merge_scn;
@@ -391,7 +419,10 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("refresh_info is null", KR(ret));
   } else if (ObMVRefreshMode::MAJOR_COMPACTION == refresh_info->refresh_mode_) {
-    if (OB_FAIL(acquire_major_refresh_mv_merge_scn_(sql_client, tenant_id))) {
+    if (OB_UNLIKELY(refresh_info->sched_suspended_)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "suspend major compaction mview refresh is");
+    } else if (OB_FAIL(acquire_major_refresh_mv_merge_scn_(sql_client, tenant_id))) {
       LOG_WARN("failed to acquire major refresh mv merge scn", KR(ret), K(tenant_id));
     } else if (OB_FAIL(share::ObBackupJobOperator::get_jobs(
                    *GCTX.sql_proxy_, meta_tenant_id, false /*select for update*/, backup_jobs))) {
@@ -405,25 +436,39 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
     }
   }
 
-  if (OB_SUCC(ret) &&
-      (!refresh_info->start_time_.is_null() || !refresh_info->next_time_expr_.empty()) &&
-      OB_FAIL(create_mview_scheduler_job(sql_client, tenant_id, mview_id, db_name, table_name,
-                                         refresh_info->start_time_, refresh_info->next_time_expr_,
-                                         refresh_info->exec_env_, refresh_info->nested_refresh_mode_,
-                                         allocator, refresh_job))) {
+  if (OB_FAIL(ret) || (refresh_info->start_time_.is_null() && refresh_info->next_time_expr_.empty())) {
+    // do nothing
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+  } else if (OB_FAIL(rootserver::ObMViewPendingTaskUtils::is_mview_timer_sched_enabled(tenant_id, use_mview_timer))) {
+    LOG_WARN("failed to check mview timer schedule", KR(ret), K(tenant_id), K(mview_id));
+  } else if (use_mview_timer) {
+    // do nothing
+#endif
+  } else if (OB_UNLIKELY(refresh_info->sched_suspended_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "suspend legacy mview refresh job is");
+  } else if (OB_FAIL(create_mview_scheduler_job(
+                  sql_client, tenant_id, mview_id, db_name, table_name,
+                  refresh_info->start_time_, refresh_info->next_time_expr_,
+                  refresh_info->exec_env_, refresh_info->nested_refresh_mode_,
+                  allocator, refresh_job))) {
     LOG_WARN("failed to create scheduler job", KR(ret));
   }
 
   if (OB_SUCC(ret)) {
     mview_info.set_tenant_id(tenant_id);
     mview_info.set_mview_id(mview_id);
-    mview_info.set_build_mode(ObMViewBuildMode::IMMEDIATE);
+    mview_info.set_build_mode(refresh_info->build_mode_);
     mview_info.set_refresh_mode(refresh_info->refresh_mode_);
     mview_info.set_refresh_method(refresh_info->refresh_method_);
+    mview_info.set_refresh_scheduler_suspended(refresh_info->sched_suspended_);
     mview_info.set_refresh_job(refresh_job);
     mview_info.set_refresh_dop(refresh_info->refresh_dop_);
     mview_info.set_nested_refresh_mode(refresh_info->nested_refresh_mode_);
     mview_info.set_compat_version(refresh_info->compat_version_);
+    mview_info.set_refresh_interval(refresh_info->refresh_interval_);
+    mview_info.set_refresh_timeout_us(
+        calc_default_refresh_timeout_us(refresh_info->refresh_interval_));
     mview_info.set_last_refresh_scn(0);
     mview_info.set_schema_version(schema_version);
     if (refresh_info->start_time_.is_timestamp()) {
@@ -712,9 +757,10 @@ int ObMViewSchedJobUtils::replace_mview_refresh_job(common::ObISQLClient &sql_cl
   const uint64_t tenant_id = mview_info.get_tenant_id();
   ObArenaAllocator allocator("CreateMVTmp");
   int64_t preserved_max_run_duration_sec = -1;
+  const bool is_dbms_scheduler_job = !mview_info.get_refresh_job().empty();
   // remove old job and try stop running job
   // stop job use sys tenant, can not use trans as sql client
-  if (!mview_info.get_refresh_job().empty()) {
+  if (is_dbms_scheduler_job) {
     ObDBMSSchedJobInfo job_info;
     bool is_oracle_mode = lib::is_oracle_mode();
     ObString job_name = mview_info.get_refresh_job();
@@ -745,7 +791,7 @@ int ObMViewSchedJobUtils::replace_mview_refresh_job(common::ObISQLClient &sql_cl
     }
   }
   if (OB_FAIL(ret)) {
-  } else {
+  } else if (is_dbms_scheduler_job) {
     common::ObObj start_date;
     ObString refresh_job;
     start_date.set_timestamp(mview_info.get_refresh_start());
@@ -845,29 +891,6 @@ int ObMViewSchedJobUtils::disable_and_stop_job(
     }
     LOG_INFO("disable and stop job when drop mview", K(ret), K(job_info));
   }
-  return ret;
-}
-
-int ObMViewSchedJobUtils::kill_mview_refreshes(
-                          const uint64_t tenant_id,
-                          const uint64_t mview_id,
-                          const bool is_drop)
-{
-  int ret = OB_SUCCESS;
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
-  obrpc::ObKillMViewRefreshArg arg;
-  arg.tenant_id_ = tenant_id;
-  arg.mview_id_ = mview_id;
-  arg.is_kill_by_mview_id_ = true;
-  arg.is_drop_ = is_drop;
-  if (OB_FAIL(rootserver::ObMViewPendingTaskManager::kill_refresh(arg))) {
-    LOG_WARN("kill refreshes by mview failed", KR(ret), K(tenant_id), K(mview_id));
-  }
-#else
-  // Refresh queuing is closed-source; the legacy synchronous refresh path holds
-  // no queued async refresh task to kill, so this is a no-op.
-  UNUSEDx(tenant_id, mview_id, is_drop);
-#endif
   return ret;
 }
 

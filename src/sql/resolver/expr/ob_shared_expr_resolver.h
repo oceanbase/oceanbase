@@ -90,6 +90,8 @@ private:
            || expr.is_pseudo_column_expr()
            || expr.get_expr_type() == T_OP_ROW
            || expr.get_expr_type() == T_QUESTIONMARK
+           // Separate operator branches must not share a non-constant refresh SCN expression.
+           || expr.get_expr_type() == T_FUN_SYS_LAST_REFRESH_SCN
            || expr.is_var_expr()
            || !expr.check_is_deterministic_expr();
   }

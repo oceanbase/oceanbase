@@ -15,6 +15,7 @@
 #include "sql/resolver/dml/ob_update_stmt.h"
 #include "sql/resolver/dml/ob_delete_stmt.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
+#include "sql/rewrite/ob_transform_rule.h"
 
 #define DELTA_TABLE_FORMAT_NAME "DLT_%.*s$$"
 #define PRE_TABLE_FORMAT_NAME "PRE_%.*s$$"
@@ -70,15 +71,15 @@ struct ObMVPrinterRefreshInfo  {
       part_idx_(part_idx),
       sub_part_idx_(sub_part_idx),
       range_(&range),
-      tables_without_delete_(NULL),
       tables_without_insert_(NULL),
-      compat_version_(0)
+      tables_without_update_(NULL),
+      tables_without_delete_(NULL)
   {}
   ObMVPrinterRefreshInfo(const share::ObScnRange &refresh_scn_range,
                          const share::ObScnRange &mview_refresh_scn_range,
-                         const ObIArray<uint64_t> &tables_without_delete,
                          const ObIArray<uint64_t> &tables_without_insert,
-                         const uint64_t compat_version)
+                         const ObIArray<uint64_t> &tables_without_update,
+                         const ObIArray<uint64_t> &tables_without_delete)
     : last_refresh_scn_(refresh_scn_range.start_scn_),
       refresh_scn_(refresh_scn_range.end_scn_),
       mv_last_refresh_scn_(&mview_refresh_scn_range.start_scn_),
@@ -86,14 +87,14 @@ struct ObMVPrinterRefreshInfo  {
       part_idx_(OB_INVALID_INDEX),
       sub_part_idx_(OB_INVALID_INDEX),
       range_(NULL),
-      tables_without_delete_(&tables_without_delete),
       tables_without_insert_(&tables_without_insert),
-      compat_version_(compat_version)
+      tables_without_update_(&tables_without_update),
+      tables_without_delete_(&tables_without_delete)
   {}
 
   TO_STRING_KV(K_(last_refresh_scn), K_(refresh_scn), KPC_(mv_last_refresh_scn), KPC_(mv_refresh_scn),
-              K_(part_idx), K_(sub_part_idx), KPC_(range), KPC_(tables_without_delete), KPC_(tables_without_insert),
-              K_(compat_version));
+              K_(part_idx), K_(sub_part_idx), KPC_(range), KPC_(tables_without_insert),
+              KPC_(tables_without_update), KPC_(tables_without_delete));
 
   const share::SCN &last_refresh_scn_;
   const share::SCN &refresh_scn_;
@@ -105,9 +106,10 @@ struct ObMVPrinterRefreshInfo  {
   const int64_t sub_part_idx_;
   const ObNewRange *range_;
   // for fast refresh adaptive skip refresh SQL
-  const ObIArray<uint64_t> *tables_without_delete_; // ref id for tables without delete (including update)
-  const ObIArray<uint64_t> *tables_without_insert_; // ref id for tables without insert (including update)
-  uint64_t compat_version_;
+  // in deprecated mv printer, update is treated as insert and delete
+  const ObIArray<uint64_t> *tables_without_insert_; // ref id for tables without insert
+  const ObIArray<uint64_t> *tables_without_update_; // ref id for tables without update
+  const ObIArray<uint64_t> *tables_without_delete_; // ref id for tables without delete
 };
 
 struct ObMVPrinterCtx {
@@ -116,15 +118,18 @@ struct ObMVPrinterCtx {
                  ObStmtFactory &stmt_factory,
                  ObRawExprFactory &expr_factory,
                  const uint64_t compat_version,
+                 ObTransformerCtx &trans_ctx,
                  const ObMVPrinterRefreshInfo *refresh_info = NULL)
   : alloc_(alloc),
     session_info_(session_info),
     stmt_factory_(stmt_factory),
     expr_factory_(expr_factory),
+    trans_ctx_(trans_ctx),
     refresh_info_(refresh_info),
     marker_idx_(OB_INVALID_INDEX),
     rt_mv_last_refresh_ts_(0),
-    compat_version_(compat_version)
+    compat_version_(compat_version),
+    update_as_insert_delete_(true)
   {}
   OB_INLINE bool for_rt_expand() const { return NULL == refresh_info_; }
   OB_INLINE bool for_union_all_child_query() const { return OB_INVALID_INDEX != marker_idx_; }
@@ -132,11 +137,13 @@ struct ObMVPrinterCtx {
   ObSQLSessionInfo &session_info_;
   ObStmtFactory &stmt_factory_;
   ObRawExprFactory &expr_factory_;
+  ObTransformerCtx &trans_ctx_;
   const ObMVPrinterRefreshInfo *refresh_info_;
   int64_t marker_idx_; // for print union all child query
   // only used for rt_mv to check if mlog covered all columns of base table since last refreshment
   int64_t rt_mv_last_refresh_ts_;
   uint64_t compat_version_;
+  bool update_as_insert_delete_;
 };
 
 class ObMVPrinter
@@ -167,16 +174,33 @@ public:
   static const ObString INNER_RT_MV_VIEW_NAME;
   static const ObString MV_STAT_VIEW_NAME;
   static const ObString GROUP_CALC_AGGR_VIEW_NAME;
+  static const ObString DML_FACTOR_TABLE_VIEW_NAME;
+  static const ObString LEFT_JOIN_INSERT_CHANGES_NAME;
+  static const ObString LEFT_JOIN_RELATIVE_ROWS_NAME;
+  static const ObString LEFT_JOIN_DELETE_CHANGES_NAME;
+  static const ObString LEFT_JOIN_DELTA_CNT_NAME;
+  static const ObString LEFT_JOIN_PRE_R_CNT_NAME;
+  static const ObString LEFT_JOIN_DELTA_NULL_NAME;
   // column name
   static const ObString HEAP_TABLE_ROWKEY_COL_NAME;
   static const ObString OLD_NEW_COL_NAME;
   static const ObString SEQUENCE_COL_NAME;
   static const ObString DML_FACTOR_COL_NAME;
+  static const ObString STEP_COL_NAME;
   static const ObString WIN_MAX_SEQ_COL_NAME;
   static const ObString WIN_MIN_SEQ_COL_NAME;
+  static const ObString WIN_FIRST_SEQ_COL_NAME;
+  static const ObString WIN_LAST_SEQ_COL_NAME;
+  static const ObString WIN_FIRST_STEP_COL_NAME;
+  static const ObString WIN_LAST_STEP_COL_NAME;
+  static const ObString WIN_FIRST_DML_COL_NAME;
+  static const ObString WIN_LAST_DML_COL_NAME;
   static const ObString WIN_ROW_NUM_COL_NAME;
   static const ObString WIN_CNT_ALL_COL_NAME;
   static const ObString WIN_CNT_NOT_NULL_COL_NAME;
+  static const ObString LEFT_JOIN_DEL_R_MATCHED_COL_NAME;
+  static const ObString DELTA_CNT_COL_NAME;
+  static const ObString PRE_R_CNT_COL_NAME;
 
   int print_mv_operators(ObIAllocator &str_alloc, ObIArray<ObString> &operators);
   int gen_child_refresh_dmls_for_union_all(ObIArray<ObDMLStmt*> &dml_stmts);
@@ -186,7 +210,7 @@ public:
                                                   ObSelectStmt &mview_stmt,
                                                   ObIAllocator &str_alloc,
                                                   ObString &mview_str);
-protected:
+public:
   enum MlogExtColFlag {
     MLOG_EXT_COL_ROWKEY_ONLY  = 0x0,
     MLOG_EXT_COL_OLD_NEW      = 0x1,
@@ -258,7 +282,8 @@ protected:
                                        ObSelectStmt &stmt,
                                        const uint64_t ext_sel_flags = UINT64_MAX);
   int add_dml_factor_to_select_list(ObRawExpr *old_new_col,
-                                    ObIArray<SelectItem> &select_items);
+                                    ObIArray<SelectItem> &select_items,
+                                    const ObString &alias_name = DML_FACTOR_COL_NAME);
   int add_normal_column_to_select_list(const TableItem &table,
                                        const ObString &col_name,
                                        ObIArray<SelectItem> &select_items);
@@ -294,7 +319,8 @@ protected:
                                TableItem *&table_item,
                                ObSelectStmt *view_stmt = NULL,
                                const bool add_to_from = true,
-                               const TableItem *source_table = NULL);
+                               const TableItem *source_table = NULL,
+                               const bool is_temp_table = false);
   int gen_format_string_name(const char *name_format_string,
                              const int64_t idx,
                              ObString &format_name,
@@ -341,9 +367,12 @@ protected:
   inline bool is_table_skip_refresh(const TableItem &table) const
   { return table.is_mv_proctime_table_; }
   inline bool is_table_without_delta_data(const TableItem &table) const
-  { return is_table_without_delete(table) && is_table_without_insert(table); }
-  bool is_table_without_delete(const TableItem &table) const;
+  { return is_table_without_insert(table) &&
+           is_table_without_update(table) &&
+           is_table_without_delete(table); }
   bool is_table_without_insert(const TableItem &table) const;
+  bool is_table_without_update(const TableItem &table) const;
+  bool is_table_without_delete(const TableItem &table) const;
   int create_simple_exists_expr(const TableItem *ori_table,
                                 ObSelectStmt *from_view,
                                 const char *from_view_name_fmt,

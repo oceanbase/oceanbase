@@ -70,7 +70,10 @@ protected:
   int get_inner_sel_name_for_aggr(const ObAggFunRawExpr &aggr, ObString &sel_name);
   int gen_group_recalculate_aggr_view(ObSelectStmt *&view_stmt);
   int gen_mav_delta_mv_view(ObSelectStmt *simple_delta_stmt, ObSelectStmt *&delta_stmt);
-protected:
+
+private:
+  static int extract_group_recalculate_aggrs(const ObIArray<ObAggFunRawExpr *> &all_aggrs,
+                                             ObIArray<ObAggFunRawExpr *> &group_recalculate_aggrs);
   DISALLOW_COPY_AND_ASSIGN(ObSimpleMAVPrinter);
 };
 

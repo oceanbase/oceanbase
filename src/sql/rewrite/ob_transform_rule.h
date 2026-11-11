@@ -135,7 +135,8 @@ struct ObTransformerCtx
     disable_gtt_session_isolation_(false),
     force_subquery_unnest_(false),
     force_equal_semi_to_inner_(false),
-    nested_loop_join_enabled_(true)
+    nested_loop_join_enabled_(true),
+    is_trans_mv_def_stmt_(false)
   { }
   virtual ~ObTransformerCtx() {}
 
@@ -220,6 +221,7 @@ struct ObTransformerCtx
   bool force_equal_semi_to_inner_;
   /* used for NLJ opportunity check */
   bool nested_loop_join_enabled_;
+  bool is_trans_mv_def_stmt_;
 };
 
 enum TransMethod
@@ -327,6 +329,9 @@ struct ObEvalCostHelper
     question_marks_count_(0),
     calculable_items_count_(0),
     try_trans_helper_(),
+    all_expr_constraints_count_(0),
+    all_plan_const_param_constraints_count_(0),
+    all_equal_param_constraints_count_(0),
     eval_cost_(false),
     expr_constraints_count_(0),
     plan_const_param_constraints_count_(0),
@@ -349,6 +354,9 @@ struct ObEvalCostHelper
   int64_t question_marks_count_;
   int64_t calculable_items_count_;
   ObTryTransHelper try_trans_helper_;
+  int64_t all_expr_constraints_count_;
+  int64_t all_plan_const_param_constraints_count_;
+  int64_t all_equal_param_constraints_count_;
 
   // from transformer context
   bool eval_cost_;
@@ -392,6 +400,7 @@ public:
       (1L << COUNT_TO_EXISTS) |
       (1L << CONDITIONAL_AGGR_COALESCE) |
       (1L << SEMI_TO_INNER) |
+      (1L << TEMP_TABLE_OPTIMIZATION) |
       (1L << DISTINCT_AGGREGATE) |
       (1L << SELECT_EXPR_PULLUP) |
       (1L << DECORRELATE);
@@ -422,7 +431,8 @@ public:
                         (1L << PRE_PROCESS) |
                         (1L << POST_PROCESS) |
                         (1L << PROCESS_DBLINK);
-  static const uint64_t BOTH_HEURISTIC_AND_COST_BASED_RULES = (1L << SEMI_TO_INNER);
+  static const uint64_t BOTH_HEURISTIC_AND_COST_BASED_RULES =
+      (1L << SEMI_TO_INNER) | (1L << TEMP_TABLE_OPTIMIZATION);
   static_assert((ALL_HEURISTICS_RULES | ALL_COST_BASED_RULES | NON_ITERATIVE_TRANSFORM_RULES) == ALL_TRANSFORM_RULES,
                 "some of the transform rules are not correctly categorized");
   static_assert((ALL_HEURISTICS_RULES & ALL_COST_BASED_RULES) == BOTH_HEURISTIC_AND_COST_BASED_RULES,

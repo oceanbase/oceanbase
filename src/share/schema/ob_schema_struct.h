@@ -4288,14 +4288,14 @@ enum class ObMViewBuildMode : int64_t
 {
   IMMEDIATE = 0,
   DEFERRED = 1,
-  PERBUILT = 2,
+  PREBUILT = 2,
   MAX
 };
 
 
 enum struct ObMVRefreshMethod : int64_t
 {
-  NEVER = 0,
+  NEVER = 0, // Reserved for legacy metadata; refresh mode controls NEVER REFRESH.
   COMPLETE = 1,
   FAST = 2,
   FORCE = 3,

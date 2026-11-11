@@ -146,8 +146,9 @@ private:
   int collect_and_check_detail_table_changes(ObMViewTransaction &trans,
                                              share::schema::ObSchemaGetterGuard &schema_guard,
                                              const ObIArray<uint64_t> &tables_need_mlog,
-                                             ObIArray<uint64_t> &tables_without_delete,
                                              ObIArray<uint64_t> &tables_without_insert,
+                                             ObIArray<uint64_t> &tables_without_update,
+                                             ObIArray<uint64_t> &tables_without_delete,
                                              bool &reached_complete_refresh_threshold) const;
   bool reached_detail_complete_refresh_threshold(const ObMViewDetailTableChangeStats &data) const;
   static bool has_valid_exclusive_holder_(const ObIArray<transaction::tablelock::ObTableLockHolderInfo> &holder_info);

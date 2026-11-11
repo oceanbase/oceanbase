@@ -76,7 +76,7 @@ public:
   virtual int get_dml_table_infos(ObIArray<ObDmlTableInfo*>& dml_table_info) override;
   virtual int get_dml_table_infos(ObIArray<const ObDmlTableInfo*>& dml_table_info) const override;
   virtual int get_value_exprs(ObIArray<ObRawExpr *> &value_exprs) const override;
-  bool value_from_select() const { return !from_items_.empty(); }
+  bool value_from_select() const { return get_from_item_size() > 0; }
   int part_key_is_updated(bool &is_updated) const;
   int part_key_has_rand_value(bool &has) const;
   int part_key_has_subquery(bool &has) const ;

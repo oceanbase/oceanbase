@@ -5,6 +5,7 @@
 #define USING_LOG_PREFIX RS
 
 #include "rootserver/mview/ob_mview_utils.h"
+#include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/schema/ob_mview_info.h"
 #include "share/schema/ob_dependency_info.h"
 #include "share/ob_common_rpc_proxy.h"
@@ -109,6 +110,7 @@ int ObMViewUtils::submit_build_mlog_task(const uint64_t tenant_id,
       ObString base_table_name;
       ObString mlog_table_name;
       bool is_table_with_logic_pk = false;
+      bool is_oracle_mode = false;
       const ObSysVariableSchema *sys_variable_schema = nullptr;
       if (OB_FAIL(get_base_table_name_for_print(tenant_id, base_table_schema, schema_guard, base_table_name))) {
         LOG_WARN("failed to get real base table name", KR(ret), K(tenant_id));
@@ -123,8 +125,10 @@ int ObMViewUtils::submit_build_mlog_task(const uint64_t tenant_id,
       } else if (OB_ISNULL(sys_variable_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null sys variable schema", KR(ret), KP(sys_variable_schema));
+      } else if (OB_FAIL(base_table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
+        LOG_WARN("failed to get table compatibility mode", KR(ret), K(tenant_id));
       } else if (OB_FAIL(ObTableSchema::build_mlog_table_name(
-                     allocator, base_table_name, mlog_table_name, lib::is_oracle_mode(),
+                     allocator, base_table_name, mlog_table_name, is_oracle_mode,
                      base_table_schema->has_mlog_table()))) {
         LOG_WARN("failed to build mlog table name", KR(ret), K(base_table_name));
       } else if (OB_FAIL(base_table_schema->is_table_with_logic_pk(schema_guard,
@@ -147,7 +151,7 @@ int ObMViewUtils::submit_build_mlog_task(const uint64_t tenant_id,
         create_mlog_arg.with_sequence_ = true;
         create_mlog_arg.purge_options_.purge_mode_ = ObMLogPurgeMode::DEFERRED;
         create_mlog_arg.purge_options_.start_datetime_expr_.set_timestamp(current_time);
-        create_mlog_arg.purge_options_.next_datetime_expr_ = "sysdate() + interval 60 second";
+        create_mlog_arg.purge_options_.next_datetime_expr_ = "CURRENT_TIMESTAMP + INTERVAL '60' SECOND";
         create_mlog_arg.mlog_schema_.set_dop(mlog_dop);
         if (!is_table_with_logic_pk) {
           create_mlog_arg.with_primary_key_ = false;
@@ -399,10 +403,8 @@ int ObMViewUtils::generate_mview_complete_refresh_sql(
                       is_oracle_mode, src_table_schema_version_hint))) {
     LOG_WARN("failed to generated mview ddl schema hint", KR(ret));
   }
-  // When mview_select_sql is passed in (from storage-side RPC), use it directly.
-  // Otherwise fall back to reading the view definition from schema cache (for
-  // the CREATE MVIEW initial refresh path, which runs entirely on RS where
-  // MTL switch to user tenant is not available).
+  // Only initial refreshes that bypass the initial refresh queue may leave select_sql empty.
+  // Their DDL snapshot_version_ provides snapshot consistency, so the cached view definition can be used.
   if (OB_FAIL(ret)) {
   } else if (mview_select_sql.empty()) {
     const ObString view_def = mview_table_schema->get_view_schema().get_expand_view_definition_for_mv_str().empty()
@@ -867,6 +869,55 @@ int ObMViewUtils::get_relevent_mviews(ObISQLClient &sql_client,
             LOG_WARN("failed to push back mview id", KR(ret), K(dep_obj_id));
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMViewUtils::fetch_mview_build_info(ObISQLClient &sql_client,
+                                         const uint64_t tenant_id,
+                                         const uint64_t mview_id,
+                                         uint64_t &define_user_id,
+                                         ObMViewBuildMode &build_mode,
+                                         bool &is_mview_available)
+{
+  int ret = OB_SUCCESS;
+  define_user_id = OB_INVALID_ID;
+  build_mode = ObMViewBuildMode::MAX;
+  is_mview_available = false;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    common::sqlclient::ObMySQLResult *result = nullptr;
+    ObSqlString sql;
+    int64_t build_mode_val = 0;
+    int64_t table_mode_val = 0;
+    if (OB_FAIL(sql.assign_fmt(
+            "SELECT t.define_user_id AS define_user_id, t.table_mode AS table_mode, "
+            "m.build_mode AS build_mode "
+            "FROM %s t, %s m WHERE t.tenant_id = 0 AND m.tenant_id = 0 "
+            "AND t.table_id = %lu AND m.mview_id = %lu",
+            share::OB_ALL_TABLE_TNAME, share::OB_ALL_MVIEW_TNAME, mview_id, mview_id))) {
+      LOG_WARN("fail to assign sql", KR(ret), K(mview_id));
+    } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is null", KR(ret));
+    } else if (OB_FAIL(result->next())) {
+      if (OB_ITER_END == ret) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("mview build info not found", KR(ret), K(tenant_id), K(mview_id));
+      } else {
+        LOG_WARN("fail to get next row", KR(ret), K(tenant_id), K(mview_id));
+      }
+    } else {
+      EXTRACT_INT_FIELD_MYSQL(*result, "define_user_id", define_user_id, uint64_t);
+      EXTRACT_INT_FIELD_MYSQL(*result, "table_mode", table_mode_val, int64_t);
+      EXTRACT_INT_FIELD_MYSQL(*result, "build_mode", build_mode_val, int64_t);
+      if (OB_SUCC(ret)) {
+        build_mode = static_cast<ObMViewBuildMode>(build_mode_val);
+        is_mview_available =
+            (IS_MV_AVAILABLE == ObTableMode::get_mv_available_flag(static_cast<int32_t>(table_mode_val)));
       }
     }
   }

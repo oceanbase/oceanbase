@@ -900,6 +900,7 @@ ParseNode *push_back_child(void *malloc_pool, int *error_code, ParseNode *left_n
                            T_SET_UNION_ALL == left_node->type_ ||
                            T_VALUE_VECTOR == left_node->type_ ||
                            T_VALUE_LIST == left_node->type_ ||
+                           T_MV_OPTION_LIST == left_node->type_ ||
                            T_OP_CNN == left_node->type_))) {
     *error_code = OB_PARSER_ERR_UNEXPECTED;
   } else {

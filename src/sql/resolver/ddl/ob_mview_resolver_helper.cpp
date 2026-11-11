@@ -9,6 +9,7 @@
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
 #include "sql/resolver/ddl/ob_create_table_resolver_base.h"
 #include "sql/resolver/mv/ob_mv_checker.h"
+#include "sql/resolver/mv/ob_mv_dep_utils.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "sql/rewrite/ob_transformer_impl.h"
 #include "share/ob_license_utils.h"
@@ -16,7 +17,6 @@
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "storage/mview/ob_mview_refresh.h"
-#include "storage/mview/cmd/ob_mview_executor_util.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/printer/ob_raw_expr_printer.h"
@@ -178,6 +178,129 @@ int ObMViewResolverHelper::resolve_primary_key_node(ParseNode &pk_node,
   return ret;
 }
 
+int ObMViewResolverHelper::check_duplicate_mv_options(const ParseNode *options_node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(options_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null mview options node", KR(ret));
+  } else if (OB_UNLIKELY((T_MV_OPTION_LIST != options_node->type_ && T_MV_REFRESH_INFO != options_node->type_)
+                         || (T_MV_REFRESH_INFO == options_node->type_ && 0 != options_node->value_)
+                         || 0 > options_node->num_child_
+                         || (0 < options_node->num_child_ && NULL == options_node->children_)
+                         || (T_MV_OPTION_LIST == options_node->type_ && 0 == options_node->num_child_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected mview options node", KR(ret), K(options_node->type_),
+             K(options_node->value_), K(options_node->num_child_), K(options_node->children_));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < options_node->num_child_; ++i) {
+    const ParseNode *option_node = options_node->children_[i];
+    if (OB_ISNULL(option_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null mview option", KR(ret), K(i));
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < i; ++j) {
+      const ParseNode *seen_option = options_node->children_[j];
+      if (OB_UNLIKELY(seen_option->type_ == option_node->type_
+                      && (T_MV_OPTIONS != option_node->type_
+                          || seen_option->int32_values_[0] == option_node->int32_values_[0]))) {
+        ret = OB_ERR_PARSER_SYNTAX;
+        LOG_WARN("duplicate or conflicting materialized view option", KR(ret), K(option_node->type_),
+                 K(option_node->int32_values_[0]));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMViewResolverHelper::resolve_create_mview_options(const ParseNode *options_node,
+                                                       const ObSelectStmt *stmt,
+                                                       ObCreateViewResolver &resolver,
+                                                       obrpc::ObMVRefreshInfo &refresh_info,
+                                                       int64_t &mv_flags)
+{
+  int ret = OB_SUCCESS;
+  int64_t option_count = 0;
+  mv_flags = 0;
+  if (OB_ISNULL(resolver.session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null session info", KR(ret));
+  } else if (OB_FAIL(init_create_mview_options(resolver.session_info_->get_effective_tenant_id(),
+                                               refresh_info))) {
+    LOG_WARN("failed to init create mview options", KR(ret));
+  } else if (NULL == options_node) {
+  } else if (OB_UNLIKELY(T_MV_OPTION_LIST != options_node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected mview options node type", KR(ret), K(options_node->type_));
+  } else if (OB_FAIL(check_duplicate_mv_options(options_node))) {
+    LOG_WARN("failed to check mview options", KR(ret));
+  } else {
+    option_count = options_node->num_child_;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < option_count; ++i) {
+    const ParseNode *option_node = options_node->children_[i];
+    if (T_MV_BUILD_OPT == option_node->type_) {
+      if (OB_FAIL(resolve_mv_build_mode(option_node, refresh_info.build_mode_))) {
+        LOG_WARN("failed to resolve mview build mode", KR(ret));
+      }
+    } else if (T_MV_REFRESH_INFO == option_node->type_) {
+      if (OB_FAIL(resolve_mv_refresh_info(option_node, resolver.params_, refresh_info))) {
+        LOG_WARN("failed to resolve mview refresh info", KR(ret));
+      } else if (OB_UNLIKELY(refresh_info.sched_suspended_)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("create materialized view with suspend is not supported", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view with suspend is");
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+      } else if (OB_NOT_NULL(stmt) && !refresh_info.start_time_.is_null()
+                 && OB_FAIL(ObMVDepUtils::check_dep_mview_refresh_interval_order(
+                        *stmt, resolver.session_info_->get_effective_tenant_id(),
+                        refresh_info.refresh_interval_))) {
+        LOG_WARN("failed to check mview refresh interval order", KR(ret),
+                 K(refresh_info.refresh_interval_));
+#endif
+      }
+    } else if (T_MV_OPTIONS == option_node->type_) {
+      if (OB_UNLIKELY(1 > option_node->int32_values_[0] || 2 < option_node->int32_values_[0]
+                      || 0 > option_node->int32_values_[1] || 1 < option_node->int32_values_[1])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid materialized view option", KR(ret),
+                 K(option_node->int32_values_[0]), K(option_node->int32_values_[1]));
+      } else {
+        mv_flags |= 1 == option_node->int32_values_[1] ? option_node->int32_values_[0] : 0;
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected create mview option type", KR(ret), K(option_node->type_));
+    }
+  }
+  return ret;
+}
+
+int ObMViewResolverHelper::init_create_mview_options(const uint64_t tenant_id,
+                                                     obrpc::ObMVRefreshInfo &refresh_info)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  refresh_info.build_mode_ = ObMViewBuildMode::IMMEDIATE;
+  refresh_info.refresh_method_ = ObMVRefreshMethod::FORCE;
+  refresh_info.refresh_mode_ = ObMVRefreshMode::DEMAND;
+  refresh_info.refresh_dop_ = 0;
+  refresh_info.nested_refresh_mode_ = ObMVNestedRefreshMode::INDIVIDUAL;
+  refresh_info.start_time_.reset();
+  refresh_info.next_time_expr_.reset();
+  refresh_info.refresh_interval_ = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get min data version", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!((data_version >= MOCK_DATA_VERSION_4_4_2_2
+                            && data_version < DATA_VERSION_4_5_0_0)
+                           || data_version >= DATA_VERSION_4_6_1_0))) {
+    refresh_info.compat_version_ = 0;
+  } else {
+    refresh_info.compat_version_ = GET_MIN_CLUSTER_VERSION();
+  }
+  return ret;
+}
+
 int ObMViewResolverHelper::resolve_mv_options(const ObSelectStmt *stmt,
                                               ParseNode *options_node,
                                               obrpc::ObMVRefreshInfo &refresh_info,
@@ -187,153 +310,205 @@ int ObMViewResolverHelper::resolve_mv_options(const ObSelectStmt *stmt,
                                               ObCreateViewResolver &resolver)
 {
   int ret = OB_SUCCESS;
-  refresh_info.refresh_method_ = ObMVRefreshMethod::FORCE; //default method is force
-  refresh_info.refresh_mode_ = ObMVRefreshMode::DEMAND; //default mode is demand
-  uint64_t data_version = 0;
-  if (OB_ISNULL(stmt)) {
+  refresh_info.reset();
+  int64_t mv_flags = 0;
+  char buf[OB_MAX_PROC_ENV_LENGTH];
+  int64_t pos = 0;
+  bool cnt_proctime_table = false;
+  const int64_t on_query_computation_flag = 1;
+  const int64_t query_rewrite_flag = 1 << 1;
+  if (OB_ISNULL(stmt) || OB_ISNULL(resolver.session_info_) || OB_ISNULL(resolver.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stmt is null", K(ret));
-  } else if (NULL == options_node) {
-    /* do nothing */
-  } else if (OB_UNLIKELY(T_MV_OPTIONS != options_node->type_ || 1 != options_node->num_child_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(options_node));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(resolver.session_info_->get_effective_tenant_id(), data_version))) {
-    LOG_WARN("failed to get min data version", K(ret), K(data_version));
-  } else if (OB_FAIL(resolve_mv_refresh_info(options_node->children_[0], refresh_info, resolver))) {
-    LOG_WARN("fail to resolve mv refresh info", KR(ret));
+    LOG_WARN("unexpected null", KR(ret), K(stmt), K(resolver.session_info_), K(resolver.allocator_));
+  } else if (OB_FAIL(ObExecEnv::gen_exec_env(*resolver.session_info_, buf, OB_MAX_PROC_ENV_LENGTH, pos))) {
+    LOG_WARN("failed to generate exec env", KR(ret));
+  } else if (OB_FAIL(ob_write_string(*resolver.allocator_, ObString(pos, buf),
+                                    refresh_info.exec_env_))) {
+    LOG_WARN("failed to write exec env", KR(ret));
+  } else if (OB_FAIL(resolve_create_mview_options(options_node, stmt, resolver, refresh_info, mv_flags))) {
+    LOG_WARN("failed to resolve create mview options", KR(ret));
+  } else if (0 != (mv_flags & on_query_computation_flag)
+             && OB_FALSE_IT(table_schema.set_mv_on_query_computation(ObMVOnQueryComputationFlag::IS_MV_ON_QUERY_COMPUTATION))) {
+  } else if ((table_schema.mv_on_query_computation() || ObMVRefreshMethod::FAST == refresh_info.refresh_method_)
+             && OB_FAIL(resolve_mv_fast_refresh(stmt, refresh_info, table_schema, container_table_schema,
+                                         required_columns_infos, resolver))) {
+    LOG_WARN("failed to resolve mview fast refresh", KR(ret));
+  } else if (OB_FAIL(stmt->is_contains_mv_proctime_table(cnt_proctime_table))) {
+    LOG_WARN("failed to check contains mv proctime table", KR(ret));
   } else {
-    const int64_t on_query_computation_flag = 1;
-    const int64_t query_rewrite_flag = 1 << 1;
-    if (options_node->value_ & on_query_computation_flag) {
-      table_schema.set_mv_on_query_computation(ObMVOnQueryComputationFlag::IS_MV_ON_QUERY_COMPUTATION);
-    }
-    if (options_node->value_ & query_rewrite_flag) {
+    if (mv_flags & query_rewrite_flag) {
       table_schema.set_mv_enable_query_rewrite(ObMVEnableQueryRewriteFlag::IS_MV_ENABLE_QUERY_REWRITE);
     }
-  }
-
-  if (OB_SUCC(ret)) {
-    if ((table_schema.mv_on_query_computation() ||
-                ObMVRefreshMethod::FAST == refresh_info.refresh_method_)) {
-      ObMVRefreshableType refresh_type = OB_MV_REFRESH_INVALID;
-      FastRefreshableNotes fast_refreshable_note;
-      ObSEArray<std::pair<ObRawExpr*, int64_t>, 8> fast_refresh_dependency_columns;
-      ObDMLStmt *copied_stmt = NULL;
-      ObTableReferencedColumnsInfo table_referenced_columns_info;
-      if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*resolver.params_.stmt_factory_,
-              *resolver.params_.expr_factory_,
-              stmt, copied_stmt))) {
-        LOG_WARN("failed to deep copy stmt", K(ret));
-      } else if (OB_FAIL(table_referenced_columns_info.init())) {
-        LOG_WARN("failed to init table referenced columns info", KR(ret));
-      } else if (OB_FAIL(ObMVChecker::check_mv_fast_refresh_type(static_cast<ObSelectStmt*>(copied_stmt),
-                                                                 true,
-                                                                 resolver.allocator_,
-                                                                 resolver.schema_checker_,
-                                                                 resolver.params_.stmt_factory_,
-                                                                 resolver.params_.expr_factory_,
-                                                                 resolver.session_info_,
-                                                                 container_table_schema,
-                                                                 table_schema.mv_on_query_computation(),
-                                                                 refresh_type, fast_refreshable_note,
-                                                                 fast_refresh_dependency_columns,
-                                                                 &table_referenced_columns_info,
-                                                                 NULL))) {
-        LOG_WARN("fail to check mv type", KR(ret));
-      } else if (OB_UNLIKELY(fast_refresh_dependency_columns.count() > 0
-                             && ((data_version < MOCK_DATA_VERSION_4_3_5_5)
-                                 || (data_version >= DATA_VERSION_4_4_0_0 && data_version < MOCK_DATA_VERSION_4_4_2_0)
-                                 || (data_version >= DATA_VERSION_4_5_0_0 && data_version < DATA_VERSION_4_5_1_0)))) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("data version below 4.3.5.5 or between 4.4.0.0 and 4.4.2.0 or between 4.5.0.0 and 4.5.1.0, not support fast refresh auto add dependency columns", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version below 4.3.5.5 or between 4.4.0.0 and 4.4.2.0 or between 4.5.0.0 and 4.5.1.0, not support fast refresh auto add dependency columns");
-      } else if (OB_UNLIKELY(!IS_VALID_FAST_REFRESH_TYPE(refresh_type))) {
-        // When creating an MV, which can not be fast refreshed, with both fast refresh
-        // and on query computation, we should return CAN_NOT_ON_QUERY_COMPUTE
-        if (table_schema.mv_on_query_computation()) {
-          ret = OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE;
-          LOG_USER_ERROR(OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE, table_schema.get_table_name(),
-                          fast_refreshable_note.error_.ptr());
-        } else {
-          ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
-          LOG_USER_ERROR(OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH, table_schema.get_table_name(),
-                          fast_refreshable_note.error_.ptr());
-        }
-        LOG_WARN("fast refresh is not supported for this mv", KR(ret), K(refresh_type));
-      } else if (OB_FAIL(table_referenced_columns_info.convert_to_required_columns_infos(required_columns_infos))) {
-        LOG_WARN("failed to convert to required columns infos", K(ret));
-      } else if (OB_MV_FAST_REFRESH_MAJOR_REFRESH_MJV == refresh_type) {
-        table_schema.set_mv_major_refresh(IS_MV_MAJOR_REFRESH);
-        container_table_schema.set_mv_major_refresh(IS_MV_MAJOR_REFRESH);
-        refresh_info.refresh_mode_ = ObMVRefreshMode::MAJOR_COMPACTION;
-        LOG_INFO("[MAJ_REF_MV] match major refresh mv", K(table_schema.get_table_name()));
-      }
-      if (OB_SUCC(ret)) {
-        if ((fast_refresh_dependency_columns.count() > 0) &&
-            OB_FAIL(ObMVProvider::expand_mv_stmt_with_dependent_columns(static_cast<ObSelectStmt*>(copied_stmt),
-                    fast_refresh_dependency_columns, *resolver.allocator_, resolver.session_info_, *resolver.params_.expr_factory_))) {
-            LOG_WARN("failed to expand mv stmt with dependency columns", K(ret));
-        } else if (table_schema.mv_on_query_computation() &&
-                   OB_FAIL(check_on_query_computation_supported(static_cast<ObSelectStmt*>(copied_stmt)))) {
-          LOG_WARN("fail to check on query computation mv column type", KR(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        int append_columns_count = fast_refresh_dependency_columns.count();
-        int expend_stmt_select_items_count = static_cast<ObSelectStmt*>(copied_stmt)->get_select_item_size();
-        if (append_columns_count == 0) {
-          // do nothing
-        } else {
-          // for exp: user defined columns (a, b, c) + hidden column (d),
-          // expend_stmt_select_items_count = 4, append_columns_count = 1
-          // select_item_index = 3, column_index = 0, hidden_column_index = 4
-          int select_item_index = (expend_stmt_select_items_count - append_columns_count);
-          int column_index = 0;  // columns idx for fast_refresh_dependency_columns to get expend column info
-          int hidden_column_index = container_table_schema.get_max_used_column_id() + 1; // columns idx for container table
-          if (select_item_index > 0) {
-            for (; column_index < append_columns_count && OB_SUCC(ret);
-                 select_item_index++, column_index++, hidden_column_index++) {
-              const SelectItem &select_item = static_cast<ObSelectStmt*>(copied_stmt)->get_select_item(select_item_index);
-              char comment_buf[MAX_COLUMN_COMMENT_CHAR_LENGTH];
-              ObString comment_string;
-              if (OB_FAIL(generate_hidden_column_comment(fast_refresh_dependency_columns.at(column_index),
-                                                         copied_stmt->is_set_stmt(),
-                                                         resolver.schema_checker_->get_schema_guard(),
-                                                         resolver.session_info_,
-                                                         comment_buf,
-                                                         comment_string))) {
-                LOG_WARN("failed to generate hidden column comment", KR(ret));
-              } else if (OB_FAIL(add_hidden_cols_for_mv(container_table_schema,
-                                                        hidden_column_index,
-                                                        select_item,
-                                                        comment_string,
-                                                        resolver))) {
-                LOG_WARN("failed to add hidden cols for mv", KR(ret));
-              }
-            }
-            ObString sql;
-            ObSchemaGetterGuard *schema_guard = resolver.schema_checker_->get_schema_guard();
-            if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(ObSQLUtils::reconstruct_sql(*resolver.allocator_,
-                               copied_stmt, sql, schema_guard, resolver.session_info_->create_obj_print_params()))) {
-              LOG_WARN("failed to reconstruct sql", KR(ret));
-            } else if (OB_FAIL(table_schema.set_expand_view_definition_for_mv(sql))) {
-              LOG_WARN("failed to set expend view definition for mv", KR(ret));
-            }
-          }
-        }
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    bool cnt_proctime_table = false;
-    if (OB_FAIL(stmt->is_contains_mv_proctime_table(cnt_proctime_table))) {
-      LOG_WARN("failed to check contains mv proctime table", KR(ret));
-    } else if (cnt_proctime_table) {
+    if (cnt_proctime_table) {
       table_schema.set_mv_cnt_proctime_table(MV_CNT_PROCTIME_TABLE);
       container_table_schema.set_mv_cnt_proctime_table(MV_CNT_PROCTIME_TABLE);
     }
+  }
+  return ret;
+}
+
+int ObMViewResolverHelper::resolve_mv_fast_refresh(
+    const ObSelectStmt *stmt,
+    obrpc::ObMVRefreshInfo &refresh_info,
+    ObTableSchema &table_schema,
+    ObTableSchema &container_table_schema,
+    ObIArray<obrpc::ObMVRequiredColumnsInfo> &required_columns_infos,
+    ObCreateViewResolver &resolver)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  ObMVCheckerResult checker_result;
+  ObDMLStmt *copied_stmt = NULL;
+  ObDMLStmt *check_stmt = NULL;
+  if (OB_ISNULL(stmt) || OB_ISNULL(resolver.allocator_) || OB_ISNULL(resolver.schema_checker_)
+      || OB_ISNULL(resolver.params_.stmt_factory_) || OB_ISNULL(resolver.params_.expr_factory_)
+      || OB_ISNULL(resolver.session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", KR(ret), K(stmt), K(resolver.allocator_), K(resolver.schema_checker_),
+             K(resolver.params_.stmt_factory_), K(resolver.params_.expr_factory_), K(resolver.session_info_));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(resolver.session_info_->get_effective_tenant_id(), data_version))) {
+    LOG_WARN("failed to get min data version", KR(ret));
+  } else {
+    const ObMVCheckerParams checker_params{*resolver.allocator_,
+                                          *resolver.schema_checker_,
+                                          *resolver.params_.stmt_factory_,
+                                          *resolver.params_.expr_factory_,
+                                          *resolver.session_info_,
+                                          table_schema,
+                                          container_table_schema,
+                                          refresh_info.compat_version_,
+                                          table_schema.mv_on_query_computation(),
+                                          true /* for_create_mview */};
+    if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*resolver.params_.stmt_factory_,
+                                               *resolver.params_.expr_factory_,
+                                               stmt, copied_stmt))) {
+      LOG_WARN("failed to deep copy stmt", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*resolver.params_.stmt_factory_,
+                                                      *resolver.params_.expr_factory_,
+                                                      stmt,
+                                                      check_stmt))) {
+      LOG_WARN("failed to deep copy stmt for check", K(ret));
+    } else if (OB_FAIL(ObMVChecker::prepare_mv_stmt_and_check_refresh_type(checker_params,
+                                                                        check_stmt,
+                                                                        checker_result))) {
+      LOG_WARN("fail to check mv type", KR(ret));
+    } else if (OB_UNLIKELY(checker_result.get_dependent_columns().count() > 0
+                           && ((data_version < MOCK_DATA_VERSION_4_3_5_5)
+                               || (data_version >= DATA_VERSION_4_4_0_0 && data_version < MOCK_DATA_VERSION_4_4_2_0)
+                               || (data_version >= DATA_VERSION_4_5_0_0 && data_version < DATA_VERSION_4_5_1_0)))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN(
+        "data version below 4.3.5.5 or between 4.4.0.0 and 4.4.2.0 or between 4.5.0.0 and 4.5.1.0, not support fast "
+        "refresh auto add dependent columns",
+        K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                     "data version below 4.3.5.5 or between 4.4.0.0 and 4.4.2.0 or between 4.5.0.0 and 4.5.1.0, not "
+                     "support fast refresh auto add dependent columns");
+    } else if (OB_UNLIKELY(!IS_VALID_FAST_REFRESH_TYPE(checker_result.get_refresh_type()))) {
+      // When creating an MV, which can not be fast refreshed, with both fast refresh
+      // and on query computation, we should return CAN_NOT_ON_QUERY_COMPUTE
+      if (table_schema.mv_on_query_computation()) {
+        ret = OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE;
+        LOG_USER_ERROR(OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE,
+                       table_schema.get_table_name(),
+                       checker_result.get_note().error_.ptr());
+      } else {
+        ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
+        LOG_USER_ERROR(OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH,
+                       table_schema.get_table_name(),
+                       checker_result.get_note().error_.ptr());
+      }
+      LOG_WARN("fast refresh is not supported for this mv", KR(ret), K(checker_result.get_refresh_type()));
+    } else if (OB_FAIL(checker_result.get_mlog_required_columns_info().convert_to_required_columns_infos(
+                   required_columns_infos))) {
+      LOG_WARN("failed to convert to required columns infos", K(ret));
+    } else if (OB_MV_FAST_REFRESH_MAJOR_REFRESH_MJV == checker_result.get_refresh_type()) {
+      table_schema.set_mv_major_refresh(IS_MV_MAJOR_REFRESH);
+      container_table_schema.set_mv_major_refresh(IS_MV_MAJOR_REFRESH);
+      refresh_info.refresh_mode_ = ObMVRefreshMode::MAJOR_COMPACTION;
+      LOG_INFO("[MAJ_REF_MV] match major refresh mv", K(table_schema.get_table_name()));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if ((checker_result.get_dependent_columns().count() > 0)
+        && OB_FAIL(ObMVProvider::expand_mv_stmt_with_dependent_columns(static_cast<ObSelectStmt *>(copied_stmt),
+                                                                    checker_result.get_dependent_columns(),
+                                                                    *resolver.allocator_,
+                                                                    resolver.session_info_,
+                                                                    *resolver.params_.expr_factory_))) {
+      LOG_WARN("failed to expand mv stmt with dependent columns", K(ret));
+    } else if (table_schema.mv_on_query_computation()
+               && OB_FAIL(check_on_query_computation_supported(static_cast<ObSelectStmt *>(copied_stmt)))) {
+      LOG_WARN("fail to check on query computation mv column type", KR(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    int dep_col_count = checker_result.get_dependent_columns().count();
+    int expend_stmt_select_items_count = static_cast<ObSelectStmt*>(copied_stmt)->get_select_item_size();
+    if (dep_col_count == 0) {
+      // do nothing
+    } else {
+      // for exp: user defined columns (a, b, c) + hidden column (d),
+      // expend_stmt_select_items_count = 4, dep_col_count = 1
+      // select_item_index = 3, dep_col_idx = 0, hidden_column_index = 4
+      int select_item_index = (expend_stmt_select_items_count - dep_col_count);
+      int dep_col_idx = 0;
+      int hidden_column_index = container_table_schema.get_max_used_column_id() + 1; // columns idx for container table
+      if (select_item_index > 0) {
+        for (; dep_col_idx < dep_col_count && OB_SUCC(ret);
+             select_item_index++, dep_col_idx++, hidden_column_index++) {
+          const SelectItem &select_item = static_cast<ObSelectStmt*>(copied_stmt)->get_select_item(select_item_index);
+          char comment_buf[MAX_COLUMN_COMMENT_CHAR_LENGTH];
+          ObString comment_string;
+          if (OB_FAIL(generate_hidden_column_comment(checker_result.get_dependent_columns().at(dep_col_idx),
+                                                     copied_stmt->is_set_stmt(),
+                                                     resolver.schema_checker_->get_schema_guard(),
+                                                     resolver.session_info_,
+                                                     comment_buf,
+                                                     comment_string))) {
+            LOG_WARN("failed to generate hidden column comment", KR(ret));
+          } else if (OB_FAIL(add_hidden_cols_for_mv(container_table_schema,
+                                                  hidden_column_index,
+                                                  select_item,
+                                                  comment_string,
+                                                  resolver))) {
+            LOG_WARN("failed to add hidden cols for mv", KR(ret));
+          }
+        }
+        ObString sql;
+        ObSchemaGetterGuard *schema_guard = resolver.schema_checker_->get_schema_guard();
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(ObMVProvider::align_mv_stmt_output_column_names(
+                       static_cast<ObSelectStmt *>(copied_stmt), container_table_schema))) {
+          LOG_WARN("failed to align mv output column names", KR(ret));
+        } else if (OB_FAIL(ObSQLUtils::reconstruct_sql(*resolver.allocator_,
+                           copied_stmt, sql, schema_guard, resolver.session_info_->create_obj_print_params()))) {
+          LOG_WARN("failed to reconstruct sql", KR(ret));
+        } else if (OB_FAIL(table_schema.set_expand_view_definition_for_mv(sql))) {
+          LOG_WARN("failed to set expend view definition for mv", KR(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMViewResolverHelper::resolve_mv_build_mode(const ParseNode *build_mode_node,
+                                                  ObMViewBuildMode &build_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(build_mode_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null mv build mode node", KR(ret));
+  } else if (OB_UNLIKELY(T_MV_BUILD_OPT != build_mode_node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected mv build mode node", KR(ret), K(build_mode_node->type_));
+  } else if (OB_UNLIKELY(0 != build_mode_node->value_ && 1 != build_mode_node->value_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid mv build mode", KR(ret), K(build_mode_node->value_));
+  } else {
+    build_mode = 0 == build_mode_node->value_ ? ObMViewBuildMode::IMMEDIATE
+                                              : ObMViewBuildMode::DEFERRED;
   }
   return ret;
 }
@@ -352,140 +527,176 @@ int ObMViewResolverHelper::check_on_query_computation_supported(const ObSelectSt
   return ret;
 }
 
-int ObMViewResolverHelper::resolve_mv_refresh_info(ParseNode *refresh_info_node,
-                                                   obrpc::ObMVRefreshInfo &refresh_info,
-                                                   ObCreateViewResolver &resolver)
+
+int ObMViewResolverHelper::resolve_mv_refresh_info(const ParseNode *refresh_info_node,
+                                                  ObResolverParams &resolver_params,
+                                                  obrpc::ObMVRefreshInfo &refresh_info)
 {
   int ret = OB_SUCCESS;
-  uint64_t data_version = 0;
-  if (resolver.allocator_ == nullptr) {
+  if (OB_ISNULL(refresh_info_node) || OB_ISNULL(resolver_params.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator_ is null", KR(ret));
-  }
-  char buf[OB_MAX_PROC_ENV_LENGTH];
-  int64_t pos = 0;
-  OZ (ObExecEnv::gen_exec_env(*resolver.session_info_, buf, OB_MAX_PROC_ENV_LENGTH, pos));
-  OX (refresh_info.exec_env_.assign(buf, pos));
-  OZ (ob_write_string(*resolver.allocator_, refresh_info.exec_env_, refresh_info.exec_env_));
-  OZ (OB_FAIL(GET_MIN_DATA_VERSION(resolver.session_info_->get_effective_tenant_id(), data_version)));
-  if (OB_SUCC(ret) && refresh_info_node != nullptr) {
-    if (refresh_info_node->int32_values_[0] == 1) { //never refresh
-      refresh_info.refresh_method_ = ObMVRefreshMethod::NEVER;
-      refresh_info.refresh_mode_ = ObMVRefreshMode::NEVER;
-    } else if (refresh_info_node->int32_values_[0] == 0) {
-      if (OB_UNLIKELY(5 != refresh_info_node->num_child_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected refresh info node", K(ret), K(refresh_info_node->type_), K(refresh_info_node->num_child_));
-      } else {
-        int32_t refresh_method = refresh_info_node->int32_values_[1];
-        ParseNode *refresh_parallel_node = refresh_info_node->children_[0];
-        ParseNode *nested_refresh_node = refresh_info_node->children_[1];
-        ParseNode *refresh_on_node = refresh_info_node->children_[2];
-        ParseNode *refresh_interval_node = refresh_info_node->children_[3];
-        ParseNode *compat_version_node = refresh_info_node->children_[4];
-        // refresh method
-        if (OB_FAIL(resolve_refresh_method(refresh_method,
-                                           refresh_info.refresh_method_))) {
-          LOG_WARN("fail to resolve refresh method", KR(ret));
-        }
-        // refresh parallel
-        if (OB_FAIL(ret)) {
-        } else if (NULL == refresh_parallel_node) {
-          refresh_info.refresh_dop_ = 0;
-        } else if (OB_FAIL(resolve_refresh_parallel_node(refresh_parallel_node,
-                                                         refresh_info.refresh_dop_))) {
-          LOG_WARN("failed to resolve refresh parallel node", KR(ret));
-        }
-        // nested refresh mode
-        if (OB_FAIL(ret)) {
-        } else if (NULL == nested_refresh_node) {
-          refresh_info.nested_refresh_mode_ = ObMVNestedRefreshMode::INDIVIDUAL;
-        } else if (OB_UNLIKELY(data_version < MOCK_DATA_VERSION_4_3_5_3
-                               || (data_version >= DATA_VERSION_4_4_0_0 && data_version < MOCK_DATA_VERSION_4_4_2_0)
-                               || (data_version >= DATA_VERSION_4_5_0_0 && data_version < DATA_VERSION_4_5_1_0))) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("data version below 4.3.5.3 or between 4.4.0.0 and 4.4.2.0 or between 4.5.0.0 and 4.5.1.0, not support nested refresh type", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version below 4.3.5.3 or between 4.4.0.0 and 4.4.2.0 or between 4.5.0.0 and 4.5.1.0, set nested refresh type is");
-        } else if (OB_FAIL(resolve_nested_refresh_node(nested_refresh_node,
-                                                       refresh_info.nested_refresh_mode_))) {
-          LOG_WARN("failed to resolve nested refresh node", KR(ret));
-        }
-        // refresh on mode
-        if (OB_FAIL(ret)) {
-        } else if (NULL == refresh_on_node) {
-          refresh_info.refresh_mode_ = ObMVRefreshMode::DEMAND;
-        } else if (OB_FAIL(resolve_refresh_on_node(refresh_on_node, refresh_info.refresh_mode_))) {
-          LOG_WARN("fail to resolve refresh on node", KR(ret));
-        }
-        // refresh interval
-        if (OB_FAIL(ret)) {
-        } else if (NULL == refresh_interval_node) {
-          refresh_info.start_time_.reset();
-          refresh_info.next_time_expr_.reset();
-        } else {
-          int64_t start_time = OB_INVALID_TIMESTAMP;
-          ObString next_time_expr;
-          int64_t period_sec = 0;
-          int64_t mview_complete_refresh_min_interval = 600;
-          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(resolver.session_info_->get_effective_tenant_id()));
-          if (tenant_config.is_valid()) {
-            mview_complete_refresh_min_interval = tenant_config->_mv_complete_refresh_min_interval / 1000000L;
+    LOG_WARN("unexpected null", KR(ret), K(refresh_info_node), K(resolver_params.session_info_));
+  } else if (OB_UNLIKELY(T_MV_REFRESH_INFO != refresh_info_node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected mview refresh info node type", KR(ret), K(refresh_info_node->type_));
+  } else if (OB_UNLIKELY((1 == refresh_info_node->value_ || 2 == refresh_info_node->value_)
+                         && 0 != refresh_info_node->num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected children for mview refresh state", KR(ret), K(refresh_info_node->value_),
+             K(refresh_info_node->num_child_));
+  } else if (1 == refresh_info_node->value_) {
+    refresh_info.refresh_mode_ = ObMVRefreshMode::NEVER;
+  } else if (2 == refresh_info_node->value_) {
+    if (OB_FAIL(resolve_mv_sched_suspended(resolver_params.session_info_->get_effective_tenant_id(),
+                                           refresh_info.sched_suspended_))) {
+      LOG_WARN("failed to resolve mview scheduler suspension", KR(ret));
+    }
+  } else if (OB_FAIL(check_duplicate_mv_options(refresh_info_node))) {
+    LOG_WARN("failed to check mview refresh options", KR(ret));
+  } else {
+    const uint64_t tenant_id = resolver_params.session_info_->get_effective_tenant_id();
+    const int64_t option_count = refresh_info_node->num_child_;
+    const ParseNode *start_node = NULL;
+    const ParseNode *next_node = NULL;
+    const ParseNode *compat_version_node = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < option_count; ++i) {
+      const ParseNode *option_node = refresh_info_node->children_[i];
+      switch (option_node->type_) {
+        case T_MV_REFRESH_METHOD:
+          if (OB_FAIL(resolve_refresh_method(option_node->value_, refresh_info.refresh_method_))) {
+            LOG_WARN("failed to resolve refresh method", KR(ret));
           }
-          if (OB_FAIL(resolve_refresh_interval_node(refresh_interval_node,
-                                                    resolver.session_info_,
-                                                    resolver.allocator_,
-                                                    resolver.params_,
-                                                    start_time,
-                                                    next_time_expr,
-                                                    period_sec))) {
-            LOG_WARN("failed to resolve interval node", KR(ret));
-          } else if (OB_INVALID_TIMESTAMP != start_time || NULL != next_time_expr) {
-            // refresh interval has been set
-            if (OB_UNLIKELY(ObMVRefreshMode::COMMIT == refresh_info.refresh_mode_)) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("ON COMMIT attribute followed by start with/next clause is not supported", KR(ret));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "ON COMMIT attribute followed by start with/next clause is");
-            } else if (OB_UNLIKELY(ObMVRefreshMode::STATEMENT == refresh_info.refresh_mode_)) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("ON STATEMENT attribute followed by start with/next clause is not supported", KR(ret));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "ON STATEMENT attribute followed by start with/next clause is");
-            } else if (OB_UNLIKELY(ObMVRefreshMethod::COMPLETE == refresh_info.refresh_method_ &&
-                                   period_sec < mview_complete_refresh_min_interval)) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("the interval of complete refresh is less than the minimum interval", KR(ret), K(period_sec), K(mview_complete_refresh_min_interval));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "the interval of complete refresh is less than the minimum interval");
-            } else {
-              refresh_info.start_time_.set_timestamp(start_time);
-              refresh_info.next_time_expr_ = next_time_expr;
-            }
-          } else {
-            // refresh interval has not been set, use default value
-            refresh_info.start_time_.reset();
-            refresh_info.next_time_expr_.reset();
+          break;
+        case T_PARALLEL:
+          if (OB_FAIL(resolve_refresh_parallel_node(option_node, refresh_info.refresh_dop_))) {
+            LOG_WARN("failed to resolve refresh parallel", KR(ret));
           }
-        }
-        // compat version
-        if (OB_FAIL(ret)) {
-        } else if (!((data_version >= MOCK_DATA_VERSION_4_4_2_2 && data_version < DATA_VERSION_4_5_0_0)
-                     || (data_version >= DATA_VERSION_4_6_1_0))) {
-          refresh_info.compat_version_ = 0;
-        } else if (NULL == compat_version_node) {
-          refresh_info.compat_version_ = GET_MIN_CLUSTER_VERSION();
-        } else if (OB_FAIL(resolve_compat_version_node(compat_version_node,
-                                                        resolver.session_info_->get_effective_tenant_id(),
-                                                        refresh_info.compat_version_))) {
-          LOG_WARN("failed to resolve compat version node", KR(ret));
-        }
+          break;
+        case T_MV_NESTED_REFRESH_CLAUSE:
+          if (OB_FAIL(resolve_nested_refresh_node(option_node, tenant_id, refresh_info.nested_refresh_mode_))) {
+            LOG_WARN("failed to resolve nested refresh mode", KR(ret));
+          }
+          break;
+        case T_MV_REFRESH_ON_CLAUSE:
+          if (OB_FAIL(resolve_refresh_on_node(option_node, refresh_info.refresh_mode_))) {
+            LOG_WARN("failed to resolve refresh on mode", KR(ret));
+          }
+          break;
+        case T_MV_REFRESH_START_EXPR:
+          start_node = option_node;
+          break;
+        case T_MV_REFRESH_INTERVAL:
+          next_node = option_node;
+          break;
+        case T_VERSION:
+          compat_version_node = option_node;
+          break;
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected mview refresh option type", KR(ret), K(option_node->type_));
+          break;
       }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected refresh_info_node node", K(ret), K(refresh_info_node->type_), K(refresh_info_node->int32_values_[0]));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(fill_mv_refresh_interval(start_node, next_node, tenant_id,
+                                                resolver_params, refresh_info))) {
+      LOG_WARN("failed to fill mview refresh interval", KR(ret));
+    } else if (NULL != compat_version_node
+               && OB_FAIL(resolve_compat_version(compat_version_node, tenant_id, refresh_info.compat_version_))) {
+      LOG_WARN("failed to resolve compat version", KR(ret));
     }
   }
   return ret;
 }
 
-int ObMViewResolverHelper::resolve_refresh_method(const int32_t refresh_method_value,
+int ObMViewResolverHelper::resolve_mv_sched_suspended(const uint64_t tenant_id,
+                                                      bool &sched_suspended)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get min data version", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(DATA_VERSION_5_0_2_0 > data_version)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version does not support suspending mview refresh",
+             KR(ret), K(tenant_id), K(data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                   "tenant's data version is below 5.0.2.0, suspend mview refresh is");
+  } else {
+    sched_suspended = true;
+  }
+  return ret;
+}
+
+int ObMViewResolverHelper::fill_mv_refresh_interval(const ParseNode *start_node,
+                                                    const ParseNode *next_node,
+                                                    const uint64_t tenant_id,
+                                                    ObResolverParams &resolver_params,
+                                                    obrpc::ObMVRefreshInfo &refresh_info)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = OB_INVALID_TIMESTAMP;
+  ObString next_time_expr;
+  int64_t period_sec = 0;
+  if (OB_NOT_NULL(next_node)
+      && (OB_UNLIKELY(NULL != next_node->children_[0]) || OB_ISNULL(next_node->children_[1]))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NEXT option", KR(ret), K(next_node->children_[0]), K(next_node->children_[1]));
+  } else if (NULL == start_node && NULL == next_node) {
+    refresh_info.start_time_.reset();
+    refresh_info.next_time_expr_.reset();
+    refresh_info.refresh_interval_ = 0;
+  } else if (OB_FAIL(resolve_refresh_interval_node(start_node,
+                                                    NULL == next_node ? NULL : next_node->children_[1],
+                                                    resolver_params,
+                                                    start_time,
+                                                    next_time_expr,
+                                                    period_sec))) {
+    LOG_WARN("failed to resolve interval node", KR(ret));
+  } else if (OB_INVALID_TIMESTAMP == start_time && next_time_expr.empty()) {
+    refresh_info.start_time_.reset();
+    refresh_info.next_time_expr_.reset();
+    refresh_info.refresh_interval_ = 0;
+  } else if (OB_FAIL(check_mv_refresh_interval(tenant_id, refresh_info, period_sec))) {
+    LOG_WARN("failed to check mview refresh interval", KR(ret));
+  } else if (OB_FALSE_IT(refresh_info.start_time_.set_timestamp(start_time))) {
+  } else if (OB_FALSE_IT(refresh_info.next_time_expr_ = next_time_expr)) {
+  } else {
+    refresh_info.refresh_interval_ = period_sec * 1000000L;
+  }
+  return ret;
+}
+
+int ObMViewResolverHelper::check_mv_refresh_interval(const uint64_t tenant_id,
+                                                     const obrpc::ObMVRefreshInfo &refresh_info,
+                                                     const int64_t period_sec)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObMVRefreshMode::COMMIT == refresh_info.refresh_mode_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("ON COMMIT attribute followed by start with/next clause is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "ON COMMIT attribute followed by start with/next clause is");
+  } else if (OB_UNLIKELY(ObMVRefreshMode::STATEMENT == refresh_info.refresh_mode_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("ON STATEMENT attribute followed by start with/next clause is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "ON STATEMENT attribute followed by start with/next clause is");
+  } else if (ObMVRefreshMethod::COMPLETE == refresh_info.refresh_method_) {
+    int64_t mview_complete_refresh_min_interval = 600;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      mview_complete_refresh_min_interval = tenant_config->_mv_complete_refresh_min_interval / 1000000L;
+    }
+    if (OB_UNLIKELY(period_sec < mview_complete_refresh_min_interval)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("the interval of complete refresh is less than the minimum interval", KR(ret),
+               K(period_sec), K(mview_complete_refresh_min_interval));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "the interval of complete refresh is less than the minimum interval");
+    }
+  }
+  return ret;
+}
+
+int ObMViewResolverHelper::resolve_refresh_method(const int64_t refresh_method_value,
                                                   ObMVRefreshMethod &refresh_method)
 {
   int ret = OB_SUCCESS;
@@ -531,13 +742,27 @@ int ObMViewResolverHelper::resolve_refresh_parallel_node(const ParseNode *refres
 }
 
 int ObMViewResolverHelper::resolve_nested_refresh_node(const ParseNode *nested_refresh_node,
+                                                       const uint64_t tenant_id,
                                                        ObMVNestedRefreshMode &nested_refresh_mode)
 {
   int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
   if (OB_ISNULL(nested_refresh_node)
       || OB_UNLIKELY(T_MV_NESTED_REFRESH_CLAUSE != nested_refresh_node->type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null nested refresh node", K(ret), K(nested_refresh_node));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get min data version", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(data_version < MOCK_DATA_VERSION_4_3_5_3
+                         || (data_version >= DATA_VERSION_4_4_0_0
+                             && data_version < MOCK_DATA_VERSION_4_4_2_0)
+                         || (data_version >= DATA_VERSION_4_5_0_0
+                             && data_version < DATA_VERSION_4_5_1_0))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("data version does not support nested refresh type", KR(ret), K(data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                   "data version below 4.3.5.3 or between 4.4.0.0 and 4.4.2.0 or between 4.5.0.0 and "
+                   "4.5.1.0, set nested refresh type is");
   } else {
     switch (nested_refresh_node->value_) {
       case 0:
@@ -590,28 +815,23 @@ int ObMViewResolverHelper::resolve_refresh_on_node(const ParseNode *refresh_on_n
   return ret;
 }
 
-int ObMViewResolverHelper::resolve_refresh_interval_node(const ParseNode *refresh_interval_node,
-                                                         ObSQLSessionInfo *session_info,
-                                                         common::ObIAllocator *allocator,
-                                                         ObResolverParams &resolver_params,
-                                                         int64_t &start_time,
-                                                         ObString &next_time_expr,
-                                                         int64_t &period_sec)
+int ObMViewResolverHelper::resolve_refresh_interval_node(const ParseNode *start_date,
+                                                          const ParseNode *next_date,
+                                                          ObResolverParams &resolver_params,
+                                                          int64_t &start_time,
+                                                          ObString &next_time_expr,
+                                                          int64_t &period_sec)
 {
   int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session_info = resolver_params.session_info_;
+  common::ObIAllocator *allocator = resolver_params.allocator_;
   start_time = OB_INVALID_TIMESTAMP;
   next_time_expr.reset();
   period_sec = 0;
-  if (OB_ISNULL(refresh_interval_node) || OB_ISNULL(session_info) || OB_ISNULL(allocator)) {
+  if (OB_ISNULL(session_info) || OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", KR(ret), K(session_info), K(allocator));
-  } else if (OB_UNLIKELY(T_MV_REFRESH_INTERVAL != refresh_interval_node->type_
-                         || 2 != refresh_interval_node->num_child_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected node type", KR(ret), K(refresh_interval_node->type_), K(refresh_interval_node->num_child_));
   } else {
-    const ParseNode *start_date = refresh_interval_node->children_[0];
-    const ParseNode *next_date = refresh_interval_node->children_[1];
     int64_t current_time = ObTimeUtility::current_time() / 1000000L * 1000000L; // ignore micro seconds
     if (NULL != start_date) {
       if (T_MV_REFRESH_START_EXPR != start_date->type_ || OB_ISNULL(start_date->children_[0])) {
@@ -662,16 +882,34 @@ int ObMViewResolverHelper::resolve_refresh_interval_node(const ParseNode *refres
   return ret;
 }
 
-int ObMViewResolverHelper::resolve_compat_version_node(const ParseNode *compat_version_node,
-                                                       const uint64_t tenant_id,
-                                                       uint64_t &compat_version)
+int ObMViewResolverHelper::resolve_compat_version(const ParseNode *compat_version_node,
+                                                  const uint64_t tenant_id,
+                                                  uint64_t &compat_version)
 {
   int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  const ParseNode *version_node = NULL;
   if (OB_ISNULL(compat_version_node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null compat version node", KR(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get min data version", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!((data_version >= MOCK_DATA_VERSION_4_4_2_2
+                            && data_version < DATA_VERSION_4_5_0_0)
+                           || data_version >= DATA_VERSION_4_6_1_0))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version does not support specifying mview compat version",
+             KR(ret), K(tenant_id), K(data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "specifying mview compat version at this data version is");
+  } else if (T_VERSION == compat_version_node->type_
+             && (OB_ISNULL(compat_version_node->children_) || OB_ISNULL(compat_version_node->children_[0]))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null compat version", KR(ret));
   } else {
-    ObString version_str(compat_version_node->str_len_, compat_version_node->str_value_);
+    version_node = T_VERSION == compat_version_node->type_
+                   ? compat_version_node->children_[0]
+                   : compat_version_node;
+    ObString version_str(version_node->str_len_, version_node->str_value_);
     uint64_t version_val = 0;
     if (OB_FAIL(ObClusterVersion::get_version(version_str, version_val))) {
       LOG_WARN("failed to parse compat version", KR(ret), K(version_str));
@@ -818,7 +1056,7 @@ int ObMViewResolverHelper::resolve_materialized_view(const ParseNode &parse_tree
   return ret;
 }
 
-int ObMViewResolverHelper::generate_hidden_column_comment(const std::pair<ObRawExpr*, int64_t> &dependency_info,
+int ObMViewResolverHelper::generate_hidden_column_comment(const std::pair<ObRawExpr *, int64_t> &dep_col,
                                                           const bool is_set_stmt,
                                                           ObSchemaGetterGuard *schema_guard,
                                                           ObSQLSessionInfo *session_info,
@@ -838,7 +1076,7 @@ int ObMViewResolverHelper::generate_hidden_column_comment(const std::pair<ObRawE
     pos = prefix_len;
   }
   if (OB_FAIL(ret)) {
-  } else if (is_set_stmt && -1 == dependency_info.second) {
+  } else if (is_set_stmt && OB_INVALID_INDEX == dep_col.second) {
     // it is a union all marker column
     static constexpr char marker_comment[] = "union all branch marker";
     static constexpr int64_t marker_len = sizeof(marker_comment) - 1;
@@ -846,13 +1084,15 @@ int ObMViewResolverHelper::generate_hidden_column_comment(const std::pair<ObRawE
       MEMCPY(buf + pos, marker_comment, marker_len);
       pos += marker_len;
     }
-  } else if (OB_ISNULL(dependency_info.first)) {
+  } else if (OB_ISNULL(dep_col.first)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
-  } else if (OB_FALSE_IT(expr_printer.init(buf, MAX_COLUMN_COMMENT_CHAR_LENGTH, &pos,
-                                           schema_guard, TZ_INFO(session_info)))) {
-  } else if (OB_FAIL(expr_printer.do_print(const_cast<ObRawExpr*>(dependency_info.first),
-                                           T_FIELD_LIST_SCOPE))) {
+  } else if (OB_FALSE_IT(expr_printer.init(buf,
+                                           MAX_COLUMN_COMMENT_CHAR_LENGTH,
+                                           &pos,
+                                           schema_guard,
+                                           TZ_INFO(session_info)))) {
+  } else if (OB_FAIL(expr_printer.do_print(const_cast<ObRawExpr *>(dep_col.first), T_FIELD_LIST_SCOPE))) {
     if (OB_LIKELY(OB_SIZE_OVERFLOW == ret && pos > 0)) {
       // comment may be truncated, just ignore it
       LOG_WARN("select item expr is too long, comment may be truncated", K(ret), K(pos));
@@ -861,9 +1101,11 @@ int ObMViewResolverHelper::generate_hidden_column_comment(const std::pair<ObRawE
       LOG_WARN("failed to print select item expr", K(ret));
     }
   } else if (is_set_stmt
-             && OB_FAIL(common::databuff_printf(buf, MAX_COLUMN_COMMENT_CHAR_LENGTH, pos,
+             && OB_FAIL(common::databuff_printf(buf,
+                                                MAX_COLUMN_COMMENT_CHAR_LENGTH,
+                                                pos,
                                                 " in the %ld-th set child query",
-                                                dependency_info.second + 1))) {
+                                                dep_col.second + 1))) {
     if (OB_LIKELY(OB_SIZE_OVERFLOW == ret && pos > 0)) {
       // comment may be truncated, just ignore it
       LOG_WARN("set stmt branch index is too long, comment may be truncated", K(ret), K(pos));

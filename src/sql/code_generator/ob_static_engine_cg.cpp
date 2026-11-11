@@ -11324,7 +11324,7 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
       auto &op = static_cast<ObLogSet&>(log_op);
       uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
       switch (op.get_set_op()) {
-        case ObSelectStmt::UNION:
+        case ObSetRelation::UNION:
           if (op.is_recursive_union()) {
             type = PHY_RECURSIVE_UNION_ALL;
           } else {
@@ -11350,7 +11350,7 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
             }
           }
           break;
-        case ObSelectStmt::INTERSECT: {
+        case ObSetRelation::INTERSECT: {
           if (enable_rich_format.check_plan() && (min_cluster_version >= CLUSTER_VERSION_4_3_2_0)) {
             bool use_vec = (EVENT_CALL(EventTable::EN_TEST_FOR_HASH_UNION) == OB_SUCCESS);
             if (use_vec) {
@@ -11373,7 +11373,7 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
           }
           break;
         }
-        case ObSelectStmt::EXCEPT: {
+        case ObSetRelation::EXCEPT: {
           if (enable_rich_format.check_plan() && (min_cluster_version >= CLUSTER_VERSION_4_3_2_0)) {
             bool use_vec = (EVENT_CALL(EventTable::EN_TEST_FOR_HASH_UNION) == OB_SUCCESS);
             if (use_vec) {

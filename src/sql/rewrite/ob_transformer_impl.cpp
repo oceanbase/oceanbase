@@ -457,15 +457,19 @@ int ObTransformerImpl::transform_heuristic_rule(ObDMLStmt *&stmt)
 {
   int ret = OB_SUCCESS;
   bool trans_happened = false;
-  if (OB_ISNULL(stmt)) {
+  uint64_t needed_types = ObTransformRule::ALL_HEURISTICS_RULES;
+  if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stmt is NULL", K(ret));
-  } else if (OB_FAIL(transform_rule_set(stmt,
-                                        ObTransformRule::ALL_HEURISTICS_RULES,
-                                        max_iteration_count_,
-                                        trans_happened))) {
-    LOG_WARN("failed to transform one rule set", K(ret));
-  } else { /*do nothing*/ }
+    LOG_WARN("stmt or query ctx is NULL", K(ret));
+  } else {
+    // Preserve the legacy rule set used by generic cost evaluation.
+    if (!ObTransformTempTable::is_heuristic_and_cost_based_trans(*stmt->get_query_ctx())) {
+      needed_types &= ~(1L << TEMP_TABLE_OPTIMIZATION);
+    }
+    if (OB_FAIL(transform_rule_set(stmt, needed_types, max_iteration_count_, trans_happened))) {
+      LOG_WARN("failed to transform one rule set", K(ret));
+    }
+  }
   return ret;
 }
 

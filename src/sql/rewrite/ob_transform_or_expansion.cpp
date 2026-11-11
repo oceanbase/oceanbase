@@ -2313,8 +2313,8 @@ int ObTransformOrExpansion::transform_or_expansion(ObSelectStmt *stmt,
     ObSEArray<ObSelectStmt*, 2> child_stmts;
     ObSelectStmt *set_stmt = NULL;
     SemiInfo *semi_info = view_stmt->get_semi_info_by_id(trans_id);
-    const ObSelectStmt::SetOperator set_type = NULL != semi_info && semi_info->is_anti_join()
-                                               ? ObSelectStmt::INTERSECT : ObSelectStmt::UNION;
+    const ObSetRelation::SetOperator set_type = NULL != semi_info && semi_info->is_anti_join()
+                                               ? ObSetRelation::INTERSECT : ObSetRelation::UNION;
     for (int64_t i = 0; OB_SUCC(ret) && i < or_expr_count; i++) {
       ObSelectStmt *child_stmt = view_stmt;
       if (i < or_expr_count - 1 && OB_FAIL(stmt_factory->create_stmt(child_stmt))) {

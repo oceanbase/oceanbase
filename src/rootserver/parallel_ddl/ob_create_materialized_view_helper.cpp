@@ -9,7 +9,11 @@
 #include "rootserver/ddl_task/ob_ddl_scheduler.h"
 #include "storage/compaction/ob_compaction_schedule_util.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+#include "rootserver/mview/ob_mview_pending_task_utils.h"
+#endif
 #include "rootserver/ob_balance_group_ls_stat_operator.h"
+#include "rootserver/mview/ob_mview_dependency_service.h"
 #include "rootserver/ob_table_creator.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "rootserver/ddl_task/ob_sys_ddl_util.h" // for ObSysDDLSchedulerUtil#include "rootserver/ddl_task/ob_ddl_scheduler.h"
@@ -168,10 +172,13 @@ int ObCreateMaterializedViewHelper::create_schemas_for_mv_()
                                                                      new_view_schema_->get_schema_version(),
                                                                      mview_info))) {
       LOG_WARN("fail to start mview refresh job", KR(ret));
+    } else if (OB_FALSE_IT(use_mview_timer_ = mview_info.get_refresh_job().empty())) {
     } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("fail to get tenant schema guard", KR(ret), K_(tenant_id));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
       LOG_WARN("fail to get min data version", KR(ret), K_(tenant_id));
+    } else if (OB_FAIL(insert_mview_dependency_info_(schema_guard))) {
+      LOG_WARN("fail to insert mview dependency info", KR(ret));
     } else if (OB_FAIL(ddl_service_->start_mview_complete_refresh_task(get_trans_(),
                                                                        schema_guard,
                                                                        *new_view_schema_,
@@ -184,6 +191,42 @@ int ObCreateMaterializedViewHelper::create_schemas_for_mv_()
                                                                        arg_.parallelism_,
                                                                        task_record_))) {
       LOG_WARN("failed to start mview complete refresh task", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObCreateMaterializedViewHelper::insert_mview_dependency_info_(
+    share::schema::ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  // Pre-insert Category C dependency records in CREATE MV DDL transaction,
+  // so that build_deferred path (no complete refresh) still has complete dep info.
+  // (a) Fix dep_infos: resolver did not set tenant_id/dep_obj_id for CREATE MV.
+  ObSEArray<ObDependencyInfo, 8> fixed_dep_infos;
+  const int64_t dep_cnt = arg_.dep_infos_.count();
+  for (int64_t i = 0; OB_SUCC(ret) && i < dep_cnt; ++i) {
+    ObDependencyInfo dep;
+    if (OB_FAIL(dep.assign(arg_.dep_infos_.at(i)))) {
+      LOG_WARN("fail to copy dep info", KR(ret));
+    } else {
+      dep.set_tenant_id(tenant_id_);
+      if (OB_INVALID_ID == dep.get_dep_obj_id()) {
+        dep.set_dep_obj_id(new_view_schema_->get_table_id());
+      }
+      if (OB_FAIL(fixed_dep_infos.push_back(dep))) {
+        LOG_WARN("fail to push back dep info", KR(ret));
+      }
+    }
+  }
+  // (b) __all_mview_dep + table_referenced_by_mv_flag - all deps (full topology)
+  // __all_tenant_dependency is already handled by ObCreateViewHelper::insert_schema_object_dependency_()
+  if (OB_SUCC(ret)) {
+    ObMViewDependencyService mv_dep_service(*schema_service_);
+    if (OB_FAIL(mv_dep_service.update_mview_dep_infos(
+            get_trans_(), schema_guard, tenant_id_,
+            new_view_schema_->get_table_id(), fixed_dep_infos))) {
+      LOG_WARN("failed to insert mview_dep before refresh task", KR(ret));
     }
   }
   return ret;
@@ -262,6 +305,9 @@ int ObCreateMaterializedViewHelper::calc_schema_version_cnt_()
       // lob table update data table version
       schema_version_cnt_ ++;
     }
+    // insert_mview_dependency_info_ -> update_mview_reference_table_status
+    // consumes one schema version per referenced table (upper bound: dep_infos_ count).
+    schema_version_cnt_ += arg_.dep_infos_.count();
   }
   return ret;
 }
@@ -275,6 +321,17 @@ int ObCreateMaterializedViewHelper::construct_and_adjust_result_(int &return_ret
     LOG_WARN("fail to schedule ddl task", KR(ret), K_(task_record));
   } else {
     res_.task_id_ = task_record_.task_id_;
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+    // The timer reloads mview info, so notify it only after the DDL transaction commits.
+    if (use_mview_timer_) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(ObMViewPendingTaskUtils::register_mview_timer(
+              tenant_id_, new_view_schema_->get_table_id()))) {
+        LOG_WARN("[MVIEW_TIMER] failed to notify mview timer after create mview",
+                 KR(tmp_ret), K_(tenant_id), KPC(new_view_schema_));
+      }
+    }
+#endif
   }
   return ret;
 }
