@@ -362,12 +362,23 @@ private:
       bool &is_tenant_dropping_or_dropped);
   int get_tenant_readable_scn_(share::SCN &readable_scn);
   int check_if_tenant_in_archive_(bool &in_archive);
-  int submit_log_(const ObGCLSLOGType log_type, bool &is_success);
+  // Requires rwlock_'s write lock. Only appends; the caller owns the callback
+  // and must keep it alive until completion after a successful append.
+  // Returns the pre-append timestamp shared by callback and state-update diagnostics.
+  int append_gc_log_(const ObGCLSLOGType log_type, ObGCLSLogCb &cb, int64_t &start_ts);
+  // Called without rwlock_, with the LS pinned; waits for callback success or failure.
+  // Does not update GC state or clear the checkpoint.
+  void wait_gc_log_callback_(const ObGCLSLOGType log_type, const ObGCLSLogCb &cb,
+                             const int64_t start_ts);
+  // Called without rwlock_; sleep and diagnose before the next state-update attempt.
+  void wait_gc_state_update_retry_(const ObGCLSLOGType log_type,
+                                   const share::SCN &scn, const int64_t start_ts);
   int update_ls_gc_state_after_submit_log_(const ObGCLSLOGType log_type,
                                            const share::SCN &scn);
   int block_ls_transfer_in_(const share::SCN &block_scn);
   int offline_ls_(const share::SCN &offline_scn);
   int get_palf_role_(common::ObRole &role);
+  // Each handler owns its write-lock scopes; the caller must pin the LS.
   void handle_gc_ls_dropping_(const ObGarbageCollector::LSStatus &ls_status);
   void handle_gc_ls_offline_(ObGarbageCollector::LSStatus &ls_status);
   void set_block_tx_if_necessary_();

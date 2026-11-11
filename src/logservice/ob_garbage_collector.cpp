@@ -1058,16 +1058,14 @@ int ObGCHandler::check_if_tenant_in_archive_(bool &in_archive)
   return MTL(ObArchiveService*)->check_tenant_in_archive(in_archive);
 }
 
-int ObGCHandler::submit_log_(const ObGCLSLOGType log_type, bool &is_success)
+int ObGCHandler::append_gc_log_(const ObGCLSLOGType log_type, ObGCLSLogCb &cb, int64_t &start_ts)
 {
   int ret = OB_SUCCESS;
   ObGCLSLog gc_log(log_type);
   char *buffer = nullptr;
   int64_t pos = 0;
   int64_t buffer_size = gc_log.get_serialize_size();
-  ObGCLSLogCb cb(this);
   const bool need_nonblock = false;
-  is_success = false;
   SCN ref_scn;
   palf::LSN lsn;
   SCN scn;
@@ -1083,58 +1081,14 @@ int ObGCHandler::submit_log_(const ObGCLSLOGType log_type, bool &is_success)
   } else if (OB_FAIL(get_gts_(GET_GTS_TIMEOUT_US, ref_scn))) {
     CLOG_LOG(WARN, "failed to get gts", K(ret), K(ref_scn));
   } else {
-    int64_t start_ts = ObTimeUtility::current_time();
-    {
-      const bool allow_compression = false;
-      ObSpinLockGuard guard(rec_scn_lock_);
-      if (OB_FAIL(ls_->append(buffer, buffer_size, ref_scn, need_nonblock,
-                              allow_compression, &cb, lsn, scn))) {
-        CLOG_LOG(WARN, "failed to submit log", K(buffer_size), K(pos));
-      } else {
-        cb.scn_ = scn;
-      }
-    }
-    if (OB_SUCC(ret)) {
-      const ObLSID ls_id = ls_->get_ls_id();
-      // 此处需要考虑能否做成异步
-      bool is_finished = false;
-      int64_t WAIT_TIME = 10 * 1000L; // 10ms
-      constexpr int64_t MIN = 60 * 1000 * 1000;
-      while (!is_finished) {
-        bool wait_for_update_ls_gc_state = false;
-        if (cb.is_succeed()) {
-          if (OB_SUCC(update_ls_gc_state_after_submit_log_(log_type, scn))) {
-            is_finished = true;
-            is_success = true;
-            CLOG_LOG(INFO, "write GC ls log success", K(ls_id), K(log_type));
-          } else {
-            wait_for_update_ls_gc_state = true;
-            if (OB_ERR_UNEXPECTED == ret) {
-              WAIT_TIME = 10 * 1000 * 1000L;
-            } else {
-              WAIT_TIME = 1 * 1000 * 1000L;
-            }
-          }
-        } else if (cb.is_failed()) {
-          is_finished = true;
-          CLOG_LOG(WARN, "write GC ls log failed", K(ls_id), K(log_type));
-        } else {
-          //keep WAIT_TIME 10ms
-        }
-
-        if (!is_finished) {
-          ob_usleep<ObWaitEventIds::GARBAGE_COLLECTOR_SLEEP>(WAIT_TIME);
-          if (REACH_TIME_INTERVAL(2 * 1000 * 1000L)) {
-            CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "GC ls log wait cb too much time",
-                         K(wait_for_update_ls_gc_state), K(log_type), K(ls_id), K(scn));
-          }
-          int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
-          if (cost_ts >= 10 * MIN && palf_reach_time_interval(10 * MIN, last_print_dba_log_ts_)) {
-            LOG_DBA_ERROR(OB_ERR_TOO_MUCH_TIME, "msg", "wait log sync cost too much time, can not drop replica!!!",
-                          K(start_ts), K(cost_ts));
-          }
-        }
-      }
+    start_ts = ObTimeUtility::current_time();
+    const bool allow_compression = false;
+    ObSpinLockGuard guard(rec_scn_lock_);
+    if (OB_FAIL(ls_->append(buffer, buffer_size, ref_scn, need_nonblock,
+                            allow_compression, &cb, lsn, scn))) {
+      CLOG_LOG(WARN, "failed to submit log", K(buffer_size), K(pos));
+    } else {
+      cb.scn_ = scn;
     }
   }
 
@@ -1143,6 +1097,44 @@ int ObGCHandler::submit_log_(const ObGCLSLOGType log_type, bool &is_success)
     buffer = nullptr;
   }
   return ret;
+}
+
+void ObGCHandler::wait_gc_log_callback_(const ObGCLSLOGType log_type, const ObGCLSLogCb &cb,
+                                       const int64_t start_ts)
+{
+  const ObLSID ls_id = ls_->get_ls_id();
+  constexpr int64_t MIN = 60 * 1000 * 1000;
+  // The caller owns this stack callback. A timeout or revoke cannot end its
+  // lifetime before Apply has completed it with success or failure.
+  while (!cb.is_succeed() && !cb.is_failed()) {
+    ob_usleep<ObWaitEventIds::GARBAGE_COLLECTOR_SLEEP>(10 * 1000L);
+    if (REACH_TIME_INTERVAL(2 * 1000 * 1000L)) {
+      CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "GC ls log wait cb too much time",
+                   K(log_type), K(ls_id), "scn", cb.scn_);
+    }
+    const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+    if (cost_ts >= 10 * MIN && palf_reach_time_interval(10 * MIN, last_print_dba_log_ts_)) {
+      LOG_DBA_ERROR(OB_ERR_TOO_MUCH_TIME, "msg", "wait log sync cost too much time, can not drop replica!!!",
+                    K(start_ts), K(cost_ts));
+    }
+  }
+}
+
+void ObGCHandler::wait_gc_state_update_retry_(const ObGCLSLOGType log_type,
+                                              const SCN &scn, const int64_t start_ts)
+{
+  ob_usleep<ObWaitEventIds::GARBAGE_COLLECTOR_SLEEP>(1 * 1000 * 1000L);
+  const ObLSID ls_id = ls_->get_ls_id();
+  if (REACH_TIME_INTERVAL(2 * 1000 * 1000L)) {
+    CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "GC ls log update state too much time",
+                 K(log_type), K(ls_id), K(scn));
+  }
+  constexpr int64_t MIN = 60 * 1000 * 1000;
+  const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+  if (cost_ts >= 10 * MIN && palf_reach_time_interval(10 * MIN, last_print_dba_log_ts_)) {
+    LOG_DBA_ERROR(OB_ERR_TOO_MUCH_TIME, "msg", "update GC state cost too much time, can not drop replica!!!",
+                  K(start_ts), K(cost_ts));
+  }
 }
 
 int ObGCHandler::update_ls_gc_state_after_submit_log_(const ObGCLSLOGType log_type,
@@ -1293,7 +1285,6 @@ int ObGCHandler::get_palf_role_(common::ObRole &role)
 {
   int ret = OB_SUCCESS;
   int64_t proposal_id = 0;
-  bool is_pending_state = false;
   palf::PalfHandleGuard palf_handle;
   ObLogService *log_service = MTL(ObLogService*);
   if (OB_FAIL(log_service->open_palf(ls_->get_ls_id(), palf_handle))) {
@@ -1312,37 +1303,59 @@ void ObGCHandler::handle_gc_ls_dropping_(const ObGarbageCollector::LSStatus &ls_
   if (IS_NOT_INIT) {
     CLOG_LOG(WARN, "GC handler not init");
   } else {
-    WLockGuard wlock_guard(rwlock_);
-    bool is_success = false;
-    ObRole role;
-    ObLSID ls_id = ls_->get_ls_id();
+    const ObGCLSLOGType log_type = ObGCLSLOGType::BLOCK_TABLET_TRANSFER_IN;
+    const ObLSID ls_id = ls_->get_ls_id();
+    ObRole role = INVALID_ROLE;
     LSGCState gc_state = INVALID_LS_GC_STATE;
-    // If gc_start_ts_ is an invalid value, it is necessary to get the current time again to avoid a situation
-    // where gc_start_ts_ remains an invalid value after ObServer restart, which may affect the GC logic.
-    if (OB_INVALID_TIMESTAMP == gc_start_ts_) {
-      gc_start_ts_ = ObTimeUtility::current_time();
-    }
-    if (OB_FAIL(get_palf_role_(role))) {
-      CLOG_LOG(WARN, "get_palf_role_ failed", K(ls_id));
-    } else if (ObRole::LEADER != role) {
-      // follower do nothing
-    } else if (OB_FAIL(ls_->get_gc_state(gc_state))) {
-      CLOG_LOG(WARN, "get_gc_state failed", K(ls_id), K(gc_state));
-    } else if (!is_valid_ls_gc_state(gc_state)) {
-      CLOG_LOG(WARN, "ls check gc state invalid", K(ls_id), K(gc_state));
-    } else if (is_ls_offline_finished_(gc_state)) {
-      (void)set_block_tx_if_necessary_();
-      CLOG_LOG(INFO, "handle_gc_ls_dropping already finished", K(ls_id), K(gc_state));
-    } else if (is_ls_blocked_state_(gc_state)) {
-      (void)set_block_tx_if_necessary_();
-      // trigger kill all tx
-      (void)is_tablet_clear_(ls_status);
-    } else {
-      if (OB_FAIL(submit_log_(ObGCLSLOGType::BLOCK_TABLET_TRANSFER_IN, is_success))) {
-        CLOG_LOG(WARN, "failed to submit BLOCK_TABLET_TRANSFER_IN log", K(ls_id), K(gc_state));
-      } else if (is_success) {
+    // execute_gc_ pins the LS; keep this callback alive until completion.
+    ObGCLSLogCb cb(this);
+    bool submitted = false;
+    bool is_success = false;
+    int64_t start_ts = OB_INVALID_TIMESTAMP;
+    {
+      WLockGuard wlock_guard(rwlock_);
+      // Restore the start time after restart when necessary.
+      if (OB_INVALID_TIMESTAMP == gc_start_ts_) {
+        gc_start_ts_ = ObTimeUtility::current_time();
+      }
+      if (OB_FAIL(get_palf_role_(role))) {
+        CLOG_LOG(WARN, "get_palf_role_ failed", K(ls_id));
+      } else if (ObRole::LEADER != role) {
+        // follower do nothing
+      } else if (OB_FAIL(ls_->get_gc_state(gc_state))) {
+        CLOG_LOG(WARN, "get_gc_state failed", K(ls_id), K(gc_state));
+      } else if (!is_valid_ls_gc_state(gc_state)) {
+        CLOG_LOG(WARN, "ls check gc state invalid", K(ls_id), K(gc_state));
+      } else if (is_ls_offline_finished_(gc_state)) {
+        (void)set_block_tx_if_necessary_();
+        CLOG_LOG(INFO, "handle_gc_ls_dropping already finished", K(ls_id), K(gc_state));
+      } else if (is_ls_blocked_state_(gc_state)) {
+        (void)set_block_tx_if_necessary_();
+        // trigger kill all tx
         (void)is_tablet_clear_(ls_status);
-        CLOG_LOG(INFO, "BLOCK_TABLET_TRANSFER_IN log has callback on_success", K(ls_id), K(gc_state));
+      } else if (OB_FAIL(append_gc_log_(log_type, cb, start_ts))) {
+        CLOG_LOG(WARN, "failed to submit BLOCK_TABLET_TRANSFER_IN log", K(ls_id), K(gc_state));
+      } else {
+        submitted = true;
+      }
+    }
+
+    if (submitted) {
+      wait_gc_log_callback_(log_type, cb, start_ts);
+      if (cb.is_succeed()) {
+        while (!is_success) {
+          {
+            WLockGuard wlock_guard(rwlock_);
+            if (OB_SUCC(update_ls_gc_state_after_submit_log_(log_type, cb.scn_))) {
+              is_success = true;
+              (void)is_tablet_clear_(ls_status);
+              CLOG_LOG(INFO, "BLOCK_TABLET_TRANSFER_IN log has callback on_success", K(ls_id), K(gc_state));
+            }
+          }
+          if (!is_success) {
+            wait_gc_state_update_retry_(log_type, cb.scn_, start_ts);
+          }
+        }
       } else {
         CLOG_LOG(WARN, "BLOCK_TABLET_TRANSFER_IN log has not callback on_success", K(ls_id), K(gc_state));
       }
@@ -1358,42 +1371,70 @@ void ObGCHandler::handle_gc_ls_offline_(ObGarbageCollector::LSStatus &ls_status)
   if (IS_NOT_INIT) {
     CLOG_LOG(WARN, "GC handler not init");
   } else {
-    WLockGuard wlock_guard(rwlock_);
-    ObRole role;
-    ObLSID ls_id = ls_->get_ls_id();
+    const ObGCLSLOGType log_type = ObGCLSLOGType::OFFLINE_LS;
+    const ObLSID ls_id = ls_->get_ls_id();
+    ObRole role = INVALID_ROLE;
     LSGCState gc_state = INVALID_LS_GC_STATE;
-    // If gc_start_ts_ is an invalid value, it is necessary to get the current time again to avoid a situation
-    // where gc_start_ts_ remains an invalid value after ObServer restart, which may affect the GC logic.
-    if (OB_INVALID_TIMESTAMP == gc_start_ts_) {
-      gc_start_ts_ = ObTimeUtility::current_time();
+    ObGCLSLogCb cb(this);
+    bool submitted = false;
+    bool is_success = false;
+    int64_t start_ts = OB_INVALID_TIMESTAMP;
+    {
+      WLockGuard wlock_guard(rwlock_);
+      // Restore the start time after restart when necessary.
+      if (OB_INVALID_TIMESTAMP == gc_start_ts_) {
+        gc_start_ts_ = ObTimeUtility::current_time();
+      }
+      (void)set_block_tx_if_necessary_();
+      if (OB_FAIL(get_palf_role_(role))) {
+        CLOG_LOG(WARN, "get_palf_role_ failed", K(ls_id));
+      } else if (ObRole::LEADER != role) {
+        // follower do nothing
+      } else if (OB_FAIL(ls_->get_gc_state(gc_state))) {
+        CLOG_LOG(WARN, "get_gc_state failed", K(ls_id), K(gc_state));
+      } else if (!is_valid_ls_gc_state(gc_state)) {
+        ret = OB_STATE_NOT_MATCH;
+        CLOG_LOG(WARN, "ls check gc state invalid", K(ls_id), K(gc_state));
+      } else if (!is_ls_blocked_finished_(gc_state)) {
+        CLOG_LOG(WARN, "ls not ready for offline", K(ls_id), K(gc_state));
+      } else if (is_ls_wait_gc_state_(gc_state)) {
+        ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
+        CLOG_LOG(INFO, "handle_gc_ls_offline need delete entry", K(ls_id), K(gc_state));
+      } else if (is_ls_offline_gc_state(gc_state)) {
+        (void)try_check_and_set_wait_gc_(ls_status);
+      } else {
+        DEBUG_SYNC(LS_GC_BEFORE_SUBMIT_OFFLINE_LOG);
+        if (OB_FAIL(append_gc_log_(log_type, cb, start_ts))) {
+          CLOG_LOG(WARN, "failed to submit OFFLINE_LS log", K(ls_id), K(gc_state));
+        } else {
+          submitted = true;
+        }
+      }
     }
 
-    bool is_success = false;
-    (void)set_block_tx_if_necessary_();
-    if (OB_FAIL(get_palf_role_(role))) {
-      CLOG_LOG(WARN, "get_palf_role_ failed", K(ls_id));
-    } else if (ObRole::LEADER != role) {
-      // follower do nothing
-    } else if (OB_FAIL(ls_->get_gc_state(gc_state))) {
-      CLOG_LOG(WARN, "get_gc_state failed", K(ls_id), K(gc_state));
-    } else if (!is_valid_ls_gc_state(gc_state)) {
-      ret = OB_STATE_NOT_MATCH;
-      CLOG_LOG(WARN, "ls check gc state invalid", K(ls_id), K(gc_state));
-    } else if (!is_ls_blocked_finished_(gc_state)) {
-      CLOG_LOG(WARN, "ls not ready for offline", K(ls_id), K(gc_state));
-    } else if (is_ls_wait_gc_state_(gc_state)) {
-      ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
-      CLOG_LOG(INFO, "handle_gc_ls_offline need delete entry", K(ls_id), K(gc_state));
-    } else if (is_ls_offline_gc_state(gc_state)) {
-      (void)try_check_and_set_wait_gc_(ls_status);
-    } else {
-      DEBUG_SYNC(LS_GC_BEFORE_SUBMIT_OFFLINE_LOG);
-      if (OB_FAIL(submit_log_(ObGCLSLOGType::OFFLINE_LS, is_success))) {
-        CLOG_LOG(WARN, "failed to submit OFFLINE_LS log", K(ls_id), K(gc_state));
-      } else if (is_success) {
-        CLOG_LOG(INFO, "OFFLINE_LS has callback on_success", K(ls_id), K(gc_state));
-        DEBUG_SYNC(LS_GC_AFTER_SUBMIT_OFFLINE_LOG);
-        (void)try_check_and_set_wait_gc_(ls_status);
+    if (submitted) {
+      wait_gc_log_callback_(log_type, cb, start_ts);
+      if (cb.is_succeed()) {
+        while (!is_success) {
+          {
+            WLockGuard wlock_guard(rwlock_);
+            // A committed log must finish its local state update after revoke too.
+            if (OB_SUCC(update_ls_gc_state_after_submit_log_(log_type, cb.scn_))) {
+              is_success = true;
+              CLOG_LOG(INFO, "OFFLINE_LS has callback on_success", K(ls_id), K(gc_state));
+              DEBUG_SYNC(LS_GC_AFTER_SUBMIT_OFFLINE_LOG);
+              // Callback waiting may span a leader revoke. Recheck before cleanup.
+              if (OB_FAIL(get_palf_role_(role))) {
+                CLOG_LOG(WARN, "get_palf_role_ after offline callback failed", K(ret), K(ls_id));
+              } else if (ObRole::LEADER == role) {
+                (void)try_check_and_set_wait_gc_(ls_status);
+              }
+            }
+          }
+          if (!is_success) {
+            wait_gc_state_update_retry_(log_type, cb.scn_, start_ts);
+          }
+        }
       } else {
         CLOG_LOG(WARN, "OFFLINE_LS has not callback on_success", K(ls_id), K(gc_state));
       }

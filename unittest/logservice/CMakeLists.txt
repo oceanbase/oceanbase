@@ -42,6 +42,14 @@ ob_unittest(test_log_dir_match)
 ob_unittest(test_server_log_block_mgr)
 ob_unittest(test_tablet_replay_executor)
 log_unittest(test_role_change_handler)
+# Keep GC in a separate translation unit so the storage/append test doubles
+# are effective even when the observer library is built with unity compilation.
+ob_unittest(test_gc_callback_lock test_gc_callback_lock.cpp
+  ${CMAKE_SOURCE_DIR}/src/logservice/ob_garbage_collector.cpp)
+# Use the real LogHandler append/marking path; control only its PALF boundary.
+ob_unittest(test_gc_callback_interleaving test_gc_callback_interleaving.cpp
+  ${CMAKE_SOURCE_DIR}/src/logservice/ob_garbage_collector.cpp
+  ${CMAKE_SOURCE_DIR}/src/logservice/ob_log_handler.cpp)
 log_unittest(test_log_mode_mgr)
 ob_unittest(test_log_sync_mode_mgr)
 ob_unittest(test_apply_sync_mode)
