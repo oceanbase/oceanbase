@@ -852,12 +852,11 @@ int LogStorage::check_read_out_of_bound_(const block_id_t &block_id,
     ret = OB_ERR_OUT_OF_LOWER_BOUND;
     PALF_LOG(INFO, "read something out of lower bound, the block may be deleted by GC or rebuild",
              K(min_block_id), K(max_block_id), K(block_id));
-    // there is no possibility read data out of upper bound because we have checked flashback_version and checkd
-    // read_lsn whether is greater than readable_log_tail before 'check_read_out_of_bound_'.
   } else if (block_id > max_block_id) {
-    ret = OB_ERR_UNEXPECTED;
-    PALF_LOG(ERROR, "unexpected error, the block to be read is greater than max_block_id",
-             K(min_block_id), K(max_block_id), K(block_id));
+    // Truncate may remove suffix blocks after the readable log tail was sampled for this read.
+    ret = OB_ERR_OUT_OF_UPPER_BOUND;
+    PALF_LOG(WARN, "read block is out of upper bound, it may have been truncated concurrently",
+             K(ret), K(min_block_id), K(max_block_id), K(block_id));
   }
   if (OB_SUCC(ret) && no_such_block) {
     // if there is no block whose names with 'block_id' and 'block_id' is in range of [min_block_id, max_block_id)
