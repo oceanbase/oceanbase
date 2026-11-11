@@ -1081,7 +1081,9 @@ int set_privs_by_table_item_recursively(
       if (!is_ora_virtual_table(table_item->ref_id_)) {
         need_priv.db_name_ = table_item->database_name_;
         need_priv.grantee_id_ = user_id;
-        need_priv.obj_id_ = table_item->ref_id_;
+        need_priv.obj_id_ = ObTableType::MATERIALIZED_VIEW == table_item->table_type_
+                           ? table_item->mview_id_
+                           : table_item->ref_id_;
         need_priv.obj_level_ = OBJ_LEVEL_FOR_TAB_PRIV;
         need_priv.obj_type_ = static_cast<uint64_t>(ObObjectType::TABLE);
         need_priv.obj_privs_ = packed_privs;
