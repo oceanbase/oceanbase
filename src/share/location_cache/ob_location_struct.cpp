@@ -496,9 +496,9 @@ int ObLSLocation::merge_leader_from(const ObLSLocation &new_location)
           replica.set_proposal_id(0);
         }
       } // end for
-      if (OB_SUCC(ret) && get_renew_time() < new_location.get_renew_time()) {
-        (void) set_renew_time(new_location.get_renew_time());
-      }
+    }
+    if (OB_SUCC(ret) && get_renew_time() < new_location.get_renew_time()) {
+      (void) set_renew_time(new_location.get_renew_time());
     }
   }
   return ret;

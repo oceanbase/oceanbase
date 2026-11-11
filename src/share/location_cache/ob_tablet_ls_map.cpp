@@ -136,8 +136,11 @@ int ObTabletLSMap::update(
       }
     } else {
       // update
-      if (curr->get_transfer_seq() >= tablet_ls_cache.get_transfer_seq()) {
-        LOG_TRACE("current tablet-ls is new enough, just skip", KPC(curr), K(tablet_ls_cache));
+      if (curr->get_transfer_seq() > tablet_ls_cache.get_transfer_seq()) {
+        LOG_TRACE("transfer_seq of current tablet-ls is new enough, just skip", KPC(curr), K(tablet_ls_cache));
+      } else if (curr->get_transfer_seq() == tablet_ls_cache.get_transfer_seq()
+          && curr->get_renew_time() >= tablet_ls_cache.get_renew_time()) {
+        LOG_TRACE("renew_time of current tablet-ls is new enough, just skip", KPC(curr), K(tablet_ls_cache));
       } else if (OB_FAIL(curr->assign(tablet_ls_cache))) {
         LOG_WARN("fail to assign tablet_ls_cache", KR(ret), K(tablet_ls_cache));
       } else {
