@@ -590,16 +590,21 @@ class ObInnerSQLTimeRecord : public ObITimeRecord
 {
 public:
   ObInnerSQLTimeRecord(sql::ObSQLSessionInfo &session)
-    : session_(session),
+    // 会话的 query_start_time 在内嵌 SQL 执行期间可能被嵌套的内嵌 SQL 改写
+    // （如 CTAS/DDL 执行过程中提交的内部 SQL 会 set_query_start_time），
+    // 而各 getter 在 process_record 落账时才被读取，直接实时读 session
+    // 会导致同一语句内各阶段时间戳来自不同时刻、出现 get_plan_t/executor_t 为负。
+    // 因此在语句起点快照一次，保证本次语句各阶段时间戳自洽。
+    : query_start_timestamp_(session.get_query_start_time()),
       execute_start_timestamp_(0),
       execute_end_timestamp_(0) {}
 
-  int64_t get_send_timestamp() const { return session_.get_query_start_time(); }
-  int64_t get_receive_timestamp() const { return session_.get_query_start_time(); }
-  int64_t get_enqueue_timestamp() const { return session_.get_query_start_time(); }
-  int64_t get_run_timestamp() const { return session_.get_query_start_time(); }
-  int64_t get_process_timestamp() const { return session_.get_query_start_time(); }
-  int64_t get_single_process_timestamp() const { return session_.get_query_start_time(); }
+  int64_t get_send_timestamp() const { return query_start_timestamp_; }
+  int64_t get_receive_timestamp() const { return query_start_timestamp_; }
+  int64_t get_enqueue_timestamp() const { return query_start_timestamp_; }
+  int64_t get_run_timestamp() const { return query_start_timestamp_; }
+  int64_t get_process_timestamp() const { return query_start_timestamp_; }
+  int64_t get_single_process_timestamp() const { return query_start_timestamp_; }
   int64_t get_exec_start_timestamp() const { return execute_start_timestamp_; }
   int64_t get_exec_end_timestamp() const { return execute_end_timestamp_; }
 
@@ -607,7 +612,7 @@ public:
   void set_execute_end_timestamp(int64_t v) { execute_end_timestamp_ = v; }
 
 private:
-  sql::ObSQLSessionInfo &session_;
+  int64_t query_start_timestamp_;
   int64_t execute_start_timestamp_;
   int64_t execute_end_timestamp_;
 };
@@ -1052,7 +1057,17 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
                                       ? res.get_execute_start_ts()
                                       : ObTimeUtility::current_time();
           //监控项统计结束
-          execute_end_timestamp_ = (res.get_execute_end_ts() > 0)
+          // res.get_execute_end_ts() 记录在 open() 返回时刻。以下两类场景的等待
+          // （ObTotalWaitGuard 作用域）发生在 open() 返回之后，若结束时间仍取
+          // get_execute_end_ts()，会导致 elapsed < wait、cpu_time 为负：
+          // 1. 触发本地重试时，process_retry() 内已执行重试睡眠
+          //    （ObQueryRetryCtrl::sleep_before_local_retry，发生在睡眠之前记录的执行结束时刻之后）；
+          // 2. 语句执行失败（need_retry=false）时，force_close()/回滚阶段仍会产生等待
+          //    （如 DAS 异步 RPC 等待、事务提交/回滚等待）。
+          // 这两类场景下取当前时间（已包含重试睡眠/回滚关闭阶段的等待），
+          // 与用户 SQL 路径（obmp_query）的统计语义保持一致。
+          const bool stmt_success = (OB_SUCCESS == ret || OB_ITER_END == ret);
+          execute_end_timestamp_ = (res.get_execute_end_ts() > 0 && stmt_success && !need_retry)
                                     ? res.get_execute_end_ts()
                                     : ObTimeUtility::current_time();
 

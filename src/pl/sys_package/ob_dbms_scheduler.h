@@ -57,6 +57,9 @@ static const int64_t CREATE_JOB_PARAMETER_COUNT = 28;
 
 private:
   static int execute_sql(sql::ObExecContext &ctx, ObSqlString &sql, int64_t &affected_rows);
+  static void resolve_oracle_job_name(const ObString &raw_job_name,
+                                      ObString &job_name,
+                                      ObString *schema_name = nullptr);
   static int job_priv_check_impl(sql::ObExecContext &ctx, ObString &job_name, ObArenaAllocator &allocator, dbms_scheduler::ObDBMSSchedJobInfo &job_info);
   static int _check_session_alive(const ObSQLSessionInfo *session);
   static int _do_purge_log(sql::ObExecContext &ctx, int64_t tenant_id, ObString &job_name, const int64_t job_id, const int64_t log_history, const char* table_name, bool is_v2_table);

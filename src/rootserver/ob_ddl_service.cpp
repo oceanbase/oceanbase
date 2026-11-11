@@ -98,6 +98,8 @@
 #include "storage/tablet/ob_session_tablet_helper.h"
 #include "storage/ddl/ob_ddl_hidden_table_partition_utils.h"
 #include "share/schema/ob_dependency_info.h"
+#include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
+#include "observer/dbms_scheduler/ob_dbms_sched_service.h"
 
 namespace oceanbase
 {
@@ -107,6 +109,7 @@ using namespace obrpc;
 using namespace storage;
 using namespace palf;
 using namespace transaction::tablelock;
+using namespace dbms_scheduler;
 namespace rootserver
 {
 
@@ -32378,12 +32381,15 @@ int ObDDLService::drop_user_in_trans(const uint64_t tenant_id,
   } else if (OB_INVALID_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Tenant id is invalid", K(ret));
-  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
-    LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
-    LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
-    LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+      LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
+    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+      LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+      LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+    }
   }
 
   for (int i = 0; OB_SUCC(ret) && i < user_ids.count(); i++) {
@@ -32392,22 +32398,12 @@ int ObDDLService::drop_user_in_trans(const uint64_t tenant_id,
     if (OB_INVALID_ID == user_id) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("User id is invalid", K(ret), K(user_id));
-    } else if (OB_FAIL(ObPLDDLService::drop_trigger_in_drop_user(trans,
-                                                                 ddl_operator,
-                                                                 schema_guard,
-                                                                 tenant_id,
-                                                                 user_id))) {
-      LOG_WARN("failed to drop triggers", K(ret), K(tenant_id), K(user_id));
-    } else if (OB_FAIL(ddl_operator.drop_user(tenant_id, user_id, (0 == i) ? ddl_stmt_str : NULL, trans))) {
-      LOG_WARN("failed to drop user", K(ret), K(tenant_id), K(user_id));
     } else {
       const ObTenantSchema *tenant_schema = NULL;
       const ObSysVariableSchema *sys_variable_schema = NULL;
       bool is_oracle_mode = false;
       const ObUserInfo *user_info = NULL;
-      if (OB_FAIL(ret)) {
-        // do-nothing
-      } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+      if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
         LOG_WARN("tenant not exists", K(ret), K(tenant_id));
       } else if (OB_UNLIKELY(NULL == tenant_schema)) {
         ret = OB_TENANT_NOT_EXIST;
@@ -32419,24 +32415,31 @@ int ObDDLService::drop_user_in_trans(const uint64_t tenant_id,
         LOG_WARN("sys variable schema is null", K(ret));
       } else if (OB_FAIL(sys_variable_schema->get_oracle_mode(is_oracle_mode))) {
         LOG_WARN("failed to get oracle mode", K(ret), K(tenant_id));
-      } else if (is_oracle_mode) {
-        if (OB_FAIL(schema_guard.get_user_info(tenant_id, user_id, user_info))) {
-          LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(user_id));
-        } else if (NULL == user_info) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(user_id));
-        } else if (!user_info->is_role()) {
-          // For Oracle mode, drop user will drop the same name db
-          // role does not contain the same name db
-          obrpc::ObDropDatabaseArg arg;
-          arg.tenant_id_ = tenant_id;
-          arg.database_name_ = user_info->get_user_name();
-          arg.if_exist_ = false;
-          arg.to_recyclebin_ = false;
-          obrpc::ObDropDatabaseRes res;
-          if (OB_FAIL(drop_database(arg, res, &trans))) {
-            LOG_WARN("failed to create oracle user database", K(ret), K(tenant_id), K(user_info));
-          }
+      } else if (OB_FAIL(schema_guard.get_user_info(tenant_id, user_id, user_info))) {
+        LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(user_id));
+      } else if (NULL == user_info) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(user_id));
+      } else if (OB_FAIL(ObPLDDLService::drop_trigger_in_drop_user(trans,
+                                                                   ddl_operator,
+                                                                   schema_guard,
+                                                                   tenant_id,
+                                                                   user_id))) {
+        LOG_WARN("failed to drop triggers", K(ret), K(tenant_id), K(user_id));
+      } else if (OB_FAIL(ddl_operator.drop_user(tenant_id, user_id,
+                                                (0 == i) ? ddl_stmt_str : NULL, trans))) {
+        LOG_WARN("failed to drop user", K(ret), K(tenant_id), K(user_id));
+      } else if (is_oracle_mode && !user_info->is_role()) {
+        // For Oracle mode, drop user will drop the same name db
+        // role does not contain the same name db
+        obrpc::ObDropDatabaseArg arg;
+        arg.tenant_id_ = tenant_id;
+        arg.database_name_ = user_info->get_user_name();
+        arg.if_exist_ = false;
+        arg.to_recyclebin_ = false;
+        obrpc::ObDropDatabaseRes res;
+        if (OB_FAIL(drop_database(arg, res, &trans))) {
+          LOG_WARN("failed to create oracle user database", K(ret), K(tenant_id), K(user_info));
         }
       }
     }
@@ -32454,6 +32457,19 @@ int ObDDLService::drop_user_in_trans(const uint64_t tenant_id,
     ret = publish_schema(tenant_id);
     if (OB_FAIL(ret)) {
       LOG_WARN("publish schema failed", K(ret));
+    }
+  }
+  // DROP USER 成功后主动触发一次 orphan job cleaner，尽快清理残留的 scheduler job。
+  // 只做 best-effort，失败不影响 DROP USER 结果。
+  // DDL 线程跑在系统租户上下文，需要切换到目标租户才能拿到正确的 ObDBMSSchedService。
+  if (OB_SUCC(ret) && REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+    MTL_SWITCH(tenant_id) {
+      rootserver::ObDBMSSchedService *sched_service = MTL(rootserver::ObDBMSSchedService *);
+      if (OB_NOT_NULL(sched_service)) {
+        sched_service->trigger_orphan_job_clean();
+        LOG_INFO("triggered orphan job clean after drop user", K(tenant_id));
+      }
+      LOG_INFO("trigger orphan job clean", K(sched_service), K(tenant_id));
     }
   }
   return ret;

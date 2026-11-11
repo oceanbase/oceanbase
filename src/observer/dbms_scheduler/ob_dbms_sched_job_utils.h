@@ -31,6 +31,7 @@
 #define DATA_VERSION_SUPPORT_CALENDAR(data_version) ((MOCK_DATA_VERSION_4_3_5_4 <= data_version && DATA_VERSION_4_4_0_0 > data_version) \
                                                   || (DATA_VERSION_4_4_2_0 <= data_version))
 #define DATA_VERSION_SUPPORT_EXECUTE_SESSION_ID(data_version) (DATA_VERSION_4_4_2_0 <= data_version)
+#define DATA_VERSION_SUPPORT_ALLOW_RUNS_IN_RESTRICTED_MODE(data_version) (DATA_VERSION_4_4_2_4 <= data_version)
 
 namespace oceanbase
 {
@@ -159,7 +160,8 @@ public:
     this_exec_date_(0),
     this_exec_addr_(),
     this_exec_trace_id_(),
-    this_exec_sess_id_() {}
+    this_exec_sess_id_(),
+    allow_runs_in_restricted_mode_(false) {}
 
   TO_STRING_KV(K(tenant_id_),
                K(user_id_),
@@ -197,7 +199,8 @@ public:
                K(this_exec_date_),
                K(this_exec_addr_),
                K(this_exec_trace_id_),
-               K(this_exec_sess_id_));
+               K(this_exec_sess_id_),
+               K(allow_runs_in_restricted_mode_));
 
   bool valid()
   {
@@ -313,6 +316,7 @@ public:
   common::ObString this_exec_addr_;
   common::ObString this_exec_trace_id_;
   uint64_t this_exec_sess_id_;
+  bool allow_runs_in_restricted_mode_;
 
 public:
   static const int64_t JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS = 1;
@@ -520,9 +524,10 @@ public:
    * @retval OB_INVALID_ARGUMENT 无效参数/ user_info 为 NULL
    * @retval OB_ERR_NO_PRIVILEGE 传入用户没有权限
    */
-  static int check_dbms_sched_job_priv(const share::schema::ObUserInfo *user_info,
-                                       const ObDBMSSchedJobInfo &job_info,
-                                       sql::ObExecContext &ctx);
+   static int check_dbms_sched_job_priv(share::schema::ObSchemaGetterGuard &guard,
+                                        const share::schema::ObUserInfo *user_info,
+                                        const ObDBMSSchedJobInfo &job_info,
+                                        sql::ObExecContext &ctx);
   /**
    * @brief  计算 job 保存的时间表达式得到下一次执行的时间
    * @param [in] job_info  - job 信息

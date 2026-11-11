@@ -752,6 +752,7 @@ do {                                                                  \
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "this_exec_addr", job_info_local.this_exec_addr_);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "this_exec_trace_id", job_info_local.this_exec_trace_id_);
   EXTRACT_UINT_FIELD_MYSQL_SKIP_RET(result, "this_exec_sess_id", job_info_local.this_exec_sess_id_, uint64_t);
+  EXTRACT_BOOL_FIELD_MYSQL_SKIP_RET(result, "allow_runs_in_restricted_mode", job_info_local.allow_runs_in_restricted_mode_);
   OZ (job_info.deep_copy(allocator, job_info_local));
   return ret;
 }

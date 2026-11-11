@@ -283,17 +283,30 @@ struct ObExecTimestamp {
   void update_stage_time() {
     // elapsed_t_ 重试不需要累加，其他重试需要累加，且在 multistmt 场景下计算方式更改
     // multistmt 场景特殊处理，第二个及之后的 sql 的 queue_t_、decode_t_ 均为 0
+    int64_t cur_queue_t = 0;
+    int64_t cur_decode_t = 0;
     if (multistmt_start_ts_ > 0) {
       queue_t_ = 0;
       decode_t_ = 0;
       elapsed_t_ = executor_end_ts_ - multistmt_start_ts_;
     } else {
-      queue_t_ += run_ts_ - enter_queue_ts_;
-      decode_t_ += before_process_ts_ - run_ts_;
+      cur_queue_t = run_ts_ - enter_queue_ts_;
+      cur_decode_t = before_process_ts_ - run_ts_;
       elapsed_t_ = executor_end_ts_ - receive_ts_;
     }
-    get_plan_t_ += process_executor_ts_ - single_process_ts_;
-    executor_t_ += executor_end_ts_ - process_executor_ts_;
+    const int64_t cur_get_plan_t = process_executor_ts_ - single_process_ts_;
+    const int64_t cur_executor_t = executor_end_ts_ - process_executor_ts_;
+    // 各阶段耗时异常统一在此打印，便于对照各 cur_* 值与时间戳定位是哪一段为负
+    if (OB_UNLIKELY(cur_queue_t < 0 || cur_decode_t < 0 || elapsed_t_ < 0
+                    || cur_get_plan_t < 0 || cur_executor_t < 0)) {
+      SQL_MONITOR_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "stage time is invalid",
+                          K(cur_queue_t), K(cur_decode_t), K(elapsed_t_),
+                          K(cur_get_plan_t), K(cur_executor_t), KPC(this));
+    }
+    queue_t_ += cur_queue_t;
+    decode_t_ += cur_decode_t;
+    get_plan_t_ += cur_get_plan_t;
+    executor_t_ += cur_executor_t;
   }
 };
 
@@ -390,12 +403,19 @@ struct ObAuditRecordData {
         elapsed_time = exec_timestamp_.executor_end_ts_ - exec_timestamp_.receive_ts_;
       }
     }
+    if (OB_UNLIKELY(elapsed_time < 0)) {
+      SQL_MONITOR_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "elapsed time is invalid", K(elapsed_time), K(exec_timestamp_.executor_end_ts_), K(exec_timestamp_.receive_ts_));
+    }
     return elapsed_time;
   }
 
   int64_t get_executor_time() const
   {
-    return cursor_executor_t_ > 0 ? cursor_executor_t_ : exec_timestamp_.executor_t_;
+    const int64_t t = cursor_executor_t_ > 0 ? cursor_executor_t_ : exec_timestamp_.executor_t_;
+    if (OB_UNLIKELY(t < 0)) {
+      SQL_MONITOR_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "executor time is invalid", K(t), K(exec_timestamp_.executor_t_), K(exec_timestamp_.executor_end_ts_), K(exec_timestamp_.process_executor_ts_));
+    }
+    return t;
   }
 
   inline bool is_streaming_cursor_record() const
@@ -405,7 +425,11 @@ struct ObAuditRecordData {
 
   int64_t get_process_time() const
   {
-    return exec_timestamp_.executor_end_ts_ - exec_timestamp_.single_process_ts_;
+    const int64_t t = exec_timestamp_.executor_end_ts_ - exec_timestamp_.single_process_ts_;
+    if (OB_UNLIKELY(t < 0)) {
+      SQL_MONITOR_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "process time is invalid", K(t), K(exec_timestamp_.executor_end_ts_), K(exec_timestamp_.single_process_ts_));
+    }
+    return t;
   }
 
   void update_event_stage_state() {
@@ -559,5 +583,3 @@ inline void print_sql_trace_info(const ObAuditRecordData &audit_record)
 } //namespace sql
 } //namespace oceanbase
 #endif
-
-

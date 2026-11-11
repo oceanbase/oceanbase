@@ -231,11 +231,19 @@ int ObSPIResultSet::close_result_set()
       ObPhysicalPlan *plan = result_set_->get_physical_plan();
       if (OB_NOT_NULL(plan) && streaming_stat_pending_) {
         ObAuditRecordData &audit_record = result_set_->get_session().get_raw_audit_record();
-        int64_t saved_cursor_executor_t = audit_record.cursor_executor_t_;
-        int64_t saved_cursor_elapsed = audit_record.cursor_elapsed_;
-        if (audit_record.cursor_executor_t_ <= 0) {
-          audit_record.cursor_executor_t_ = 1;
+        // 补记的 elapsed 取游标累计值/时间戳跨度/等待时间三者的最大值，
+        // wait 兜底保证补记场景下 cpu_time = elapsed - wait - queue 非负。
+        int64_t ts_elapsed = 0;
+        if (audit_record.exec_timestamp_.executor_end_ts_ > 0) {
+          ts_elapsed = audit_record.exec_timestamp_.multistmt_start_ts_ > 0
+              ? audit_record.exec_timestamp_.executor_end_ts_
+                    - audit_record.exec_timestamp_.multistmt_start_ts_
+              : audit_record.exec_timestamp_.executor_end_ts_
+                    - audit_record.exec_timestamp_.receive_ts_;
         }
+        audit_record.cursor_elapsed_ =
+            MAX(audit_record.cursor_elapsed_,
+                MAX(ts_elapsed, audit_record.exec_record_.wait_time_end_));
         ObIArray<ObTableRowCount> *table_row_count_list = NULL;
         ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(result_set_->get_exec_context());
         if (OB_NOT_NULL(plan_ctx)) {
@@ -254,9 +262,13 @@ int ObSPIResultSet::close_result_set()
         } else {
           plan->update_evolution_stat(audit_record);
         }
-        audit_record.cursor_executor_t_ = saved_cursor_executor_t;
-        audit_record.cursor_elapsed_ = saved_cursor_elapsed;
         streaming_stat_pending_ = false;
+      }
+      // 清掉游标累计值，防止残留被下一请求复用（PS cursor 请求结束不 reset audit record）。
+      {
+        ObAuditRecordData &audit_record = result_set_->get_session().get_raw_audit_record();
+        audit_record.cursor_executor_t_ = 0;
+        audit_record.cursor_elapsed_ = 0;
       }
 
       if (result_set_->get_errcode() != OB_SUCCESS) {
@@ -11154,6 +11166,9 @@ int ObSPIService::ps_cursor_open(ObPLExecCtx *ctx,
       if (OB_NOT_NULL(session)) {
         spi_result->destruct_exec_params(*session);
       }
+      if (OB_NOT_NULL(session)) {
+        ps_cursor.restore_cursor_stat_to_audit(*session);
+      }
       int close_ret = spi_result->close_result_set();
       if (OB_SUCCESS != close_ret) {
         LOG_WARN("close mysql result failed", K(ret), K(close_ret));
@@ -11204,6 +11219,7 @@ int ObSPIService::fill_ps_cursor(ObSQLSessionInfo &session,
     if (OB_NOT_NULL(spi_result)) {                                      \
       if (OB_NOT_NULL(spi_result->get_result_set())) {                  \
         spi_result->destruct_exec_params(session);                      \
+        ps_cursor.restore_cursor_stat_to_audit(session);                \
         const int64_t saved_affected_rows = session.get_affected_rows();\
         int close_ret = spi_result->close_result_set();                 \
         session.set_affected_rows(saved_affected_rows);                 \
@@ -11228,6 +11244,7 @@ int ObSPIService::fill_ps_cursor(ObSQLSessionInfo &session,
       // NOTE: Do not delete the following log line !!!
       LOG_INFO("async fill ps cursor", K(ret), K(ps_cursor.get_id()), K(session.get_server_sid()),
                K(session.get_effective_tenant_id()));
+      const int64_t iter_start_ts = ObTimeUtility::current_time();
       ObSpinLockGuard guard(ps_cursor.get_spin_lock());
       if (!ps_cursor.is_client_close()) {
         int64_t max_cnt = ps_cursor.get_fetch_size();
@@ -11268,6 +11285,9 @@ int ObSPIService::fill_ps_cursor(ObSQLSessionInfo &session,
       } else {
         ps_cursor.set_store_ret(OB_ITER_END);
       }
+      // 每次迭代的填充耗时计入游标累计执行时间（需在 CLOSE_SPI_RESULT 补记之前），
+      // 供 close 补记恢复使用，保证补记的 elapsed 为真实执行时间
+      ps_cursor.add_cursor_elapsed_time(ObTimeUtility::current_time() - iter_start_ts);
       if (OB_FAIL(ret) || ps_cursor.is_client_close() || OB_SUCCESS != ps_cursor.get_store_ret()) {
         store_end = true;
         CLOSE_SPI_RESULT;
@@ -11276,6 +11296,7 @@ int ObSPIService::fill_ps_cursor(ObSQLSessionInfo &session,
   } else {
     LOG_INFO("sync fill ps cursor", K(ret), K(ps_cursor.get_id()), K(session.get_server_sid()),
              K(session.get_effective_tenant_id()));
+    const int64_t fill_start_ts = ObTimeUtility::current_time();
     CHECK_CURSOR_HANDLER;
     if (FAILEDx(fill_cursor(*rs,
                             spi_cursor,
@@ -11301,6 +11322,8 @@ int ObSPIService::fill_ps_cursor(ObSQLSessionInfo &session,
         ps_cursor.set_store_ret(OB_ITER_END);
       }
     }
+    // 同步路径填充耗时计入游标累计执行时间，供 close 补记使用
+    ps_cursor.add_cursor_elapsed_time(ObTimeUtility::current_time() - fill_start_ts);
     // CLOSE_SPI_RESULT;
   }
 #undef CHECK_CURSOR_HANDLER

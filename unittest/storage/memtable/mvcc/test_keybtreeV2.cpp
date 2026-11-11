@@ -107,6 +107,10 @@ public:
   {
     return obj_;
   }
+  const void *get_prefetch_ptr() const
+  {
+    return get_ptr();
+  }
   ObObj *obj_;
 };
 

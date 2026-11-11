@@ -295,6 +295,16 @@ protected:
     while (OB_SUCC(ret) && start < end && !is_equal) {
       int mid = start + (end - start) / 2;
       BtreeKey &mid_key = get_key(mid, index);
+      if (end - start > 2) {
+        int left_next = start + (mid - start) / 2;
+        int right_next = mid + 1 + (end - mid - 1) / 2;
+        if (left_next < mid) {
+          __builtin_prefetch(get_key(left_next, index).get_prefetch_ptr(), 0, 0);
+        }
+        if (right_next > mid && right_next < end) {
+          __builtin_prefetch(get_key(right_next, index).get_prefetch_ptr(), 0, 0);
+        }
+      }
       __builtin_prefetch(mid_key.get_ptr(), 0, 3);
       int cmp_ret = 0;
       if (OB_FAIL(nh.compare(key, mid_key, cmp_ret))) {

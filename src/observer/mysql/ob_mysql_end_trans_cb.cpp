@@ -15,6 +15,8 @@
 #include "ob_mysql_end_trans_cb.h"
 #include "obmp_stmt_send_piece_data.h"
 #include "pl/ob_pl.h"
+#include "lib/stat/ob_diagnostic_info.h"
+#include "lib/wait_event/ob_wait_event.h"
 using namespace oceanbase::common;
 using namespace oceanbase::obmysql;
 namespace oceanbase
@@ -73,8 +75,20 @@ void ObSqlEndTransCb::callback(int cb_param)
   if (OB_ISNULL(session_info)) {
     ret = OB_ERR_NULL_VALUE;
     SERVER_LOG(ERROR, "session info is NULL", "ret", ret, K(session_info));
+    common::ObDiagnosticInfo *di = common::ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      di->get_ash_stat().in_committing_ = false;
+      di->get_ash_stat().in_sql_execution_ = true;
+      di->end_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT, false);
+    }
   } else {
     sql::ObSQLSessionInfo::LockGuard lock_guard(session_info->get_query_lock());
+    common::ObDiagnosticInfo *di = common::ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      di->get_ash_stat().in_committing_ = false;
+      di->get_ash_stat().in_sql_execution_ = true;
+      di->end_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT, false);
+    }
     bool reuse_tx = OB_SUCCESS == cb_param
       || OB_TRANS_COMMITED == cb_param
       || OB_TRANS_ROLLBACKED == cb_param;
@@ -223,6 +237,12 @@ void ObPLEndTransCb::callback(int cb_param)
   sql::ObSQLSessionInfo *session_info = sess_info_;
   int64_t tx_id = 0;
   set_err(cb_param);
+  common::ObDiagnosticInfo *di = common::ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di)) {
+    di->get_ash_stat().in_committing_ = false;
+    di->get_ash_stat().in_sql_execution_ = true;
+    di->end_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT, false);
+  }
   // has get lock_ in ObEndTransAsyncCallback::dispatch_callback
   if (OB_ISNULL(tx_desc) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;

@@ -63,16 +63,9 @@ void ObEndTransAsyncCallback::callback(int cb_param, const transaction::ObTransI
 
 void ObEndTransAsyncCallback::callback(int cb_param)
 {
-  // Add ASH flags to async commit of transactions
-  // In the start of async commit in func named ` ObSqlTransControl::do_end_trans_() `,
-  // set the ash flag named  `in_committing_` to true.
   ObDiagnosticInfoSwitchGuard g(diagnostic_info_);
   if (OB_NOT_NULL(diagnostic_info_)) {
-    common::ObDiagnosticInfo *di = diagnostic_info_;
     reset_diagnostic_info();
-    di->get_ash_stat().in_committing_ = false;
-    di->get_ash_stat().in_sql_execution_ = true;
-    di->end_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT, false);
   }
   bool need_disconnect = false;
   if (OB_UNLIKELY(!has_set_need_rollback_)) {
@@ -128,6 +121,12 @@ void ObEndTransAsyncCallback::dispatch_callback(int cb_param, bool need_disconne
     pl_end_trans_cb_.callback(cb_param);
   } else if (is_pl_async_commit_) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "[PL_ASYNC_COMMIT] PL async commit but tx_desc is null");
+    common::ObDiagnosticInfo *di = common::ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      di->get_ash_stat().in_committing_ = false;
+      di->get_ash_stat().in_sql_execution_ = true;
+      di->end_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT, false);
+    }
   } else {
     mysql_end_trans_cb_.set_need_disconnect(need_disconnect);
     mysql_end_trans_cb_.callback(cb_param);

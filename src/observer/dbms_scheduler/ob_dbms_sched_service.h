@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_ROOTSERVER_OB_DBMS_SCHEDULER_SERVICE_H
 #define OCEANBASE_ROOTSERVER_OB_DBMS_SCHEDULER_SERVICE_H
 
+#include "lib/task/ob_timer.h"
 #include "share/ob_define.h"
 #include "logservice/ob_log_base_type.h"                        //ObIRoleChangeSubHandler ObICheckpointSubHandler ObIReplaySubHandler
 #include "observer/dbms_scheduler/ob_dbms_sched_job_master.h"
@@ -27,9 +28,22 @@ class ObDBMSSchedService : public ObTenantThreadHelper,
                            public logservice::ObIReplaySubHandler
 {
 public:
+  class ObOrphanJobCleanTask : public common::ObTimerTask
+  {
+  public:
+    ObOrphanJobCleanTask() : service_(nullptr) {}
+    void set_service(ObDBMSSchedService *service) { service_ = service; }
+    virtual void runTimerTask() override;
+  private:
+    ObDBMSSchedService *service_;
+  };
+
   ObDBMSSchedService()
       : tenant_id_(OB_INVALID_TENANT_ID),
-        job_master_()
+        in_orphan_job_clean_(false),
+        orphan_job_clean_scheduled_(false),
+        job_master_(),
+        orphan_job_clean_task_()
   {}
   virtual ~ObDBMSSchedService()
   {
@@ -45,6 +59,7 @@ public:
   void destroy();
   bool is_leader() { return job_master_.is_leader(); }
   bool is_stop() { return job_master_.is_stop(); }
+  void trigger_orphan_job_clean();
 
 public:
   // for replay, do nothing
@@ -73,8 +88,15 @@ public:
   virtual int resume_leader() override;
 
 private:
+  int schedule_orphan_job_clean_task_();
+  void cancel_orphan_job_clean_task_();
+  void wait_orphan_job_clean_task_();
+  int run_orphan_job_clean_task_();
   uint64_t tenant_id_;
+  bool in_orphan_job_clean_;
+  bool orphan_job_clean_scheduled_;
   dbms_scheduler::ObDBMSSchedJobMaster job_master_;
+  ObOrphanJobCleanTask orphan_job_clean_task_;
 };
 }  // namespace rootserver
 }  // namespace oceanbase

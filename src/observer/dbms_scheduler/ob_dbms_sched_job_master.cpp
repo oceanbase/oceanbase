@@ -14,6 +14,7 @@
 
 #include "ob_dbms_sched_job_master.h"
 #include "share/ob_primary_zone_util.h"//ObPrimaryZoneUtil
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 #include "rootserver/ob_root_service.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
@@ -264,6 +265,24 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
       free_job_key(job_key);
       job_key = NULL;
       LOG_INFO("free disable/broken job", K(job_info));
+    } else if ([&]() -> bool {
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(job_info.get_tenant_id()));
+        // restricted session 仅对 Oracle 租户的用户 job 生效；
+        // 内置/shadow job 不挂起，否则统计信息收集、动态分区等维护任务会停摆。
+        return tenant_config.is_valid()
+               && job_info.is_oracle_tenant()
+               && tenant_config->_enable_restricted_session
+               && !job_info.allow_runs_in_restricted_mode_
+               && job_info.is_user_job()
+               && now <= job_info.get_end_date();
+      }()) {
+      // restricted session 模式下跳过本次调度，不移出队列，不推进 next_date
+      if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+        LOG_INFO("skip job in restricted session mode", K(job_info));
+      }
+      next_check_date = max(now + MIN_SCHEDULER_INTERVAL,
+                            job_info.is_mview_job() ? job_info.get_next_date()
+                                                    : min(job_info.get_next_date(), now + CHECK_NEW_INTERVAL));
     } else if (now > job_info.get_end_date()) {
       int tmp = OB_SUCCESS;
       if (OB_SUCCESS != (tmp = table_operator_.update_for_enddate(job_info))) {

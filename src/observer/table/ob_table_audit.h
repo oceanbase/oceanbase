@@ -203,7 +203,11 @@ public:
       // exec_timestamp
       record_.exec_timestamp_.exec_type_ = ExecType::RpcProcessor;
       record_.exec_timestamp_.net_t_ = 0;
-      record_.exec_timestamp_.net_wait_t_ = record_.exec_timestamp_.enter_queue_ts_ - record_.exec_timestamp_.receive_ts_;
+      const int64_t net_wait_t = record_.exec_timestamp_.enter_queue_ts_ - record_.exec_timestamp_.receive_ts_;
+      if (OB_UNLIKELY(net_wait_t < 0)) {
+        SQL_MONITOR_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "net wait time is invalid", K(net_wait_t));
+      }
+      record_.exec_timestamp_.net_wait_t_ = net_wait_t;
       record_.exec_timestamp_.process_executor_ts_ = start_ts_; // The start timestamp of a plan
       record_.exec_timestamp_.executor_end_ts_ = ObTimeUtility::fast_current_time(); // The end timestamp of a plan
       record_.exec_timestamp_.update_stage_time();

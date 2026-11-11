@@ -1391,6 +1391,9 @@ public:
   int init_params(ParamStore &exec_params);
   int prepare_cursor_store(sql::ObSQLSessionInfo &session,
                            sql::ObResultSet &result_set);
+  // 补记计划统计（close_result_set 内的 update_plan_stat）前，把游标累计的
+  // 真实执行时间恢复到会话审计记录，口径与 ObPLCursorInfo::close 一致
+  void restore_cursor_stat_to_audit(sql::ObSQLSessionInfo &session);
   virtual int close(sql::ObSQLSessionInfo &session,
                     bool is_reuse = false,
                     bool close_by_open_thread = false);

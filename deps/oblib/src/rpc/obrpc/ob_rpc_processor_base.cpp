@@ -657,7 +657,17 @@ int ObRpcProcessorBase::flush(int64_t wait_timeout, const ObAddr *src_addr)
   } else {
     NG_TRACE(receive);
     reuse();
+    // set_ob_request() refreshes send/receive/enqueue timestamps with the
+    // follow-up stream request's values. These timestamps are used by
+    // sql_audit statistics, which should keep the first request's values,
+    // so save and restore them here.
+    const int64_t saved_send_timestamp = send_timestamp_;
+    const int64_t saved_receive_timestamp = receive_timestamp_;
+    const int64_t saved_enqueue_timestamp = enqueue_timestamp_;
     set_ob_request(*req);
+    send_timestamp_ = saved_send_timestamp;
+    receive_timestamp_ = saved_receive_timestamp;
+    enqueue_timestamp_ = saved_enqueue_timestamp;
     if (!rpc_pkt_) {
       ret = OB_ERR_UNEXPECTED;
       if (part_response_error(req, ret) != OB_SUCCESS) {

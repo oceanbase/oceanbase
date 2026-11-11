@@ -112,8 +112,16 @@ public:
             exec_timestamp.net_t_ = 0;
             exec_timestamp.net_wait_t_ = 0;
           } else {
-            exec_timestamp.net_t_ = exec_timestamp.receive_ts_ - exec_timestamp.rpc_send_ts_;
-            exec_timestamp.net_wait_t_ = exec_timestamp.enter_queue_ts_ - exec_timestamp.receive_ts_;
+            const int64_t net_t = exec_timestamp.receive_ts_ - exec_timestamp.rpc_send_ts_;
+            const int64_t net_wait_t = exec_timestamp.enter_queue_ts_ - exec_timestamp.receive_ts_;
+            if (OB_UNLIKELY(net_t < 0)) {
+              SQL_MONITOR_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "net time is invalid", K(net_t));
+            }
+            if (OB_UNLIKELY(net_wait_t < 0)) {
+              SQL_MONITOR_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "net wait time is invalid", K(net_wait_t));
+            }
+            exec_timestamp.net_t_ = net_t;
+            exec_timestamp.net_wait_t_ = net_wait_t;
           }
         }
       }

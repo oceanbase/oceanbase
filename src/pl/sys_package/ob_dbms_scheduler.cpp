@@ -53,6 +53,23 @@ int ObDBMSScheduler::execute_sql(sql::ObExecContext &ctx, ObSqlString &sql, int6
   return ret;
 }
 
+void ObDBMSScheduler::resolve_oracle_job_name(const ObString &raw_job_name,
+                                              ObString &job_name,
+                                              ObString *schema_name)
+{
+  job_name = raw_job_name;
+  if (OB_NOT_NULL(schema_name)) {
+    schema_name->reset();
+  }
+  const char *dot = raw_job_name.find('.');
+  if (OB_NOT_NULL(dot)) {
+    if (OB_NOT_NULL(schema_name)) {
+      *schema_name = ObString(static_cast<int32_t>(dot - raw_job_name.ptr()), raw_job_name.ptr());
+    }
+    job_name = ObString(static_cast<int32_t>(raw_job_name.length() - (dot - raw_job_name.ptr()) - 1), dot + 1);
+  }
+}
+
 int ObDBMSScheduler::get_and_increase_job_id(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result)
 {
   UNUSED(params);
@@ -141,15 +158,77 @@ int ObDBMSScheduler::create_job(
 
         //check job name
         if (OB_SUCC(ret)) {
-          ObString job_name;
-          if (OB_FAIL(ObCharset::charset_convert(ctx.get_allocator(), params.at(0).get_string(), params.at(0).get_collation_type(), ObCharset::get_system_collation(), job_name))) {
+          ObString raw_job_name;
+          if (OB_FAIL(ObCharset::charset_convert(ctx.get_allocator(),
+                                                 params.at(0).get_string(),
+                                                 params.at(0).get_collation_type(),
+                                                 ObCharset::get_system_collation(),
+                                                 raw_job_name,
+                                                 ObCharset::COPY_STRING_ON_SAME_CHARSET))) {
             LOG_WARN("charset convert failed", K(ret), K(tenant_id));
-          } else if (OB_FAIL(ObDBMSSchedJobUtils::check_is_valid_name(job_name))) {
-            ret = OB_SP_RAISE_APPLICATION_ERROR;
-            ObString err_info("job name is an invalid name for a database object.");
-            LOG_ORACLE_USER_ERROR(OB_SP_RAISE_APPLICATION_ERROR, 27452L, err_info.length(), err_info.ptr());
-          } else {
-            job_info.job_name_ = job_name;
+           } else {
+            // Oracle 模式下解析 schema.job_name 格式，拆出 schema 前缀和纯 job_name。
+            ObString schema_name;
+            ObString pure_job_name;
+            resolve_oracle_job_name(raw_job_name, pure_job_name, &schema_name);
+            if (OB_FAIL(ObDBMSSchedJobUtils::check_is_valid_name(pure_job_name))) {
+              ret = OB_SP_RAISE_APPLICATION_ERROR;
+              ObString err_info("job name is an invalid name for a database object.");
+              LOG_ORACLE_USER_ERROR(OB_SP_RAISE_APPLICATION_ERROR, 27452L, err_info.length(), err_info.ptr());
+            } else {
+              job_info.job_name_ = pure_job_name;
+            }
+            // Oracle 模式用户名以大写存储，对 schema_name fold to upper 后再比较和查询
+            ObCharset::caseup(CS_TYPE_UTF8MB4_BIN, schema_name);
+            if (OB_SUCC(ret) && !schema_name.empty()
+                && 0 != schema_name.compare(ctx.get_my_session()->get_user_name())) {
+              const share::schema::ObUserInfo *cur_user_info = nullptr;
+              const share::schema::ObUserInfo *target_user_info = nullptr;
+              share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
+              ObDBMSSchedJobInfo priv_check_job_info;
+              if (OB_ISNULL(schema_guard)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("schema guard is null", KR(ret));
+              } else if (OB_FAIL(schema_guard->get_user_info(tenant_id, schema_name,
+                                                             ObString("%"), target_user_info))) {
+                // 保留 schema service 的真实错误码（如刷新超时），不覆盖为"用户不存在"
+                LOG_WARN("fail to get target user info", KR(ret), K(tenant_id), K(schema_name));
+              } else if (OB_ISNULL(target_user_info)) {
+                ret = OB_SP_RAISE_APPLICATION_ERROR;
+                ObString err_info("target schema user does not exist.");
+                LOG_ORACLE_USER_ERROR(OB_SP_RAISE_APPLICATION_ERROR, 23421L, err_info.length(), err_info.ptr());
+              } else if (OB_FAIL(schema_guard->get_user_info(tenant_id,
+                                                             ctx.get_my_session()->get_user_id(),
+                                                             cur_user_info))) {
+                LOG_WARN("fail to get current user info", KR(ret), K(tenant_id));
+              } else if (OB_ISNULL(cur_user_info)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("current user info is null, unexpected", KR(ret), K(tenant_id));
+              } else {
+                uint64_t target_database_id = OB_INVALID_ID;
+                priv_check_job_info.user_id_ = target_user_info->get_user_id();
+                if (OB_FAIL(ObDBMSSchedJobUtils::check_dbms_sched_job_priv(
+                    *schema_guard, cur_user_info, priv_check_job_info, ctx))) {
+                  ret = OB_SP_RAISE_APPLICATION_ERROR;
+                  ObString err_info("current user does not have permission to create job in another schema.");
+                  LOG_ORACLE_USER_ERROR(OB_SP_RAISE_APPLICATION_ERROR, 23421L, err_info.length(), err_info.ptr());
+                } else if (OB_FAIL(schema_guard->get_database_id(tenant_id, schema_name, target_database_id))) {
+                  LOG_WARN("fail to get target database id", KR(ret), K(tenant_id), K(schema_name));
+                } else {
+                  // Job 完全归属目标 schema 用户。
+                  // cowner_ 是执行时的 database/schema 上下文（Oracle 模式 schema 名 = 用户名），
+                  // 必须与 powner_ 保持一致，指向目标用户而非创建者；
+                  // database_id_ 也应切换到目标 schema，避免 owner/cowner 与元数据不一致。
+                  job_info.database_id_ = target_database_id;
+                  job_info.user_id_ = target_user_info->get_user_id();
+                  job_info.powner_  = target_user_info->get_user_name();
+                  job_info.lowner_  = target_user_info->get_user_name();
+                  job_info.cowner_  = target_user_info->get_user_name();
+                  LOG_INFO("create job in target schema", K(schema_name),
+                           K(job_info.database_id_), K(job_info.powner_), K(job_info.cowner_));
+                }
+              }
+            }
           }
         }
 
@@ -390,6 +469,10 @@ int ObDBMSScheduler::job_priv_check_impl(sql::ObExecContext &ctx, ObString &job_
   CK (OB_NOT_NULL(ctx.get_my_session()));
   CK (OB_NOT_NULL(ctx.get_virtual_table_ctx().schema_guard_));
   OX (tenant_id = ctx.get_my_session()->get_effective_tenant_id());
+  ObString schema_name;
+  ObString pure_job_name;
+  resolve_oracle_job_name(job_name, pure_job_name, &schema_name);
+  job_name = pure_job_name;
   if (OB_FAIL(ObDBMSSchedJobUtils::check_is_valid_name(job_name))) {
     ret = OB_SP_RAISE_APPLICATION_ERROR;
     ObString err_info("job name is an invalid name for a database object.");
@@ -406,12 +489,18 @@ int ObDBMSScheduler::job_priv_check_impl(sql::ObExecContext &ctx, ObString &job_
       ObString err_info("job not exist");
       LOG_ORACLE_USER_ERROR(OB_SP_RAISE_APPLICATION_ERROR, 23421L, err_info.length(), err_info.ptr());
     }
+  } else if (!schema_name.empty() && 0 != schema_name.case_compare(job_info.powner_)) {
+    // schema 前缀与 job 实际 owner 不一致，和 Oracle 行为一致报 job not exist
+    ret = OB_SP_RAISE_APPLICATION_ERROR;
+    ObString err_info("job not exist");
+    LOG_ORACLE_USER_ERROR(OB_SP_RAISE_APPLICATION_ERROR, 23421L, err_info.length(), err_info.ptr());
   } else if(OB_FAIL(ctx.get_virtual_table_ctx().schema_guard_->get_user_info(tenant_id, ctx.get_my_session()->get_user_id(), user_info))) {
     LOG_WARN("fail to get user id", KR(ret), K(tenant_id), K(ctx.get_my_session()->get_user_id()));
   } else if (OB_ISNULL(user_info)) {
     ret = OB_USER_NOT_EXIST;
     LOG_WARN("user not exist", KR(ret), K(tenant_id), K(ctx.get_my_session()->get_user_id()));
-  } else if (OB_FAIL(ObDBMSSchedJobUtils::check_dbms_sched_job_priv(user_info, job_info, ctx))) {
+  } else if (OB_FAIL(ObDBMSSchedJobUtils::check_dbms_sched_job_priv(
+      *ctx.get_virtual_table_ctx().schema_guard_, user_info, job_info, ctx))) {
     ret = OB_SP_RAISE_APPLICATION_ERROR;
     ObString err_info("current user does not have permission.");
     LOG_ORACLE_USER_ERROR(OB_SP_RAISE_APPLICATION_ERROR, 23421L, err_info.length(), err_info.ptr());

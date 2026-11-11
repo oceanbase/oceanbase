@@ -531,9 +531,29 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
     if (nullptr != adpt_pc_conf) {
       update_adaptive_pc_info(record, adpt_pc_conf);
     }
-    ATOMIC_AAF(&(stat_.elapsed_time_), record.get_elapsed_time());
-    ATOMIC_AAF(&(stat_.cpu_time_), record.get_elapsed_time() - record.exec_record_.wait_time_end_
-                                   - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
+    const int64_t elapsed_time = record.get_elapsed_time();
+    ATOMIC_AAF(&(stat_.elapsed_time_), elapsed_time);
+    // multistmt 后续子语句的 elapsed 从 multistmt_start_ts_ 起算，
+    // 整包的 run_ts_-receive_ts_ 排队时间不属于该子语句，
+    // 与 update_stage_time 的口径保持一致(queue_t_=0)。
+    const int64_t queue_time = record.exec_timestamp_.multistmt_start_ts_ > 0
+        ? 0 : record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_;
+    int64_t cpu_time = elapsed_time - record.exec_record_.wait_time_end_ - queue_time;
+    if (OB_UNLIKELY(cpu_time < 0)) {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "cpu time is invalid",
+                    K(cpu_time), K(elapsed_time),
+                    K(record.exec_record_.wait_time_end_),
+                    K(record.exec_record_.wait_count_end_),
+                    K(record.exec_record_.max_wait_event_),
+                    "queue_time", queue_time,
+                    K(record.exec_timestamp_.run_ts_), K(record.exec_timestamp_.receive_ts_),
+                    K(record.exec_timestamp_.enter_queue_ts_),
+                    K(record.exec_timestamp_.executor_end_ts_),
+                    K(record.exec_timestamp_.process_executor_ts_),
+                    K(record.exec_timestamp_.exec_type_),
+                    K(record.cursor_elapsed_), K(record.cursor_executor_t_));
+    }
+    ATOMIC_AAF(&(stat_.cpu_time_), cpu_time);
 
     if (is_first) {
       ATOMIC_STORE(&(stat_.hit_count_), 0);
@@ -560,9 +580,26 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
     ATOMIC_AAF(&(stat_.concurrency_wait_time_), record.exec_record_.get_concurrency_time());
     ATOMIC_AAF(&(stat_.user_io_wait_time_), record.exec_record_.get_user_io_time());
     ATOMIC_AAF(&(stat_.rows_processed_), record.return_rows_ + record.affected_rows_);
-    ATOMIC_AAF(&(stat_.elapsed_time_), record.get_elapsed_time());
-    ATOMIC_AAF(&(stat_.cpu_time_), record.get_elapsed_time() - record.exec_record_.wait_time_end_
-                                   - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
+    const int64_t elapsed_time = record.get_elapsed_time();
+    ATOMIC_AAF(&(stat_.elapsed_time_), elapsed_time);
+    const int64_t queue_time = record.exec_timestamp_.multistmt_start_ts_ > 0
+        ? 0 : record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_;
+    int64_t cpu_time = elapsed_time - record.exec_record_.wait_time_end_ - queue_time;
+    if (OB_UNLIKELY(cpu_time < 0)) {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "cpu time is invalid",
+                    K(cpu_time), K(elapsed_time),
+                    K(record.exec_record_.wait_time_end_),
+                    K(record.exec_record_.wait_count_end_),
+                    K(record.exec_record_.max_wait_event_),
+                    "queue_time", queue_time,
+                    K(record.exec_timestamp_.run_ts_), K(record.exec_timestamp_.receive_ts_),
+                    K(record.exec_timestamp_.enter_queue_ts_),
+                    K(record.exec_timestamp_.executor_end_ts_),
+                    K(record.exec_timestamp_.process_executor_ts_),
+                    K(record.exec_timestamp_.exec_type_),
+                    K(record.cursor_elapsed_), K(record.cursor_executor_t_));
+    }
+    ATOMIC_AAF(&(stat_.cpu_time_), cpu_time);
     // ATOMIC_STORE(&(stat_.expected_worker_count_), record.expected_worker_cnt_);
 
     if (is_first) {

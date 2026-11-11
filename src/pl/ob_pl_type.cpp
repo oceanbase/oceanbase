@@ -2897,6 +2897,13 @@ int ObPsCursorInfo::prepare_cursor_store(sql::ObSQLSessionInfo &session, sql::Ob
   return ret;
 }
 
+void ObPsCursorInfo::restore_cursor_stat_to_audit(sql::ObSQLSessionInfo &session)
+{
+  ObAuditRecordData &audit_record = session.get_raw_audit_record();
+  audit_record.cursor_executor_t_ = get_cursor_total_exec_time();
+  audit_record.cursor_elapsed_ = get_cursor_total_elapsed_time();
+}
+
 int ObPsCursorInfo::close(sql::ObSQLSessionInfo &session,
                           bool is_reuse,
                           bool close_by_open_thread)
@@ -2913,6 +2920,7 @@ int ObPsCursorInfo::close(sql::ObSQLSessionInfo &session,
     if (OB_NOT_NULL(spi_result)) {
       if (OB_NOT_NULL(spi_result->get_result_set())) {
         spi_result->destruct_exec_params(session);
+        restore_cursor_stat_to_audit(session);
         const int64_t saved_affected_rows = session.get_affected_rows();
         int close_ret = spi_result->close_result_set();
         session.set_affected_rows(saved_affected_rows);

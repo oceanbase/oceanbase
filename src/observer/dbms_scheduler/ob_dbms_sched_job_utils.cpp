@@ -14,6 +14,10 @@
 
 
 #include "ob_dbms_sched_job_utils.h"
+#include "share/schema/ob_schema_getter_guard.h"
+#include "share/schema/ob_schema_struct.h"
+#include "share/ob_priv_common.h"
+#include "share/schema/ob_priv_type.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
 #include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
 #include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
@@ -360,6 +364,7 @@ int ObDBMSSchedJobInfo::deep_copy(ObIAllocator &allocator, const ObDBMSSchedJobI
   func_type_ = other.func_type_;
   this_exec_date_ = other.this_exec_date_;
   this_exec_sess_id_ = other.this_exec_sess_id_;
+  allow_runs_in_restricted_mode_ = other.allow_runs_in_restricted_mode_;
 
   OZ (ob_write_string(allocator, other.lowner_, lowner_));
   OZ (ob_write_string(allocator, other.powner_, powner_));
@@ -577,6 +582,12 @@ int ObDBMSSchedJobUtils::remove_dbms_sched_job(
   return ret;
 }
 
+// 在 DROP USER 事务开始前调用（必须在事务外，直接传 sql_proxy）。
+// 分三个阶段清理该用户下的所有 job：
+//   1. 对所有 job 发 stop RPC（打 KILLED 标记 + kill_session），令所有 kill 并发生效；
+//   2. best-effort 轮询等待 running-job 表中该用户所有记录消失，尽量确认 kill 已落地；
+//   3. 逐个从 scheduler_job 表删除 job 行。
+// Phase 1/3 失败仅记日志；Phase 2 最多轮询 1s，超时仅记日志，不阻塞 DROP USER。
 int ObDBMSSchedJobUtils::create_dbms_sched_job(
     common::ObISQLClient &sql_client,
     const uint64_t tenant_id,
@@ -827,6 +838,45 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job_info(common::ObISQLClient &sql_cl
     } else if (OB_FAIL(dml.add_column("max_failures", value))) {
       LOG_WARN("failed to set job_class", K(ret), K(job_info), K(job_attribute_value.get_string()), K(value));
     }
+  } else if (0 == job_attribute_name.case_compare("allow_runs_in_restricted_mode")) {
+    uint64_t data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+      LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
+    } else if (!DATA_VERSION_SUPPORT_ALLOW_RUNS_IN_RESTRICTED_MODE(data_version)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("allow_runs_in_restricted_mode not supported in current data version",
+               KR(ret), K(data_version));
+    } else {
+      bool allow = false;
+      // get_string() 对 varchar/char 类型均可用；
+      // ObObj 也可能是 bool/int 类型（内部路径），用 is_true() 兜底
+      bool parsed = false;
+      if (job_attribute_value.is_varchar() || job_attribute_value.is_char()
+          || job_attribute_value.is_nvarchar2() || job_attribute_value.is_nchar()) {
+        ObString val_str = job_attribute_value.get_string();
+        // trim 尾部空格，兼容 Oracle VARCHAR2 可能携带填充空格的情况
+        while (val_str.length() > 0 && val_str[val_str.length() - 1] == ' ') {
+          val_str = ObString(val_str.length() - 1, val_str.ptr());
+        }
+        if (0 == val_str.case_compare("TRUE") || 0 == val_str.case_compare("1")) {
+          allow = true;
+          parsed = true;
+        } else if (0 == val_str.case_compare("FALSE") || 0 == val_str.case_compare("0")) {
+          allow = false;
+          parsed = true;
+        }
+      } else if (job_attribute_value.is_tinyint() || job_attribute_value.is_int()) {
+        allow = (job_attribute_value.get_int() != 0);
+        parsed = true;
+      }
+      if (!parsed) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid value for allow_runs_in_restricted_mode",
+                 KR(ret), K(job_attribute_value));
+      } else if (OB_FAIL(dml.add_column("allow_runs_in_restricted_mode", allow))) {
+        LOG_WARN("add column failed", KR(ret), K(allow));
+      }
+    }
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("not support argument", KR(ret), K(tenant_id));
@@ -1038,7 +1088,8 @@ int ObDBMSSchedJobUtils::check_mview_job_alter_priv_mysql(ObExecContext &ctx,
   return ret;
 }
 
-int ObDBMSSchedJobUtils::check_dbms_sched_job_priv(const ObUserInfo *user_info,
+int ObDBMSSchedJobUtils::check_dbms_sched_job_priv(ObSchemaGetterGuard &guard,
+                                                   const share::schema::ObUserInfo *user_info,
                                                    const ObDBMSSchedJobInfo &job_info,
                                                    ObExecContext &ctx)
 {
@@ -1051,28 +1102,65 @@ int ObDBMSSchedJobUtils::check_dbms_sched_job_priv(const ObUserInfo *user_info,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("user info is NULL", KR(ret));
   } else if (is_ora_sys_user(user_info->get_user_id()) || is_root_user(user_info->get_user_id())) {
-    // do nothing
-  } else if (job_info.user_id_ != OB_INVALID_ID) { //如果 job 有 user_id 优先使用
-    if (job_info.user_id_ != user_info->get_user_id()) {
-      need_check_alter_priv = !is_oracle_tenant && job_info.is_mview_job();
-      if (!need_check_alter_priv) {
-        ret = OB_ERR_NO_PRIVILEGE;
-        LOG_WARN("job user id check failed", KR(ret), K(user_info), K(job_info.user_id_));
+    // 内置超级用户（Oracle SYS / MySQL root），直接放行
+  } else if (is_oracle_tenant) {
+    // Oracle 模式：优先检查 CREATE ANY JOB 系统权限（包含通过角色继承的权限）
+    // 注意：此函数可能在 definer rights PL 包（如 DBMS_ISCHEDULER）内部被调用，
+    // 此时 session->get_enable_role_array() 已被 PL 引擎替换为 definer（SYS）的角色上下文，
+    // 调用者的角色信息已丢失。因此必须直接从 user_info 重建调用者的角色列表，
+    // 而不能依赖 session 中已被 switch 的 enable_role_array。
+    ObSEArray<uint64_t, 8> invoker_role_id_array;
+    for (int64_t i = 0; OB_SUCC(ret) && i < user_info->get_role_id_array().count(); ++i) {
+      if (user_info->get_disable_option(user_info->get_role_id_option_array().at(i)) == 0) {
+        if (OB_FAIL(invoker_role_id_array.push_back(user_info->get_role_id_array().at(i)))) {
+          LOG_WARN("failed to push back role id", KR(ret));
+        }
       }
     }
-  } else if (is_oracle_tenant) {
-    if (0 != job_info.powner_.case_compare(user_info->get_user_name())) { // job 的 owner 和 输入的 user 不一致
+    static const ObString empty_db;
+    const int check_ret = OB_SUCC(ret)
+        ? sql::ObOraSysChecker::check_ora_user_sys_priv(
+              guard,
+              user_info->get_tenant_id(),
+              user_info->get_user_id(),
+              empty_db,
+              PRIV_ID_CREATE_ANY_JOB,
+              invoker_role_id_array)
+        : OB_ERR_NO_PRIVILEGE;
+    const bool has_create_any_job = (OB_SUCCESS == check_ret);
+    if (has_create_any_job) {
+      // 拥有 CREATE ANY JOB 权限（直接或通过角色），可操作任意 job
+    } else if (job_info.user_id_ != OB_INVALID_ID) { // 如果 job 有 user_id 优先使用
+      if (job_info.user_id_ != user_info->get_user_id()) {
+        ret = OB_ERR_NO_PRIVILEGE;
+        LOG_WARN("oracle job user id check failed", KR(ret), K(user_info->get_user_id()), K(job_info.user_id_));
+      }
+    } else if (0 != job_info.powner_.case_compare(user_info->get_user_name())) {
+      // job 的 powner 与当前用户不一致
       ret = OB_ERR_NO_PRIVILEGE;
-      LOG_WARN("oracle check job owner failed", KR(ret), K(user_info), K(job_info.user_id_));
+      LOG_WARN("oracle check job owner failed", KR(ret), K(user_info->get_user_name()), K(job_info.powner_));
     }
   } else {
-    if (0 != job_info.powner_.case_compare(user_info->get_user_name())) { // job 保存的 owner 可能是 root@% or root (旧)
+    // MySQL 模式：拥有 SUPER 全局权限的用户可操作任意 job
+    bool has_super = (user_info->get_priv_set() & OB_PRIV_SUPER) != 0;
+    if (has_super) {
+      // 拥有 SUPER 权限，可操作任意 job
+    } else if (job_info.user_id_ != OB_INVALID_ID) { // 如果 job 有 user_id 优先使用
+      if (job_info.user_id_ != user_info->get_user_id()) {
+        need_check_alter_priv = job_info.is_mview_job();
+        if (!need_check_alter_priv) {
+          ret = OB_ERR_NO_PRIVILEGE;
+          LOG_WARN("mysql job user id check failed", KR(ret), K(user_info->get_user_id()), K(job_info.user_id_));
+        }
+      }
+    } else if (0 != job_info.powner_.case_compare(user_info->get_user_name())) {
+      // job 保存的 owner 可能是 root@% 或 root (旧格式)，需要解析 user@host
       const char *c = job_info.powner_.reverse_find('@');
       if (OB_ISNULL(c)) {
         need_check_alter_priv = job_info.is_mview_job();
         if (!need_check_alter_priv) {
           ret = OB_ERR_NO_PRIVILEGE;
-          LOG_WARN("mysql check job owner failed", KR(ret), K(user_info), K(job_info.user_id_));
+          LOG_WARN("mysql check job owner failed", KR(ret), K(user_info->get_user_name()), K(job_info.powner_));
         }
       } else {
         ObString user = job_info.powner_;
@@ -1080,11 +1168,13 @@ int ObDBMSSchedJobUtils::check_dbms_sched_job_priv(const ObUserInfo *user_info,
         ObString host_name;
         user_name = user.split_on(c);
         host_name = user;
-        if (0 != user_name.case_compare(user_info->get_user_name()) || 0 != host_name.case_compare(user_info->get_host_name())) {
+        if (0 != user_name.case_compare(user_info->get_user_name())
+            || 0 != host_name.case_compare(user_info->get_host_name())) {
           need_check_alter_priv = job_info.is_mview_job();
           if (!need_check_alter_priv) {
             ret = OB_ERR_NO_PRIVILEGE;
-            LOG_WARN("job user id check failed", KR(ret), K(user_info), K(job_info.user_id_));
+            LOG_WARN("mysql check job owner failed", KR(ret),
+                K(user_info->get_user_name()), K(user_info->get_host_name()), K(job_info.powner_));
           }
         }
       }

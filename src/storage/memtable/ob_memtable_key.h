@@ -307,6 +307,7 @@ public:
   int checksum(common::ObBatchChecksum &bc) const { return rowkey_->checksum(bc); }
   int64_t to_string(char *buf, const int64_t buf_len) const { return rowkey_->to_string(buf, buf_len); }
   const ObObj *get_ptr() const { return rowkey_->get_obj_ptr(); }
+  const void *get_prefetch_ptr() const { return get_ptr(); }
 public:
   const common::ObStoreRowkey *rowkey_;
 };
