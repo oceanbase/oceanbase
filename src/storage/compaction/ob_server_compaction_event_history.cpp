@@ -159,6 +159,8 @@ int ObServerCompactionEventIterator::open(const int64_t tenant_id)
   if (OB_SUCC(ret)) {
     cur_idx_ = 0;
     is_opened_ = true;
+  } else if (!is_opened_) {
+    reset();
   }
   return ret;
 }
