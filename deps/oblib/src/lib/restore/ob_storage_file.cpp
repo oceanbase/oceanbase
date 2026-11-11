@@ -1396,9 +1396,10 @@ int ObStorageParallelFileMultiPartWriter::open(const ObString &uri, ObObjectStor
   } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), TMP_NAME_FORMAT,
                                      OB_FILE_PREFIX, real_path_, cur_ts))) {
     OB_LOG(WARN, "failed to fill tmp_path", K(ret), K(uri));
+  } else if (OB_FAIL(databuff_printf(real_path_, sizeof(real_path_), "%.*s",
+                                     static_cast<int>(uri.length()), uri.ptr()))) {
+    OB_LOG(WARN, "failed to fill real_path", K(ret), K(uri));
   } else {
-    MEMCPY(real_path_, uri.ptr(), uri.length());
-    real_path_[uri.length()] = '\0';
     is_opened_ = true;
   }
   return ret;
