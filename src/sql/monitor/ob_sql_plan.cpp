@@ -127,6 +127,8 @@ int ObSqlPlan::store_sql_plan_for_explain(ObExecContext *ctx,
   if (OB_FAIL(plan_text_to_strings(out_plan_text, plan_strs))) {
     // overwrite ret
     LOG_WARN("failed to convert plan text to strings", K(ret));
+  } else if (plan_table.empty()) {
+    // Only display the plan when the default plan table does not exist.
   } else if (OB_FAIL(inner_store_sql_plan_for_explain(ctx,
                                                       plan_table,
                                                       statement_id,
