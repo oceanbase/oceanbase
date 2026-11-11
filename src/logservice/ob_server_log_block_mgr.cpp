@@ -4,11 +4,13 @@
  */
 
 #define USING_LOG_PREFIX CLOG
+#include <stddef.h>
 #include "ob_server_log_block_mgr.h"
 #include <regex>                                // std::regex
 #include "observer/ob_server.h"                 // OBSERVER
 #include "observer/ob_server_utils.h"           // get_log_disk_info_in_config
 #include "logservice/ob_log_service.h"          // ObLogService
+#include "share/ob_cluster_version.h"            // GET_MIN_DATA_VERSION
 
 #define BYTE_TO_MB(byte) (byte+1024*1024-1)/1024/1024
 
@@ -880,6 +882,9 @@ int ObServerLogBlockMgr::update_log_pool_meta_guarded_by_lock_(const LogPoolMeta
     log_pool_meta_ = meta;
   }
   LogPoolMetaEntry log_pool_meta_entry(meta);
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_5_0_2_0) {
+    log_pool_meta_entry.version_ = LogPoolMetaEntry::VERSION_V1;
+  }
   log_pool_meta_entry.update_checksum();
   int64_t pos = 0;
   memset(log_pool_meta_serialize_buf_, '\0', LOG_POOL_META_SERIALIZE_SIZE);
@@ -1543,15 +1548,24 @@ void ObServerLogBlockMgr::LogPoolMetaEntry::update_checksum()
 
 int64_t ObServerLogBlockMgr::LogPoolMetaEntry::calc_checksum_()
 {
-  int64_t checksum = 0;
-  int64_t header_checksum_len = sizeof(*this) - sizeof(checksum_);
-  checksum = static_cast<int64_t>(ob_crc64(this, header_checksum_len));
-  return checksum;
+  uint64_t checksum = 0;
+  if (VERSION_V1 == version_ || VERSION_V2 == version_) {
+    // The prefix ends at the old V1 checksum offset. V2 appends only the marker,
+    // not the padding between the marker and checksum_.
+    checksum = ob_crc64(this, offsetof(LogPoolMetaEntry, cross_tenant_reclaim_enabled_));
+    if (VERSION_V2 == version_) {
+      checksum = ob_crc64(checksum, &cross_tenant_reclaim_enabled_,
+                          sizeof(cross_tenant_reclaim_enabled_));
+    }
+  }
+  return static_cast<int64_t>(checksum);
 }
 
 bool ObServerLogBlockMgr::LogPoolMetaEntry::check_integrity()
 {
-  return checksum_ == calc_checksum_();
+  return MAGIC_NUM == magic_
+         && (VERSION_V1 == version_ || VERSION_V2 == version_)
+         && checksum_ == calc_checksum_();
 }
 
 DEFINE_SERIALIZE(ObServerLogBlockMgr::LogPoolMetaEntry)
@@ -1561,8 +1575,15 @@ DEFINE_SERIALIZE(ObServerLogBlockMgr::LogPoolMetaEntry)
   if (OB_FAIL(serialization::encode_i16(buf, buf_len, new_pos, magic_))
       || OB_FAIL(serialization::encode_i16(buf, buf_len, new_pos, version_))
       || OB_FAIL(serialization::encode_i32(buf, buf_len, new_pos, flag_))
-      || OB_FAIL(log_pool_meta_.serialize(buf, buf_len, new_pos))
-      || OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, checksum_))) {
+      || OB_FAIL(log_pool_meta_.serialize(buf, buf_len, new_pos))) {
+    CLOG_LOG(ERROR, "serialize failed", KR(ret), KPC(this), K(pos), K(new_pos));
+  } else if (VERSION_V1 != version_ && VERSION_V2 != version_) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(ERROR, "unsupported log pool meta version", KR(ret), KPC(this));
+  } else if (VERSION_V2 == version_ && OB_FAIL(serialization::encode_bool(
+                 buf, buf_len, new_pos, cross_tenant_reclaim_enabled_))) {
+    CLOG_LOG(ERROR, "serialize failed", KR(ret), KPC(this), K(pos), K(new_pos));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, checksum_))) {
     CLOG_LOG(ERROR, "serialize failed", K(ret), KPC(this), K(pos), K(new_pos));
   } else {
     pos = new_pos;
@@ -1577,10 +1598,20 @@ DEFINE_DESERIALIZE(ObServerLogBlockMgr::LogPoolMetaEntry)
   if (OB_FAIL(serialization::decode_i16(buf, data_len, new_pos, &magic_))
       || OB_FAIL(serialization::decode_i16(buf, data_len, new_pos, &version_))
       || OB_FAIL(serialization::decode_i32(buf, data_len, new_pos, &flag_))
-      || OB_FAIL(log_pool_meta_.deserialize(buf, data_len, new_pos))
-      || OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &checksum_))) {
+      || OB_FAIL(log_pool_meta_.deserialize(buf, data_len, new_pos))) {
+    CLOG_LOG(ERROR, "deserialize failed", KR(ret), KPC(this), K(pos), K(new_pos));
+  } else if (VERSION_V1 != version_ && VERSION_V2 != version_) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(ERROR, "unsupported log pool meta version", KR(ret), KPC(this));
+  } else if (VERSION_V2 == version_ && OB_FAIL(serialization::decode_bool(
+                 buf, data_len, new_pos, &cross_tenant_reclaim_enabled_))) {
+    CLOG_LOG(ERROR, "deserialize failed", KR(ret), KPC(this), K(pos), K(new_pos));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &checksum_))) {
     CLOG_LOG(ERROR, "deserialize failed", K(ret), KPC(this), K(pos), K(new_pos));
   } else {
+    if (VERSION_V1 == version_) {
+      cross_tenant_reclaim_enabled_ = false;
+    }
     pos = new_pos;
     CLOG_LOG(INFO, "deserialize LogPoolMeta success", KPC(this), K(buf));
   }
@@ -1594,6 +1625,9 @@ DEFINE_GET_SERIALIZE_SIZE(ObServerLogBlockMgr::LogPoolMetaEntry)
   size += serialization::encoded_length_i16(sizeof(version_));
   size += serialization::encoded_length_i32(sizeof(flag_));
   size += log_pool_meta_.get_serialize_size();
+  if (VERSION_V2 == version_) {
+    size += serialization::encoded_length_bool(cross_tenant_reclaim_enabled_);
+  }
   size += serialization::encoded_length_i64(sizeof(checksum_));
   return size;
 }

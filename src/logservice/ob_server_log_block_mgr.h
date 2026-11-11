@@ -94,12 +94,16 @@ private:
   };
 
   struct LogPoolMetaEntry {
-    LogPoolMetaEntry() {}
+    static const int64_t VERSION_V1 = 1;
+    static const int64_t VERSION_V2 = 2;
+    LogPoolMetaEntry() : LogPoolMetaEntry(LogPoolMeta()) {}
     LogPoolMetaEntry(const LogPoolMeta &log_pool_meta)
       : magic_(MAGIC_NUM),
         version_(VERSION),
         flag_(0),
-        log_pool_meta_(log_pool_meta) {}
+        log_pool_meta_(log_pool_meta),
+        cross_tenant_reclaim_enabled_(false),
+        checksum_(0) {}
     ~LogPoolMetaEntry() {}
     void update_checksum();
     bool check_integrity();
@@ -107,13 +111,16 @@ private:
     int16_t version_;
     int32_t flag_;
     LogPoolMeta log_pool_meta_;
+    // Keep the preceding fields in the V1 layout for checksum compatibility.
+    bool cross_tenant_reclaim_enabled_;
     int64_t checksum_;
-    TO_STRING_KV(K_(magic), K_(version), K_(flag), K_(log_pool_meta), K_(checksum));
+    TO_STRING_KV(K_(magic), K_(version), K_(flag), K_(log_pool_meta),
+                 K_(cross_tenant_reclaim_enabled), K_(checksum));
     NEED_SERIALIZE_AND_DESERIALIZE;
   private:
     int64_t calc_checksum_();
     static const int64_t MAGIC_NUM = 0x4C50;
-    static const int64_t VERSION = 1;
+    static const int64_t VERSION = VERSION_V2;
   };
 
   struct GetBlockIdListFunctor : public palf::ObBaseDirFunctor
