@@ -414,9 +414,6 @@ int ObDDLReplicaBuildExecutor::get_progress(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("replica build executor not init", K(ret));
-  } else if (dest_cg_cnt_ <= 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get replica build progress", K(ret), K(dest_cg_cnt_));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < replica_build_ctxs_.count(); ++i) {
     row_inserted += replica_build_ctxs_.at(i).row_inserted_;
@@ -437,7 +434,11 @@ int ObDDLReplicaBuildExecutor::get_progress(
     cg_row_percent = 0;
   } else {
     row_percent = row_inserted * 100.0 / physical_row_count;
-    cg_row_percent = cg_row_inserted * 100.0 / (physical_row_count * dest_cg_cnt_);
+    // Legacy row-store tables created before 4.3 may have no explicit column group.
+    // Only column-store tables with multiple column groups need column group progress.
+    if (dest_cg_cnt_ > 1) {
+      cg_row_percent = cg_row_inserted * 100.0 / (physical_row_count * dest_cg_cnt_);
+    }
   }
   return ret;
 }
