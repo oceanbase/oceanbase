@@ -1291,6 +1291,171 @@ int ObConstraintTask::check_column_is_nullable(const uint64_t column_id, bool &i
   return ret;
 }
 
+int ObConstraintTask::init_check_constraint_callback_arg(ObAlterTableArg &alter_table_arg)
+{
+  int ret = OB_SUCCESS;
+  const AlterTableSchema &source_schema = alter_table_arg_.alter_table_schema_;
+  const ObConstraint *constraint = nullptr;
+  if (1 == source_schema.get_constraint_count()) {
+    constraint = *source_schema.constraint_begin();
+  } else {
+    constraint = source_schema.get_constraint(target_object_id_);
+  }
+  // Start from an empty argument and copy execution context only, never DDL actions:
+  // the other actions of a compound ALTER have already committed, and replaying them
+  // here would deadlock against the lock this task still holds. The single exception is
+  // the column default, which defer_column_default_for_not_null_validation() postpones
+  // until this callback; refresh_check_constraint_callback_arg() carries it over.
+  // Keep this in sync when a new member is added to ObAlterTableArg.
+  if (OB_ISNULL(constraint)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("constraint not found in task argument", K(ret), K(target_object_id_), K(source_schema));
+  } else if (OB_FAIL(alter_table_arg.ObDDLArg::assign(alter_table_arg_))) {
+    LOG_WARN("assign ddl context failed", K(ret));
+  } else if (OB_FAIL(alter_table_arg.tz_info_wrap_.deep_copy(alter_table_arg_.tz_info_wrap_))) {
+    LOG_WARN("copy timezone info failed", K(ret));
+  } else if (OB_FAIL(alter_table_arg.set_nls_formats(alter_table_arg_.nls_formats_))) {
+    LOG_WARN("copy nls formats failed", K(ret));
+  } else if (OB_FAIL(alter_table_arg.local_session_var_.deep_copy(alter_table_arg_.local_session_var_))) {
+    LOG_WARN("copy local session variables failed", K(ret));
+  } else if (OB_FAIL(alter_table_arg.alter_table_schema_.add_constraint(*constraint))) {
+    LOG_WARN("copy constraint failed", K(ret));
+  } else {
+    alter_table_arg.based_schema_object_infos_.reset();
+    alter_table_arg.exec_tenant_id_ = tenant_id_;
+    alter_table_arg.session_id_ = alter_table_arg_.session_id_;
+    alter_table_arg.sql_mode_ = alter_table_arg_.sql_mode_;
+    alter_table_arg.data_version_ = alter_table_arg_.data_version_;
+    alter_table_arg.compat_mode_ = alter_table_arg_.compat_mode_;
+    alter_table_arg.is_inner_ = alter_table_arg_.is_inner_;
+    alter_table_arg.foreign_key_checks_ = alter_table_arg_.foreign_key_checks_;
+    alter_table_arg.inner_sql_exec_addr_ = alter_table_arg_.inner_sql_exec_addr_;
+    alter_table_arg.client_session_id_ = alter_table_arg_.client_session_id_;
+    alter_table_arg.client_session_create_ts_ = alter_table_arg_.client_session_create_ts_;
+    alter_table_arg.lock_priority_ = alter_table_arg_.lock_priority_;
+    alter_table_arg.table_id_ = object_id_;
+    alter_table_arg.alter_constraint_type_ = alter_table_arg_.alter_constraint_type_;
+    AlterTableSchema &alter_schema = alter_table_arg.alter_table_schema_;
+    alter_schema.set_tenant_id(tenant_id_);
+    // Compatibility checks run before the callback refreshes names and versions.
+    alter_schema.set_table_id(object_id_);
+    alter_schema.alter_type_ = OB_DDL_ALTER_TABLE;
+    alter_schema.set_sql_mode(source_schema.get_sql_mode());
+    (*alter_schema.constraint_begin())->set_constraint_id(target_object_id_);
+  }
+  return ret;
+}
+
+int ObConstraintTask::refresh_check_constraint_callback_arg(
+    ObAlterTableArg &alter_table_arg, const uint64_t column_id)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = nullptr;
+  const ObColumnSchemaV2 *column_schema = nullptr;
+  if (OB_FAIL(ObDDLUtil::refresh_alter_table_arg(
+      tenant_id_, object_id_, OB_INVALID_ID/*foreign_key_id*/, alter_table_arg))) {
+    LOG_WARN("refresh constraint callback argument failed", K(ret));
+  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+      tenant_id_, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(object_id_));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table dropped", K(ret), K(object_id_));
+  } else {
+    // Use the same table version for the column payload and the RPC's schema
+    // precondition; do not overwrite a concurrent DDL with stale column metadata.
+    const ObBasedSchemaObjectInfo *table_info = nullptr;
+    for (int64_t i = 0;
+        nullptr == table_info && i < alter_table_arg.based_schema_object_infos_.count(); ++i) {
+      const ObBasedSchemaObjectInfo &info = alter_table_arg.based_schema_object_infos_.at(i);
+      if (TABLE_SCHEMA == info.schema_type_ && object_id_ == info.schema_id_) {
+        table_info = &info;
+      }
+    }
+    if (OB_ISNULL(table_info)) {
+      // refresh_alter_table_arg always records the data table it refreshed against, so a
+      // missing entry means the precondition is not enforced rather than merely stale.
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema precondition not recorded for constraint callback", K(ret),
+          K(object_id_), K(alter_table_arg.based_schema_object_infos_));
+    } else if (table_info->schema_version_ != table_schema->get_schema_version()) {
+      ret = OB_SCHEMA_EAGAIN;
+      LOG_WARN("table schema changed while preparing constraint callback", K(ret), K(object_id_),
+          "precondition_version", table_info->schema_version_,
+          "current_version", table_schema->get_schema_version());
+    } else {
+      alter_table_arg.alter_table_schema_.set_table_flags(table_schema->get_table_flags());
+      if (OB_INVALID_ID != column_id) {
+        bool found_not_null_column = false;
+        const AlterTableSchema &source_schema = alter_table_arg_.alter_table_schema_;
+        for (int64_t i = 0; OB_SUCC(ret) && i < source_schema.get_column_count(); ++i) {
+          const AlterColumnSchema *requested_column = static_cast<const AlterColumnSchema *>(
+              source_schema.get_column_schema_by_idx(i));
+          AlterColumnSchema column;
+          if (OB_ISNULL(requested_column)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column not found in task argument", K(ret), K(i));
+          } else if (column_id != requested_column->get_column_id()
+              && (requested_column->is_generated_column()
+                  || (OB_DDL_MODIFY_COLUMN != requested_column->alter_type_
+                      && OB_DDL_CHANGE_COLUMN != requested_column->alter_type_
+                      && OB_DDL_ALTER_COLUMN != requested_column->alter_type_))) {
+            // ADD/DROP and generated expressions have no deferred default to apply.
+          } else if (OB_ISNULL(column_schema =
+              OB_DDL_ALTER_COLUMN == requested_column->alter_type_
+                  && OB_INVALID_ID == requested_column->get_column_id()
+              ? table_schema->get_column_schema(requested_column->get_origin_column_name())
+              : table_schema->get_column_schema(requested_column->get_column_id()))) {
+            // Report instead of skipping. A request without a stable column id is looked
+            // up by its original name, which a concurrent RENAME leaves unresolvable, and
+            // skipping it would silently drop that column's deferred default change.
+            ret = OB_ERR_COLUMN_NOT_FOUND;
+            LOG_WARN("column not found", K(ret), KPC(requested_column));
+          } else if (OB_FAIL(column.assign(*column_schema))) {
+            LOG_WARN("copy current column schema failed", K(ret));
+          } else if (OB_FAIL(column.set_origin_column_name(column_schema->get_column_name_str()))) {
+            LOG_WARN("set origin column name failed", K(ret));
+          } else if (!column.is_generated_column() && OB_FAIL(column.set_cur_default_value(
+              requested_column->get_cur_default_value(), requested_column->is_default_expr_v2_column()))) {
+            LOG_WARN("set deferred column default failed", K(ret));
+          } else {
+            // The first DDL already applied the requested definition except for the
+            // default, and it defers the default for every non-generated column the
+            // statement modifies, not just the validated one. So the current definition
+            // plus the requested default is the full intent, without replaying the name,
+            // position or type changes that already committed.
+            column.alter_type_ = OB_DDL_ALTER_COLUMN == requested_column->alter_type_
+                ? OB_DDL_ALTER_COLUMN : OB_DDL_MODIFY_COLUMN;
+            column.is_drop_default_ = requested_column->is_drop_default_;
+            column.is_set_default_ = requested_column->is_set_default_;
+            column.is_set_nullable_ = requested_column->is_set_nullable_;
+            column.is_no_zero_date_ = requested_column->is_no_zero_date_;
+            column.check_timestamp_column_order_ = requested_column->check_timestamp_column_order_;
+            if (column_id == column.get_column_id()) {
+              found_not_null_column = true;
+              column.set_nullable(false);
+              column.drop_not_null_cst();
+            }
+            if (OB_FAIL(alter_table_arg.alter_table_schema_.add_alter_column(column, true))) {
+              LOG_WARN("add callback column failed", K(ret));
+            } else {
+              alter_table_arg.is_alter_columns_ = true;
+            }
+          }
+        }
+        if (OB_SUCC(ret) && !found_not_null_column) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("not null column not found in task argument", K(ret), K(column_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObConstraintTask::set_check_constraint_validated()
 {
   int ret = OB_SUCCESS;
@@ -1305,8 +1470,10 @@ int ObConstraintTask::set_check_constraint_validated()
       LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
     } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, CONSTRAINT_TASK_SET_VALIDATED))) {
       LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
-    } else if (OB_FAIL(deep_copy_table_arg(allocator, alter_table_arg_, alter_table_arg))) {
-      LOG_WARN("deep copy table arg failed", K(ret));
+    } else if (OB_FAIL(is_table_hidden_
+        ? deep_copy_table_arg(allocator, alter_table_arg_, alter_table_arg)
+        : init_check_constraint_callback_arg(alter_table_arg))) {
+      LOG_WARN("prepare check constraint callback argument failed", K(ret));
     } else {
       // Table options were handled by the original ALTER. Replaying them while holding the
       // constraint task's RX lock can request an incompatible table X lock.
@@ -1370,7 +1537,7 @@ int ObConstraintTask::set_check_constraint_validated()
             alter_table_arg.exec_tenant_id_ = tenant_id_;
             uint64_t column_id = OB_INVALID_ID;
             if (is_oracle_mode) {
-              if (OB_FAIL(ObDDLUtil::refresh_alter_table_arg(tenant_id_, object_id_, OB_INVALID_ID/*foreign_key_id*/, alter_table_arg))) {
+              if (OB_FAIL(refresh_check_constraint_callback_arg(alter_table_arg))) {
                 LOG_WARN("failed to refresh name for alter table schema", K(ret));
               } else {
                 alter_table_arg.alter_constraint_type_ = obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE;
@@ -1380,29 +1547,17 @@ int ObConstraintTask::set_check_constraint_validated()
               }
             } else {
               alter_table_arg.alter_constraint_type_ = obrpc::ObAlterTableArg::DROP_CONSTRAINT;
-              if (OB_ISNULL((*iter)->cst_col_begin())) {
+              if (1 != (*iter)->get_column_cnt() || OB_ISNULL((*iter)->cst_col_begin())) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("column of not null constraint is null", K(ret), KPC(*iter));
-              } else if (OB_INVALID_ID != (column_id = *((*iter)->cst_col_begin()))) {
-                ObColumnSchemaV2 *column = NULL;
-                for (int64_t i = 0; i < alter_table_arg.alter_table_schema_.get_column_count(); i++) {
-                  if (alter_table_arg.alter_table_schema_.get_column_schema_by_idx(i)->get_column_id() == column_id) {
-                    column = alter_table_arg.alter_table_schema_.get_column_schema_by_idx(i);
-                  }
-                }
-                if (OB_ISNULL(column)) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("get column schema failed", K(ret), K(alter_table_arg), K(column_id));
-                } else {
-                  column->set_nullable(false);
-                  column->drop_not_null_cst();
-                }
+              } else {
+                column_id = *((*iter)->cst_col_begin());
               }
               if (OB_FAIL(ret)) {
               } else if (OB_UNLIKELY(OB_INVALID_ID == column_id)) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("invalid column id", K(ret), K(alter_table_arg), K(column_id));
-              } else if (OB_FAIL(ObDDLUtil::refresh_alter_table_arg(tenant_id_, object_id_, OB_INVALID_ID/*foreign_key_id*/, alter_table_arg))) {
+              } else if (OB_FAIL(refresh_check_constraint_callback_arg(alter_table_arg, column_id))) {
                 if (OB_ERR_CONTRAINT_NOT_FOUND == ret) {
                   bool is_nullable = false;
                   if (OB_FAIL(check_column_is_nullable(column_id, is_nullable))) { // overwrite ret
@@ -1536,8 +1691,10 @@ int ObConstraintTask::rollback_failed_check_constraint()
   SMART_VAR(ObAlterTableArg, alter_table_arg) {
     if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, CONSTRAINT_TASK_ROLL_BACK_SCHEMA))) {
       LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
-    } else if (OB_FAIL(deep_copy_table_arg(allocator, alter_table_arg_, alter_table_arg))) {
-      LOG_WARN("fail to deep copy table arg", K(ret));
+    } else if (OB_FAIL(is_table_hidden_
+        ? deep_copy_table_arg(allocator, alter_table_arg_, alter_table_arg)
+        : init_check_constraint_callback_arg(alter_table_arg))) {
+      LOG_WARN("prepare check constraint callback argument failed", K(ret));
     } else {
       // Rollback must only undo the constraint change, not repeat the original table options.
       alter_table_arg.alter_table_schema_.alter_option_bitset_.reset();
@@ -1549,7 +1706,9 @@ int ObConstraintTask::rollback_failed_check_constraint()
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObDDLUtil::refresh_alter_table_arg(tenant_id_, object_id_, OB_INVALID_ID/*foreign_key_id*/, alter_table_arg))) {
+    } else if (OB_FAIL(is_table_hidden_
+        ? ObDDLUtil::refresh_alter_table_arg(tenant_id_, object_id_, OB_INVALID_ID/*foreign_key_id*/, alter_table_arg)
+        : refresh_check_constraint_callback_arg(alter_table_arg))) {
       if (OB_TABLE_NOT_EXIST == ret || OB_ERR_CONTRAINT_NOT_FOUND == ret) {
         ret = OB_NO_NEED_UPDATE;
       } else {

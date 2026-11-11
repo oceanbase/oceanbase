@@ -113,6 +113,9 @@ private:
   int send_fk_constraint_request();
   int set_foreign_key_constraint_validated();
   int check_column_is_nullable(const uint64_t column_id, bool &is_nullable) const;
+  int init_check_constraint_callback_arg(obrpc::ObAlterTableArg &alter_table_arg);
+  int refresh_check_constraint_callback_arg(obrpc::ObAlterTableArg &alter_table_arg,
+                                          const uint64_t column_id = common::OB_INVALID_ID);
   int set_check_constraint_validated();
   int set_constraint_validated();
   int set_new_not_null_column_validate();
