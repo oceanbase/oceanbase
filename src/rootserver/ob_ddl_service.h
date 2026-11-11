@@ -2321,14 +2321,12 @@ private:
       const ObSysVariableSchema &sys_variable_schema,
       share::schema::ObSysVarSchema &sysvar,
       bool &execute);
-  int validate_rename_table_args(const ObTableSchema *table_schema);
+  int validate_rename_table_args(const ObTableSchema *table_schema,
+                                 share::schema::ObSchemaGetterGuard &schema_guard);
   int construct_rename_table_items_for_mview(uint64_t tenant_id,
                                              const ObTableSchema *table_schema,
-                                             bool is_oracle_mode,
                                              share::schema::ObSchemaGetterGuard &schema_guard,
-                                             ObMySQLTransaction &trans,
                                              const obrpc::ObRenameTableItem &rename_item,
-                                             common::ObArenaAllocator &allocator,
                                              ObIArray<obrpc::ObRenameTableItem> &full_rename_items);
 
 public:

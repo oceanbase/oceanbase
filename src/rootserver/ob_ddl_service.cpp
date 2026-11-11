@@ -16248,7 +16248,7 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
             LOG_WARN("fail to get table schema", K(ret));
           } else if (nullptr == table_schema) {
             // skip
-          } else if (OB_FAIL(validate_rename_table_args(table_schema))) {
+          } else if (OB_FAIL(validate_rename_table_args(table_schema, schema_guard))) {
             LOG_WARN("failed to validate rename table args", KR(ret), K(rename_item));
           } else if (OB_FAIL(ObDependencyInfo::collect_all_dep_objs(
                          tenant_id, table_schema->get_table_id(), trans, all_dep_objs))) {
@@ -16259,9 +16259,8 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
             LOG_WARN("failed to add rename_item", KR(ret), K(rename_item));
           } else if (OB_NOT_NULL(table_schema) && table_schema->is_materialized_view() &&
                      OB_FAIL(construct_rename_table_items_for_mview(
-                         tenant_id, table_schema, is_oracle_mode, schema_guard, trans, rename_item,
-                         allocator, full_rename_items))) {
-            // for mv, not only should we rename the mv itself, we should also rename its container table and its mlog table
+                         tenant_id, table_schema, schema_guard, rename_item, full_rename_items))) {
+            // for mv, not only should we rename the mv itself, we should also rename its container table
             LOG_WARN("failed to add mview related rename item", KR(ret), K(rename_item));
           }
         }
@@ -16719,7 +16718,8 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
   return ret;
 }
 
-int ObDDLService::validate_rename_table_args(const ObTableSchema *table_schema)
+int ObDDLService::validate_rename_table_args(const ObTableSchema *table_schema,
+                                             ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
 
@@ -16736,6 +16736,19 @@ int ObDDLService::validate_rename_table_args(const ObTableSchema *table_schema)
     LOG_WARN("rename table required by materialized view is not supported", KR(ret),
              K(table_schema->get_table_name()));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename table required by materialized view is");
+  } else if (table_schema->is_materialized_view()) {
+    const ObTableSchema *container_schema = NULL;
+    if (OB_FAIL(schema_guard.get_table_schema(table_schema->get_tenant_id(),
+                                              table_schema->get_data_table_id(), container_schema))) {
+      LOG_WARN("failed to get mview container schema", KR(ret), KPC(table_schema));
+    } else if (OB_ISNULL(container_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mview container schema is null", KR(ret), KPC(table_schema));
+    } else if (container_schema->required_by_mv_refresh()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("rename mview required by materialized view is not supported", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename table required by materialized view is");
+    }
   }
 
   return ret;
@@ -16743,11 +16756,8 @@ int ObDDLService::validate_rename_table_args(const ObTableSchema *table_schema)
 
 int ObDDLService::construct_rename_table_items_for_mview(uint64_t tenant_id,
                                                          const ObTableSchema *table_schema,
-                                                         bool is_oracle_mode,
                                                          share::schema::ObSchemaGetterGuard &schema_guard,
-                                                         ObMySQLTransaction &trans,
                                                          const obrpc::ObRenameTableItem &rename_item,
-                                                         common::ObArenaAllocator &allocator,
                                                          ObIArray<obrpc::ObRenameTableItem> &full_rename_items)
 {
   int ret = OB_SUCCESS;
@@ -16773,40 +16783,6 @@ int ObDDLService::construct_rename_table_items_for_mview(uint64_t tenant_id,
       container_rename_item.new_table_name_ = container_table_schema->get_table_name();
       if (OB_FAIL(full_rename_items.push_back(container_rename_item))) {
         LOG_WARN("failed to add related container item", KR(ret), K(container_rename_item));
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (container_table_schema->has_mlog_table()) {
-      const ObTableSchema *mlog_schema = NULL;
-      ObString new_mlog_name;
-      bool has_mlog_task = false;
-      if (OB_FAIL(schema_guard.get_table_schema(
-              tenant_id, container_table_schema->get_mlog_tid(), mlog_schema))) {
-        LOG_WARN("failed to get table schema", KR(ret));
-      } else if (OB_ISNULL(mlog_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("mlog schema is null", KR(ret));
-      } else if (OB_FAIL(ObDDLTaskRecordOperator::check_has_index_or_mlog_task(
-                trans, *mlog_schema, tenant_id, container_table_schema->get_table_id(), has_mlog_task))) {
-        LOG_WARN("fail to check has index task", KR(ret), K(tenant_id),
-                K(container_table_schema->get_table_id()), K(mlog_schema->get_table_id()));
-      } else if (has_mlog_task) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("renaming a building or dropping mlog table is not supported", KR(ret), K(tenant_id),
-                K(container_table_schema->get_table_id()), K(mlog_schema->get_table_id()));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "renaming a building or dropping mlog table is");
-      } else if (OB_FAIL(ObTableSchema::build_mlog_table_name(
-                     allocator, rename_item.new_table_name_, new_mlog_name, is_oracle_mode))) {
-        LOG_WARN("failed to build mlog table name", KR(ret), K(rename_item.new_table_name_));
-      } else {
-        ObRenameTableItem mlog_rename_item;
-        mlog_rename_item.origin_db_name_ = rename_item.origin_db_name_;
-        mlog_rename_item.new_db_name_ = rename_item.new_db_name_;
-        mlog_rename_item.origin_table_name_ = mlog_schema->get_table_name();
-        mlog_rename_item.new_table_name_ = new_mlog_name;
-        if (OB_FAIL(full_rename_items.push_back(mlog_rename_item))) {
-          LOG_WARN("failed to add related mlog item", KR(ret), K(mlog_rename_item));
-        }
       }
     }
   }

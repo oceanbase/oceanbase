@@ -295,7 +295,47 @@ int ObMViewSchedJobUtils::create_mview_scheduler_job(
   ObString refresh_job;
   ObString job_prefix(ObMViewInfo::MVIEW_REFRESH_JOB_PREFIX);
   int64_t job_id = OB_INVALID_ID;
+  ObSqlString job_action;
   job_name.reset();
+  ObString job_owner;
+  uint64_t job_owner_id = OB_INVALID_ID;
+  if (OB_FAIL(generate_mview_job_action_(db_name, table_name, nested_refresh_mode, job_action))) {
+    LOG_WARN("failed to generate mview job action", KR(ret));
+  } else if (OB_FAIL(ObMViewSchedJobUtils::generate_job_id(tenant_id, job_id))) {
+    LOG_WARN("failed to generate mview job id", KR(ret));
+  } else if (OB_FAIL(ObMViewSchedJobUtils::generate_job_name(allocator, job_id, job_prefix,
+                                                             refresh_job))) {
+    LOG_WARN("failed to generate mview job name", KR(ret), K(tenant_id), K(job_id), K(job_prefix));
+  } else if (OB_FAIL(ObMViewSchedJobUtils::get_owner_name_from_table_id_(
+             sql_client, tenant_id, mview_id, allocator, job_owner, job_owner_id))) {
+    LOG_WARN("failed to get owner from mview table, use default owner", KR(ret), K(mview_id));
+    job_owner.reset();
+    job_owner_id = OB_INVALID_ID;
+    ret = OB_SUCCESS;
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObMViewSchedJobUtils::add_scheduler_job(
+                   sql_client, tenant_id, job_id, refresh_job, job_action.string(), start_date,
+                   repeat_interval, exec_env, &job_owner, job_owner_id, preserved_max_run_duration_sec))) {
+      LOG_WARN("failed to add mview scheduler job", KR(ret), K(refresh_job), K(job_action),
+               "start with", start_date, "next", repeat_interval);
+    } else {
+      job_name = refresh_job;
+      LOG_INFO("succeed to add refresh mview scheduler job", K(refresh_job), K(job_action),
+               "start with", start_date, "next", repeat_interval);
+    }
+  }
+
+  return ret;
+}
+
+int ObMViewSchedJobUtils::generate_mview_job_action_(
+    const common::ObString &db_name,
+    const common::ObString &table_name,
+    const share::schema::ObMVNestedRefreshMode nested_refresh_mode,
+    ObSqlString &job_action)
+{
+  int ret = OB_SUCCESS;
   const ObString true_str("TRUE");
   const ObString false_str("FALSE");
   const ObString consistent_str("CONSISTENT");
@@ -315,49 +355,20 @@ int ObMViewSchedJobUtils::create_mview_scheduler_job(
     nested = true_str;
     data_sync = consistent_str;
   }
-  // job_name is generated as "job_prefix+job_id"
-  ObString job_owner;
-  uint64_t job_owner_id = OB_INVALID_ID;
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObMViewSchedJobUtils::generate_job_id(tenant_id, job_id))) {
-    LOG_WARN("failed to generate mview job id", KR(ret));
-  } else if (OB_FAIL(ObMViewSchedJobUtils::generate_job_name(allocator, job_id, job_prefix,
-                                                             refresh_job))) {
-    LOG_WARN("failed to generate mview job name", KR(ret), K(tenant_id), K(job_id), K(job_prefix));
-  } else if (OB_FAIL(ObMViewSchedJobUtils::get_owner_name_from_table_id_(
-             sql_client, tenant_id, mview_id, allocator, job_owner, job_owner_id))) {
-    LOG_WARN("failed to get owner from mview table, use default owner", KR(ret), K(mview_id));
-    job_owner.reset();
-    job_owner_id = OB_INVALID_ID;
-    ret = OB_SUCCESS;
+  } else if (OB_FAIL(job_action.assign_fmt("DBMS_MVIEW.refresh('%.*s.%.*s',nested=>%.*s",
+                                         db_name.length(), db_name.ptr(),
+                                         table_name.length(), table_name.ptr(),
+                                         nested.length(), nested.ptr()))) {
+    LOG_WARN("fail to assign job action", KR(ret), K(db_name), K(table_name));
+  } else if (nested_refresh_mode == ObMVNestedRefreshMode::INDIVIDUAL
+             && OB_FAIL(job_action.append(")"))) {
+    LOG_WARN("fail to append job action", KR(ret));
+  } else if (nested_refresh_mode > ObMVNestedRefreshMode::INDIVIDUAL
+             && OB_FAIL(job_action.append_fmt(",nested_refresh_mode=>'%.*s')",
+                                              data_sync.length(), data_sync.ptr()))) {
+    LOG_WARN("fail to append job action", KR(ret));
   }
-  if (OB_SUCC(ret)) {
-    ObSqlString job_action;
-    if (OB_FAIL(job_action.assign_fmt("DBMS_MVIEW.refresh('%.*s.%.*s',"
-                                      "nested=>%.*s",
-                                      static_cast<int>(db_name.length()), db_name.ptr(),
-                                      static_cast<int>(table_name.length()), table_name.ptr(),
-                                      static_cast<int>(nested.length()), nested.ptr()))) {
-      LOG_WARN("fail to assign job action", KR(ret), K(db_name), K(table_name));
-    } else if (nested_refresh_mode == ObMVNestedRefreshMode::INDIVIDUAL &&
-               OB_FAIL(job_action.append_fmt(")"))) {
-      LOG_WARN("fail to append job action", KR(ret), K(db_name), K(table_name));
-    } else if (nested_refresh_mode > ObMVNestedRefreshMode::INDIVIDUAL &&
-               OB_FAIL(job_action.append_fmt(",nested_refresh_mode=>'%.*s')",
-                       static_cast<int>(data_sync.length()), data_sync.ptr()))) {
-      LOG_WARN("fail to append job action", KR(ret), K(db_name), K(table_name));
-    } else if (OB_FAIL(ObMViewSchedJobUtils::add_scheduler_job(
-                   sql_client, tenant_id, job_id, refresh_job, job_action.string(), start_date,
-                   repeat_interval, exec_env, &job_owner, job_owner_id, preserved_max_run_duration_sec))) {
-      LOG_WARN("failed to add mview scheduler job", KR(ret), K(refresh_job), K(job_action),
-               "start with", start_date, "next", repeat_interval);
-    } else {
-      job_name = refresh_job;
-      LOG_INFO("succeed to add refresh mview scheduler job", K(refresh_job), K(job_action),
-               "start with", start_date, "next", repeat_interval);
-    }
-  }
-
   return ret;
 }
 
@@ -482,6 +493,52 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
     }
   }
   LOG_INFO("succeed to add mview info and refresh job", K(mview_info));
+  return ret;
+}
+
+int ObMViewSchedJobUtils::rename_mview_refresh_job(
+    ObISQLClient &sql_client,
+    ObSchemaGetterGuard &schema_guard,
+    const ObTableSchema &new_mview_schema)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = new_mview_schema.get_tenant_id();
+  const uint64_t mview_id = new_mview_schema.get_table_id();
+  ObArenaAllocator allocator("RenameMVTmp");
+  ObMViewInfo mview_info;
+  const ObDatabaseSchema *database_schema = nullptr;
+  if (OB_UNLIKELY(!new_mview_schema.is_materialized_view())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("expected a materialized view", KR(ret), K(mview_id));
+  } else if (OB_FAIL(schema_guard.get_database_schema(
+                        tenant_id, new_mview_schema.get_database_id(), database_schema))) {
+    LOG_WARN("failed to get destination database schema", KR(ret), K(new_mview_schema));
+  } else if (OB_ISNULL(database_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("destination database schema is null", KR(ret), K(new_mview_schema));
+  } else if (OB_FAIL(ObMViewInfo::fetch_mview_info(sql_client, tenant_id, mview_id,
+                                                mview_info, true /*for_update*/))) {
+    LOG_WARN("failed to fetch mview info for rename", KR(ret), K(tenant_id), K(mview_id));
+  } else if (!mview_info.get_refresh_job().empty()) {
+    const ObString &job_name = mview_info.get_refresh_job();
+    ObSqlString job_action;
+    ObDBMSSchedJobInfo job_info;
+    if (OB_FAIL(generate_mview_job_action_(database_schema->get_database_name_str(),
+                                          new_mview_schema.get_table_name_str(),
+                                          mview_info.get_nested_refresh_mode(), job_action))) {
+      LOG_WARN("failed to generate refresh action for rename", KR(ret), K(mview_id));
+    } else if (OB_FAIL(ObDBMSSchedJobUtils::get_dbms_sched_job_info(
+                          sql_client, tenant_id, lib::is_oracle_mode(), job_name, allocator, job_info))) {
+      LOG_WARN("failed to get scheduler job for rename", KR(ret), K(tenant_id), K(mview_id), K(job_name));
+    } else {
+      ObObj action;
+      action.set_varchar(job_action.string());
+      if (OB_FAIL(ObDBMSSchedJobUtils::update_dbms_sched_job_info(
+                      sql_client, job_info, ObString("job_action"), action))) {
+        LOG_WARN("failed to update refresh action for rename", KR(ret), K(mview_id), K(job_name), K(job_action));
+      }
+    }
+  }
   return ret;
 }
 
