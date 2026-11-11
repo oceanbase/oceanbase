@@ -75,7 +75,9 @@ quote         '
 sqbegin       {quote}
 sqend         {quote}
 sqdouble      {quote}{quote}
-sqcontent     [^\\\n\r']+
+/* Match each NUL separately: flex otherwise rescans the whole content token
+ * at every NUL when distinguishing input data from the end-of-buffer marker. */
+sqcontent     ([^\\\n\r'\0]+|\0)
 qescape       [\\](.|\n)
 sqnewline     {quote}{whitespace}{quote}
 
@@ -83,7 +85,7 @@ dquote         \"
 dqbegin       {dquote}
 dqend         {dquote}
 dqdouble      {dquote}{dquote}
-dqcontent     [^\\\n\r"]+
+dqcontent     ([^\\\n\r"\0]+|\0)
 adqcontent    [^"]+
 dqnewline     {dquote}{whitespace}{dquote}
 

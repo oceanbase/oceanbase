@@ -702,10 +702,13 @@ do {                                                                            
 #define STORE_STR_CONTENT(str_node)                                                             \
 do {                                                                                            \
   ParseResult *p = (ParseResult *)yyextra;                                                      \
-  /*如果是fast parser第一次存储str node的值不需要深拷贝，直接用指针指向sql文本即可，到下次遇到特殊字符再深拷贝*/       \
-  if (str_node->str_len_ <= 0 && IS_FAST_PARAMETERIZE && IS_NEED_PARAMETERIZE) {                \
-    str_node->str_value_ = p->input_sql_ + yylloc->first_column - 1;                            \
-    str_node->str_len_ = yyleng;                                                                \
+  /* Keep adjacent unescaped content (including NUL tokens) in the input buffer. */              \
+  if (IS_FAST_PARAMETERIZE && IS_NEED_PARAMETERIZE                                              \
+      && (str_node->str_len_ <= 0 || str_node->str_value_ != NULL)) {                            \
+    if (str_node->str_len_ <= 0) {                                                              \
+      str_node->str_value_ = p->input_sql_ + yylloc->first_column - 1;                          \
+    }                                                                                           \
+    str_node->str_len_ += yyleng;                                                               \
   } else {                                                                                      \
     char **tmp_literal = &(p->tmp_literal_);                                                    \
     if (NULL == *tmp_literal) {                                                                 \
