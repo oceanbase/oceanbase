@@ -107,7 +107,7 @@ int ObTableLoadObjCaster::cast_obj(ObTableLoadCastObjCtx &cast_obj_ctx,
     if (lib::is_mysql_mode() && column_schema->get_cur_default_value().is_ext()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("column default value is ext", KR(ret), KPC(column_schema));
-    } else if (lib::is_oracle_mode() && column_schema->is_default_expr_v2_column()) {
+    } else if (column_schema->is_default_expr_v2_column()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("column default value is expr", KR(ret), KPC(column_schema));
     }

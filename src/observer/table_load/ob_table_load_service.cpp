@@ -774,7 +774,7 @@ int ObTableLoadService::check_support_direct_load_for_default_value(
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("direct-load does not support column default value is ext", KR(ret), KPC(column_schema));
           FORWARD_USER_ERROR_MSG(ret, "direct-load does not support column default value is ext");
-        } else if (OB_UNLIKELY(lib::is_oracle_mode() && column_schema->is_default_expr_v2_column())) {
+        } else if (OB_UNLIKELY(column_schema->is_default_expr_v2_column())) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("direct-load does not support column default value is expr", KR(ret), KPC(column_schema));
           FORWARD_USER_ERROR_MSG(ret, "direct-load does not support column default value is expr");
