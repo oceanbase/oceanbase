@@ -132,6 +132,7 @@ int ObDirectLoadMemLoader::close_chunk(ChunkType *&chunk)
 
   if (chunk != nullptr) {
     mem_ctx_->release_chunk(chunk);
+    chunk = nullptr;
   }
   return ret;
 }

@@ -197,8 +197,10 @@ void ObCOSSTableRowsFilter::reset()
   }
   for (int64_t i = 0; i < filter_iters_.count(); ++i) {
     ObICGIterator* cg_iter = filter_iters_[i];
-    cg_iter->~ObICGIterator();
-    allocator_->free(cg_iter);
+    if (nullptr != cg_iter) {
+      cg_iter->~ObICGIterator();
+      allocator_->free(cg_iter);
+    }
   }
   filter_iters_.reset();
   iter_filter_node_.reset();
@@ -218,7 +220,9 @@ void ObCOSSTableRowsFilter::reuse()
     where_optimizer_->reuse();
   }
   for (int64_t i = 0; i < filter_iters_.count(); ++i) {
-    filter_iters_[i]->reuse();
+    if (nullptr != filter_iters_[i]) {
+      filter_iters_[i]->reuse();
+    }
   }
   prepared_ = false;
   subtree_filter_iter_to_locate_ = 0;
