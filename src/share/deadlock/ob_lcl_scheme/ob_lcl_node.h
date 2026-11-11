@@ -101,7 +101,8 @@ public:
             const ObDetectorPriority &priority,
             const uint64_t start_delay,
             const uint32_t count_down_allow_detect,
-            const bool auto_activate_when_detected);
+            const bool auto_activate_when_detected,
+            common::ObMalloc &callback_allocator);
   ~ObLCLNode();
 public:
   int add_parent(const ObDependencyHolder &parent) override;

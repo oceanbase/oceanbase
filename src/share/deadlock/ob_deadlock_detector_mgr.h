@@ -194,6 +194,8 @@ private:
                        const common::ObAddr *exec_sql_addr = nullptr);
   int convert_string_holder_to_shared_guard_(const ObStringHolder &holder,
                                              ObSharedGuard<char> &shared_guard);
+  // Outlive all callbacks held by the detector map.
+  common::ObMalloc callback_allocator_;
   // define for ObLinkHashMap
   class InnerAllocHandle
   {
@@ -212,6 +214,7 @@ private:
                  const uint64_t start_delay,
                  const uint32_t count_down_allow_detect,
                  const bool auto_activate_when_detected,
+                 common::ObMalloc &callback_allocator,
                  ObIDeadLockDetector *&p_detector);
       void release(ObIDeadLockDetector *p_detector);
       static uint64_t create_count_;
@@ -313,6 +316,7 @@ int ObDeadLockDetectorMgr::register_key(const KeyType &key,
                                                           start_delay,
                                                           count_down_allow_detect,
                                                           auto_activate_when_detected,
+                                                          callback_allocator_,
                                                           p_detector))) {
       DETECT_LOG(WARN, "create new detector instance failed", PRINT_WRAPPER, KP(p_detector));
     } else if (OB_FAIL(detector_map_.insert_and_get(binary_key, p_detector))) {

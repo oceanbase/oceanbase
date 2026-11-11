@@ -92,6 +92,7 @@ int ObDeadLockDetectorMgr::InnerAllocHandle::InnerFactory::create(const UserBina
                                                                   const uint64_t start_delay,
                                                                   const uint32_t count_down_allow_detect,
                                                                   const bool auto_activate_when_detected,
+                                                                  common::ObMalloc &callback_allocator,
                                                                   ObIDeadLockDetector *&p_detector)
 {
   int ret = OB_SUCCESS;
@@ -117,12 +118,15 @@ int ObDeadLockDetectorMgr::InnerAllocHandle::InnerFactory::create(const UserBina
                                             priority,
                                             start_delay,
                                             count_down_allow_detect,
-                                            auto_activate_when_detected);
+                                            auto_activate_when_detected,
+                                            callback_allocator);
     if (false == static_cast<ObLCLNode*>(p_detector)->
                  is_successfully_constructed()) {
       ret = OB_INIT_FAIL;
       DETECT_LOG(WARN, "construct ObLCLNode obj failed", KR(ret));
+      p_detector->~ObIDeadLockDetector();
       mtl_free(p_detector);
+      p_detector = nullptr;
     } else {
       ATOMIC_INC(&create_count_);
     }
@@ -188,6 +192,7 @@ int ObDeadLockDetectorMgr::init()
     ret = OB_ERR_UNEXPECTED;
     DETECT_LOG(ERROR, "proxy_ or rpc_ is not null", PRINT_WRAPPER);
   } else {
+    callback_allocator_.set_attr(ObMemAttr(MTL_ID(), "DLCallback"));
     ObMemAttr attr(OB_SERVER_TENANT_ID, MEMORY_LABEL);
     SET_USE_500(attr);
     if (OB_FAIL(ret)) {
@@ -473,6 +478,7 @@ int ObDeadLockDetectorMgr::process_notify_parent_message(const ObDeadLockNotifyP
                                0,
                                0,
                                true,
+                               callback_allocator_,
                                p_detector))) {
       DETECT_LOG(WARN, "create new detector instance failed", PRINT_WRAPPER);
     } else if (OB_FAIL(detector_map_.insert_and_get(binary_key, p_detector))) {
