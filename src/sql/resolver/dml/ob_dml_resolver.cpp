@@ -1710,6 +1710,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
   CK( OB_NOT_NULL(params_.expr_factory_),
       OB_NOT_NULL(stmt_),
       OB_NOT_NULL(get_stmt()),
+      OB_NOT_NULL(params_.query_ctx_),
       OB_NOT_NULL(session_info_));
   OC( (params_.session_info_->get_collation_connection)(collation_connection) );
   OC( (params_.session_info_->get_character_set_connection)(character_set_connection) );
@@ -1884,7 +1885,16 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
         !expr->has_flag(CNT_OUTER_JOIN_SYMBOL)) {
       bool is_new = false;
       bool dummp_bool = false;
-      if (OB_FAIL(expr_resv_ctx_.get_shared_instance(expr, expr, is_new, dummp_bool))) {
+      const bool skip_const_root_sharing = expr->is_static_scalar_const_expr() &&
+                                           expr->check_is_deterministic_expr() &&
+                                           expr->has_flag(CNT_STATIC_PARAM);
+      if (skip_const_root_sharing && params_.query_ctx_->check_opt_compat_version(
+              COMPAT_VERSION_4_2_5_BP8, COMPAT_VERSION_4_3_0,
+              COMPAT_VERSION_4_3_5_BP6, COMPAT_VERSION_4_4_0,
+              COMPAT_VERSION_4_4_2_BP4)) {
+        // Keep independent parameters in constant roots to avoid equality constraints from sharing.
+        // Parameter-free constants still share for expression identity checks in MV refresh.
+      } else if (OB_FAIL(expr_resv_ctx_.get_shared_instance(expr, expr, is_new, dummp_bool))) {
         LOG_WARN("failed to get shared instance", K(ret));
       }
     }
