@@ -7,7 +7,9 @@
 
 #include "sql/engine/expr/ob_expr_vec_vid.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "share/ob_tablet_autoincrement_service.h"
+#include "share/ob_ddl_common.h"
 
 namespace oceanbase
 {
@@ -69,6 +71,14 @@ int ObExprVecVid::cg_expr(
   } else if (OB_UNLIKELY(1 != raw_ctx.arg_cnt_) || OB_ISNULL(raw_ctx.args_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(raw_ctx), KP(raw_ctx.args_));
+  } else if (eval_ctx.exec_ctx_.is_ddl_idempotent_autoinc()) {
+    ret = generate_idempotent_vec_id(eval_ctx.exec_ctx_, expr_datum);
+  } else if (nullptr != eval_ctx.exec_ctx_.get_my_session()
+             && eval_ctx.exec_ctx_.get_my_session()->get_ddl_info().is_ddl()
+             && eval_ctx.exec_ctx_.get_my_session()->get_ddl_info().is_dest_table_hidden()) {
+    // PX producers do not know the logical row ordinal. Defer final generation
+    // to the offline R-table consumer without allocating an ordinary VID cache.
+    expr_datum.set_int(0);
   } else {
     ObExpr *calc_part_id_expr = raw_ctx.args_[0];
     ObObjectID partition_id = OB_INVALID_ID;
@@ -85,6 +95,23 @@ int ObExprVecVid::cg_expr(
         LOG_DEBUG("succeed to genearte vector id", K(tablet_id), K(seq_id));
       }
     }
+  }
+  return ret;
+}
+
+/*static*/ int ObExprVecVid::generate_idempotent_vec_id(
+    ObExecContext &exec_ctx,
+    ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!exec_ctx.is_ddl_idempotent_autoinc())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("missing idempotent vector id parameters", K(ret));
+  } else {
+    expr_datum.set_int(share::ObDDLUtil::generate_idempotent_value(exec_ctx.get_slice_count(),
+                                                                 exec_ctx.get_slice_idx(),
+                                                                 exec_ctx.get_autoinc_range_interval(),
+                                                                 exec_ctx.get_slice_row_idx()));
   }
   return ret;
 }

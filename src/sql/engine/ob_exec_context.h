@@ -586,6 +586,32 @@ public:
     autoinc_range_interval_ = autoinc_range_interval;
     is_ddl_idempotent_auto_inc_ = true;
   }
+  // Keep DDL numbering local to the writer, including error exits.
+  class DDLAutoincScopeGuard
+  {
+  public:
+    explicit DDLAutoincScopeGuard(ObExecContext &ctx)
+      : ctx_(ctx), is_idempotent_(ctx.is_ddl_idempotent_auto_inc_),
+        slice_count_(ctx.slice_count_), slice_idx_(ctx.slice_idx_),
+        slice_row_idx_(ctx.slice_row_idx_), interval_(ctx.autoinc_range_interval_)
+    {}
+    ~DDLAutoincScopeGuard()
+    {
+      ctx_.is_ddl_idempotent_auto_inc_ = is_idempotent_;
+      ctx_.slice_count_ = slice_count_;
+      ctx_.slice_idx_ = slice_idx_;
+      ctx_.slice_row_idx_ = slice_row_idx_;
+      ctx_.autoinc_range_interval_ = interval_;
+    }
+  private:
+    ObExecContext &ctx_;
+    bool is_idempotent_;
+    int64_t slice_count_;
+    int64_t slice_idx_;
+    int64_t slice_row_idx_;
+    int64_t interval_;
+    DISALLOW_COPY_AND_ASSIGN(DDLAutoincScopeGuard);
+  };
   bool is_ddl_idempotent_autoinc() { return is_ddl_idempotent_auto_inc_; }
   int64_t get_slice_count() { return slice_count_; }
   int64_t get_slice_idx() { return slice_idx_; }

@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/pdml/static/ob_px_sstable_insert_op.h"
+#include "sql/engine/expr/ob_expr_vec_vid.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "storage/ddl/ob_ddl_seq_generator.h"
 #include "rootserver/ddl_task/ob_ddl_task.h"
@@ -396,9 +397,16 @@ int ObPxMultiPartSSTableInsertOp::eval_current_row(ObIArray<ObDatum *> &datums, 
     if (OB_ISNULL(e)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is NULL", K(ret), K(i));
+    } else if (need_idempotent_vec_vid_ && i == tablet_autoinc_column_idx_) {
+      // PX projects VID as a column reference without an evaluation function.
+      // Materialize its deferred value only after selecting the logical row.
+      datum = &e->locate_datum_for_write(eval_ctx);
+      if (OB_FAIL(ObExprVecVid::generate_idempotent_vec_id(eval_ctx.exec_ctx_, *datum))) {
+        LOG_WARN("generate idempotent vector id failed", K(ret), K(tablet_id));
+      }
     } else if (OB_FAIL(e->eval(eval_ctx, datum))) {
       LOG_WARN("evaluate expression failed", K(ret), K(i), KPC(e));
-    } else if (i == tablet_autoinc_column_idx_) {
+    } else if (i == tablet_autoinc_column_idx_ && is_heap_plan()) {
       // Reset the datum ptr for the same column that the heap slice writer will
       // overwrite later, otherwise it may alias another expr datum buffer in
       // the single-row path.
@@ -525,7 +533,7 @@ int ObPxMultiPartSSTableInsertOp::locate_exprs()
   }
 
   if (OB_SUCC(ret)) {
-    if (is_heap_plan()) {
+    if (is_heap_plan() || need_idempotent_vec_vid_) {
       // init tablet_autoinc_expr_
       for (int64_t i = 0; OB_SUCC(ret) && i < child_output_exprs.count(); ++i) {
         if (child_output_exprs.at(i)->type_ == T_TABLET_AUTOINC_NEXTVAL) {
@@ -551,7 +559,8 @@ int ObPxMultiPartSSTableInsertOp::locate_exprs()
           LOG_WARN("tablet autoinc expr not found", K(ret), KP(tablet_autoinc_expr_), K(tablet_autoinc_column_idx_), K(is_found));
         }
       }
-    } else {
+    }
+    if (OB_SUCC(ret) && !is_heap_plan()) {
       // for iot table and idempotent ddl, init slice_info_expr_;
       for (int64_t i = 0; OB_SUCC(ret) && i < child_output_exprs.count(); ++i) {
         if (child_output_exprs.at(i)->type_ == ObItemType::T_PSEUDO_DDL_SLICE_ID) {
@@ -584,8 +593,10 @@ int ObPxMultiPartSSTableInsertOp::check_need_idempotence()
       LOG_WARN("table schema is null", K(ret), K(MY_SPEC.plan_->get_ddl_table_id()));
     } else {
       is_vec_gen_vid_ = ddl_table_schema->is_vec_rowkey_vid_type();
-      need_idempotent_tablet_autoinc_ = MY_SPEC.regenerate_heap_table_pk_ // ddl heap plan
-                                        || (is_vec_gen_vid_ && ddl_dag_->get_ddl_task_param().is_offline_index_rebuild_); // generate vid for vector index in offline mode
+      need_idempotent_tablet_autoinc_ = MY_SPEC.regenerate_heap_table_pk_;
+      need_idempotent_vec_vid_ = is_vec_gen_vid_
+                                && ddl_dag_->get_ddl_task_param().is_offline_index_rebuild_
+                                && !is_incremental_direct_load(ddl_dag_->get_direct_load_type());
       need_idempotent_table_autoinc_ = ddl_table_schema->get_autoinc_column_id() > 0
                                        && ddl_table_schema->get_autoinc_column_id() != OB_INVALID_ID
                                        && !is_incremental_direct_load(ddl_dag_->get_direct_load_type())
@@ -602,7 +613,7 @@ int ObPxMultiPartSSTableInsertOp::check_need_idempotence()
           need_idempotent_doc_id_ = !data_table_schema->is_table_without_pk();
         }
       }
-      LOG_TRACE("check need idempotent doc id or table autoinc", K(need_idempotent_doc_id_), K(need_idempotent_table_autoinc_), K(MY_SPEC.plan_->get_ddl_table_id()));
+      LOG_TRACE("check need idempotent autoinc", K(need_idempotent_vec_vid_), K(need_idempotent_doc_id_), K(need_idempotent_table_autoinc_), K(MY_SPEC.plan_->get_ddl_table_id()));
     }
   }
   return ret;
@@ -950,6 +961,7 @@ int ObPxMultiPartSSTableInsertOp::write_ordered_slice_by_row()
   LOG_DEBUG("write_ordered_slice_by_row", K(is_vec_tablet_rebuild),  K(GET_MY_SESSION(exec_ctx)->get_ddl_info()));
 
   while (OB_SUCC(ret) && !is_all_partition_finished_) {
+    ObExecContext::DDLAutoincScopeGuard autoinc_guard(get_exec_ctx());
     if (OB_FAIL(get_next_row_from_child(&insert_monitor))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("get next row failed", K(ret));
@@ -979,8 +991,8 @@ int ObPxMultiPartSSTableInsertOp::write_ordered_slice_by_row()
     }
   }
   if (OB_SUCC(ret) && is_all_partition_finished_ && nullptr != slice_writer) {
-    if (need_idempotent_doc_id_ && OB_FAIL(sync_tablet_doc_id(slice_writer))) {
-      LOG_WARN("sync tablet doc id failed", K(ret), KPC(slice_writer));
+    if ((need_idempotent_doc_id_ || need_idempotent_vec_vid_) && OB_FAIL(sync_tablet_autoinc(slice_writer))) {
+      LOG_WARN("sync tablet autoinc failed", K(ret), KPC(slice_writer));
     } else if (OB_FAIL(slice_writer->close())) {
       LOG_WARN("close slice writer failed", K(ret));
     }
@@ -1010,8 +1022,8 @@ int ObPxMultiPartSSTableInsertOp::switch_slice_if_need(
     // do nothing
   } else {
     if (OB_NOT_NULL(slice_writer)) {
-      if (need_idempotent_doc_id_ && OB_FAIL(sync_tablet_doc_id(slice_writer))) {
-        LOG_WARN("sync tablet doc id failed", K(ret), KPC(slice_writer));
+      if ((need_idempotent_doc_id_ || need_idempotent_vec_vid_) && OB_FAIL(sync_tablet_autoinc(slice_writer))) {
+        LOG_WARN("sync tablet autoinc failed", K(ret), KPC(slice_writer));
       } else if (OB_FAIL(slice_writer->close())) {
         LOG_WARN("close slice writer failed", K(ret));
       } else {
@@ -1053,7 +1065,7 @@ int ObPxMultiPartSSTableInsertOp::switch_slice_if_need(
       }
     }
     if (OB_SUCC(ret) && nullptr != autoinc_param) {
-      if (need_idempotent_doc_id_) {
+      if (need_idempotent_doc_id_ || need_idempotent_vec_vid_) {
         if (OB_FAIL(init_tablet_autoinc_param(tablet_id, slice_idx, *autoinc_param))) {
           LOG_WARN("init tablet autoinc param failed", K(ret));
         }
@@ -1143,7 +1155,7 @@ int ObPxMultiPartSSTableInsertOp::get_data_tablet_id(const ObTabletID &tablet_id
   return ret;
 }
 
-int ObPxMultiPartSSTableInsertOp::sync_tablet_doc_id(ObISliceWriter *slice_writer)
+int ObPxMultiPartSSTableInsertOp::sync_tablet_autoinc(ObISliceWriter *slice_writer)
 {
   int ret = OB_SUCCESS;
   ObDDLAutoincParam autoinc_param;
@@ -1168,7 +1180,9 @@ int ObPxMultiPartSSTableInsertOp::sync_tablet_doc_id(ObISliceWriter *slice_write
                                                                             slice_idx,
                                                                             rootserver::ObDDLSliceInfo::AUTOINC_RANGE_INTERVAL,
                                                                             row_count);
-      if (OB_FAIL(get_data_tablet_id(tablet_id, data_tablet_id))) {
+      // DOC_ID belongs to the data tablet; VID belongs to the R auxiliary tablet.
+      data_tablet_id = tablet_id;
+      if (need_idempotent_doc_id_ && OB_FAIL(get_data_tablet_id(tablet_id, data_tablet_id))) {
         LOG_WARN("fail to get data tablet id", K(ret), K(tablet_id));
       } else if (OB_FAIL(ObDDLUtil::set_tablet_autoinc_seq(tablet_context->ls_id_, data_tablet_id, last_autoinc_val))) {
         LOG_WARN("set tablet autoinc seq failed", K(ret), KPC(slice_writer));

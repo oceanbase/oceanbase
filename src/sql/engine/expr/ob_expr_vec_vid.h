@@ -11,6 +11,7 @@ namespace oceanbase
 {
 namespace sql
 {
+class ObExecContext;
 class ObExprVecVid : public ObFuncExprOperator
 {
 public:
@@ -32,6 +33,11 @@ public:
   static int generate_vec_id(
       const ObExpr &raw_ctx,
       ObEvalCtx &eval_ctx,
+      ObDatum &expr_datum);
+  // PX consumers may receive only a projected column, so expose final offline
+  // materialization separately from evaluation of the SQL function arguments.
+  static int generate_idempotent_vec_id(
+      ObExecContext &exec_ctx,
       ObDatum &expr_datum);
 private :
   //disallow copy

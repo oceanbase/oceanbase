@@ -124,6 +124,7 @@ public:
       need_idempotent_tablet_autoinc_(false),
       need_idempotent_table_autoinc_(false),
       need_idempotent_doc_id_(false),
+      need_idempotent_vec_vid_(false),
       need_update_tablet_range_count_(true)
   {}
   virtual ~ObPxMultiPartSSTableInsertOp() { destroy(); }
@@ -142,15 +143,21 @@ protected:
   int eval_current_row(ObIArray<ObDatum *> &datums, const ObTabletID &tablet_id);
   int eval_current_batch(ObIArray<ObIVector *> &vectors, const ObBatchRows &brs);
   int sync_table_level_autoinc_value();
-  bool is_heap_plan() const { return MY_SPEC.regenerate_heap_table_pk_ || is_vec_gen_vid_; }
+  bool is_heap_plan() const
+  {
+    // Select the writer path; ordinary/idempotent allocation is controlled separately.
+    // Offline R-table VIDs are materialized using logical slice positions.
+    return MY_SPEC.regenerate_heap_table_pk_ || (is_vec_gen_vid_ && !need_idempotent_vec_vid_);
+  }
   int write_heap_slice_by_row();
   int write_heap_slice_by_batch();
   int write_ordered_slice_by_row();
   int write_ordered_slice_by_batch();
   int finish_dag();
+  // Whether generated values require a distinct logical position for each row.
   bool need_autoinc_by_row();
   int get_data_tablet_id(const ObTabletID &tablet_id, ObTabletID &data_tablet_id);
-  int sync_tablet_doc_id(ObISliceWriter *slice_writer);
+  int sync_tablet_autoinc(ObISliceWriter *slice_writer);
   int init_table_autoinc_param(const ObTabletID &tablet_id, const int64_t slice_idx, ObDDLAutoincParam &autoinc_param);
   int init_tablet_autoinc_param(const ObTabletID &tablet_id, const int64_t slice_idx, ObDDLAutoincParam &autoinc_param);
   int locate_exprs();
@@ -174,7 +181,7 @@ protected:
   ObTabletID non_partitioned_tablet_id_;
   ObExpr *tablet_id_expr_; // valid when partitioned table
   ObExpr *slice_info_expr_; // valid when ordered tablet and idempotent ddl
-  ObExpr *tablet_autoinc_expr_; // valid when heap plan
+  ObExpr *tablet_autoinc_expr_; // output slot for heap keys or offline R-table VID
   int64_t tablet_autoinc_column_idx_;
   storage::ObColumnClusteredDag *ddl_dag_;
   // for heap plan, direct write tablet
@@ -183,6 +190,7 @@ protected:
   bool need_idempotent_tablet_autoinc_;
   bool need_idempotent_table_autoinc_;
   bool need_idempotent_doc_id_;
+  bool need_idempotent_vec_vid_;
   bool need_update_tablet_range_count_;
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartSSTableInsertOp);
 };
