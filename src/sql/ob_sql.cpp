@@ -5524,8 +5524,10 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
       // the purpose of adding condition (!session.get_is_in_retry()) is
       // send the plan instead of continue sending sqlinfo when retrying remotely.
       // bug:
+      // Send GTT v2 physical plans to preserve the origin's access path.
       if (OB_SUCC(ret) && phy_plan->is_remote_plan()
           && !phy_plan->contains_temp_table()
+          && !phy_plan->is_gtt_temp_table_v2()
           && !enable_send_plan) {
         pctx->get_remote_sql_info().sql_from_pl_ = PC_PL_MODE == pc_ctx.mode_;
         pctx->get_remote_sql_info().is_ps_cursor_ = pc_ctx.sql_ctx_.is_ps_cursor_;
@@ -5672,7 +5674,9 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
         }
       }
     }
-    if (OB_SUCC(ret) && NULL != phy_plan && !phy_plan->is_remote_plan()) {
+    // GTT v2 remote plans are sent as physical plans and need solidified session variables.
+    if (OB_SUCC(ret) && NULL != phy_plan
+        && (!phy_plan->is_remote_plan() || phy_plan->is_gtt_temp_table_v2())) {
       if (OB_FAIL(pctx->set_all_local_session_vars(phy_plan->get_all_local_session_vars()))) {
         LOG_WARN("fail to set all local session vars", K(ret));
       }
