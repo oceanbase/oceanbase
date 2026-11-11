@@ -1009,7 +1009,9 @@ public:
       priority_(ObDagPrio::DAG_PRIO_MAX),
       running_task_cnts_(0),
       limits_(0),
-      adaptive_task_limit_(0)
+      adaptive_task_limit_(0),
+      need_release_one_slot_(false),
+      need_stop_self_schedule_hint_(false)
   {}
   ~ObDagPrioScheduler() { destroy();}
   void destroy();
@@ -1103,6 +1105,7 @@ public:
   // After self-schedule finishes a task, only release the worker; never finalize the dag.
   // Scheduler thread finalizes finished dags later in pop_task_from_ready_list_.
   int release_worker_only(ObTenantDagWorker &worker, const ObDagType::ObDagTypeEnum dag_type);
+  int try_stop_self_schedule(ObITask *&task, ObIDag *&dag, ObTenantDagWorker &worker, bool &slot_released);
   // force_cancel: whether to cancel running dag
   int cancel_dag(const ObIDag &dag, const bool force_cancel = false);
   int check_dag_exist(const ObIDag &dag, bool &exist, bool &is_emergency);
@@ -1186,9 +1189,13 @@ private:
   int erase_dag_(ObIDag &dag);
   int deal_with_fail_dag_(ObIDag &dag, ObITask *&cur_task, const int errcode, bool &retry_flag);
   int finish_task_in_dag_(ObITask *&task, ObIDag *&dag);
+  // The following helpers require prio_rwlock_.
+  int deal_with_finish_task_(ObITask *&task, ObIDag *&dag, ObTenantDagWorker &worker, int error_code);
+  bool need_release_slot_for_waiting_worker_();
   void pause_worker_(ObTenantDagWorker &worker);
-  bool check_need_load_shedding_(const bool for_schedule);
-
+  bool need_stop_self_schedule_() const;
+  // Refresh before unlocking after changing running_task_cnts_, adaptive_task_limit_ or need_release_one_slot_.
+  void refresh_need_stop_self_schedule_hint_();
 public:
   static const int32_t MAX_SHOW_DAG_CNT = 100;
 private:
@@ -1213,6 +1220,8 @@ private:
   int64_t running_task_cnts_;
   int64_t limits_;           // needs to be equal with thread_score
   int64_t adaptive_task_limit_;
+  bool need_release_one_slot_;
+  bool need_stop_self_schedule_hint_; // atomic value; must be updated under prio_rwlock_.
 };
 
 #define DEFINE_ATOMIC_ARRAY_FUNC(name, var) \
@@ -1356,7 +1365,7 @@ public:
   // worker can keep running it (returned via next_task). The worker only drives its own
   // status machine; all scheduling decisions live here.
   // cur_task and its dag may be freed even on failure; callers must not dereference them afterwards.
-  int finish_task_and_try_pick_next(ObITask *cur_task,
+  int finish_task_and_try_pick_next(ObITask *&cur_task,
                                     ObTenantDagWorker &worker,
                                     int task_error_code,
                                     ObITask *&next_task);
@@ -1406,6 +1415,10 @@ private:
   int try_reclaim_threads();
   void destroy_all_workers();
   void return_worker_to_pool_(ObTenantDagWorker &worker);
+  int finish_task_and_try_self_schedule_(ObITask *&cur_task,
+                                         ObTenantDagWorker &worker,
+                                         ObITask *&next_task,
+                                         bool &slot_released);
   int schedule_next_task_directly_(ObITask *&next_task,
                                    ObTenantDagWorker &worker,
                                    const int64_t priority,

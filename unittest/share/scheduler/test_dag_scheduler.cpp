@@ -13,10 +13,13 @@
 #define USING_LOG_PREFIX TEST
 #include <getopt.h>
 #include <gtest/gtest.h>
+#include "lib/utility/ob_defer.h"
 #define protected public
 #define private public
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
+#include "storage/compaction/ob_compaction_memory_pool.h"
+#include "storage/ob_tenant_tablet_stat_mgr.h"
 #include "lib/random/ob_random.h"
 
 int64_t dag_cnt = 1;
@@ -1143,6 +1146,8 @@ public:
     ASSERT_EQ(OB_SUCCESS, ma->set_tenant_limit(tenant_id_, 1LL << 30));
     apply_self_sched_guc(tenant_id_, GetParam());
   }
+  static int wait_for_prio_state(ObDagPrioScheduler &prio, const int64_t running,
+      const int64_t waiting = 0, const bool release_slot = false);
   void TearDown()
   {
     tablet_scheduler_->destroy();
@@ -1554,9 +1559,270 @@ void print_state(int64_t idx)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
   ASSERT_TRUE(nullptr != scheduler);
+  SpinRLockGuard guard(scheduler->prio_sche_[idx].prio_rwlock_);
   COMMON_LOG(INFO, "scheduler state: ", K(scheduler->get_total_running_task_cnt()), K(scheduler->work_thread_num_),
       K(scheduler->total_worker_cnt_), K(scheduler->prio_sche_[idx].limits_),
       K(scheduler->prio_sche_[idx].running_task_cnts_));
+}
+
+int TestDagScheduler::wait_for_prio_state(ObDagPrioScheduler &prio, const int64_t running,
+    const int64_t waiting, const bool release_slot)
+{
+  int ret = OB_SUCCESS;
+  bool matched = false;
+  const int64_t deadline = ObTimeUtility::current_time() + CHECK_TIMEOUT;
+  for (; OB_SUCC(ret) && !matched && ObTimeUtility::current_time() < deadline; ob_usleep(SLEEP_SLICE)) {
+    SpinRLockGuard guard(prio.prio_rwlock_);
+    if (OB_FAIL(guard.get_ret())) {
+      COMMON_LOG(WARN, "failed to lock scheduler state", K(ret));
+    } else {
+      matched = running == prio.running_task_cnts_ && waiting == prio.waiting_workers_.get_size()
+          && release_slot == prio.need_release_one_slot_;
+    }
+  }
+  if (OB_SUCC(ret) && !matched) {
+    ret = OB_TIMEOUT;
+    COMMON_LOG(WARN, "wait for scheduler state timed out", K(ret), K(running), K(waiting), K(release_slot));
+  }
+  return ret;
+}
+
+TEST_P(TestDagScheduler, test_schedule_all_priorities_in_one_round)
+{
+  ASSERT_EQ(OB_SUCCESS, scheduler_->init(MTL_ID(), time_slice));
+  // Stop the scheduler thread, so that only the manual schedule() below dispatches tasks.
+  scheduler_->stop();
+  scheduler_->wait();
+  int64_t finished_cnt = 0;
+  DEFER(scheduler_->destroy());
+  const ObDagPrio::ObDagPrioEnum priorities[] = {ObDagPrio::DAG_PRIO_HA_HIGH, ObDagPrio::DAG_PRIO_DDL};
+  for (int64_t i = 0; i < ARRAYSIZEOF(priorities); ++i) {
+    TestLPDag *dag = nullptr;
+    TestAddTask *task = nullptr;
+    ASSERT_EQ(OB_SUCCESS, scheduler_->alloc_dag(dag));
+    ASSERT_EQ(OB_SUCCESS, dag->init(i));
+    dag->set_priority(priorities[i]);
+    ASSERT_EQ(OB_SUCCESS, dag->alloc_task(task));
+    ASSERT_EQ(OB_SUCCESS, task->init(&finished_cnt, 1, 0, 1));
+    ASSERT_EQ(OB_SUCCESS, dag->add_task(*task));
+    ASSERT_EQ(OB_SUCCESS, scheduler_->add_dag(dag));
+  }
+  // Dispatching the HA_HIGH task must not stop this round before the DDL priority.
+  EXPECT_EQ(OB_SUCCESS, scheduler_->schedule());
+  CHECK_EQ_UTIL_TIMEOUT(ARRAYSIZEOF(priorities), ATOMIC_LOAD(&finished_cnt));
+}
+
+struct BlockingDagState
+{
+  BlockingDagState() : task_cnt_(2), yield_(false), started_seq_(0), released_seq_(0) {}
+  void release(const int64_t seq = INT64_MAX) { ATOMIC_STORE(&released_seq_, seq); }
+  int wait_started(const int64_t seq)
+  {
+    int ret = OB_SUCCESS;
+    const int64_t deadline = ObTimeUtility::current_time() + CHECK_TIMEOUT;
+    while (seq != ATOMIC_LOAD(&started_seq_) && ObTimeUtility::current_time() < deadline) {
+      ob_usleep(SLEEP_SLICE);
+    }
+    if (seq != ATOMIC_LOAD(&started_seq_)) {
+      ret = OB_TIMEOUT;
+      COMMON_LOG(WARN, "wait for task start timed out", K(ret), K(seq), "started", ATOMIC_LOAD(&started_seq_));
+    }
+    return ret;
+  }
+  int64_t task_cnt_;
+  bool yield_;
+  int64_t started_seq_;
+  int64_t released_seq_;
+};
+
+class BlockingTask : public ObITask
+{
+public:
+  BlockingTask() : ObITask(TASK_TYPE_UT), state_(nullptr), seq_(0) {}
+  void init(BlockingDagState &state, const int64_t seq)
+  {
+    state_ = &state;
+    seq_ = seq;
+  }
+  int generate_next_task(ObITask *&next_task) override
+  {
+    int ret = OB_SUCCESS;
+    BlockingTask *task = nullptr;
+    next_task = nullptr;
+    if (seq_ >= state_->task_cnt_) {
+      ret = OB_ITER_END;
+    } else if (OB_FAIL(get_dag()->alloc_task(task))) {
+      COMMON_LOG(WARN, "failed to alloc blocking task", K(ret), K_(seq));
+    } else {
+      task->init(*state_, seq_ + 1);
+      next_task = task;
+    }
+    return ret;
+  }
+  int process() override
+  {
+    int ret = OB_SUCCESS;
+    const int64_t deadline = ObTimeUtility::current_time() + CHECK_TIMEOUT;
+    ATOMIC_STORE(&state_->started_seq_, seq_);
+    while (OB_SUCC(ret) && seq_ > ATOMIC_LOAD(&state_->released_seq_)) {
+      if (ObTimeUtility::current_time() >= deadline) {
+        ret = OB_TIMEOUT;
+        COMMON_LOG(WARN, "wait for task release timed out", K(ret), K_(seq));
+      } else if (state_->yield_) {
+        if (OB_FAIL(dag_yield())) {
+          COMMON_LOG(WARN, "failed to yield blocking task", K(ret), K_(seq));
+        }
+      } else {
+        ob_usleep(SLEEP_SLICE);
+      }
+    }
+    // Destruction may cancel a yielding task after the test releases all tasks.
+    EXPECT_TRUE(OB_SUCCESS == ret || (OB_CANCELED == ret && INT64_MAX == ATOMIC_LOAD(&state_->released_seq_))) << ret;
+    return ret;
+  }
+private:
+  BlockingDagState *state_;
+  int64_t seq_;
+};
+
+static int add_blocking_dag(ObTenantDagScheduler &scheduler, const int64_t dag_id,
+    BlockingDagState &state, const ObDagPrio::ObDagPrioEnum priority = ObDagPrio::DAG_PRIO_DDL)
+{
+  int ret = OB_SUCCESS;
+  TestLPDag *dag = nullptr;
+  BlockingTask *task = nullptr;
+  if (OB_FAIL(scheduler.alloc_dag(dag))) {
+    COMMON_LOG(WARN, "failed to alloc blocking dag", K(ret), K(dag_id));
+  } else if (OB_FAIL(dag->init(dag_id))) {
+    COMMON_LOG(WARN, "failed to init blocking dag", K(ret), K(dag_id));
+  } else if (FALSE_IT(dag->set_priority(priority))) {
+  } else if (FALSE_IT(dag->set_max_concurrent_task_cnt(1))) {
+  } else if (OB_FAIL(dag->alloc_task(task))) {
+    COMMON_LOG(WARN, "failed to alloc blocking task", K(ret), K(dag_id));
+  } else if (FALSE_IT(task->init(state, 1))) {
+  } else if (OB_FAIL(dag->add_task(*task))) {
+    COMMON_LOG(WARN, "failed to add blocking task", K(ret), K(dag_id));
+  } else if (OB_FAIL(scheduler.add_dag(dag))) {
+    COMMON_LOG(WARN, "failed to add blocking dag", K(ret), K(dag_id));
+  }
+  if (OB_FAIL(ret) && nullptr != dag) {
+    scheduler.free_dag(*dag);
+    dag = nullptr;
+  }
+  return ret;
+}
+
+TEST_P(TestDagScheduler, test_compaction_ignores_load_shedding)
+{
+  const ObDagPrio::ObDagPrioEnum priority = ObDagPrio::DAG_PRIO_COMPACTION_HIGH;
+  BlockingDagState states[4];
+  storage::ObTenantTabletStatMgr *old_stat_mgr = MTL(storage::ObTenantTabletStatMgr *);
+  storage::ObTenantCompactionMemPool *old_mem_pool = MTL(storage::ObTenantCompactionMemPool *);
+  const bool old_adaptive_merge = tablet_scheduler_->enable_adaptive_merge_schedule();
+  storage::ObTenantTabletStatMgr *stat_mgr = OB_NEW(storage::ObTenantTabletStatMgr, ObModIds::TEST);
+  storage::ObTenantCompactionMemPool *mem_pool = OB_NEW(storage::ObTenantCompactionMemPool, ObModIds::TEST);
+  DEFER(
+    for (int64_t i = 0; i < ARRAYSIZEOF(states); ++i) {
+      states[i].release();
+    }
+    scheduler_->destroy();
+    tenant_base_.set(old_stat_mgr);
+    tenant_base_.set(old_mem_pool);
+    ATOMIC_STORE(&tablet_scheduler_->tenant_status_.enable_adaptive_merge_schedule_, old_adaptive_merge);
+    ob_delete(stat_mgr);
+    ob_delete(mem_pool);
+  );
+  ASSERT_NE(nullptr, stat_mgr);
+  ASSERT_NE(nullptr, mem_pool);
+  ASSERT_EQ(OB_SUCCESS, scheduler_->init(MTL_ID(), time_slice));
+  scheduler_->stop();
+  scheduler_->wait();
+  tenant_base_.set(stat_mgr);
+  tenant_base_.set(mem_pool);
+  ATOMIC_STORE(&stat_mgr->load_shedder_.load_shedding_factor_, 2);
+  ATOMIC_STORE(&mem_pool->mem_mode_, storage::ObTenantCompactionMemPool::CRITICAL_MODE);
+  ATOMIC_STORE(&tablet_scheduler_->tenant_status_.enable_adaptive_merge_schedule_, true);
+  ASSERT_EQ(OB_SUCCESS, scheduler_->set_thread_score(priority, ARRAYSIZEOF(states)));
+  ObDagPrioScheduler &prio = scheduler_->prio_sche_[priority];
+  for (int64_t i = 0; i < ARRAYSIZEOF(states); ++i) {
+    states[i].yield_ = true;
+    ASSERT_EQ(OB_SUCCESS, add_blocking_dag(*scheduler_, i, states[i], priority));
+  }
+  bool scheduled = false;
+  ASSERT_EQ(OB_SUCCESS, prio.loop_ready_dag_list(scheduled));
+  for (int64_t i = 0; i < ARRAYSIZEOF(states); ++i) {
+    ASSERT_EQ(OB_SUCCESS, states[i].wait_started(1));
+  }
+  ASSERT_EQ(OB_SUCCESS, prio.loop_ready_dag_list(scheduled));
+  states[0].release(1);
+  const int64_t deadline = ObTimeUtility::current_time() + CHECK_TIMEOUT;
+  while (ATOMIC_LOAD(&states[0].started_seq_) < 2 && ObTimeUtility::current_time() < deadline) {
+    if (!GetParam()) {
+      ASSERT_EQ(OB_SUCCESS, prio.loop_ready_dag_list(scheduled));
+    }
+    ob_usleep(SLEEP_SLICE);
+  }
+  ASSERT_EQ(2, ATOMIC_LOAD(&states[0].started_seq_));
+  EXPECT_EQ(OB_SUCCESS, wait_for_prio_state(prio, ARRAYSIZEOF(states)));
+}
+
+TEST_P(TestDagScheduler, test_self_schedule_shrink_same_dag)
+{
+  const ObDagPrio::ObDagPrioEnum priority = ObDagPrio::DAG_PRIO_DDL;
+  ASSERT_EQ(OB_SUCCESS, scheduler_->init(MTL_ID(), time_slice));
+  // Only workers can pick up tasks after the manual schedule().
+  scheduler_->stop();
+  scheduler_->wait();
+  ASSERT_EQ(OB_SUCCESS, scheduler_->set_thread_score(priority, 2));
+  ObDagPrioScheduler &prio = scheduler_->prio_sche_[priority];
+  BlockingDagState dag1;
+  BlockingDagState dag2;
+  DEFER(dag1.release(); dag2.release(); scheduler_->destroy());
+  ASSERT_EQ(OB_SUCCESS, add_blocking_dag(*scheduler_, 1, dag1));
+  ASSERT_EQ(OB_SUCCESS, add_blocking_dag(*scheduler_, 2, dag2));
+  ASSERT_EQ(OB_SUCCESS, scheduler_->schedule());
+  ASSERT_EQ(OB_SUCCESS, dag1.wait_started(1));
+  ASSERT_EQ(OB_SUCCESS, dag2.wait_started(1));
+
+  prio.set_adaptive_limit(1);
+  dag1.release(1);
+  ASSERT_EQ(OB_SUCCESS, wait_for_prio_state(prio, 1));
+  EXPECT_EQ(1, ATOMIC_LOAD(&dag1.started_seq_));
+
+  if (GetParam()) {
+    // As if the worker of dag2 read the hint before the worker of dag1 cleared it.
+    SpinWLockGuard guard(prio.prio_rwlock_);
+    ASSERT_EQ(OB_SUCCESS, guard.get_ret());
+    ATOMIC_STORE(&prio.need_stop_self_schedule_hint_, true);
+  }
+  dag2.release(1);
+  if (GetParam()) {
+    ASSERT_EQ(OB_SUCCESS, dag2.wait_started(2));
+  }
+  EXPECT_EQ(OB_SUCCESS, wait_for_prio_state(prio, GetParam() ? 1 : 0));
+}
+
+TEST_P(TestDagScheduler, test_self_schedule_resumes_waiting_worker_same_dag)
+{
+  const ObDagPrio::ObDagPrioEnum priority = ObDagPrio::DAG_PRIO_DDL;
+  ASSERT_EQ(OB_SUCCESS, scheduler_->init(MTL_ID(), time_slice));
+  ASSERT_EQ(OB_SUCCESS, scheduler_->set_thread_score(priority, 2));
+  ObDagPrioScheduler &prio = scheduler_->prio_sche_[priority];
+  BlockingDagState yield_dag;
+  BlockingDagState short_dag;
+  DEFER(yield_dag.release(); short_dag.release(); scheduler_->destroy());
+  yield_dag.task_cnt_ = 1;
+  yield_dag.yield_ = true;
+  ASSERT_EQ(OB_SUCCESS, add_blocking_dag(*scheduler_, 1, yield_dag));
+  ASSERT_EQ(OB_SUCCESS, add_blocking_dag(*scheduler_, 2, short_dag));
+  ASSERT_EQ(OB_SUCCESS, yield_dag.wait_started(1));
+  ASSERT_EQ(OB_SUCCESS, short_dag.wait_started(1));
+
+  prio.set_adaptive_limit(1);
+  ASSERT_EQ(OB_SUCCESS, wait_for_prio_state(prio, 1, 1, GetParam()));
+  short_dag.release(1);
+  ASSERT_EQ(OB_SUCCESS, wait_for_prio_state(prio, 1));
+  EXPECT_EQ(1, ATOMIC_LOAD(&short_dag.started_seq_));
 }
 
 TEST_P(TestDagScheduler, test_set_concurrency)

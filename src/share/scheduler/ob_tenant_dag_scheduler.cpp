@@ -2092,6 +2092,8 @@ void ObDagPrioScheduler::destroy()
     dag_map_.destroy();
   }
   running_task_cnts_ = 0;
+  need_release_one_slot_ = false;
+  need_stop_self_schedule_hint_ = false;
   allocator_ = nullptr;
   ha_allocator_ = nullptr;
   running_workers_.reset();
@@ -2136,6 +2138,8 @@ int ObDagPrioScheduler::init(
     running_task_cnts_ = 0;
     limits_ = OB_DAG_PRIOS[priority].score_;
     adaptive_task_limit_ = limits_;
+    need_release_one_slot_ = false;
+    need_stop_self_schedule_hint_ = false;
   }
   return ret;
 }
@@ -2295,6 +2299,7 @@ void ObDagPrioScheduler::add_schedule_info_(const ObDagType::ObDagTypeEnum dag_t
   scheduler_->add_scheduled_task_cnts(dag_type);
   scheduler_->add_scheduled_data_size(dag_type, data_size);
   ++running_task_cnts_;
+  refresh_need_stop_self_schedule_hint_();
 }
 
 void ObDagPrioScheduler::add_added_info_(const ObDagType::ObDagTypeEnum dag_type)
@@ -2314,6 +2319,7 @@ int ObDagPrioScheduler::schedule_one_()
     COMMON_LOG(WARN, "unexpected null scheduler", K(ret), KP_(scheduler));
   } else if (!waiting_workers_.is_empty()) {
     worker = waiting_workers_.remove_first();
+    need_release_one_slot_ = false;
   } else if (OB_FAIL(pop_task_from_ready_list_(task))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       COMMON_LOG(WARN, "failed to pop task", K(ret), K_(priority));
@@ -2584,6 +2590,7 @@ int ObDagPrioScheduler::rank_compaction_dags_()
 
   if (OB_SUCC(ret)) {
     adaptive_task_limit_ = limits_;
+    refresh_need_stop_self_schedule_hint_();
   }
   return ret;
 }
@@ -2958,8 +2965,10 @@ void ObDagPrioScheduler::pause_worker_(ObTenantDagWorker &worker)
     // dag still exist now
     scheduler_->sub_running_dag_cnts(worker.get_task()->get_dag()->get_type());
     --running_task_cnts_;
+    need_release_one_slot_ = false;
     running_workers_.remove(&worker);
     waiting_workers_.add_last(&worker);
+    refresh_need_stop_self_schedule_hint_();
     COMMON_LOG(INFO, "pause worker", K(*worker.get_task()),
         "priority", OB_DAG_PRIOS[priority_].dag_prio_str_,
         K(running_task_cnts_), "total_running_task_cnt", scheduler_->get_total_running_task_cnt());
@@ -2969,20 +2978,24 @@ void ObDagPrioScheduler::pause_worker_(ObTenantDagWorker &worker)
 int ObDagPrioScheduler::loop_ready_dag_list(bool &is_found)
 {
   int ret = OB_SUCCESS;
-  {
+  is_found = false;
+  if (OB_ISNULL(scheduler_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "unexpected null scheduler", K(ret), KP_(scheduler));
+  } else {
     common::SpinWLockGuard guard(prio_rwlock_);
-    if (running_task_cnts_ < adaptive_task_limit_) {
-      // if extra_erase_dag_net not null, the is_found must be false.
-      if (!check_need_load_shedding_(true/*for_schedule*/)) {
-        is_found = (OB_SUCCESS == schedule_one_());
-      }
-
-      while (running_task_cnts_ < adaptive_task_limit_ && is_found) {
-        if (check_need_load_shedding_(true/*for_schedule*/)) {
-          break;
-        } else if (OB_SUCCESS != schedule_one_()) {
-          break;
+    need_release_one_slot_ = need_release_slot_for_waiting_worker_();
+    refresh_need_stop_self_schedule_hint_();
+    while (OB_SUCC(ret) && running_task_cnts_ < adaptive_task_limit_) {
+      if (OB_FAIL(schedule_one_())) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          COMMON_LOG(WARN, "failed to schedule one task", K(ret), K_(priority));
         }
+        break;
+      } else {
+        is_found = true;
       }
     }
   }
@@ -3466,6 +3479,41 @@ int ObDagPrioScheduler::deal_with_finish_task(
     int error_code)
 {
   int ret = OB_SUCCESS;
+  common::SpinWLockGuard guard(prio_rwlock_);
+  if (OB_FAIL(deal_with_finish_task_(task, dag, worker, error_code))) {
+    COMMON_LOG(WARN, "failed to deal with finish task", K(ret));
+  }
+  return ret;
+}
+
+int ObDagPrioScheduler::try_stop_self_schedule(
+    ObITask *&task,
+    ObIDag *&dag,
+    ObTenantDagWorker &worker,
+    bool &slot_released)
+{
+  int ret = OB_SUCCESS;
+  slot_released = false;
+  if (ATOMIC_LOAD(&need_stop_self_schedule_hint_)) {
+    common::SpinWLockGuard guard(prio_rwlock_);
+    if (!need_stop_self_schedule_()) {
+      // Another worker may have released the slot while we waited for the lock.
+    } else if (OB_FAIL(deal_with_finish_task_(task, dag, worker, OB_SUCCESS))) {
+      COMMON_LOG(WARN, "failed to finish task and release slot", K(ret), KP(task), KP(dag));
+    } else {
+      slot_released = true;
+    }
+  }
+  return ret;
+}
+
+int ObDagPrioScheduler::deal_with_finish_task_(
+    ObITask *&task,
+    ObIDag *&dag,
+    ObTenantDagWorker &worker,
+    int error_code)
+{
+  int ret = OB_SUCCESS;
   if (OB_ISNULL(task) || OB_ISNULL(dag) || OB_UNLIKELY(task->get_dag() != dag)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid args", K(ret), KPC(task), KPC(dag));
@@ -3476,7 +3524,6 @@ int ObDagPrioScheduler::deal_with_finish_task(
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "unexpected null scheduler", K(ret), KP_(scheduler));
   } else {
-    common::SpinWLockGuard guard(prio_rwlock_);
     ObDagType::ObDagTypeEnum dag_type = dag->get_type();
     if (OB_SUCCESS != error_code
       && ObIDag::DAG_STATUS_NODE_FAILED != dag->get_dag_status()) {
@@ -3522,13 +3569,13 @@ int ObDagPrioScheduler::deal_with_finish_task(
       COMMON_LOG(WARN, "failed to finish task", K(ret), KPC(dag));
     }
     scheduler_->sub_running_dag_cnts(dag_type);
-  }
-
-  if (OB_SUCC(ret)) {
-    scheduler_->sub_total_running_task_cnt();
-    common::SpinWLockGuard guard(prio_rwlock_);
-    --running_task_cnts_;
-    running_workers_.remove(&worker);
+    if (OB_SUCC(ret)) {
+      --running_task_cnts_;
+      scheduler_->sub_total_running_task_cnt();
+      need_release_one_slot_ = false;
+      running_workers_.remove(&worker);
+      refresh_need_stop_self_schedule_hint_();
+    }
   }
   return ret;
 }
@@ -3541,13 +3588,13 @@ int ObDagPrioScheduler::release_worker_only(ObTenantDagWorker &worker,
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "unexpected null scheduler", K(ret), KP_(scheduler));
   } else {
-    {
-      common::SpinWLockGuard guard(prio_rwlock_);
-      --running_task_cnts_;
-      running_workers_.remove(&worker);
-    }
+    common::SpinWLockGuard guard(prio_rwlock_);
+    --running_task_cnts_;
+    need_release_one_slot_ = false;
+    running_workers_.remove(&worker);
     scheduler_->sub_running_dag_cnts(dag_type);
     scheduler_->sub_total_running_task_cnt();
+    refresh_need_stop_self_schedule_hint_();
   }
   return ret;
 }
@@ -3640,6 +3687,7 @@ void ObDagPrioScheduler::set_adaptive_limit(const int64_t limit)
 {
   common::SpinWLockGuard guard(prio_rwlock_);
   adaptive_task_limit_ = limit;
+  refresh_need_stop_self_schedule_hint_();
 }
 
 int64_t ObDagPrioScheduler::get_running_task_cnt()
@@ -3660,6 +3708,7 @@ int ObDagPrioScheduler::set_thread_score(const int64_t score, int64_t &old_val, 
     limits_ = 0 == score ? OB_DAG_PRIOS[priority_].score_ : score;
     new_val = limits_;
     adaptive_task_limit_ = limits_; // reset adaptive task limit
+    refresh_need_stop_self_schedule_hint_();
   }
   return ret;
 }
@@ -3673,12 +3722,6 @@ bool ObDagPrioScheduler::try_switch(ObTenantDagWorker &worker)
     common::SpinWLockGuard guard(prio_rwlock_);
     if (running_task_cnts_ > adaptive_task_limit_) {
       need_pause = true;
-    } else if (is_compaction_dag_prio() && check_need_load_shedding_(false /*for_schedule*/)) {
-      need_pause = true;
-      FLOG_INFO("[ADAPTIVE_SCHED]tenant cpu is at high level, pause current compaction task", K(priority_));
-    }
-
-    if (need_pause) {
       pause_worker_(worker);
     } else if (!waiting_workers_.is_empty()) {
       if (waiting_workers_.get_first()->need_wake_up()) {
@@ -3700,47 +3743,28 @@ bool ObDagPrioScheduler::try_switch(ObTenantDagWorker &worker)
   return need_pause;
 }
 
-// under prio rwlock
-bool ObDagPrioScheduler::check_need_load_shedding_(const bool for_schedule)
+// when self-schedule is enabled, we need to release slot for waiting worker
+bool ObDagPrioScheduler::need_release_slot_for_waiting_worker_()
 {
-  bool need_shedding = false;
-  compaction::ObBasicMergeScheduler *scheduler = nullptr;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  if (OB_ISNULL(scheduler = ObBasicMergeScheduler::get_merge_scheduler())) {
-    // may be during the start phase
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (GCTX.is_shared_storage_mode()
-             && tenant_config.is_valid()
-             && tenant_config->_ob_enable_background_thread_auto_adapt) {
-    need_shedding = false;
-#endif
-  } else if (scheduler->enable_adaptive_merge_schedule()) {
-    ObTenantTabletStatMgr *stat_mgr = MTL(ObTenantTabletStatMgr *);
-    int64_t load_shedding_factor = 1;
-    const int64_t extra_limit = for_schedule ? 0 : 1;
-    ObTenantCompactionMemPool::MemoryMode mem_mode;
+  return scheduler_->is_self_schedule_enabled()
+      && !waiting_workers_.is_empty()
+      && adaptive_task_limit_ > 0
+      && running_task_cnts_ == adaptive_task_limit_
+      && !scheduler_->has_set_stop()
+      && waiting_workers_.get_first()->need_wake_up();
+}
 
-    if (OB_ISNULL(stat_mgr)) {
-    } else if (FALSE_IT(load_shedding_factor = MAX(1, stat_mgr->get_load_shedding_factor()))) {
-    } else if (load_shedding_factor <= 1 || !is_compaction_dag_prio()) {
-      // no need to load shedding
-    } else if (FALSE_IT(mem_mode = MTL(ObTenantCompactionMemPool *)->get_memory_mode())) {
-    } else if (ObDagPrio::DAG_PRIO_COMPACTION_HIGH == priority_
-            && ObTenantCompactionMemPool::CRITICAL_MODE == mem_mode) {
-      need_shedding = true;
-    } else {
-      const int64_t load_shedding_limit = MAX(2, adaptive_task_limit_ / load_shedding_factor);
-      if (running_task_cnts_ > load_shedding_limit + extra_limit) {
-        need_shedding = true;
-      }
-    }
+bool ObDagPrioScheduler::need_stop_self_schedule_() const
+{
+  return running_task_cnts_ > adaptive_task_limit_ || need_release_one_slot_;
+}
 
-    if (need_shedding && REACH_THREAD_TIME_INTERVAL(30_s)) {
-      FLOG_INFO("[ADAPTIVE_SCHED] DagScheduler needs to load shedding", K(load_shedding_factor), K(for_schedule),
-                K(extra_limit), K_(adaptive_task_limit), K_(running_task_cnts), K_(priority), K(mem_mode));
-    }
+void ObDagPrioScheduler::refresh_need_stop_self_schedule_hint_()
+{
+  const bool need_stop = need_stop_self_schedule_();
+  if (need_stop != ATOMIC_LOAD(&need_stop_self_schedule_hint_)) {
+    ATOMIC_STORE(&need_stop_self_schedule_hint_, need_stop);
   }
-  return need_shedding;
 }
 
 /***************************************ObDagNetScheduler impl********************************************/
@@ -5144,42 +5168,79 @@ void ObTenantDagScheduler::notify_when_dag_net_finish()
 }
 
 int ObTenantDagScheduler::finish_task_and_try_pick_next(
-    ObITask *cur_task,
+    ObITask *&cur_task,
     ObTenantDagWorker &worker,
     int task_error_code,
     ObITask *&next_task)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   next_task = nullptr;
   ObIDag *dag = nullptr;
   if (OB_ISNULL(cur_task) || OB_ISNULL(dag = cur_task->get_dag())) {
     ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "invalid null arguments", K(ret), KP(cur_task), KP(dag));
+  } else if (OB_UNLIKELY(dag->get_priority() < 0 || dag->get_priority() >= ObDagPrio::DAG_PRIO_MAX)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "invalid priority", K(ret), K(dag->get_priority()));
+  } else if (OB_SUCCESS != task_error_code
+          || dag->is_dag_failed()
+          || !is_self_schedule_enabled()) {
+    // dag is failed, or self-schedule is not enabled, take the slow path.
+    if (OB_FAIL(deal_with_finish_task(cur_task, worker, task_error_code))) {
+      COMMON_LOG(WARN, "failed to finish task", K(ret), KP(cur_task), KP(dag));
+    }
+  } else {
+    const int64_t priority = dag->get_priority();
+    bool slot_released = false;
+    if (OB_FAIL(prio_sche_[priority].try_stop_self_schedule(cur_task, dag, worker, slot_released))) {
+      COMMON_LOG(WARN, "failed to stop self schedule", K(ret), KP(cur_task), KP(dag));
+    } else if (slot_released) {
+    } else if (OB_FAIL(finish_task_and_try_self_schedule_(cur_task, worker, next_task, slot_released))) {
+      COMMON_LOG(WARN, "failed to finish task and try self schedule", K(ret), KP(cur_task), K(priority));
+    }
+
+    if (slot_released) {
+      (void) return_worker_to_pool_(worker);
+    }
+  }
+  return ret;
+}
+
+int ObTenantDagScheduler::finish_task_and_try_self_schedule_(
+    ObITask *&cur_task,
+    ObTenantDagWorker &worker,
+    ObITask *&next_task,
+    bool &slot_released)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  next_task = nullptr;
+  slot_released = false;
+  ObIDag *dag = nullptr;
+  if (OB_ISNULL(cur_task) || OB_ISNULL(dag = cur_task->get_dag())) {
+    ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid null arguments", K(ret), KP(cur_task), KP(dag));
   } else {
     // The dag may be freed by scheduler thread at any time once it's marked as stopped
     // when calling dag->try_finish_and_pick_next_same_dag, so need cache priority and dag_type firstly.
     const int64_t priority = dag->get_priority();
     const ObDagType::ObDagTypeEnum dag_type = dag->get_type();
-    if (OB_SUCCESS != task_error_code
-        || dag->is_dag_failed()
-        || !is_self_schedule_enabled()) {
-      // dag is failed, or self-schedule is not enabled, take the slow path.
-    } else if (OB_TMP_FAIL(dag->try_finish_and_pick_next_same_dag(cur_task, next_task))) {
-      COMMON_LOG(ERROR, "failed to try finish and pick next", K(tmp_ret), KP(cur_task), KPC(dag));
+    if (OB_TMP_FAIL(dag->try_finish_and_pick_next_same_dag(cur_task, next_task))) {
+      COMMON_LOG_RET(ERROR, tmp_ret, "failed to finish task and pick next task in same dag", KP(cur_task), KP(dag));
     }
 
     if (OB_NOT_NULL(cur_task)) {
-      if (OB_FAIL(deal_with_finish_task(cur_task, worker, task_error_code))) {
-        // Finishing the task may also free its dag; only log their addresses here.
+      if (OB_FAIL(deal_with_finish_task(cur_task, worker, OB_SUCCESS))) {
         COMMON_LOG(WARN, "failed to finish task", K(ret), KP(cur_task), KP(dag));
       }
-    } else if (OB_NOT_NULL(next_task)) {
-      if (OB_FAIL(schedule_next_task_directly_(next_task, worker, priority, dag_type))) {
-        COMMON_LOG(WARN, "failed to schedule next task directly", K(ret));
+    } else if (OB_ISNULL(next_task)) {
+      if (OB_FAIL(prio_sche_[priority].release_worker_only(worker, dag_type))) {
+        COMMON_LOG(WARN, "failed to release worker only", K(ret), K(priority));
+      } else {
+        slot_released = true;
       }
-    } else if (OB_FAIL(release_worker_only(worker, priority, dag_type))) {
-      COMMON_LOG(WARN, "failed to release worker only", K(ret));
+    } else if (OB_FAIL(schedule_next_task_directly_(next_task, worker, priority, dag_type))) {
+      COMMON_LOG(WARN, "failed to schedule next task directly", K(ret), KPC(next_task), KP(dag));
     }
   }
   return ret;
@@ -5200,9 +5261,9 @@ int ObTenantDagScheduler::schedule_next_task_directly_(
   } else if (OB_FAIL(next_task->generate_next_task())) {
     // refer to ObDagPrioScheduler::schedule_one_()
     COMMON_LOG(WARN, "failed to generate next task", K(ret), KPC(next_task));
-    dag->reset_task_running_status(*next_task, ObITask::TASK_STATUS_FAILED);
+    // Set stop before decrementing the running count, which may allow the failed DAG to be freed.
     dag->simply_set_stop(ret);
-    // dag is left for the scheduler thread to finalize via pop_task_from_ready_list_.
+    dag->reset_task_running_status(*next_task, ObITask::TASK_STATUS_FAILED);
     if (OB_TMP_FAIL(release_worker_only(worker, priority, dag_type))) {
       COMMON_LOG(WARN, "failed to release worker after generate_next_task failed", K(tmp_ret));
     }
@@ -5389,15 +5450,18 @@ void ObTenantDagScheduler::loop_dag_net()
 int ObTenantDagScheduler::loop_ready_dag_lists()
 {
   int ret = OB_SUCCESS;
-  bool is_found = false;
-
-  for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < ObDagPrio::DAG_PRIO_MAX; ++i) {
-    if (OB_FAIL(prio_sche_[i].loop_ready_dag_list(is_found))) {
-      COMMON_LOG(WARN, "fail to loop ready dag list", K(ret), "priority", i);
+  int tmp_ret = OB_SUCCESS;
+  bool any_scheduled = false;
+  for (int64_t i = 0; i < ObDagPrio::DAG_PRIO_MAX; ++i) {
+    bool is_found = false;
+    if (OB_TMP_FAIL(prio_sche_[i].loop_ready_dag_list(is_found))) {
+      COMMON_LOG(WARN, "failed to loop ready dag list", K(tmp_ret), K(i));
+      ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
     }
+    any_scheduled = any_scheduled || is_found;
   }
 
-  if (!is_found) {
+  if (OB_SUCC(ret) && !any_scheduled) {
     ret = OB_ENTRY_NOT_EXIST;
   }
   return ret;
