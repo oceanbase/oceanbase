@@ -3273,6 +3273,8 @@ int ObTableSqlService::gen_table_dml_without_check(
     sub_part_option.get_part_num() : 0;
   const char *ttl_definition = table.get_ttl_definition().empty() ?
     "" : table.get_ttl_definition().ptr();
+  const ObString expiration_definition = table.get_expiration_definition().empty() ?
+    empty_str : table.get_expiration_definition();
   const char *kv_attributes = table.get_kv_attributes().empty() ?
     "" : table.get_kv_attributes().ptr();
   const char *storage_cache_policy = table.get_storage_cache_policy().empty() ?
@@ -3451,6 +3453,11 @@ int ObTableSqlService::gen_table_dml_without_check(
           && OB_FAIL(dml.add_column("external_file_pattern_type", table.get_external_file_pattern_type())))
       || (data_version >= DATA_VERSION_5_0_1_0
           && OB_FAIL(dml.add_column("merge_engine_upper_version", ObHexEscapeSqlStr(merge_engine_upper_version_str))))
+      || ((data_version >= DATA_VERSION_5_0_2_0
+           || (data_version >= MOCK_DATA_VERSION_4_4_2_4 && data_version < DATA_VERSION_4_5_0_0))
+          && (OB_FAIL(dml.add_column("expiration_timestamp", table.get_expiration_timestamp()))
+              || OB_FAIL(dml.add_column("expiration_definition",
+                                        ObHexEscapeSqlStr(expiration_definition)))))
       ) {
         LOG_WARN("add column failed", K(ret));
       }

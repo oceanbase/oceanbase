@@ -2535,6 +2535,7 @@ public:
        SKIP_INDEX_LEVEL,
        DELTA_FORMAT,
        MERGE_ENGINE_TYPE,
+       EXPIRATION_TIMESTAMP,
        MAX_OPTION = 1000
   };
   enum AlterPartitionType
@@ -2936,7 +2937,8 @@ public:
       foreign_key_checks_(true),
       is_add_to_scheduler_(false),
       force_drop_(false),
-      compat_mode_(lib::Worker::CompatMode::INVALID)
+      compat_mode_(lib::Worker::CompatMode::INVALID),
+      is_expiration_drop_(false)
   {}
   bool is_valid() const;
   ObDropTableArg &operator=(const ObDropTableArg &other) = delete;
@@ -2958,6 +2960,7 @@ public:
   bool is_add_to_scheduler_;
   bool force_drop_;
   lib::Worker::CompatMode compat_mode_;
+  bool is_expiration_drop_;
   common::ObArenaAllocator allocator_;
 };
 

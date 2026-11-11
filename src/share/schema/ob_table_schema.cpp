@@ -2042,6 +2042,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       skip_index_level_ = src_schema.skip_index_level_;
       ttl_flag_ = src_schema.ttl_flag_;
       external_file_pattern_type_ = src_schema.external_file_pattern_type_;
+      expiration_timestamp_ = src_schema.expiration_timestamp_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -2213,6 +2214,10 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
 
   if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.ttl_definition_, ttl_definition_))) {
     LOG_WARN("deep copy ttl definition failed", K(ret));
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.expiration_definition_, expiration_definition_))) {
+    LOG_WARN("deep copy expiration definition failed", K(ret));
   }
 
   if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.kv_attributes_, kv_attributes_))) {
@@ -4144,6 +4149,8 @@ int64_t ObTableSchema::get_convert_size() const
   convert_size += external_file_pattern_.length() + 1;
   convert_size += sizeof(external_file_pattern_type_);
   convert_size += ttl_definition_.length() + 1;
+  convert_size += sizeof(expiration_timestamp_);
+  convert_size += expiration_definition_.length() + 1;
   convert_size += kv_attributes_.length() + 1;
   convert_size += index_params_.length() + 1;
 
@@ -4257,6 +4264,8 @@ void ObTableSchema::reset()
   external_file_pattern_.reset();
   external_properties_.reset();
   ttl_definition_.reset();
+  expiration_timestamp_ = 0;
+  expiration_definition_.reset();
   kv_attributes_.reset();
   index_params_.reset();
   exec_env_.reset();
@@ -8204,6 +8213,8 @@ OB_DEF_SERIALIZE(ObTableSchema)
     OB_UNIS_ENCODE(*hidden_rowkey_column_group_);
   }
   // !!! FOR STATIC CHECKER END
+  OB_UNIS_ENCODE(expiration_timestamp_);
+  OB_UNIS_ENCODE(expiration_definition_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -8473,6 +8484,8 @@ OB_DEF_DESERIALIZE(ObTableSchema)
     }
   }
   // !!! FOR STATIC CHECKER END
+  OB_UNIS_DECODE(expiration_timestamp_);
+  OB_UNIS_DECODE_AND_FUNC(expiration_definition_, deep_copy_str);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -8638,6 +8651,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
     OB_UNIS_ADD_LEN(*hidden_rowkey_column_group_);
   }
   // !!! FOR STATIC CHECKER END
+  OB_UNIS_ADD_LEN(expiration_timestamp_);
+  OB_UNIS_ADD_LEN(expiration_definition_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员

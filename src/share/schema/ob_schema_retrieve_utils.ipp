@@ -1517,6 +1517,10 @@ int ObSchemaRetrieveUtils::fill_table_schema(
       result, "ttl_definition", ttl_definition, true, ignore_column_error, empty_str);
     EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(
       result, "merge_engine_upper_version", merge_engine_upper_version, true/*skip null*/, true/*ignore column error*/, empty_str);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, expiration_timestamp, table_schema,
+        int64_t, true/*skip null*/, true/*ignore column error*/, 0);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, expiration_definition, table_schema, true/*skip null*/, true/*ignore column error*/, "");
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, kv_attributes, table_schema, true, ignore_column_error, "");
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(

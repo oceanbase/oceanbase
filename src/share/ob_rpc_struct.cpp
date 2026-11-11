@@ -3128,6 +3128,7 @@ int ObDropTableArg::assign(const ObDropTableArg &other)
     table_type_ = other.table_type_;
     if_exist_ = other.if_exist_;
     to_recyclebin_ = other.to_recyclebin_;
+    is_expiration_drop_ = other.is_expiration_drop_;
     for (int64_t i = 0; OB_SUCC(ret) && i < other.tables_.count(); i++) {
       ObTableItem table_item;
       table_item.mode_ = other.tables_.at(i).mode_;
@@ -3153,6 +3154,7 @@ DEF_TO_STRING(ObDropTableArg)
        K_(foreign_key_checks),
        K_(is_add_to_scheduler),
        K_(force_drop),
+       K_(is_expiration_drop),
        K_(compat_mode));
   J_OBJ_END();
   return pos;
@@ -3169,7 +3171,8 @@ OB_SERIALIZE_MEMBER((ObDropTableArg, ObDDLArg),
                     foreign_key_checks_,
                     is_add_to_scheduler_,
                     force_drop_,
-                    compat_mode_);
+                    compat_mode_,
+                    is_expiration_drop_);
 
 bool ObOptimizeTableArg::is_valid() const
 {

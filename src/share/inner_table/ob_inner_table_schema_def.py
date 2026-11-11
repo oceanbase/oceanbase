@@ -336,6 +336,8 @@ all_table_def = dict(
       ('skip_index_level', 'int', 'false', '0'),
       ('external_file_pattern_type', 'int', 'false', '0'),
       ('merge_engine_upper_version', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
+      ('expiration_timestamp', 'bigint', 'false', '0'),
+      ('expiration_definition', 'varchar:OB_MAX_DEFAULT_VALUE_LENGTH', 'false', ''),
     ],
 )
 

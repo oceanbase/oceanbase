@@ -938,6 +938,8 @@ delta_format	varchar(1048576)	NO		flat
 skip_index_level	bigint(20)	NO		0	
 external_file_pattern_type	bigint(20)	NO		0	
 merge_engine_upper_version	varbinary(1048576)	YES		NULL	
+expiration_timestamp	bigint(20)	NO		0	
+expiration_definition	varchar(262144)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_core_all_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2053,6 +2055,8 @@ delta_format	varchar(1048576)	NO		flat
 skip_index_level	bigint(20)	NO		0	
 external_file_pattern_type	bigint(20)	NO		0	
 merge_engine_upper_version	varbinary(1048576)	YES		NULL	
+expiration_timestamp	bigint(20)	NO		0	
+expiration_definition	varchar(262144)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table;
 IF(count(*) >= 0, 1, 0)
 1

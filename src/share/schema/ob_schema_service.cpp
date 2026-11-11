@@ -403,6 +403,7 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
       skip_index_level_ = src_schema.skip_index_level_;
       ttl_flag_ = src_schema.ttl_flag_;
       external_file_pattern_type_ = src_schema.external_file_pattern_type_;
+      expiration_timestamp_ = src_schema.expiration_timestamp_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -421,6 +422,8 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
         LOG_WARN("deep copy external_file_format failed", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.external_file_pattern_, external_file_pattern_))) {
         LOG_WARN("deep copy external_file_pattern failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.expiration_definition_, expiration_definition_))) {
+        LOG_WARN("deep copy expiration definition failed", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.external_properties_, external_properties_))) {
         LOG_WARN("deep copy external_properties failed", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.external_sub_path_, external_sub_path_))) {

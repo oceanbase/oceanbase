@@ -1620,6 +1620,23 @@ public:
   int set_external_file_pattern(const common::ObString &pattern) { return deep_copy_str(pattern, external_file_pattern_); }
   void set_external_file_pattern_type(ObExternalFilePatternType type) { external_file_pattern_type_ = static_cast<int64_t>(type); }
   int set_external_properties(const common::ObString &format) { return deep_copy_str(format, external_properties_); }
+  int set_expiration_timestamp(const int64_t expiration_timestamp)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(expiration_timestamp < 0)) {
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      expiration_timestamp_ = expiration_timestamp;
+    }
+    return ret;
+  }
+  int set_expiration_definition(const common::ObString &expiration_definition)
+  { return deep_copy_str(expiration_definition, expiration_definition_); }
+  void reset_expiration()
+  {
+    expiration_timestamp_ = 0;
+    expiration_definition_.reset();
+  }
   void set_external_table_auto_refresh(const int64_t flag) { table_flags_ |= (flag << EXTERNAL_TABLE_AUTO_REFRESH_FLAG_OFFSET); }
   inline void set_user_specified_partition_for_external_table() { table_flags_ |= EXTERNAL_TABLE_USER_SPECIFIED_PARTITION_FLAG; }
   inline void set_fulltext_dict() { table_flags_ |= FULLTEXT_DICT_FLAG; }
@@ -1775,6 +1792,9 @@ public:
   inline ObViewSchema &get_view_schema() { return view_schema_; }
   inline const ObViewSchema &get_view_schema() const { return view_schema_; }
   inline const common::ObString &get_ttl_definition() const { return ttl_definition_; }
+  inline int64_t get_expiration_timestamp() const { return expiration_timestamp_; }
+  inline const common::ObString &get_expiration_definition() const { return expiration_definition_; }
+  inline bool has_expiration_timestamp() const { return expiration_timestamp_ > 0; }
   inline ObTTLFlag get_ttl_flag() const { return ttl_flag_; }
   inline ObTTLFlag &get_ttl_flag() { return ttl_flag_; }
   virtual bool has_ttl_definition() const override { return !get_ttl_definition().empty(); }
@@ -2661,6 +2681,10 @@ protected:
   ObSkipIndexLevel skip_index_level_;
   int64_t external_file_pattern_type_;
   ObMergeEngineUpperVersion merge_engine_upper_version_;
+  // Compatibility placeholders for Table Expiration. Keep extension fields at
+  // the end of ObTableSchema and append their serialization slots accordingly.
+  int64_t expiration_timestamp_;
+  common::ObString expiration_definition_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema
