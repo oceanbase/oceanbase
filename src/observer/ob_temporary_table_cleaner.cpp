@@ -722,7 +722,7 @@ int ObSessionTmpTableCleaner::is_sys_ls_leader_(bool &is_leader)
     if (OB_ISNULL(ls_svr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("mtl ObLSService should not be null", KR(ret), KP(ls_svr));
-    } else if (OB_FAIL(ls_svr->get_ls(SYS_LS, handle, ObLSGetMod::OBSERVER_MOD))) {
+    } else if (OB_FAIL(ls_svr->get_ls(SYS_LS, handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
       LOG_WARN("get ls failed", KR(ret));
     } else if (OB_ISNULL(ls = handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;

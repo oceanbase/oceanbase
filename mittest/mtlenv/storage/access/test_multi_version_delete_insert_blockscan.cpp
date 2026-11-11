@@ -174,7 +174,7 @@ void TestMultiVersionDeleteInsertBlockscan::SetUpTestCase()
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   // create tablet
   share::schema::ObTableSchema table_schema;
@@ -251,7 +251,7 @@ void TestMultiVersionDeleteInsertBlockscan::prepare_tx_data(const int64_t txn_cn
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
   ls_handle.get_ls()->get_tx_table_guard(tx_table_guard);

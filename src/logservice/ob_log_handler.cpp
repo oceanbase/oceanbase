@@ -2793,7 +2793,7 @@ int __get_log_handler(const ObLSID &ls_id,
   ObLS *ls = NULL;
   if (OB_ISNULL(ls_service)) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     CLOG_LOG(WARN, "get_ls failed", K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

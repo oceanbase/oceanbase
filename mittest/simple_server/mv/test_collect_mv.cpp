@@ -302,7 +302,7 @@ TEST_F(ObCollectMV, update_full_column)
   EQ(0, tenant_guard.switch_to(R.tenant_id_));
   ObLSID ls_id(val);
   ObLSHandle ls_handle;
-  EQ(0, MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  EQ(0, MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ObTabletHandle tablet_handle;
   EQ(0, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
   ObTableHandleV2 table_handle;
@@ -666,7 +666,7 @@ TEST_F(ObCollectMV, new_ls)
   ObLSMeta ls_meta;
   MTL_SWITCH(R.tenant_id_) {
     ObLSHandle ls_handle;
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     } else if (OB_FAIL(ls_handle.get_ls()->get_ls_meta(ls_meta))) {
     }
   }

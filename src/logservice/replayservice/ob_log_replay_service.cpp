@@ -306,7 +306,7 @@ int ObLogReplayService::mark_need_reload_queue_size(const int64_t new_queue_size
   } else if (OB_ISNULL(ls_service)) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "ls service is NULL", K(ret));
-  } else if (OB_FAIL(ls_service->get_ls_ids(ls_ids))) {
+  } else if (OB_FAIL(ls_service->get_ls_ids(ls_ids, ObLSAccessAttr::DISABLE_LOGONLY))) {
     CLOG_LOG(WARN, "get ls ids failed", K(ret), K(new_queue_size));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < ls_ids.count(); ++i) {

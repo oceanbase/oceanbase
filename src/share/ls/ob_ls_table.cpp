@@ -103,7 +103,8 @@ int ObLSTable::get_member_list(
     if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("MTL ObLSService failed", KR(ret), K(tenant_id), K(ls_id), K(MTL_ID()));
-    } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::SHARE_MOD))) {
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::SHARE_MOD,
+                                    ObLSAccessAttr::ALLOW_LOGONLY))) {
       LOG_WARN("get ls handle failed", KR(ret), K(tenant_id), K(ls_id));
     } else if (OB_ISNULL(ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;

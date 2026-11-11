@@ -353,7 +353,7 @@ void ObCheckPointService::ObCheckpointTask::runTimerTask()
   int ret = OB_SUCCESS;
   INIT_TRACE_GUARD;
   CheckpointFunctorForLS checkpoint_func;
-  if (OB_FAIL(MTL(ObLSService *)->foreach_ls(checkpoint_func))) {
+  if (OB_FAIL(MTL(ObLSService *)->foreach_ls(checkpoint_func, ObLSAccessAttr::ALLOW_LOGONLY))) {
     STORAGE_LOG(WARN, "for each ls functor failed", KR(ret));
   } else {
     STORAGE_LOG(INFO, "checkpoint ls finish", K(checkpoint_func));
@@ -387,7 +387,7 @@ void ObCheckPointService::ObTraversalFlushTask::runTimerTask()
   STORAGE_LOG(INFO, "====== traversal_flush timer task ======");
   INIT_TRACE_GUARD;
   TraverseFlushFunctorForLS traverse_flush_func;
-  if (OB_FAIL(MTL(ObLSService *)->foreach_ls(traverse_flush_func))) {
+  if (OB_FAIL(MTL(ObLSService *)->foreach_ls(traverse_flush_func, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "for each ls functor failed", KR(ret));
   }
 }
@@ -449,7 +449,7 @@ void ObCheckPointService::ObCheckClogDiskUsageTask::runTimerTask()
   } else if (need_flush) {
     INIT_TRACE_GUARD;
     FlushRecycleClogFunctorForLS flush_to_recycle_clog_func;
-    if (OB_FAIL(MTL(ObLSService *)->foreach_ls(flush_to_recycle_clog_func))) {
+    if (OB_FAIL(MTL(ObLSService *)->foreach_ls(flush_to_recycle_clog_func, ObLSAccessAttr::DISABLE_LOGONLY))) {
       STORAGE_LOG(WARN, "for each ls functor failed", KR(ret));
     } else {
       STORAGE_LOG(INFO, "finish flush to recycle clog", K(flush_to_recycle_clog_func));
@@ -538,7 +538,7 @@ public:
 
     ObLSHandle ls_handle;
     ObLS *ls = nullptr;
-    if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       STORAGE_LOG(WARN, "get log stream failed", K(ret), K(ls_id_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -726,7 +726,7 @@ void ObCheckPointService::ObSSUpdateCkptSCNTask::runTimerTask()
   STORAGE_LOG(INFO, "====== SS Update Checkpoint SCN Task ======");
   INIT_TRACE_GUARD;
   UpdateSSCkptFunctorForLS up_ckpt_func_for_ls;
-  if (OB_FAIL(MTL(ObLSService *)->foreach_ls(up_ckpt_func_for_ls))) {
+  if (OB_FAIL(MTL(ObLSService *)->foreach_ls(up_ckpt_func_for_ls, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "for each ls functor failed", KR(ret));
   }
 }
@@ -859,7 +859,7 @@ void ObCheckPointService::ObSSUpdateCkptLSNTask::runTimerTask()
   STORAGE_LOG(INFO, "====== SS Update LogService LSN Task ======");
   INIT_TRACE_GUARD;
   UpdateSSLSNFunctorForLS up_lsn_func_for_ls;
-  if (OB_FAIL(MTL(ObLSService *)->foreach_ls(up_lsn_func_for_ls))) {
+  if (OB_FAIL(MTL(ObLSService *)->foreach_ls(up_lsn_func_for_ls, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "for each ls functor failed", KR(ret));
   }
 }
@@ -898,7 +898,7 @@ void ObCheckPointService::ObSSAdvanceCkptTask::runTimerTask()
   if (current_ts - MTL(ObCheckPointService *)->prev_ss_advance_ckpt_task_ts() > advance_checkpoint_interval) {
     STORAGE_LOG(INFO, "====== SS Advance Checkpoint Task ======");
     SSAdvanceCkptFunctorForLS advance_ckpt_func_for_ls;
-    if (OB_FAIL(MTL(ObLSService *)->foreach_ls(advance_ckpt_func_for_ls))) {
+    if (OB_FAIL(MTL(ObLSService *)->foreach_ls(advance_ckpt_func_for_ls, ObLSAccessAttr::DISABLE_LOGONLY))) {
       STORAGE_LOG(WARN, "for each ls functor failed", KR(ret));
     } else {
       MTL(ObCheckPointService *)->set_prev_ss_advance_ckpt_task_ts(current_ts);
@@ -921,7 +921,7 @@ public:
     } else {
       ScheLSUploadTask *sche_ls_upload_task = new (task_buffer) ScheLSUploadTask();
       // hold ls handle to avoid ls being destroyed
-      if (OB_FAIL(MTL(ObLSService *)->get_ls(ls.get_ls_id(), sche_ls_upload_task->ls_handle(), ObLSGetMod::STORAGE_MOD))) {
+      if (OB_FAIL(MTL(ObLSService *)->get_ls(ls.get_ls_id(), sche_ls_upload_task->ls_handle(), ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         STORAGE_LOG(WARN, "get ls failed", K(ret), K(ls.get_ls_id()));
       } else if (OB_FAIL(host_ckpt_sv_.ss_sche_upload_thread_pool().push_task(sche_ls_upload_task))) {
         STORAGE_LOG(WARN, "push sche_ls_upload_task failed", K(ret), K(ls.get_ls_id()));
@@ -945,7 +945,7 @@ void ObCheckPointService::ObSSScheduleIncUploadTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
   ScheduleParallelUploadFunctor schedule_upload_func(host_ckpt_sv_);
-  if (OB_FAIL(MTL(ObLSService *)->foreach_ls(schedule_upload_func))) {
+  if (OB_FAIL(MTL(ObLSService *)->foreach_ls(schedule_upload_func, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "for each ls functor failed", KR(ret));
   }
 }

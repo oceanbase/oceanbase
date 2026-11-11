@@ -336,7 +336,7 @@ int ObTableLoadStoreDataTableCtx::check_tablet(const ObLSID &ls_id,
   if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service is nullptr", KR(ret));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("fail to get ls", KR(ret), K(ls_id));
   } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
                                                tablet_id,
@@ -558,7 +558,7 @@ int ObTableLoadStoreLobTableCtx::init_ls_partition_ids(
     const ObTableLoadLSIdAndPartitionId &ls_partition_id = ls_partition_ids[i];
     const ObLSID &ls_id = ls_partition_id.ls_id_;
     const ObTabletID &tablet_id = ls_partition_id.part_tablet_id_.tablet_id_;
-    if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+    if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get log stream", K(ret));
     } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, tablet_id, tablet_handle,
                                                  ObMDSGetTabletMode::READ_ALL_COMMITED))) {
@@ -584,7 +584,7 @@ int ObTableLoadStoreLobTableCtx::init_ls_partition_ids(
     const ObTableLoadLSIdAndPartitionId &ls_partition_id = target_ls_partition_ids[i];
     const ObLSID &ls_id = ls_partition_id.ls_id_;
     const ObTabletID &tablet_id = ls_partition_id.part_tablet_id_.tablet_id_;
-    if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+    if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get log stream", K(ret));
     } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, tablet_id, tablet_handle,
                                                  ObMDSGetTabletMode::READ_ALL_COMMITED))) {

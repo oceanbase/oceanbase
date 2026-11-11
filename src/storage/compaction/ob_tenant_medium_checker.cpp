@@ -127,7 +127,7 @@ int ObTenantMediumChecker::refresh_ls_status()
   } else if (OB_FAIL(ls_locality_cache.refresh_ls_locality(true/*force_refresh*/))) {
     ls_locality_cache_refresh_success_ = false;
     LOG_WARN("failed to refresh ls locality", K(ret));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls_ids(ls_ids))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls_ids(ls_ids, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get all ls id", K(ret));
   } else {
     lib::ObMutexGuard guard(lock_);

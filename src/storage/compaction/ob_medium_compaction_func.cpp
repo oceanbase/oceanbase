@@ -1410,7 +1410,7 @@ int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
           if (OB_UNLIKELY(check_medium_scn <= 0)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("failed to find medium check info", K(ret), K(tablet_id), K(ls_id), KPC(check_infos));
-          } else if (OB_TMP_FAIL((MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::COMPACT_MODE)))) {
+          } else if (OB_TMP_FAIL((MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::COMPACT_MODE, ObLSAccessAttr::DISABLE_LOGONLY)))) {
             if (OB_LS_NOT_EXIST == tmp_ret) {
               LOG_TRACE("ls not exist", K(tmp_ret), K(ls_id));
             } else {

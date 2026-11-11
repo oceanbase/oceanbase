@@ -25,7 +25,8 @@ namespace logservice
     ObLSHandle handle;
     ObLS *ls = NULL;
     ObLogRestoreHandler *restore_handler = NULL;
-    if (OB_FAIL(MTL(storage::ObLSService *)->get_ls(id, handle, ObLSGetMod::LOG_MOD))) {
+    if (OB_FAIL(MTL(storage::ObLSService *)->get_ls(
+      id, handle, ObLSGetMod::LOG_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("get ls failed", K(ret), K(id));
     } else if (OB_ISNULL(ls = handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -48,7 +49,8 @@ namespace logservice
     if (OB_ISNULL(source) || ! share::is_valid_log_source_type(source->get_source_type())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid source type", K(ret), KPC(source));
-    } else if (OB_FAIL(MTL(storage::ObLSService *)->get_ls(id, handle, ObLSGetMod::LOG_MOD))) {
+    } else if (OB_FAIL(MTL(storage::ObLSService *)->get_ls(
+      id, handle, ObLSGetMod::LOG_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("get ls failed", K(ret), K(id));
     } else if (OB_ISNULL(ls = handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;

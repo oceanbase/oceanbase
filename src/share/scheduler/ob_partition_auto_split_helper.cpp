@@ -1380,7 +1380,7 @@ int ObLSTabletSplitScheduler::schedule_data_split_dag(ObIArray<ObTabletSplitTask
         LOG_WARN("ls service should not be NULL", K(ret), K(task.tenant_id_), K(ls_id));
       } else if (OB_FAIL(get_split_addr(task, ls_id, split_replica_addrs))) {
         LOG_WARN("failed to get split addr", K(task));
-      } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+      } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("get ls failed", K(ret), K(ls_id));
       } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, task.tablet_id_, tablet_handle))) {
           LOG_WARN("get tablet failed", K(ret));

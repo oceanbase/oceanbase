@@ -155,7 +155,7 @@ int ObTenantCompactionProgressMgr::loop_major_sstable_(
   common::ObTimeGuard timeguard("loop_major_sstable_to_calc_progress_size", 30 * 1000 * 1000); // 30s
   ObSharedGuard<ObLSIterator> ls_iter_guard;
   ObLS *ls = nullptr;
-  if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard, ObLSGetMod::COMPACT_MODE))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard, ObLSGetMod::COMPACT_MODE, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls iterator", K(ret));
   }
 

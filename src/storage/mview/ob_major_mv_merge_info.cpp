@@ -120,7 +120,7 @@ OB_SERIALIZE_MEMBER(ObUpdateMergeScnArg, ls_id_, merge_scn_);
   } else if (OB_UNLIKELY(!arg.is_valid())) { \
     ret = OB_ERR_UNEXPECTED; \
     LOG_WARN("arg is invalid", KR(ret), K(arg)); \
-  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::TABLET_MOD))) { \
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::TABLET_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) { \
     LOG_WARN("failed to get ls", KR(ret), K(arg)); \
   } else if (OB_UNLIKELY(NULL == (ls = ls_handle.get_ls()))) { \
     ret = OB_ERR_UNEXPECTED; \
@@ -233,7 +233,7 @@ int ObMVCheckReplicaHelper::get_and_update_merge_info(
   if (!ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("arg is not valid", KR(ret), K(ls_id));
-  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::TABLET_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::TABLET_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", KR(ret), K(ls_id));
   } else if (OB_UNLIKELY(NULL == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -320,7 +320,7 @@ int ObMVCheckReplicaHelper::get_merge_info(
   if (!ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("arg is not valid", KR(ret), K(ls_id));
-  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::TABLET_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::TABLET_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls", KR(ret), K(ls_id));
   } else if (OB_UNLIKELY(NULL == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;

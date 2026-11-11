@@ -115,7 +115,7 @@ static int traverse_all_tablets(FilterOp &&filter_op, Func &&func)
   int ret = OB_SUCCESS;
   common::ObSharedGuard<ObLSIterator> ls_iter;
   ObLS *ls = nullptr;
-  if (OB_FAIL(MTL(ObLSService*)->get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService*)->get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_AND_PRINT(WARN, "failed to get log stream iter", K(ret));
       return ret;
   }
@@ -371,7 +371,7 @@ static int check_tablet_addr(const ObTabletMapKey &tablet_key, const ObMetaDiskA
   ObTabletHandle tablet_handle;
   ObMetaDiskAddr addr_from_t3m;
   ObLSHandle ls_handle;
-  if (OB_FAIL(MTL(ObLSService*)->get_ls(tablet_key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService*)->get_ls(tablet_key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_AND_PRINT(WARN, "failed to get ls", K(ret));
   } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_key.tablet_id_, tablet_handle,
     ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
@@ -644,7 +644,7 @@ static int check_consistency_by_replay_slog()
   //lock all log streams
   std::vector<std::shared_ptr<common::ObBucketWLockAllGuard>> lock_guards;
   std::vector<std::shared_ptr<ObLSLockGuard>> ls_lock_guards;
-  if (OB_FAIL(MTL(ObLSService*)->get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService*)->get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream iter", K(ret));
   } else {
     while (OB_SUCC(ret)) {
@@ -708,7 +708,7 @@ static int check_consistency_by_replay_slog()
     // check ls exists
     for (const ObLSID &ls_id : ls_ids) {
       ObLSHandle ls_handle;
-      if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_AND_PRINT(WARN, "ls not exists", K(ret));
         break;
       }
@@ -1125,7 +1125,7 @@ public:
 
     int get_ls(const int64_t ls_id, ObLSHandle &ls_handle)
     {
-      return MTL(ObLSService*)->get_ls(ObLSID(ls_id), ls_handle, ObLSGetMod::STORAGE_MOD);
+      return MTL(ObLSService*)->get_ls(ObLSID(ls_id), ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
     }
 
     bool check_tablet_exists(const int64_t ls_id, const int64_t tablet_id) const

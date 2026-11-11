@@ -12,6 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGETEST
 
+#include <cstdio>
+#include <unistd.h>
 #include <future>
 #include <sstream>
 #include <thread>
@@ -83,7 +85,7 @@ protected:
     if (OB_FAIL(gen_create_ls_arg(MTL_ID(), ls_id, arg))) {
     } else if (OB_FAIL(ls_service_->create_ls(arg))) {
     } else {
-      ret = ls_service_->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD);
+      ret = ls_service_->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
     }
     return ret;
   }
@@ -263,7 +265,7 @@ TEST_F(TestIDServiceLSLifetime, rollback_after_map_publication_invalidates_cache
   ASSERT_EQ(OB_SUCCESS, add_ret);
   created_ls_.push_back(ls_id);
   ObLSHandle request;
-  const int get_ret = ls_service_->get_ls(ls_id, request, ObLSGetMod::STORAGE_MOD);
+  const int get_ret = ls_service_->get_ls(ls_id, request, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   const int cache_ret = OB_SUCCESS == get_ret ? cache_ls(*id_service_, request) : get_ret;
   auto state = ObLSService::ObLSCreateState::CREATE_STATE_ADDED_TO_MAP;
   // Always roll back this partial LS, even if an acquisition assertion fails.
@@ -334,15 +336,15 @@ TEST_F(TestIDServiceLSLifetime, map_get_ls_preserves_handle_error_semantics)
   ObLSHandle reused;
   ASSERT_EQ(OB_SUCCESS, reused.copy_from(owner));
   ObLSMap uninitialized_map;
-  EXPECT_EQ(OB_NOT_INIT, uninitialized_map.get_ls(ls_id, reused, ObLSGetMod::STORAGE_MOD));
+  EXPECT_EQ(OB_NOT_INIT, uninitialized_map.get_ls(ls_id, reused, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   EXPECT_EQ(ls, reused.get_ls());
   EXPECT_EQ(OB_LS_NOT_EXIST,
-      ls_service_->get_ls(ObLSID(999999), reused, ObLSGetMod::STORAGE_MOD));
+      ls_service_->get_ls(ObLSID(999999), reused, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   EXPECT_EQ(ls, reused.get_ls());
-  ASSERT_EQ(OB_SUCCESS, ls_service_->get_ls(ls_id, reused, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_service_->get_ls(ls_id, reused, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   EXPECT_EQ(ls, reused.get_ls());
   EXPECT_EQ(OB_INVALID_ARGUMENT,
-      ls_service_->get_ls(ls_id, reused, ObLSGetMod::INVALID_MOD));
+      ls_service_->get_ls(ls_id, reused, ObLSGetMod::INVALID_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   EXPECT_FALSE(reused.is_valid());
 }
 
@@ -395,13 +397,13 @@ TEST_F(TestIDServiceLSLifetime, map_get_ls_frees_old_ls_outside_bucket)
       ASSERT_EQ(OB_SUCCESS, add_ret);
     }
     ObLSHandle reused;
-    ASSERT_EQ(OB_SUCCESS, ls_map.get_ls(old_id, reused, ObLSGetMod::STORAGE_MOD));
+    ASSERT_EQ(OB_SUCCESS, ls_map.get_ls(old_id, reused, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
     ASSERT_EQ(OB_SUCCESS, ls_map.del_ls(old_id));
     ASSERT_EQ(1, reused.get_ls()->get_ref_mgr().get_total_ref_cnt());
     allocator.watched_ls_ = reused.get_ls();
     allocator.bucket_ = &ls_map.buckets_lock_[new_id.hash() % ObLSMap::BUCKETS_CNT];
     const ObLSGetMod mod = 0 == i ? ObLSGetMod::STORAGE_MOD : ObLSGetMod::INVALID_MOD;
-    EXPECT_EQ(0 == i ? OB_SUCCESS : OB_INVALID_ARGUMENT, ls_map.get_ls(new_id, reused, mod));
+    EXPECT_EQ(0 == i ? OB_SUCCESS : OB_INVALID_ARGUMENT, ls_map.get_ls(new_id, reused, mod, ObLSAccessAttr::DISABLE_LOGONLY));
     EXPECT_TRUE(allocator.freed_);
     EXPECT_TRUE(allocator.bucket_unlocked_);
     EXPECT_EQ(0 == i, reused.is_valid());
@@ -425,7 +427,9 @@ TEST_F(TestIDServiceLSLifetime, missing_ls_leaves_no_cache)
 
 int main(int argc, char **argv)
 {
-  OB_LOGGER.set_file_name("test_id_service_ls_lifetime.log", true);
+  char log_path[256];
+  snprintf(log_path, sizeof(log_path), "test_id_service_ls_lifetime_%d.log", static_cast<int>(getpid()));
+  OB_LOGGER.set_file_name(log_path, true);
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

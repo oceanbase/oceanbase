@@ -250,7 +250,7 @@ int ObTabletSplitCtx::init(const ObTabletSplitParam &param)
   } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(param));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(param.ls_id_, ls_handle_, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(param.ls_id_, ls_handle_, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(param));
   } else if (OB_FAIL(ObTabletSplitUtil::get_tablet(allocator_, ls_handle_,
       param.source_tablet_id_, false/*is_shared_mode*/, local_tablet_hdl,
@@ -2957,7 +2957,7 @@ int ObSplitDownloadSSTableTask::process()
   } else if (OB_SUCCESS != data_split_dag->get_complement_data_ret()) {
     LOG_WARN("complement data has already failed",
       "ret", data_split_dag->get_complement_data_ret());
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
   } else if (OB_FAIL(ObTabletSplitUtil::get_tablet(arena_alloc, ls_handle, source_tablet_id_,
       false/*is_shared_mode*/, local_source_tablet_hdl))) {

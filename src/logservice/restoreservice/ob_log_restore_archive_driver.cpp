@@ -63,7 +63,8 @@ void ObLogRestoreArchiveDriver::print_stat()
     ObSharedGuard<ObLSIterator> guard;
     if (OB_ISNULL(ls_svr_)) {
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "ls_svr is null, unexpected", KP(ls_svr_));
-    } else if (OB_FAIL(ls_svr_->get_ls_iter(guard, ObLSGetMod::LOG_MOD))) {
+    } else if (OB_FAIL(ls_svr_->get_ls_iter(guard, ObLSGetMod::LOG_MOD,
+                                            ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get ls iter", KP(ls_svr_));
     } else {
       while (OB_SUCC(ret)) {

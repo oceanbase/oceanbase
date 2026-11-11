@@ -57,7 +57,7 @@ public:
               storage::gen_create_ls_arg(OB_SYS_TENANT_ID, ls_id_, arg));
     ASSERT_EQ(OB_SUCCESS, MTL(ObLSService *)->create_ls(arg));
     ASSERT_EQ(OB_SUCCESS,
-              ls_svr->get_ls(ls_id_, ls_handle_, ObLSGetMod::TABLELOCK_MOD));
+              ls_svr->get_ls(ls_id_, ls_handle_, ObLSGetMod::TABLELOCK_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
     ASSERT_NE(nullptr, ls_ = ls_handle_.get_ls());
     ASSERT_EQ(OB_SUCCESS, ls_->get_lock_table()->get_lock_memtable(table_handle_));
     ASSERT_EQ(OB_SUCCESS, table_handle_.get_lock_memtable(memtable_));

@@ -149,7 +149,7 @@ TEST_F(TestTableLockFlush, checkpoint)
   ObLSID ls_id(110);
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id_, ls_id, arg));
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService *)->create_ls(arg));
-  EXPECT_EQ(OB_SUCCESS, MTL(ObLSService *)->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  EXPECT_EQ(OB_SUCCESS, MTL(ObLSService *)->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ObLS *ls = handle.get_ls();
   ASSERT_NE(nullptr, ls);
 
@@ -234,7 +234,7 @@ TEST_F(TestTableLockFlush, restore_tablelock_memtable)
   LOG_INFO("create_ls");
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id_, ls_id, arg));
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService *)->create_ls(arg));
-  EXPECT_EQ(OB_SUCCESS, MTL(ObLSService *)->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  EXPECT_EQ(OB_SUCCESS, MTL(ObLSService *)->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ObLS *ls = handle.get_ls();
   ASSERT_NE(nullptr, ls);
   // create table lock memtable
@@ -355,7 +355,7 @@ TEST_F(TestTableLockFlush, restore_tx_ctx)
   ObLSID ls_id(113);
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id_, ls_id, arg));
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService *)->create_ls(arg));
-  EXPECT_EQ(OB_SUCCESS, MTL(ObLSService *)->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  EXPECT_EQ(OB_SUCCESS, MTL(ObLSService *)->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ObLS *ls = handle.get_ls();
   ASSERT_NE(nullptr, ls);
 

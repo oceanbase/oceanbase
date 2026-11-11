@@ -641,7 +641,7 @@ int ObDeleteLobMetaRowTask::prepare_lob_param(
   lob_param.is_full_table_scan_ = true;
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
-  if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(param_->ls_id_));
   } else if (OB_ISNULL(ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

@@ -60,7 +60,7 @@ TEST_F(TestTabletMemtableMgr, tablet_memtable_mgr) {
 
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(1, ls_id, arg));
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->create_ls(arg));
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   ASSERT_EQ(OB_SUCCESS, build_test_schema(table_schema, table_id));
   ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema, allocator));

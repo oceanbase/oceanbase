@@ -43,7 +43,7 @@ int ObAdvanceLSCkptTask::try_advance_ls_ckpt_ts()
   storage::ObLSHandle ls_handle;
 
   if (OB_ISNULL(MTL(ObLSService *))
-      || OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, storage::ObLSGetMod::TRANS_MOD))
+      || OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, storage::ObLSGetMod::TRANS_MOD, storage::ObLSAccessAttr::DISABLE_LOGONLY))
       || !ls_handle.is_valid()) {
     if (OB_SUCCESS == ret) {
       ret = OB_INVALID_ARGUMENT;

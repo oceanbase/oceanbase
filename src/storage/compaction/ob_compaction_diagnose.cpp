@@ -1186,7 +1186,7 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
         continue;
       } else if (func.get_ls_status().ls_id_ == ls_id) {
         // do nothing
-      } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, storage::ObLSGetMod::STORAGE_MOD))) {
+      } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, storage::ObLSGetMod::STORAGE_MOD, storage::ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("failed to get ls", K(ret), K(ls_id));
       } else if (FALSE_IT(ls = ls_handle.get_ls())) {
       } else if (OB_FAIL(func.diagnose_switch_ls(ls_handle))) {

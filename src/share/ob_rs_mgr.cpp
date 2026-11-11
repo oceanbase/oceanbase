@@ -419,7 +419,7 @@ int ObRsMgr::construct_initial_server_list(
       if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("MTL ObLSService failed", KR(ret), "tenant_id", OB_SYS_TENANT_ID, K(MTL_ID()));
-      } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::RS_MOD))) {
+      } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::RS_MOD, GCTX.is_shared_storage_mode() ? ObLSAccessAttr::DISABLE_LOGONLY : ObLSAccessAttr::ALLOW_LOGONLY))) {
         if (OB_LS_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
         } else {

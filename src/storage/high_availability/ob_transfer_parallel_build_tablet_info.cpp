@@ -92,7 +92,7 @@ int ObTransferParallelBuildTabletDag::init(
     LOG_WARN("transfer parallel build tablet dag get invalid argument", K(ret), K(ls_id), KP(ctx), KP(timeout_ctx));
   } else if (OB_FAIL(set_dag_id(ctx->get_task_id()))) {
     LOG_WARN("failed to set dag id", K(ret), K(ls_id), KPC(ctx));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ls_id, ls_handle_))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ls_id, ls_handle_, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   } else {
     ls_id_ = ls_id;

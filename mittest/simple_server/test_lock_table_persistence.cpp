@@ -136,7 +136,7 @@ TEST_F(ObLockTableBeforeRestartTest, test_lock_table_flush)
   ObTableLockOwnerID owner_id;
   owner_id.convert_from_value(static_cast<ObLockOwnerType>(0), 1);
   share::ObLSID ls_id = share::LOCK_SERVICE_LS;
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_NE(nullptr, ls = handle.get_ls());
   ObTableHandleV2 table_handle;
   ObLockMemtable *lock_memtable = nullptr;
@@ -244,7 +244,7 @@ TEST_F(ObLockTableAfterRestartTest, test_recover_lock_table)
   ObLS *ls = nullptr;
   ObLSHandle handle;
   share::ObLSID ls_id = share::LOCK_SERVICE_LS;
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_NE(nullptr, ls = handle.get_ls());
 
   // get lock_scn from table

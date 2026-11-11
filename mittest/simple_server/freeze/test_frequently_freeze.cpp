@@ -89,7 +89,7 @@ void TestFrequentlyFreeze::get_ls(const share::ObLSID &ls_id, ObLS *&ls)
   ObLSIterator *ls_iter = nullptr;
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService *);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_NE(nullptr, ls = ls_handle.get_ls());
 }
 

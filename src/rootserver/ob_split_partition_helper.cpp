@@ -285,7 +285,7 @@ int ObSplitPartitionHelper::freeze_split_src_tablet(const ObFreezeSplitSrcTablet
       if (OB_ISNULL(ls_service) || OB_ISNULL(log_service) || OB_ISNULL(tenant_tablet_scheduler)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected ls_service or log_service", K(ret));
-      } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+      } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("get ls failed", K(ret), K(arg));
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;

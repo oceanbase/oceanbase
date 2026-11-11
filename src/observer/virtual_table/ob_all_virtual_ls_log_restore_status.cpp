@@ -65,7 +65,8 @@ int ObVirtualLSLogRestoreStatus::inner_get_next_row(common::ObNewRow *&row)
         if (OB_ISNULL(ls_svr)) {
           // ignore ret
           SERVER_LOG(WARN, "mtl ObLSService should not be null", K(ret));
-        } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::LOG_MOD))) {
+        } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::LOG_MOD,
+                                               ObLSAccessAttr::DISABLE_LOGONLY))) {
           SERVER_LOG(WARN, "get ls iter failed", K(ret));
           ret = OB_ITER_END;
         } else if (OB_ISNULL(iter = guard.get_ptr())) {

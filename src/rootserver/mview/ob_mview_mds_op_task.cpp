@@ -112,7 +112,7 @@ int ObMViewMdsOpTask::update_mview_mds_op()
   int64_t start_ts = ObTimeUtil::current_time();
   if (OB_FAIL(tx_set.create(32))) {
     LOG_WARN("create tx set failed", KR(ret));
-  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get_ls failed", KR(ret), K(ls_id));
   } else if (OB_FAIL(ls_handle.get_ls()->iterate_tx_ctx(ls_tx_ctx_iter))) {
     LOG_WARN("construt tx_ctx iter failed", KR(ret));

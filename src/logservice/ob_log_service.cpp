@@ -1136,7 +1136,7 @@ int ObLogService::check_need_do_checkpoint(bool &need_do_checkpoint)
     if (OB_ISNULL(ls_service)) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(ERROR, "ObLSService is nullptr", KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls_iter(iterator, ObLSGetMod::LOG_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls_iter(iterator, ObLSGetMod::LOG_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
       CLOG_LOG(WARN, "get_ls_iter failed", KP(ls_service));
     } else {
       ObLS *ls = NULL;

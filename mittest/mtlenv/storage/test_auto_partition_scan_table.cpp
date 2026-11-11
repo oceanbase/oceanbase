@@ -130,7 +130,7 @@ int FakeObScanTable::set_tablet_split_info(
   ObLSHandle ls_handle;
   ObLSID test_ls_id(ls_id_);
 
-  if (OB_FAIL(MTL(ObLSService *)->get_ls(test_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(test_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "fail to get log stream", K(ret), K(ls_handle));
   } else if (OB_UNLIKELY(nullptr == ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -181,7 +181,7 @@ void FakeObScanTable::insert_data_to_tablet(MockObAccessService *access_service,
   ObTabletHandle tablet_handle;
 
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ObLS *ls = ls_handle.get_ls();
   ASSERT_NE(nullptr, ls);
   ASSERT_EQ(OB_SUCCESS, ls->get_tablet(tablet_id, tablet_handle));

@@ -617,7 +617,7 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::do_truncate(const bool i
         if (OB_NOT_NULL(fd_dispenser_ptr)
           && OB_FAIL(fd_dispenser_ptr->init(last_super_block.max_file_id_))) {
           STORAGE_LOG(WARN, "failed to init fd_dispenser", K(ret));
-        } else if (OB_FAIL(ctx_.ls_service_.get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD))) {
+        } else if (OB_FAIL(ctx_.ls_service_.get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
           STORAGE_LOG(WARN, "failed to get log stream iterator", K(ret));
         } else if (OB_FAIL(ls_item_writer_.init_for_slog_ckpt(MTL_ID(), MTL_EPOCH_ID(), mem_attr, fd_dispenser_ptr))) {
           STORAGE_LOG(WARN, "failed to init log stream item writer", K(ret));
@@ -944,7 +944,7 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::record_single_tablet_(
     tablet_handle.reset(); // release tablet before refresh
 
     ObLSHandle ls_handle;
-    if (OB_FAIL(ctx_.ls_service_.get_ls(tablet_key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(ctx_.ls_service_.get_ls(tablet_key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       STORAGE_LOG(WARN, "failed to get ls", K(ret), K(tablet_key));
     } else if (OB_FAIL(ls_handle.get_ls()->refresh_empty_shell_for_slog_ckpt(ctx_.t3m_, tablet_key, old_addr))) {
       STORAGE_LOG(WARN, "failed to apply defragment tablet", K(ret), K(tablet_key), K(old_addr));

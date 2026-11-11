@@ -287,7 +287,7 @@ int ObTransService::handle_sby_msg(const ObTxSbyBaseMsg *sby_msg)
     ObLSHandle handle;
 
     ObPartTransCtx *tx_ctx = nullptr;
-    if (OB_FAIL(MTL(ObLSService *)->get_ls(sby_msg->dst_ls_id_, handle, ObLSGetMod::TRANS_MOD))) {
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(sby_msg->dst_ls_id_, handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       TRANS_LOG(WARN, "get log stream failed", K(ret), KPC(sby_msg));
     } else if (OB_ISNULL(handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;

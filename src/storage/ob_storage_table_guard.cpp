@@ -66,7 +66,7 @@ void ObStorageTableGuard::throttle_if_needed_()
         ObLSHandle ls_handle;
         ObLS *ls = nullptr;
         const ObLSID &ls_id = tablet_->get_tablet_meta().ls_id_;
-        if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+        if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
           STORAGE_LOG(WARN, "get ls handle failed", KR(ret), K(ls_id));
         } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         } else {
@@ -207,7 +207,7 @@ int ObStorageTableGuard::create_data_memtable_for_replay_(const share::ObLSID &l
   ObTabletHandle tmp_handle;
   SCN clog_checkpoint_scn;
   ObLS *ls = nullptr;
-  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_UNLIKELY(!ls_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -370,7 +370,7 @@ int ObStorageTableGuard::check_freeze_to_inc_write_ref(ObMemtable *memtable, boo
       bool need_create_memtable = true;
       ObTabletHandle tmp_handle;
       ObLSHandle ls_handle;
-      if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("failed to get log stream", K(ret), K(need_retry), K(ls_id), K(tablet_id));
       } else if (OB_UNLIKELY(!ls_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;

@@ -1212,7 +1212,7 @@ int ObTxRedoSyncRetryTask::ObTxRedoSyncIterFunc::operator()(
   if (!ls_handle_.is_valid() && OB_SUCC(ret) && OB_SUCCESS == tmp_ret) {
     if (OB_TMP_FAIL(
             MTL(ObLSService *)
-                ->get_ls(redo_sync_hash_pair.first.ls_id_, ls_handle_, ObLSGetMod::TRANS_MOD))) {
+                ->get_ls(redo_sync_hash_pair.first.ls_id_, ls_handle_, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       TRANS_LOG(WARN, "get ls failed", K(ret), K(redo_sync_hash_pair.first));
     }
   }
@@ -1363,7 +1363,7 @@ int ObDupTableLeaseRequestP::process()
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "invalid msg", K(ret), K(arg_));
   } else if (OB_FAIL(
-                 MTL(ObLSService *)->get_ls(arg_.get_ls_id(), ls_handle, ObLSGetMod::TRANS_MOD))) {
+                 MTL(ObLSService *)->get_ls(arg_.get_ls_id(), ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     DUP_TABLE_LOG(WARN, "get ls failed", K(ret), K(arg_));
   } else if (OB_ISNULL(ls_handle.get_ls())) {
     ret = OB_ERR_NULL_VALUE;
@@ -1386,7 +1386,7 @@ int ObDupTableTsSyncRequestP::process()
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "invalid msg", K(ret), K(arg_));
   } else if (OB_FAIL(
-                 MTL(ObLSService *)->get_ls(arg_.get_ls_id(), ls_handle, ObLSGetMod::TRANS_MOD))) {
+                 MTL(ObLSService *)->get_ls(arg_.get_ls_id(), ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     DUP_TABLE_LOG(WARN, "get ls failed", K(ret), K(arg_));
   } else if (OB_ISNULL(ls_handle.get_ls())) {
     ret = OB_ERR_NULL_VALUE;
@@ -1410,7 +1410,7 @@ int ObDupTableTsSyncResponseP::process()
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "invalid msg", K(ret), K(arg_));
   } else if (OB_FAIL(
-                 MTL(ObLSService *)->get_ls(arg_.get_ls_id(), ls_handle, ObLSGetMod::TRANS_MOD))) {
+                 MTL(ObLSService *)->get_ls(arg_.get_ls_id(), ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     DUP_TABLE_LOG(WARN, "get ls failed", K(ret), K(arg_));
   } else if (OB_ISNULL(ls_handle.get_ls())) {
     ret = OB_ERR_NULL_VALUE;
@@ -1434,7 +1434,7 @@ int ObDupTableBeforePrepareRequestP::process()
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "invalid msg", K(ret), K(arg_));
   } else if (OB_FAIL(
-                 MTL(ObLSService *)->get_ls(arg_.get_ls_id(), ls_handle, ObLSGetMod::TRANS_MOD))) {
+                 MTL(ObLSService *)->get_ls(arg_.get_ls_id(), ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     DUP_TABLE_LOG(WARN, "get ls failed", K(ret), K(arg_));
   } else if (OB_ISNULL(ls_handle.get_ls())) {
     ret = OB_ERR_NULL_VALUE;

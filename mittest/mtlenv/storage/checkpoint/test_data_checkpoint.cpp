@@ -190,7 +190,7 @@ TEST_F(TestDataCheckpoint, dlink_base)
   ObLSID ls_id(100);
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id_, ls_id, arg));
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->create_ls(arg));
-  EXPECT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  EXPECT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ObLS * ls = handle.get_ls();
   ASSERT_NE(nullptr, ls);
   checkpoint::ObDataCheckpoint *data_checkpoint = ls->get_data_checkpoint();
@@ -226,7 +226,7 @@ TEST_F(TestDataCheckpoint, ls_freeze)
   ObLSID ls_id(101);
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id_, ls_id, arg));
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->create_ls(arg));
-  EXPECT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  EXPECT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ObLS * ls = handle.get_ls();
   ASSERT_NE(nullptr, ls);
   ObDataCheckpoint *data_checkpoint = ls->get_data_checkpoint();

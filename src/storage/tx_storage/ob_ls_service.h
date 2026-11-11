@@ -109,7 +109,8 @@ public:
   // @param [out] handle, a guard of the specified logsream.
   int get_ls(const share::ObLSID &ls_id,
              ObLSHandle &handle,
-             ObLSGetMod mod);
+             ObLSGetMod mod,
+             ObLSAccessAttr access_attr);
   int get_ls_replica(
       const ObLSID &ls_id,
       ObLSGetMod mod,
@@ -127,6 +128,10 @@ public:
   // @param [out] exist, true if the ls exist, else false.
   int check_ls_exist(const share::ObLSID &ls_id,
                      bool &exist);
+  // Check whether the local replica of the specified LS is a logonly replica.
+  // Return OB_LS_NOT_EXIST if the LS does not exist locally.
+  int check_ls_is_logonly(const share::ObLSID &ls_id,
+                          bool &is_logonly);
   // check whether a ls waiting for destroy or not.
   // @param [in] ls_id, the ls we will check.
   // @param [out] waiting, true if the ls waiting for destroy, else false.
@@ -135,13 +140,16 @@ public:
   // get a log stream iterator.
   // @param [out] guard, the iterator created.
   // use guard just like a pointer of ObLSIterator
-  int get_ls_iter(common::ObSharedGuard<ObLSIterator> &guard, ObLSGetMod mod);
+  int get_ls_iter(common::ObSharedGuard<ObLSIterator> &guard,
+                  ObLSGetMod mod,
+                  ObLSAccessAttr access_attr);
 
   template<class FUNC>
-  int foreach_ls(FUNC &func);
+  int foreach_ls(FUNC &func, ObLSAccessAttr access_attr);
 
-  // get all ls ids
-  int get_ls_ids(common::ObIArray<share::ObLSID> &ls_id_array);
+  // get all accessible ls ids
+  int get_ls_ids(common::ObIArray<share::ObLSID> &ls_id_array,
+                 ObLSAccessAttr access_attr);
 
   // tablet operation in transactions
   // Create tablets for a ls
@@ -175,7 +183,7 @@ public:
     int ret = OB_SUCCESS;
     ObLSHandle ls_handle;
     ObTabletGCInfo tablet_info(tablet_id);
-    if (OB_FAIL(get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+    if (OB_FAIL(get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       STORAGE_LOG(WARN, "failed to get ls", K(ret), K(ls_id), K(tablet_id));
     } else {
       ls_handle.get_ls()->get_ls_private_block_gc_handler().report_tablet_id_for_gc_service(tablet_info);
@@ -291,13 +299,13 @@ private:
 };
 
 template <class FUNC>
-int ObLSService::foreach_ls(FUNC &func)
+int ObLSService::foreach_ls(FUNC &func, ObLSAccessAttr access_attr)
 {
   int ret = OB_SUCCESS;
 
   ObLSIterator *iter = NULL;
   common::ObSharedGuard<ObLSIterator> guard;
-  if (OB_FAIL(get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD))) {
+  if (OB_FAIL(get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD, access_attr))) {
     STORAGE_LOG(WARN, "get log stream iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;

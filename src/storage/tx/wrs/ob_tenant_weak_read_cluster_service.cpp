@@ -124,7 +124,8 @@ int ObTenantWeakReadClusterService::check_leader_info_(int64_t &leader_epoch) co
   if (OB_ISNULL(ls_svr)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "log stream service is NULL", K(ret));
-  } else if (OB_FAIL(ls_svr->get_ls(share::WRS_LS_ID, handle, ObLSGetMod::TRANS_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(share::WRS_LS_ID, handle, ObLSGetMod::TRANS_MOD,
+                                    ObLSAccessAttr::ALLOW_LOGONLY))) {
     if (OB_LS_NOT_EXIST != ret) {
       TRANS_LOG(WARN, "get id service log stream failed", K(ret));
     }
@@ -1076,4 +1077,3 @@ int64_t ObTenantWeakReadClusterService::get_cluster_skipped_server_count() const
 #undef ISTAT
 #undef WSTAT
 #undef DSTAT
-

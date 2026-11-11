@@ -338,7 +338,7 @@ int ObDDLIncRedoLogWriter::get_write_store_ctx_guard(
   }
   if (OB_FAIL(ctx_guard.init(ls_id_))) {
     LOG_WARN("ctx_guard init fail", K(ret), K(ls_id_));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ctx_guard.get_ls_handle(), ObLSGetMod::DAS_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ctx_guard.get_ls_handle(), ObLSGetMod::DAS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id_));
   } else if (OB_ISNULL(ls = ctx_guard.get_ls_handle().get_ls())) {
     ret = OB_ERR_UNEXPECTED;

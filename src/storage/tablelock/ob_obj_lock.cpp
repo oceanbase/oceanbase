@@ -2535,7 +2535,7 @@ int ObOBJLock::submit_log_(ObLockTableSplitLogCb &callback,
       } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("mtl ObLSService should not be null", K(ret));
-      } else if (OB_FAIL(ls_service->get_ls(callback.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+      } else if (OB_FAIL(ls_service->get_ls(callback.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("failed to get ls", K(ret));
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;

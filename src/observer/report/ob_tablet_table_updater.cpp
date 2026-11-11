@@ -605,13 +605,14 @@ int ObTabletTableUpdater::generate_tasks_(
           retry_tablet_replica_count++;
           ret = OB_SUCCESS; // do not affect report of other tablets
         }
-      } else if (OB_TENANT_NOT_IN_SERVER != ret && OB_LS_NOT_EXIST != ret && OB_TABLET_NOT_EXIST != ret) {
+      } else if (OB_TENANT_NOT_IN_SERVER != ret && OB_LS_NOT_EXIST != ret
+                 && OB_LS_OFFLINE != ret && OB_TABLET_NOT_EXIST != ret) {
         LOG_WARN("failed to fill tablet replica info", KR(ret), KPC(task));
       } else if (OB_TENANT_NOT_IN_SERVER == ret) {
         is_remove_task = true;
         ret = OB_SUCCESS;
       } else {
-        bool is_ls_not_exist = OB_LS_NOT_EXIST == ret;
+        bool is_ls_not_exist = OB_LS_NOT_EXIST == ret || OB_LS_OFFLINE == ret;
         check_remove_task_(task->get_ls_id(), is_ls_not_exist, locality_is_valid, locality_cache, is_remove_task);
         ret = OB_SUCCESS;
       }

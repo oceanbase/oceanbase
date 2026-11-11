@@ -16,10 +16,15 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include <gmock/gmock.h>
+#include <cstdio>
+#include <unistd.h>
 
 #define protected public
 #define private public
 
+#include "logservice/palf/palf_handle_impl.h"
+#include "logservice/palf_handle_guard.h"
+#include "storage/high_availability/ob_rebuild_service.h"
 #include "storage/schema_utils.h"
 #include "storage/test_dml_common.h"
 #include "storage/ob_storage_schema_util.h"
@@ -32,7 +37,9 @@ namespace oceanbase
 {
 int ObClusterVersion::get_tenant_data_version(const uint64_t tenant_id, uint64_t &data_version)
 {
-  data_version = MOCK_DATA_VERSION_4_3_5_6;
+  // Keep one version for the entire process, including MTL/PALF worker threads.
+  // The explicit 4.3.5.6 schemas below still exercise old migration parameters.
+  data_version = DATA_CURRENT_VERSION;
   return OB_SUCCESS;
 }
 namespace storage
@@ -66,6 +73,12 @@ void TestLSMigrationParam::SetUpTestCase()
   int ret = OB_SUCCESS;
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
+  // Drive rebuild steps synchronously for this suite; never restart its worker.
+  // This avoids races with the production scheduler while keeping its real
+  // LS lookup, metadata persistence and ctx-map implementation under test.
+  ASSERT_NE(nullptr, MTL(ObRebuildService*));
+  MTL(ObRebuildService*)->stop();
+  MTL(ObRebuildService*)->wait();
   SERVER_STORAGE_META_SERVICE.is_started_ = true;
 
   // create ls
@@ -223,7 +236,7 @@ TEST_F(TestLSMigrationParam, test_migrate_tablet_param)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ObLSID(TEST_LS_ID), ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ObLSID(TEST_LS_ID), ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTabletMapKey src_key;
@@ -312,7 +325,7 @@ TEST_F(TestLSMigrationParam, test_migration_param_compat)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ObLSID(TEST_LS_ID), ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ObLSID(TEST_LS_ID), ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTabletMapKey src_key;
@@ -405,13 +418,356 @@ TEST_F(TestLSMigrationParam, test_deleted_tablet_info)
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
+namespace
+{
+
+// Single-process production-component tests, not an observer/cluster restart.
+// Only one real L/PALF exists per case. The other addresses are membership
+// configuration, not simulated servers. No migration DAG is scheduled here.
+class LogonlyRebuildTestLS
+{
+public:
+  explicit LogonlyRebuildTestLS(const int64_t id)
+    : ls_id_(id), created_(false), handle_()
+  {}
+
+  ~LogonlyRebuildTestLS()
+  {
+    handle_.reset();
+    if (created_) {
+      EXPECT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id_));
+    }
+    EXPECT_EQ(OB_SUCCESS, MTL(ObRebuildService*)->remove_rebuild_ls(ls_id_));
+  }
+
+  int create(const bool self_is_member = true)
+  {
+    int ret = OB_SUCCESS;
+    obrpc::ObCreateLSArg arg;
+    ObMemberList members;
+    GlobalLearnerList learners;
+    const ObAddr &self = MockTenantModuleEnv::get_instance().self_addr_;
+    const ObAddr peer1(ObAddr::IPV4, "127.0.0.2", self.get_port());
+    const ObAddr peer2(ObAddr::IPV4, "127.0.0.3", self.get_port());
+    const ObAddr peer3(ObAddr::IPV4, "127.0.0.4", self.get_port());
+    const int64_t member_timestamp = ObTimeUtility::current_time();
+    ObMember logonly_member(self_is_member ? self : peer3, member_timestamp);
+    logonly_member.set_logonly();
+    if (OB_FAIL(gen_create_ls_arg(MTL_ID(), ls_id_, arg))) {
+    } else if (FALSE_IT(arg.replica_type_ = REPLICA_TYPE_LOGONLY)) {
+    } else if (OB_FAIL(create_ls_with_gc_retry_(arg))) {
+    } else if (FALSE_IT(created_ = true)) {
+    } else if (OB_FAIL(MTL(ObLSService*)->get_ls(
+        ls_id_, handle_, ObLSGetMod::HA_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
+    } else if (OB_FAIL(members.add_member(logonly_member))) {
+    } else if (OB_FAIL(members.add_member(ObMember(peer1, member_timestamp)))) {
+    } else if (OB_FAIL(members.add_member(ObMember(peer2, member_timestamp)))) {
+    } else if (OB_FAIL(ls()->set_initial_member_list(members, 3, learners))) {
+    }
+    return ret;
+  }
+
+  int set_rebuild_info(const ObLSRebuildStatus::STATUS status)
+  {
+    ObLSRebuildInfo info;
+    info.status_ = status;
+    info.type_ = ObLSRebuildType::CLOG;
+    return ls()->set_rebuild_info(info);
+  }
+
+  int get_ctx(ObLSRebuildCtx &ctx, int64_t &count)
+  {
+    int ret = OB_SUCCESS;
+    ObArray<ObLSRebuildCtx> contexts;
+    count = 0;
+    if (OB_FAIL(MTL(ObRebuildService*)->get_ls_rebuild_ctx_array_(contexts))) {
+    } else {
+      for (int64_t i = 0; i < contexts.count(); ++i) {
+        if (contexts.at(i).ls_id_ == ls_id_) {
+          ctx = contexts.at(i);
+          ++count;
+        }
+      }
+    }
+    return ret;
+  }
+
+  void expect_vote(const bool allow_vote)
+  {
+    palf::PalfStat stat;
+    ASSERT_EQ(OB_SUCCESS, ls()->get_log_handler()->stat(stat));
+    EXPECT_TRUE(ls()->is_logonly_replica());
+    EXPECT_EQ(palf::LogReplicaType::LOGONLY_REPLICA, stat.replica_type_);
+    EXPECT_EQ(3, stat.paxos_member_list_.get_member_number());
+    EXPECT_EQ(1, stat.paxos_member_list_.get_logonly_replica_member_number());
+    EXPECT_EQ(allow_vote, stat.allow_vote_);
+  }
+
+  void expect_rebuild(const ObLSRebuildStatus::STATUS status, const bool has_ctx)
+  {
+    ObLSRebuildInfo info;
+    bool need_rebuild = !has_ctx;
+    ASSERT_EQ(OB_SUCCESS, ls()->get_rebuild_info(info));
+    EXPECT_EQ(status, info.status_.get_status());
+    EXPECT_EQ(ObLSRebuildStatus::NONE == status ? ObLSRebuildType::NONE : ObLSRebuildType::CLOG,
+              info.type_.get_type());
+    ASSERT_EQ(OB_SUCCESS, MTL(ObRebuildService*)->check_ls_need_rebuild(ls_id_, need_rebuild));
+    EXPECT_EQ(has_ctx, need_rebuild);
+  }
+
+  ObLS *ls() { return handle_.get_ls(); }
+  const ObLSID &id() const { return ls_id_; }
+
+private:
+  int create_ls_with_gc_retry_(const obrpc::ObCreateLSArg &arg)
+  {
+    // remove_ls() queues asynchronous safe destruction. Pending LSs still
+    // count against the tenant's clog-disk LS limit until the real GC runs
+    // (normally every 10 seconds). Allow at most 30 seconds of retry delay,
+    // without bypassing the resource check or masking any other create error.
+    int ret = MTL(ObLSService*)->create_ls(arg);
+    for (int64_t retry = 0; OB_TOO_MANY_TENANT_LS == ret && retry < 150; ++retry) {
+      ob_usleep(200 * 1000);
+      ret = MTL(ObLSService*)->create_ls(arg);
+    }
+    return ret;
+  }
+
+  ObLSID ls_id_;
+  bool created_;
+  ObLSHandle handle_;
+  DISALLOW_COPY_AND_ASSIGN(LogonlyRebuildTestLS);
+};
+
+} // namespace
+
+TEST_F(TestLSMigrationParam, logonly_rebuild_recovers_init_after_disable_vote)
+{
+  LogonlyRebuildTestLS replica(201);
+  ASSERT_EQ(OB_SUCCESS, replica.create());
+  ObRebuildService *service = MTL(ObRebuildService*);
+  ASSERT_EQ(OB_SUCCESS, replica.set_rebuild_info(ObLSRebuildStatus::INIT));
+  // Start at the crash boundary after PALF persisted disable_vote but before
+  // INIT -> DOING. Do not fake a lost-log notification or PALF voting state.
+  ASSERT_EQ(OB_SUCCESS, replica.ls()->disable_vote(false));
+  replica.expect_vote(false);
+  replica.expect_rebuild(ObLSRebuildStatus::INIT, false);
+
+  ASSERT_EQ(OB_SUCCESS, service->build_rebuild_ctx_map_());
+  ObLSRebuildCtx ctx;
+  int64_t count = 0;
+  ASSERT_EQ(OB_SUCCESS, replica.get_ctx(ctx, count));
+  ASSERT_EQ(1, count);
+  ASSERT_TRUE(ctx.is_valid());
+  EXPECT_EQ(ObLSRebuildType::CLOG, ctx.type_.get_type());
+  ObLSRebuildMgr mgr;
+  ASSERT_EQ(OB_SUCCESS, mgr.init(ctx, MTL(ObLSService*)));
+  // Production CLOG INIT calls disable_vote(true), which must be reentrant
+  // when voting was already disabled before the volatile ctx was recovered.
+  ASSERT_EQ(OB_SUCCESS, mgr.process());
+  replica.expect_rebuild(ObLSRebuildStatus::DOING, true);
+  replica.expect_vote(false);
+  ASSERT_EQ(OB_SUCCESS, service->check_rebuild_ctx_map_());
+  replica.expect_rebuild(ObLSRebuildStatus::DOING, true);
+}
+
+TEST_F(TestLSMigrationParam, logonly_rebuild_rescans_rebuild_and_wait_metadata)
+{
+  const ObMigrationStatus stages[] = {
+    ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD,
+    ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT
+  };
+  for (int64_t i = 0; i < ARRAYSIZEOF(stages); ++i) {
+    SCOPED_TRACE(i);
+    LogonlyRebuildTestLS replica(202 + i);
+    ASSERT_EQ(OB_SUCCESS, replica.create());
+    ObRebuildService *service = MTL(ObRebuildService*);
+    ASSERT_EQ(OB_SUCCESS, replica.set_rebuild_info(ObLSRebuildStatus::DOING));
+    ASSERT_EQ(OB_SUCCESS, replica.ls()->disable_vote(false));
+    ASSERT_EQ(OB_SUCCESS, replica.ls()->set_ls_rebuild());
+    ASSERT_EQ(OB_SUCCESS, replica.ls()->set_migration_status(stages[i], replica.ls()->get_rebuild_seq()));
+    ASSERT_EQ(OB_SUCCESS, service->add_rebuild_ls(replica.id(), ObLSRebuildType(ObLSRebuildType::CLOG)));
+    ASSERT_EQ(OB_SUCCESS, service->remove_rebuild_ls(replica.id()));
+    replica.expect_rebuild(ObLSRebuildStatus::DOING, false);
+
+    // Re-scan persisted LS metadata after losing only the volatile ctx. This
+    // does not claim to execute BUILD DAGs, slog replay or observer restart.
+    ASSERT_EQ(OB_SUCCESS, service->build_rebuild_ctx_map_());
+    ASSERT_EQ(OB_SUCCESS, service->build_rebuild_ctx_map_());
+    ObLSRebuildCtx ctx;
+    int64_t count = 0;
+    ASSERT_EQ(OB_SUCCESS, replica.get_ctx(ctx, count));
+    ASSERT_EQ(1, count);
+    ASSERT_TRUE(ctx.is_valid());
+    EXPECT_EQ(ObLSRebuildType::CLOG, ctx.type_.get_type());
+    ObLSRebuildMgr mgr;
+    ASSERT_EQ(OB_SUCCESS, mgr.init(ctx, MTL(ObLSService*)));
+    ASSERT_EQ(OB_SUCCESS, service->check_rebuild_ctx_map_());
+    replica.expect_rebuild(ObLSRebuildStatus::DOING, true);
+    replica.expect_vote(false);
+    ObMigrationStatus migration_status;
+    ASSERT_EQ(OB_SUCCESS, replica.ls()->get_migration_status(migration_status));
+    EXPECT_EQ(stages[i], migration_status);
+  }
+}
+
+TEST_F(TestLSMigrationParam, logonly_rebuild_retryable_failure_and_terminal_cleanup)
+{
+  LogonlyRebuildTestLS replica(204);
+  ASSERT_EQ(OB_SUCCESS, replica.create());
+  ObRebuildService *service = MTL(ObRebuildService*);
+  ASSERT_EQ(OB_SUCCESS, replica.set_rebuild_info(ObLSRebuildStatus::DOING));
+  ASSERT_EQ(OB_SUCCESS, replica.ls()->disable_vote(false));
+  ASSERT_EQ(OB_SUCCESS, replica.ls()->set_ls_rebuild());
+  ASSERT_EQ(OB_SUCCESS, service->build_rebuild_ctx_map_());
+  for (int64_t i = 0; i < 2; ++i) {
+    ASSERT_EQ(OB_SUCCESS, service->finish_rebuild_ls(replica.id(), OB_EAGAIN));
+    ASSERT_EQ(OB_SUCCESS, service->check_rebuild_ctx_map_());
+    replica.expect_rebuild(ObLSRebuildStatus::DOING, true);
+    replica.expect_vote(false);
+    ObLSRebuildCtx ctx;
+    int64_t count = 0;
+    ASSERT_EQ(OB_SUCCESS, replica.get_ctx(ctx, count));
+    ASSERT_EQ(1, count);
+    EXPECT_EQ(OB_EAGAIN, ctx.result_);
+  }
+
+  // Exercise the real terminal-result handoff. Establishing REBUILD_FAIL via
+  // remote membership/deletion checks is outside this single-process test.
+  ASSERT_EQ(OB_SUCCESS, replica.ls()->set_migration_status(
+      ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_FAIL, replica.ls()->get_rebuild_seq()));
+  ASSERT_EQ(OB_SUCCESS, service->finish_rebuild_ls(replica.id(), OB_EAGAIN));
+  replica.expect_rebuild(ObLSRebuildStatus::CLEANUP, true);
+  ASSERT_EQ(OB_SUCCESS, service->scheduler_rebuild_mgr_());
+  replica.expect_rebuild(ObLSRebuildStatus::NONE, true);
+  replica.expect_vote(true);
+  ASSERT_EQ(OB_SUCCESS, service->check_rebuild_ctx_map_());
+  replica.expect_rebuild(ObLSRebuildStatus::NONE, false);
+}
+
+TEST_F(TestLSMigrationParam, logonly_rebuild_enable_vote_failure_keeps_cleanup)
+{
+  LogonlyRebuildTestLS replica(205);
+  ASSERT_EQ(OB_SUCCESS, replica.create());
+  ObRebuildService *service = MTL(ObRebuildService*);
+  ASSERT_EQ(OB_SUCCESS, replica.ls()->disable_vote(false));
+  ASSERT_EQ(OB_SUCCESS, replica.set_rebuild_info(ObLSRebuildStatus::CLEANUP));
+  ASSERT_EQ(OB_SUCCESS, service->build_rebuild_ctx_map_());
+  replica.expect_vote(false);
+  ObLSRebuildCtx ctx;
+  int64_t count = 0;
+  ASSERT_EQ(OB_SUCCESS, replica.get_ctx(ctx, count));
+  ASSERT_EQ(1, count);
+  ObLSRebuildMgr mgr;
+  ASSERT_EQ(OB_SUCCESS, mgr.init(ctx, MTL(ObLSService*)));
+
+  // A real stopped log handler makes enable_vote return OB_NOT_RUNNING.
+  // Do not flip is_in_stop_state_ back or overwrite the production function.
+  ASSERT_EQ(OB_SUCCESS, replica.ls()->get_log_handler()->stop());
+  for (int64_t i = 0; i < 2; ++i) {
+    EXPECT_EQ(OB_NOT_RUNNING, mgr.process());
+    ASSERT_EQ(OB_SUCCESS, service->check_rebuild_ctx_map_());
+    replica.expect_rebuild(ObLSRebuildStatus::CLEANUP, true);
+  }
+  // Inspect PALF independently of the stopped log handler: failed cleanup
+  // must not have enabled voting while leaving the metadata at CLEANUP.
+  palf::PalfHandleGuard palf_handle;
+  ASSERT_EQ(OB_SUCCESS, MTL(logservice::ObLogService*)->open_palf(replica.id(), palf_handle));
+  ASSERT_TRUE(palf_handle.is_valid());
+  palf::PalfStat stat;
+  ASSERT_EQ(OB_SUCCESS, palf_handle.get_palf_handle()->stat(stat));
+  EXPECT_EQ(palf::LogReplicaType::LOGONLY_REPLICA, stat.replica_type_);
+  EXPECT_FALSE(stat.allow_vote_);
+}
+
+TEST_F(TestLSMigrationParam, logonly_rebuild_enable_vote_success_releases_context)
+{
+  LogonlyRebuildTestLS replica(206);
+  ASSERT_EQ(OB_SUCCESS, replica.create());
+  ObRebuildService *service = MTL(ObRebuildService*);
+  ASSERT_EQ(OB_SUCCESS, replica.ls()->disable_vote(false));
+  ASSERT_EQ(OB_SUCCESS, replica.set_rebuild_info(ObLSRebuildStatus::DOING));
+  ASSERT_EQ(OB_SUCCESS, service->build_rebuild_ctx_map_());
+  ASSERT_EQ(OB_SUCCESS, service->finish_rebuild_ls(replica.id(), OB_SUCCESS));
+  replica.expect_rebuild(ObLSRebuildStatus::CLEANUP, true);
+  replica.expect_vote(false);
+
+  // Recover CLEANUP from metadata too; the task's in-memory result is not what
+  // authorizes enabling voting or releasing the context.
+  ASSERT_EQ(OB_SUCCESS, service->remove_rebuild_ls(replica.id()));
+  ASSERT_EQ(OB_SUCCESS, service->build_rebuild_ctx_map_());
+  ASSERT_EQ(OB_SUCCESS, service->check_rebuild_ctx_map_());
+  replica.expect_rebuild(ObLSRebuildStatus::CLEANUP, true);
+  ASSERT_EQ(OB_SUCCESS, service->scheduler_rebuild_mgr_());
+  replica.expect_vote(true);
+  replica.expect_rebuild(ObLSRebuildStatus::NONE, true);
+  ASSERT_EQ(OB_SUCCESS, service->check_rebuild_ctx_map_());
+  replica.expect_rebuild(ObLSRebuildStatus::NONE, false);
+  ASSERT_EQ(OB_SUCCESS, service->check_rebuild_ctx_map_());
+  ASSERT_EQ(OB_SUCCESS, service->build_rebuild_ctx_map_());
+  replica.expect_rebuild(ObLSRebuildStatus::NONE, false);
+}
+
+TEST_F(TestLSMigrationParam, logonly_rebuild_deleted_ls_drops_stale_context)
+{
+  LogonlyRebuildTestLS replica(207);
+  ASSERT_EQ(OB_SUCCESS, replica.create());
+  ObRebuildService *service = MTL(ObRebuildService*);
+  ASSERT_EQ(OB_SUCCESS, replica.set_rebuild_info(ObLSRebuildStatus::DOING));
+  ASSERT_EQ(OB_SUCCESS, service->build_rebuild_ctx_map_());
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(replica.id()));
+  ObLSHandle missing;
+  EXPECT_EQ(OB_LS_NOT_EXIST, MTL(ObLSService*)->get_ls(
+      replica.id(), missing, ObLSGetMod::HA_MOD, ObLSAccessAttr::ALLOW_LOGONLY));
+  bool need_rebuild = true;
+  ASSERT_EQ(OB_SUCCESS, service->check_ls_need_rebuild(replica.id(), need_rebuild));
+  EXPECT_FALSE(need_rebuild); // ObLS::stop removes its existing context.
+
+  // A late callback can enqueue an LS which is no longer in the service map.
+  ASSERT_EQ(OB_SUCCESS, service->add_rebuild_ls(replica.id(), ObLSRebuildType(ObLSRebuildType::CLOG)));
+  ASSERT_EQ(OB_SUCCESS, service->check_ls_need_rebuild(replica.id(), need_rebuild));
+  ASSERT_TRUE(need_rebuild);
+  ASSERT_EQ(OB_SUCCESS, service->build_ls_rebuild_info_());
+  ASSERT_EQ(OB_SUCCESS, service->scheduler_rebuild_mgr_());
+  ASSERT_EQ(OB_SUCCESS, service->check_rebuild_ctx_map_());
+  ASSERT_EQ(OB_SUCCESS, service->check_ls_need_rebuild(replica.id(), need_rebuild));
+  EXPECT_FALSE(need_rebuild);
+}
+
+TEST_F(TestLSMigrationParam, logonly_rebuild_non_member_rejects_pending_context)
+{
+  LogonlyRebuildTestLS replica(208);
+  // Model the local configuration after removal, not an RPC membership change.
+  ASSERT_EQ(OB_SUCCESS, replica.create(false));
+  palf::PalfStat stat;
+  ASSERT_EQ(OB_SUCCESS, replica.ls()->get_log_handler()->stat(stat));
+  const ObAddr &self = MockTenantModuleEnv::get_instance().self_addr_;
+  EXPECT_FALSE(stat.paxos_member_list_.contains(self));
+  EXPECT_FALSE(stat.learner_list_.contains(self));
+  ObRebuildService *service = MTL(ObRebuildService*);
+  ASSERT_EQ(OB_SUCCESS, service->add_rebuild_ls(replica.id(), ObLSRebuildType(ObLSRebuildType::CLOG)));
+  ObLSRebuildCtx ctx;
+  int64_t count = 0;
+  ASSERT_EQ(OB_SUCCESS, replica.get_ctx(ctx, count));
+  ASSERT_EQ(1, count);
+  bool can_rebuild = true;
+  ASSERT_EQ(OB_SUCCESS, service->check_can_rebuild_(ctx, replica.ls(), can_rebuild));
+  EXPECT_FALSE(can_rebuild);
+  ASSERT_EQ(OB_SUCCESS, service->build_ls_rebuild_info_());
+  replica.expect_rebuild(ObLSRebuildStatus::NONE, true);
+  replica.expect_vote(true);
+  ASSERT_EQ(OB_SUCCESS, service->check_rebuild_ctx_map_());
+  replica.expect_rebuild(ObLSRebuildStatus::NONE, false);
+}
+
 } // namespace storage
 } // namespace oceanbase
 
 int main(int argc, char **argv)
 {
-  system("rm -f test_ls_migration_param.log*");
-  OB_LOGGER.set_file_name("test_ls_migration_param.log", true);
+  char log_path[128];
+  snprintf(log_path, sizeof(log_path), "test_ls_migration_param_%d.log", static_cast<int>(getpid()));
+  OB_LOGGER.set_file_name(log_path, true);
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

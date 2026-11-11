@@ -336,7 +336,7 @@
    if (OB_ISNULL(MTL(storage::ObLSService *))) {
      ret = OB_ERR_UNEXPECTED;
      LOG_WARN("ls service is null", K(ret));
-   } else if (OB_FAIL(MTL(storage::ObLSService *)->get_ls_iter(ls_iter, storage::ObLSGetMod::STORAGE_MOD))) {
+   } else if (OB_FAIL(MTL(storage::ObLSService *)->get_ls_iter(ls_iter, storage::ObLSGetMod::STORAGE_MOD, storage::ObLSAccessAttr::DISABLE_LOGONLY))) {
      LOG_WARN("fail to get ls iterator", K(ret));
    } else {
      while (OB_SUCC(ret) && all_finished) {
@@ -702,7 +702,7 @@
          // Check LS existence
          storage::ObLSHandle ls_handle;
          ObLSID ls_id(rec_ls_id);
-         if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, storage::ObLSGetMod::STORAGE_MOD))) {
+         if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, storage::ObLSGetMod::STORAGE_MOD, storage::ObLSAccessAttr::ALLOW_LOGONLY))) {
            if (OB_LS_NOT_EXIST == ret) {
              should_delete = true;
              ret = OB_SUCCESS;

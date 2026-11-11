@@ -264,7 +264,7 @@ void TestDDLCreateTablet::SetUp()
 
   // 4. create ls.
   ObLSHandle ls_handle;
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ObLSID(TEST_LS_ID), ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ObLSID(TEST_LS_ID), ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ls_tablet_service_ = ls_handle.get_ls()->get_tablet_svr();
 }
 

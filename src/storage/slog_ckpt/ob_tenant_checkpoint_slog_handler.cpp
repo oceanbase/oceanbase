@@ -580,7 +580,7 @@ int ObTenantCheckpointSlogHandler::replay_dup_table_ls_meta(
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   if (OB_FAIL(MTL(ObLSService *)
-                         ->get_ls(dup_ls_meta.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+                         ->get_ls(dup_ls_meta.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     if (OB_LS_NOT_EXIST == ret) {
       LOG_INFO("this is possible when writing ls checkpoint but ls is removing", K(dup_ls_meta));
       ret = OB_SUCCESS;
@@ -1078,7 +1078,10 @@ int ObTenantCheckpointSlogHandler::inner_replay_dup_table_ls_slog(
 
   if (OB_FAIL(slog_entry.deserialize(param.buf_, param.disk_addr_.size(), pos))) {
     LOG_WARN("fail to deserialize slog", K(ret), K(param), K(pos));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(slog_entry.get_dup_ls_meta().ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(slog_entry.get_dup_ls_meta().ls_id_,
+                                                ls_handle,
+                                                ObLSGetMod::STORAGE_MOD,
+                                                ObLSAccessAttr::ALLOW_LOGONLY))) {
     if (OB_LS_NOT_EXIST == ret) {
       LOG_INFO("this is possible when writing ls checkpoint but ls is removing", K(slog_entry));
       ret = OB_SUCCESS;

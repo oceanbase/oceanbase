@@ -499,7 +499,7 @@ int ObServerStorageMetaService::start_complete_and_online_ls() const
       common::ObSharedGuard<ObLSIterator> ls_iter;
       ObLS *ls = nullptr;
       ObLSTabletService *ls_tablet_svr = nullptr;
-      if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD))) {
+      if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
         LOG_WARN("failed to get ls iter", K(ret));
       } else {
         while (OB_SUCC(ret)) {

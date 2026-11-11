@@ -60,7 +60,8 @@ int ObLSRecoveryGuard::init(const uint64_t tenant_id, const share::ObLSID &ls_id
       if (OB_ISNULL(ls_svr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ls service is null", KR(ret));
-      } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle_, storage::ObLSGetMod::RS_MOD))) {
+      } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle_, storage::ObLSGetMod::RS_MOD,
+                                    storage::ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("failed to get ls", KR(ret), K(ls_id));
       } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
@@ -722,7 +723,7 @@ int ObLSRecoveryStatHandler::get_palf_stat_(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get MTL log_service", KR(ret), K_(tenant_id), KPC_(ls));
-  } else if (OB_FAIL(ls_service->get_ls(ls_->get_ls_id(), ls_handle, ObLSGetMod::RS_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_->get_ls_id(), ls_handle, ObLSGetMod::RS_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls", KR(ret), K_(tenant_id), KPC_(ls));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

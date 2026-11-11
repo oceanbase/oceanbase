@@ -13,6 +13,8 @@
 #ifndef OCEANBASE_STORAGE_OB_LS_GET_MOD
 #define OCEANBASE_STORAGE_OB_LS_GET_MOD
 
+#include <cstdint>
+
 namespace oceanbase
 {
 namespace storage
@@ -51,6 +53,17 @@ enum class ObLSGetMod : int
   SS_MACRO_CACHE_MOD = 28,
   TOTAL_MAX_MOD = 29,
 };
+
+enum class ObLSAccessAttr : int8_t
+{
+  DISABLE_LOGONLY = 0,
+  ALLOW_LOGONLY,
+};
+
+inline bool can_access_logonly(const ObLSAccessAttr access_attr)
+{
+  return ObLSAccessAttr::ALLOW_LOGONLY == access_attr;
+}
 
 }
 }

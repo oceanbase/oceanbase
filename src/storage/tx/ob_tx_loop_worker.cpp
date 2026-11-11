@@ -195,8 +195,22 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc,
 
   int64_t ls_cnt = 0;
 
+#ifdef ERRSIM
+  // The production iterator excludes LOGONLY. Keep the meta-tenant WRS
+  // diagnostic lookup separate so its trigger remains reachable without
+  // enabling transaction maintenance on LOGONLY replicas.
+  if (is_meta_tenant(MTL_ID()) && OB_NOT_NULL(MTL(ObLSService *))) {
+    ObLSHandle wrs_ls_handle;
+    if (OB_SUCCESS == MTL(ObLSService *)->get_ls(
+            share::WRS_LS_ID, wrs_ls_handle, ObLSGetMod::TRANS_MOD,
+            ObLSAccessAttr::ALLOW_LOGONLY)) {
+      ERRSIM_test_for_do_logonly_replica_inner_sql_repro_(wrs_ls_handle.get_ls());
+    }
+  }
+#endif
+
   if (OB_ISNULL(MTL(ObLSService *))
-      || OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard, ObLSGetMod::TRANS_MOD))
+      || OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))
       || !ls_iter_guard.is_valid()) {
     if (OB_SUCCESS == ret) {
       ret = OB_INVALID_ARGUMENT;
@@ -214,12 +228,8 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc,
       common::ObRole role = common::ObRole::INVALID_ROLE;
       int64_t base_proposal_id, proposal_id;
 
-      ERRSIM_test_for_do_logonly_replica_inner_sql_repro_(cur_ls_ptr);
-
       if (ObReplicaTypeCheck::is_log_replica(cur_ls_ptr->get_replica_type())) {
-        // LOGONLY replicas do not run normal transaction maintenance.  The
-        // ERRSIM helper above is deliberately isolated from this production
-        // behavior.
+        // Defensive check: LOGONLY replicas never run transaction maintenance.
       } else {
         if (OB_TMP_FAIL(cur_ls_ptr->get_log_handler()->get_role(role, base_proposal_id))) {
           TRANS_LOG(WARN, "get role failed", K(tmp_ret), K(cur_ls_ptr->get_ls_id()));

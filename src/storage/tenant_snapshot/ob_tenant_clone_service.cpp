@@ -131,7 +131,7 @@ int ObTenantCloneService::try_clone_(const ObCloneJob& job)
   } else if (!job.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("clone job is not valid", KR(ret), K(job));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("fail to get ls iter", KR(ret));
   } else if (OB_ISNULL(ls_iter = ls_iter_guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;

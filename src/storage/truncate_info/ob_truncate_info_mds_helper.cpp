@@ -63,7 +63,7 @@ int ObTruncateInfoMdsHelper::on_register(
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("arg is invalid", K(ret), K(arg));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(arg));
   } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->set_truncate_info(arg, user_ctx, 0/*lock_timeout_us*/))) {
     LOG_WARN("failed to set truncate info", K(ret), K(arg.ls_id_), K(arg.index_tablet_id_));

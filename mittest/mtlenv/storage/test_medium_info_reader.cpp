@@ -42,7 +42,7 @@ TEST_F(TestMediumInfoReader, read_multi_medium_info_from_minor)
   // get ls
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
-  ret = MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ls = ls_handle.get_ls();
   ASSERT_NE(nullptr, ls);

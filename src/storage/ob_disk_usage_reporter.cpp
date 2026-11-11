@@ -217,7 +217,7 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
           STORAGE_LOG(WARN, "unexpected invalid tablet", K(ret), K(pointer_handle));
         } else if (OB_NOT_NULL(ls) && ls->get_ls_id() == tablet_map_key.ls_id_) {
           // do not need get_ls again
-        } else if (OB_FAIL(ls_service->get_ls(tablet_map_key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+        } else if (OB_FAIL(ls_service->get_ls(tablet_map_key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
           STORAGE_LOG(WARN, "get_ls failed", K(tablet_map_key.ls_id_));
         } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
           ret = OB_ERR_UNEXPECTED;

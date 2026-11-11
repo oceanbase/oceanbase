@@ -66,7 +66,7 @@ int check_need_wait_split_finished(
       } else {
         LOG_TRACE("full restore status, still need check data split finished", K(ret), K(restore_status));
       }
-    } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+    } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get log stream", K(ret), K(ls_id));
     } else if (OB_FAIL(ObTabletSplitUtil::check_tablet_restore_status(
         dest_tablets_id, ls_handle, handle, is_tablet_status_need_to_split))) {
@@ -1247,7 +1247,7 @@ int ObSplitFinishReplayExecutor::modify_tablet_restore_status_if_need(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr of ls service", K(ret), KPC(ls), K(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ls->get_ls_id(), ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls->get_ls_id(), ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls->get_ls_id()));
   } else if (ObTabletRestoreStatus::STATUS::UNDEFINED == src_restore_status) {
     /*skip the split, counting on restoring to fill the destination tablet data*/

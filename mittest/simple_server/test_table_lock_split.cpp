@@ -140,7 +140,7 @@ TEST_F(ObLockTableSplitBeforeRestartTest, test_table_lock_split)
   ObLS *ls = nullptr;
   ObLSHandle handle;
   share::ObLSID ls_id(1001);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_NE(nullptr, ls = handle.get_ls());
   ObTableHandleV2 table_handle;
   ObLockMemtable *lock_memtable = nullptr;
@@ -231,7 +231,7 @@ TEST_F(ObLockTableSplitAfterRestartTest, test_recover)
   ObLS *ls = nullptr;
   ObLSHandle handle;
   share::ObLSID ls_id(1001);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_NE(nullptr, ls = handle.get_ls());
 
   // check lock_memtable scn

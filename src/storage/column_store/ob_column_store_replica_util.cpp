@@ -50,7 +50,7 @@ int ObCSReplicaUtil::check_local_is_cs_replica(
   ObLS *ls = nullptr;
   ObLSHandle ls_handle;
 
-  if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     if (OB_LS_NOT_EXIST == ret) {
       // Only use weak consistency locally read for cs replica, so local ls must exist.
       // If ls not exist, table param or dml param is constructed remotely, ignore it.
@@ -76,7 +76,7 @@ int ObCSReplicaUtil::check_has_cs_replica(
   ObLS *ls = nullptr;
   ObLSHandle ls_handle;
 
-  if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

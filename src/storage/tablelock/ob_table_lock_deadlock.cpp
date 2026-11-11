@@ -49,7 +49,7 @@ int ObTxLockPartOnDetectOp::operator() (
     LOG_WARN("invalid member", K(ret), K(lock_part_id_), K(ls_id_));
   } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id_,
                                                handle,
-                                               ObLSGetMod::TABLELOCK_MOD))) {
+                                               ObLSGetMod::TABLELOCK_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id_));
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -185,7 +185,7 @@ int ObTransLockPartBlockCallBack::operator()(
     LOG_WARN("block callback is not valid", K(ret), KPC(this));
   } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id_,
                                                handle,
-                                               ObLSGetMod::TABLELOCK_MOD))) {
+                                               ObLSGetMod::TABLELOCK_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     if (OB_NOT_RUNNING == ret ||
         OB_LS_NOT_EXIST == ret) {
       // ls is removing or removed. should never be here.

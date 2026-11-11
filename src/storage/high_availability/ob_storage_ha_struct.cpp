@@ -438,7 +438,8 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD,
+                                        ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -478,7 +479,7 @@ int ObMigrationStatusHelper::check_transfer_dest_ls_(
   if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls_iter(guard, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls_iter(guard, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls iter", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -623,7 +624,7 @@ int ObMigrationStatusHelper::check_transfer_meta_info_compatible_(
   if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls_iter(guard, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls_iter(guard, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls iter", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -956,7 +957,8 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_v1_(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD,
+                                        ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1078,9 +1080,11 @@ int ObMigrationStatusHelper::check_ls_with_transfer_task_v1_(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(task_info.dest_ls_id_, dest_ls_handle, ObLSGetMod::HA_MOD))) {
-    if (OB_LS_NOT_EXIST == ret) {
-      LOG_INFO("transfer dest ls not exist", K(ret), K(task_info));
+  } else if (OB_FAIL(ls_service->get_ls(task_info.dest_ls_id_, dest_ls_handle,
+                                        ObLSGetMod::HA_MOD,
+                                        ObLSAccessAttr::DISABLE_LOGONLY))) {
+    if (OB_LS_NOT_EXIST == ret || OB_LS_OFFLINE == ret) {
+      LOG_INFO("transfer dest ls does not provide local data service", K(ret), K(task_info));
       need_check_allow_gc = true;
       need_wait_dest_ls_replay = false;
       ret = OB_SUCCESS;
@@ -1122,9 +1126,10 @@ int ObMigrationStatusHelper::check_transfer_dest_ls_status_for_ls_gc_v1_(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(transfer_ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
-    if (OB_LS_NOT_EXIST == ret) {
-      LOG_INFO("transfer dest ls not exist", K(ret), K(transfer_ls_id));
+  } else if (OB_FAIL(ls_service->get_ls(transfer_ls_id, ls_handle, ObLSGetMod::HA_MOD,
+                                        ObLSAccessAttr::DISABLE_LOGONLY))) {
+    if (OB_LS_NOT_EXIST == ret || OB_LS_OFFLINE == ret) {
+      LOG_INFO("transfer dest ls does not provide local data service", K(ret), K(transfer_ls_id));
       allow_gc = true;
       ret = OB_SUCCESS;
     } else {
@@ -1600,7 +1605,7 @@ int ObMigrationUtils::get_ls_rebuild_seq(const uint64_t tenant_id,
   } else if (OB_ISNULL(ls_service = MTL_WITH_CHECK_TENANT(ObLSService *, tenant_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream service is NULL", K(ret));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

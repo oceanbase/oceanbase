@@ -2542,7 +2542,7 @@ int ObTabletBackfillMergeCtx::get_ls_and_tablet()
     LOG_WARN("tablet backfill merge ctx is not init", K(ret));
   } else {
     ObLSHandle &ls_handle = static_param_.ls_handle_;
-    if (OB_FAIL(MTL(ObLSService *)->get_ls(static_param_.get_ls_id(), ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(static_param_.get_ls_id(), ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get log stream", K(ret), K(static_param_.get_ls_id()));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;

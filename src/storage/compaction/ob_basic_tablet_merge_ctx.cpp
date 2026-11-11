@@ -669,7 +669,7 @@ int ObBasicTabletMergeCtx::get_ls_and_tablet()
 {
   int ret = OB_SUCCESS;
   ObLSHandle &ls_handle = static_param_.ls_handle_;
-  if (OB_FAIL(MTL(ObLSService *)->get_ls(static_param_.get_ls_id(), ls_handle, ObLSGetMod::COMPACT_MODE))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(static_param_.get_ls_id(), ls_handle, ObLSGetMod::COMPACT_MODE, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(static_param_.get_ls_id()));
   } else if (ls_handle.get_ls()->is_offline()) {
     ret = OB_CANCELED;

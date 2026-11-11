@@ -93,7 +93,7 @@ int ObTenantStorageSnapshotWriter::record_single_ls_meta(
     LOG_WARN("failed to init log stream item writer", K(ret));
   } else if (OB_FAIL(ls_ckpt_reader.iter_read_meta_item(orig_ls_meta_entry, copy_ls_meta_op, orig_linked_block_list))) {
     LOG_WARN("fail to iter read and write ls snapshot", K(ret), K(orig_ls_meta_entry));
-  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("fail to get ls", K(ret));
   } else if (OB_FAIL(do_record_ls_meta(*(ls_handle.get_ls()), clog_max_scn, nullptr/*slog checkpoint fd dispenser*/))) {
     LOG_WARN("fail to record single ls meta", K(ret), K(ls_handle));
@@ -200,7 +200,7 @@ int ObTenantStorageSnapshotWriter::record_ls_meta(
   ls_item_writer_.reset();
   tablet_item_writer_.reset();
   ObMemAttr mem_attr(MTL_ID(), ObModIds::OB_CHECKPOINT);
-  if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream iter", K(ret));
   } else if (OB_FAIL(ls_item_writer_.init_for_slog_ckpt(MTL_ID(), MTL_EPOCH_ID(), mem_attr, fd_dispenser))) {
     LOG_WARN("failed to init log stream item writer", K(ret));

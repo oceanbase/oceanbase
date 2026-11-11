@@ -210,7 +210,7 @@ int ObSimpleArchive::check_archive_progress(const uint64_t tenant_id, const bool
   SWITCH_TENANT(tenant_id);
   OB_LOG(INFO, "COME HERE print", K(tenant_id), K(check_piece_advance));
   EXPECT_EQ(tenant_id, MTL_ID());
-  ret = MTL(storage::ObLSService*)->get_ls_iter(guard, ObLSGetMod::ARCHIVE_MOD);
+  ret = MTL(storage::ObLSService*)->get_ls_iter(guard, ObLSGetMod::ARCHIVE_MOD, ObLSAccessAttr::ALLOW_LOGONLY);
   EXPECT_EQ(OB_SUCCESS, ret);
   EXPECT_EQ(true, nullptr != (iter = guard.get_ptr()));
   int64_t base_ts = common::ObTimeUtility::current_time() - 10L * 1000 * 1000;

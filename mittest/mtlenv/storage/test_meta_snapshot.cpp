@@ -82,7 +82,7 @@ int TestMetaSnapshot::persist_tablet(ObTabletHandle &new_tablet_handle)
   ObTenantStorageMetaService *meta_service = MTL(ObTenantStorageMetaService*);
   blocksstable::ObStorageObjectOpt default_opt;
 
-  if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("fail to get ls", K(ret), K(ls_id));
   } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle))) {
     LOG_WARN("fail to get tablet", K(ret), K(tablet_id));

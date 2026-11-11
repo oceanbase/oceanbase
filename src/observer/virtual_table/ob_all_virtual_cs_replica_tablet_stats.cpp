@@ -134,7 +134,7 @@ int ObAllVirtualTableLSTabletIter::get_next_tablet(ObTabletHandle &tablet_handle
     if (OB_ISNULL(ls_service)) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "ls service is null", K(ret));
-    } else if (OB_FAIL(ls_service->get_ls_iter(ls_iter_guard_, ObLSGetMod::OBSERVER_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls_iter(ls_iter_guard_, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       SERVER_LOG(WARN, "failed to get ls iter", K(ret));
     }
   }

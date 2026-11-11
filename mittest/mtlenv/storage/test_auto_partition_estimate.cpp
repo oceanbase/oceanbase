@@ -154,7 +154,7 @@ int FakeObTabletEstimate::set_tablet_split_info(
   ObLSHandle ls_handle;
   ObLSID test_ls_id(ls_id_);
 
-  if (OB_FAIL(MTL(ObLSService *)->get_ls(test_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(test_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "fail to get log stream", K(ret), K(ls_handle));
   } else if (OB_UNLIKELY(nullptr == ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

@@ -32,7 +32,7 @@ int ObITabletMdsInterface::get_src_tablet_handle_and_base_ptr_(
   ObLS *ls = nullptr;
   ObTablet *tablet = nullptr;
 
-  if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::TABLET_MOD))) {
+  if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::TABLET_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     MDS_LOG(WARN, "fail to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

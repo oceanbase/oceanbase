@@ -204,7 +204,7 @@ int ObLogStandbyTransportWorker::submit_transport_task(const ObLogTransportReq &
     ObLS *ls = nullptr;
     ObLogRestoreHandler *restore_handler = nullptr;
 
-    if (OB_FAIL(ls_svr_->get_ls(req.ls_id_, ls_handle, ObLSGetMod::LOG_MOD))) {
+    if (OB_FAIL(ls_svr_->get_ls(req.ls_id_, ls_handle, ObLSGetMod::LOG_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
       CLOG_LOG(WARN, "get ls failed", K(ret), K(req.ls_id_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -262,7 +262,7 @@ void ObLogStandbyTransportWorker::do_thread_task_()
   } else if (OB_ISNULL(ls_svr_)) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(ERROR, "ls_svr_ is NULL", K(ret));
-  } else if (OB_FAIL(ls_svr_->get_ls_iter(iter_guard, ObLSGetMod::LOG_MOD))) {
+  } else if (OB_FAIL(ls_svr_->get_ls_iter(iter_guard, ObLSGetMod::LOG_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     CLOG_LOG(WARN, "get ls iter failed", K(ret));
   } else if (OB_ISNULL(iter = iter_guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;

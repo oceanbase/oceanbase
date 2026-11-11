@@ -614,7 +614,7 @@ int ObSessionTabletCreateHelper::is_ls_leader(const share::ObLSID &ls_id, bool &
   if (OB_ISNULL(ls_svr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mtl ObLSService should not be null", KR(ret), KP(ls_svr));
-  } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     if (OB_LS_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       LOG_INFO("ls not exist, skip", KR(ret), K(ls_id));
@@ -2005,7 +2005,7 @@ int ObSessionTabletTruncateHelper::freeze_tablet(
         LOG_WARN("ls on this server is not leader before tablet freeze",
                  K(ret), K(arg), K(role), K(first_proposal_id));
       } else if (OB_FAIL(ls_service->get_ls(
-                     arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+                     arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("failed to get ls", K(ret), K(arg));
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
@@ -2181,7 +2181,7 @@ int ObSessionTabletGCHelper::get_local_leader_ls_ids(common::ObIArray<share::ObL
   if (OB_ISNULL(ls_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service is null", KR(ret));
-  } else if (OB_FAIL(ls_service->get_ls_ids(local_ls_id_array))) {
+  } else if (OB_FAIL(ls_service->get_ls_ids(local_ls_id_array, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("fail to get ls ids from MTL", KR(ret));
   } else {
     ARRAY_FOREACH(local_ls_id_array, idx) {

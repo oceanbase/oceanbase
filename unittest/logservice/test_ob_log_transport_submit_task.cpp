@@ -54,7 +54,7 @@ TEST_F(TestLogTransportSubmitTask, reset_iterator_accepts_log_end)
   ASSERT_NE(nullptr, ls_service);
   ASSERT_EQ(OB_SUCCESS, storage::gen_create_ls_arg(OB_SYS_TENANT_ID, ls_id, create_ls_arg));
   ASSERT_EQ(OB_SUCCESS, ls_service->create_ls(create_ls_arg));
-  ASSERT_EQ(OB_SUCCESS, ls_service->get_ls(ls_id, ls_handle, storage::ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_service->get_ls(ls_id, ls_handle, storage::ObLSGetMod::STORAGE_MOD, storage::ObLSAccessAttr::ALLOW_LOGONLY));
   ASSERT_NE(nullptr, ls_handle.get_ls());
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_log_handler()->get_end_lsn(end_lsn));
   ASSERT_TRUE(end_lsn.is_valid());

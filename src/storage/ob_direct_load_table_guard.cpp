@@ -114,7 +114,7 @@ int ObDirectLoadTableGuard::acquire_memtable_once_()
   if (has_acquired_memtable_) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "direct load table guard cannot be inited twice", KR(ret), KPC(this));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "failed to get log stream", K(ret), KPC(this));
   } else if (OB_UNLIKELY(!ls_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -239,7 +239,7 @@ void ObDirectLoadTableGuard::async_freeze_()
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   ObLSHandle ls_handle;
-  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "failed to get ls", K(ret), "ls_id", ls_id_);
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

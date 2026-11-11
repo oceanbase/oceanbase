@@ -285,7 +285,7 @@ int ObScheduleNewMediumLoop::loop()
     ObTabletHandle tablet_handle;
     if (func.get_ls_status().ls_id_ == ls_id) {
       // do nothing, use old ls_handle
-    } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::COMPACT_MODE))) {
+    } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::COMPACT_MODE, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get ls", K(ret), K(ls_id));
     } else if (OB_FAIL(func.switch_ls(ls_handle))) {
       if (OB_STATE_NOT_MATCH != ret) {

@@ -161,7 +161,7 @@ int ObTabletReorgInfoTableService::calc_max_recycle_scn_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet reorg info table service do not init", K(ret));
-  } else if (OB_FAIL(ls_service_->get_ls_ids(ls_id_array))) {
+  } else if (OB_FAIL(ls_service_->get_ls_ids(ls_id_array, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls ids", K(ret));
   } else {
     for (int64_t i = 0; i < ls_id_array.count(); ++i) {
@@ -193,7 +193,7 @@ int ObTabletReorgInfoTableService::calc_ls_max_recycle_scn_(const share::ObLSID 
   } else if (!ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("calc ls max recycle scn get invalid argument", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls_service_->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_service_->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

@@ -106,7 +106,7 @@ int TestMdsTableScan::create_tablet(const common::ObTabletID &tablet_id, ObTable
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
 
-  if (OB_FAIL(MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -127,7 +127,7 @@ int TestMdsTableScan::get_tablet(const common::ObTabletID &tablet_id, ObTabletHa
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
 
-  if (OB_FAIL(MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -238,14 +238,14 @@ int TestMdsTableScan::try_schedule_mds_minor(const common::ObTabletID &tablet_id
   if (GCONF.enable_logservice) {
     ret = OB_NOT_SUPPORTED;
     LOG_ERROR("logservice is not supported", K(ret));
-  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret));
   } else {
     int times = 0;
     do
     {
       STORAGE_LOG(INFO, "try mds minor", K(times));
-      if (OB_FAIL(MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      if (OB_FAIL(MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("failed to get ls", K(ret), K(LS_ID));
       } else if (OB_FAIL(TestMdsTableScan::get_tablet(tablet_id, tablet_handle))) {
         LOG_WARN("failed to tablet handle", K(ret), K(tablet_id));
@@ -1366,7 +1366,7 @@ TEST_F(TestMdsTableScan, test_range_cross)
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   ASSERT_EQ(OB_SUCCESS, mini_ctx.get_ls_and_tablet());
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_NE(nullptr, ls = mini_ctx.get_ls());
   ASSERT_EQ(OB_SUCCESS, mini_ctx.init_tablet_merge_info());
   mini_ctx.static_param_.ls_rebuild_seq_ = ls->ls_meta_.get_rebuild_seq();

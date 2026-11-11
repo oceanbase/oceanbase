@@ -203,7 +203,7 @@ int ObLobSplitContext::init(const ObLobSplitParam& param)
     LOG_WARN("invalid param", K(ret), K(param));
   } else if (OB_FAIL(init_maps(param))) {
     LOG_WARN("fail to init sort maps", K(ret), K(param));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(param.ls_id_, ls_handle_, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(param.ls_id_, ls_handle_, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(param));
   } else if (OB_FAIL(ObTabletSplitUtil::get_tablet(
       allocator_, ls_handle_,

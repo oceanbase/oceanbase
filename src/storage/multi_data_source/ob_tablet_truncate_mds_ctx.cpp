@@ -81,7 +81,7 @@ void ObTabletTruncateMdsCtx::on_commit(
     // try until success
     while (true) {
       ret = OB_SUCCESS;
-      if (OB_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
+      if (OB_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("fail to get ls", K(ret), K_(ls_id));
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
@@ -146,7 +146,7 @@ void ObTabletTruncateMdsCtx::inner_end_(const bool is_commit)
     if (OB_ISNULL(ls_service)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null ls service", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       if (OB_LS_NOT_EXIST != ret) {
         LOG_WARN("fail to get ls", K(ret), K_(ls_id));
       } else {

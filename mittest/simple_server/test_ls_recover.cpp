@@ -159,7 +159,7 @@ void ObLSBeforeRestartTest::minor_freeze_tx_ctx_table()
   ASSERT_EQ(OB_SUCCESS, tguard.switch_to(RunCtx.tenant_id_));
   ObLSService *ls_svr = MTL(ObLSService*);
   ASSERT_NE(nullptr, ls_svr);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls_iter(guard, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls_iter(guard, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_NE(nullptr, iter = guard.get_ptr());
 
   while (OB_SUCC(ret)) {
@@ -591,7 +591,7 @@ TEST_F(ObLSAfterRestartTest, check_unfinished_ls)
   LOG_INFO("check exist ls offlined status");
   for (int i = 0; i < OFFLINED_NUM; i++) {
     LOG_INFO("check_unfinished_ls offlined ls", K(offlined_ls[i]));
-    ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(offlined_ls[i], ls_handle, ObLSGetMod::TXSTORAGE_MOD));
+    ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(offlined_ls[i], ls_handle, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::ALLOW_LOGONLY));
     ls = ls_handle.get_ls();
     ASSERT_NE(nullptr, ls);
     LOG_INFO("ls status", KPC(ls));
@@ -602,7 +602,7 @@ TEST_F(ObLSAfterRestartTest, check_unfinished_ls)
   LOG_INFO("check exist ls normal status");
   for (int i = 0; i < NORMAL_NUM; i++) {
     LOG_INFO("check_unfinished_ls normal ls", K(normal_ls[i]));
-    ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(normal_ls[i], ls_handle, ObLSGetMod::TXSTORAGE_MOD));
+    ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(normal_ls[i], ls_handle, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::ALLOW_LOGONLY));
     ls = ls_handle.get_ls();
     ASSERT_NE(nullptr, ls);
     ASSERT_FALSE(ls->is_offline());

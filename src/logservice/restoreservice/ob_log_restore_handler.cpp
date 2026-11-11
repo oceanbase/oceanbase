@@ -578,7 +578,7 @@ int ObLogRestoreHandler::handle_sync_mode_log_(const int64_t proposal_id,
   if (OB_ISNULL(log_service)) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "ObLogService is null, skip change sync mode", K(id_));
-  } else if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(share::ObLSID(id_), ls_handle, ObLSGetMod::LOG_MOD))) {
+  } else if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(share::ObLSID(id_), ls_handle, ObLSGetMod::LOG_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     CLOG_LOG(WARN, "get ls failed", K(ret), K(id_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -2056,7 +2056,8 @@ int ObLogRestoreHandler::get_offline_scn_(share::SCN &scn)
 {
   int ret = OB_SUCCESS;
   storage::ObLSHandle handle;
-  if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(share::ObLSID(id_), handle, ObLSGetMod::LOG_MOD))) {
+  if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(share::ObLSID(id_), handle, ObLSGetMod::LOG_MOD,
+                                                 ObLSAccessAttr::DISABLE_LOGONLY))) {
     CLOG_LOG(WARN, "get ls failed", K(id_));
   } else if (OB_FAIL(handle.get_ls()->get_offline_scn(scn))) {
     CLOG_LOG(WARN, "get offline_scn failed", K(id_));
@@ -2072,7 +2073,7 @@ int ObLogRestoreHandler::get_gc_state_(LSGCState &gc_state)
 {
   int ret = OB_SUCCESS;
   storage::ObLSHandle handle;
-  if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(share::ObLSID(id_), handle, ObLSGetMod::LOG_MOD))) {
+  if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(share::ObLSID(id_), handle, ObLSGetMod::LOG_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     CLOG_LOG(WARN, "get ls failed", K(id_));
   } else if (OB_FAIL(handle.get_ls()->get_gc_state(gc_state))) {
     CLOG_LOG(WARN, "get gc_state failed", K(id_));

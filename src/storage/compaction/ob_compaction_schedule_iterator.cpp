@@ -77,7 +77,7 @@ int ObBasicMergeScheduleIterator::init(const int64_t schedule_batch_size)
     LOG_WARN("invalid argument", KR(ret), K(schedule_batch_size));
   } else if (!is_valid()) {
     ls_ids_.reuse();
-    if (OB_FAIL(MTL(ObLSService *)->get_ls_ids(ls_ids_))) {
+    if (OB_FAIL(MTL(ObLSService *)->get_ls_ids(ls_ids_, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get all ls id", K(ret));
     } else {
       ls_idx_ = -1;
@@ -260,7 +260,7 @@ void ObCompactionScheduleIterator::reset()
 
 int ObCompactionScheduleIterator::get_cur_ls_handle(ObLSHandle &ls_handle)
 {
-  int ret = MTL(ObLSService *)->get_ls(ls_ids_[ls_idx_], ls_handle, ObLSGetMod::COMPACT_MODE);
+  int ret = MTL(ObLSService *)->get_ls(ls_ids_[ls_idx_], ls_handle, ObLSGetMod::COMPACT_MODE, ObLSAccessAttr::DISABLE_LOGONLY);
 #ifdef ERRSIM
   if (OB_SUCC(ret) && ls_ids_[ls_idx_].id() > share::ObLSID::SYS_LS_ID) {
     ret = OB_E(EventTable::EN_COMPACTION_ITER_LS_NOT_EXIST) ret;

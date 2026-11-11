@@ -388,7 +388,7 @@ void TestTruncateOracleGTT::clean_all_session_tablets()
   ASSERT_NE(nullptr, GCTX.sql_proxy_);
   common::ObSArray<ObLSID> ls_ids;
   ASSERT_NE(nullptr, MTL(ObLSService *));
-  ASSERT_SUCC(MTL(ObLSService *)->get_ls_ids(ls_ids));
+  ASSERT_SUCC(MTL(ObLSService *)->get_ls_ids(ls_ids, ObLSAccessAttr::DISABLE_LOGONLY));
 
   if (ls_ids.empty()) {
     LOG_AND_PRINT(INFO, "no LS", K(ret), K(ls_ids));
@@ -633,14 +633,14 @@ int TestTruncateOracleGTT::trigger_mds_minor(const ObTabletMapKey &key)
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_AND_PRINT(WARN, "invalid tablet key", K(ret), K(key));
-  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_AND_PRINT(WARN, "failed to get ls", K(ret));
   } else {
     int times = 0;
     do
     {
       LOG_AND_PRINT(INFO, "try mds minor", K(times));
-      if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_AND_PRINT(WARN, "failed to get ls", K(ret), K(key));
       } else if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle))) {
         LOG_AND_PRINT(WARN, "failed to tablet handle", K(ret), K(key));
@@ -687,7 +687,7 @@ int TestTruncateOracleGTT::trigger_tablet_medium_merge(
   if (OB_FAIL(ret)) {
   } else if (has_expected) {
     ObLSHandle ls_handle;
-    if (OB_FAIL(MTL(ObLSService *)->get_ls(key.ls_id_, ls_handle, ObLSGetMod::COMPACT_MODE))) {
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(key.ls_id_, ls_handle, ObLSGetMod::COMPACT_MODE, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_AND_PRINT(WARN, "failed to get ls", K(ret), K(key));
     } else {
       while (OB_SUCC(ret)) {
@@ -922,7 +922,7 @@ int TestTruncateOracleGTT::new_dummy_mds_sstable(const ObTabletMapKey &key)
     } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_AND_PRINT(WARN, "unexpected null ls svr", K(ret), KP(ls_svr));
-    } else if (OB_FAIL(ls_svr->get_ls(key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_svr->get_ls(key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_AND_PRINT(WARN, "failed to get ls", K(ret), K(key));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1173,7 +1173,7 @@ TEST_F(TestTruncateOracleGTT, test_gtt_truncate_basic)
       ObLSHandle ls_handle;
       ObLS *ls = nullptr;
       ObLSTabletService *ls_tablet_svr = nullptr;
-      ASSERT_SUCC(ls_svr->get_ls(key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD));
+      ASSERT_SUCC(ls_svr->get_ls(key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
       ASSERT_NE(nullptr, ls = ls_handle.get_ls());
       ASSERT_NE(nullptr, ls_tablet_svr = ls->get_tablet_svr());
       ObTimeGuard time_guard;

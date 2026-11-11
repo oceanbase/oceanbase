@@ -121,7 +121,7 @@ int64_t FakeObGetReadTables::get_read_tables_count(ObTabletID &src_tablet_id)
   int64_t tables_count = 0;
   ObLSID test_ls_id(TEST_LS_ID);
 
-  if (OB_FAIL(MTL(ObLSService *)->get_ls(test_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(test_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "fail to get log stream", K(ret), K(ls_handle));
   } else if (OB_UNLIKELY(nullptr == ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -173,7 +173,7 @@ int FakeObGetReadTables::set_tablet_split_info(ObTabletID &src_tablet_id)
   ObTabletSplitTscInfo split_info;
   ObLSHandle ls_handle;
   ObLSID test_ls_id(TEST_LS_ID);
-  if (OB_FAIL(MTL(ObLSService *)->get_ls(test_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(test_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "fail to get log stream", K(ret), K(ls_handle));
   } else if (OB_UNLIKELY(nullptr == ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

@@ -119,7 +119,7 @@ TEST_F(TestMediumInfoIterator, pure_mds_sstable)
   // get ls
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
-  ret = MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ls = ls_handle.get_ls();
   ASSERT_NE(nullptr, ls);
@@ -226,7 +226,7 @@ TEST_F(TestMediumInfoIterator, data_no_overlap)
   // get ls
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
-  ret = MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ls = ls_handle.get_ls();
   ASSERT_NE(nullptr, ls);
@@ -356,7 +356,7 @@ TEST_F(TestMediumInfoIterator, full_inclusion)
   // get ls
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
-  ret = MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ls = ls_handle.get_ls();
   ASSERT_NE(nullptr, ls);

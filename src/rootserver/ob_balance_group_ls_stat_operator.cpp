@@ -722,7 +722,7 @@ int ObNewTableTabletAllocator::prepare_for_oracle_temp_table(
     if (OB_ISNULL(ls_service)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls service is null", KR(ret));
-    } else if (OB_FAIL(ls_service->get_ls_ids(local_ls_id_array))) {
+    } else if (OB_FAIL(ls_service->get_ls_ids(local_ls_id_array, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("fail to get ls ids from MTL", KR(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < local_ls_id_array.count(); ++i) {

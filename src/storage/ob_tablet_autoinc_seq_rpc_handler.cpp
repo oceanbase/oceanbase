@@ -179,7 +179,7 @@ int ObTabletAutoincSeqRpcHandler::fetch_tablet_autoinc_seq_cache(
       } else if (!is_strong_leader(role)) {
         ret = OB_NOT_MASTER;
         LOG_WARN("follower received FetchTabletsSeq rpc", K(ret), K(ls_id));
-      } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+      } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("get ls failed", K(ret), K(ls_id));
       } else if (OB_FAIL(ls_switch_checker.check_ls_switch_state(ls_handle.get_ls(), is_online))) {
         LOG_WARN("check ls online state failed", K(ret), K(ls_id));
@@ -238,7 +238,7 @@ int ObTabletAutoincSeqRpcHandler::batch_get_tablet_autoinc_seq(
       } else if (!is_strong_leader(role)) {
         ret = OB_NOT_MASTER;
         LOG_WARN("follower received FetchTabletsSeq rpc", K(ret), K(ls_id));
-      } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+      } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("get ls failed", K(ret), K(ls_id));
       } else if (OB_FAIL(ls_switch_checker.check_ls_switch_state(ls_handle.get_ls(), is_online))) {
         LOG_WARN("check ls online state failed", K(ret), K(ls_id));
@@ -329,7 +329,7 @@ int ObTabletAutoincSeqRpcHandler::batch_set_tablet_autoinc_seq(
       } else if (!is_strong_leader(role)) {
         ret = OB_NOT_MASTER;
         LOG_WARN("follower received FetchTabletsSeq rpc", K(ret), K(ls_id));
-      } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+      } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("get ls failed", K(ret), K(ls_id));
       } else if (OB_FAIL(ls_switch_checker.check_ls_switch_state(ls_handle.get_ls(), is_online))) {
         LOG_WARN("check ls online state failed", K(ret), K(ls_id));

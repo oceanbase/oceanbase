@@ -717,7 +717,7 @@ int ObLogStandbyAckService::check_restore_source_valid(const share::ObLSID &ls_i
   if (OB_ISNULL(ls_service = MTL(storage::ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "ls_service is null", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     CLOG_LOG(WARN, "get ls failed", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

@@ -48,7 +48,7 @@ int ObAllVirtualPalfStat::inner_get_next_row(common::ObNewRow *&row)
       ObSharedGuard<ObLSIterator> ls_iter;
 
       if (OB_NOT_NULL(ls_service)) {
-        if (OB_FAIL(ls_service->get_ls_iter(ls_iter, ObLSGetMod::SHARE_MOD))) {
+        if (OB_FAIL(ls_service->get_ls_iter(ls_iter, ObLSGetMod::SHARE_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
           SERVER_LOG(WARN, "get_ls_iter failed", KR(ret));
           ret = OB_SUCCESS;
         } else {

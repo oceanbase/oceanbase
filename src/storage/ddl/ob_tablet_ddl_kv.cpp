@@ -1353,7 +1353,8 @@ int ObDDLKV::wait_pending()
   } else if (OB_UNLIKELY(!is_freezed())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("ddl kv not freezed", K(ret));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD,
+                                        ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get ls handle failed", K(ret), K(ls_id_));
   } else {
     SCN max_decided_scn;
@@ -1592,7 +1593,7 @@ int ObDDLKV::flush(share::ObLSID ls_id)
   ObLSHandle ls_handle;
   if (get_is_flushed()) {
     ret = OB_NO_NEED_UPDATE;
-  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     TRANS_LOG(WARN, "get ls failed", KR(ret), K(ls_id));
   } else if (ls_handle.get_ls()->flush_is_disabled()) {
     ret = OB_EAGAIN;

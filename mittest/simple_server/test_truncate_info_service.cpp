@@ -193,7 +193,7 @@ int ObTruncateInfoServiceTest::wait_mds_flush(
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
 
-  if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     COMMON_LOG(WARN, "failed to get ls", K(ret));
   } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->direct_get_tablet(tablet_id, tablet_handle))) {
     COMMON_LOG(WARN, "failed to get tablet", K(ret), K(ls_handle));

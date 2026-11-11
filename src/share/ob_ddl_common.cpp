@@ -521,7 +521,7 @@ int ObDDLUtil::get_sys_log_handler_role_and_proposal_id(
       if (OB_ISNULL(ls_svr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("mtl ObLSService should not be null", KR(ret), KP(ls_svr));
-      } else if (OB_FAIL(ls_svr->get_ls(SYS_LS, handle, ObLSGetMod::OBSERVER_MOD))) {
+      } else if (OB_FAIL(ls_svr->get_ls(SYS_LS, handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
         LOG_WARN("get ls failed", KR(ret));
       } else if (OB_ISNULL(ls = handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
@@ -2485,7 +2485,7 @@ int ObDDLUtil::get_tablet_physical_row_cnt(
   if (!ls_id.is_valid() || !tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id));
   } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_10_S, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("fail to get tablet", K(ret), K(ls_id), K(tablet_id));
@@ -4146,7 +4146,7 @@ int ObDDLUtil::is_major_exist(const ObLSID &ls_id, const common::ObTabletID &tab
   } else if (OB_ISNULL(ls_svr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be null", K(ret));
-  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   } else if (OB_FAIL(ddl_get_tablet(ls_handle, tablet_id, tablet_handle))) {
     LOG_WARN("failed to get tablet id", K(ret), K(ls_id), K(tablet_id));

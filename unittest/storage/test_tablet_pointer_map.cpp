@@ -575,7 +575,7 @@ TEST_F(TestMetaPointerMap, test_acquire_full_truncate_tablet_gets_current_old_ha
   const ObTabletMapKey key(ObLSID(1001), ObTabletID(102));
   ObLSHandle ls_handle;
   ASSERT_EQ(common::OB_SUCCESS,
-            ls_service.get_ls(key.ls_id_, ls_handle, ObLSGetMod::TXSTORAGE_MOD));
+            ls_service.get_ls(key.ls_id_, ls_handle, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ObTabletPointer tablet_ptr(ls_handle, memtable_mgr_hdl);
   ObMetaDiskAddr none_addr;
   none_addr.set_none_addr();

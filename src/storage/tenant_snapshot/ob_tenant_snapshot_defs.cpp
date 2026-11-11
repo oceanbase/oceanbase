@@ -415,7 +415,7 @@ int ObTenantSnapshot::build_one_ls_snapshot_meta_(ObLSSnapshot* ls_snapshot)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls_snapshot is nullptr", KR(ret), KPC(this));
   } else if (FALSE_IT(creating_ls_id = ls_snapshot->get_ls_id())) {
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(creating_ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(creating_ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", KR(ret), KPC(this), KPC(ls_snapshot));
   } else if (OB_ISNULL((ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;

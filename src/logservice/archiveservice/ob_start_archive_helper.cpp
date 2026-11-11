@@ -201,7 +201,7 @@ int StartArchiveHelper::get_local_base_lsn_(palf::LSN &lsn, bool &log_gap)
   if (OB_ISNULL(ls_service)) {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(WARN, "ls_service is NULL", K(ret), K_(id), KP(ls), KP(log_handler));
-  } else if (OB_FAIL(ls_service->get_ls(id_, ls_handle, ObLSGetMod::ARCHIVE_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(id_, ls_handle, ObLSGetMod::ARCHIVE_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     ARCHIVE_LOG(WARN, "get_ls failed", K_(id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls()) || OB_ISNULL(log_handler = ls->get_log_handler())) {
     ret = OB_ERR_UNEXPECTED;

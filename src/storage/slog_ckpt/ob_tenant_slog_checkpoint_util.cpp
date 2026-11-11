@@ -67,7 +67,7 @@ int ObTenantSlogCkptUtil::write_and_apply_tablet(
     STORAGE_LOG(WARN, "invalid tablet storage param", K(ret), K(storage_param));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
     STORAGE_LOG(WARN, "fail to get min data version", K(ret));
-  } else if (OB_FAIL(ls_service.get_ls(tablet_key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_service.get_ls(tablet_key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "failed to get ls", K(ret), K(tablet_key));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

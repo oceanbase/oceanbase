@@ -162,7 +162,7 @@
    ObLSHandle ls_handle;
    ObLSService *ls_svr = MTL(ObLSService *);
    ASSERT_EQ(OB_SUCCESS,
-             ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+             ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
    MTL(ObTenantTabletScheduler *)->resume_major_merge();
 
    // create tablet
@@ -356,7 +356,7 @@
    ObLSHandle ls_handle;
    ObLSService *ls_svr = MTL(ObLSService *);
    ASSERT_EQ(OB_SUCCESS,
-             ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+             ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
    ASSERT_EQ(OB_SUCCESS,
              ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
 
@@ -445,7 +445,7 @@
    ObLSHandle ls_handle;
    ObLSService *ls_svr = MTL(ObLSService *);
    ASSERT_EQ(OB_SUCCESS,
-             ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+             ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
    ASSERT_EQ(OB_SUCCESS,
              ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
 
@@ -657,7 +657,7 @@
    ObLSHandle ls_handle;
    ObLSService *ls_svr = MTL(ObLSService *);
    ASSERT_EQ(OB_SUCCESS,
-             ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+             ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
    ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tx_table_guard(tx_table_guard));
  }
 
@@ -670,7 +670,7 @@
      ObLSService *ls_svr = MTL(ObLSService *);
      ObLSHandle ls_handle;
      ObTabletHandle old_handle;
-     OK(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+     OK(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
      OK(ls_handle.get_ls()->get_tablet(tablet_id, old_handle));
      ObTablet *old_tablet = old_handle.get_obj();
      ASSERT_NE(nullptr, old_tablet);
@@ -754,7 +754,7 @@
    ObLSService *ls_svr = MTL(ObLSService *);
    const ObTabletTableStore *const_store = nullptr;
    const ObTablet *tablet = nullptr;
-   OK(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+   OK(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
    OK(ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
    tablet = tablet_handle.get_obj();
    if (tablet->table_store_addr_.is_memory_object()) {

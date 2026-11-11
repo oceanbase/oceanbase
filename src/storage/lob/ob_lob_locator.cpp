@@ -634,7 +634,7 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
           share::ObLSID tmp_ls_id(ls_id_);
           ObLSHandle ls_handle;
           ObTabletHandle tablet_handle;
-          if (OB_FAIL(MTL(ObLSService *)->get_ls(tmp_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+          if (OB_FAIL(MTL(ObLSService *)->get_ls(tmp_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
             LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
           } else if (OB_ISNULL(ls_handle.get_ls())) {
             ret = OB_ERR_UNEXPECTED;
