@@ -1944,7 +1944,7 @@ int ObLogger::async_audit_dump(const common::ObBasebLogPrint &info)
     ObPLogItem *log_item = NULL;
     set_disable_logging(true);
     //1. fill log buffer
-    if (OB_FAIL(alloc_log_item(level, MAX_LOG_SIZE, log_item))) {
+    if (OB_FAIL(alloc_log_item(level, LOG_ITEM_SIZE + MAX_LOG_SIZE, log_item))) {
       LOG_STDERR("alloc_log_item error, ret=%d\n", ret);
       ret = OB_SUCCESS; // ignore alloc memory fails
     } else if (OB_ISNULL(log_item)) {
@@ -1996,7 +1996,7 @@ int ObLogger::alloc_log_item(const int32_t level, const int64_t size, ObPLogItem
     if (OB_NOT_NULL(vlog_item)) {
       ATOMIC_INC(&alloc_from_cache_count_);
       log_item = new (vlog_item) ObPLogItem();
-      log_item->set_buf_size(size - LOG_ITEM_SIZE);
+      log_item->set_buf_size(is_large ? MAX_LOG_SIZE : BASE_LOG_SIZE);
       log_item->set_log_level(level);
       log_item->set_cached_item();
       log_item->set_slot(slot);
