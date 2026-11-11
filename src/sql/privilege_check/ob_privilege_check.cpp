@@ -2081,10 +2081,11 @@ int get_dml_stmt_need_privs(
                 }
                 ADD_NEED_PRIV(need_priv);
               } else if (lib::is_mysql_mode()) {
+                // Shared plans must check legacy DML privileges against the current executor.
                 if (OB_FAIL(add_col_priv_to_need_priv(basic_stmt,
                                                       *table_item,
                                                       session_priv.tenant_id_,
-                                                      session_priv.user_id_,
+                                                      OB_INVALID_ID,
                                                       need_privs))) {
                   LOG_WARN("add col id array to need priv failed", K(ret));
                 }
