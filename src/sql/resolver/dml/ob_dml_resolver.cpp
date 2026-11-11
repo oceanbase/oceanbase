@@ -18997,7 +18997,7 @@ int ObDMLResolver::resolve_table_relation_in_hint(const ParseNode &table_node,
     LOG_WARN("unexpected table relation node.", K(ret), K(get_type_name(table_node.type_)), K(table_node.num_child_));
   } else if (OB_FAIL(resolve_qb_name_node(table_node.children_[1], table_in_hint.qb_name_))) {
     LOG_WARN("failed to resolve qb name node.", K(ret));
-  } else if (OB_FAIL(resolve_db_and_catalog_info(table_node.children_[0],
+  } else if (OB_TMP_FAIL(resolve_db_and_catalog_info(table_node.children_[0],
                                                   table_in_hint.db_name_,
                                                   catalog_name,
                                                   catalog_id,
@@ -19005,7 +19005,11 @@ int ObDMLResolver::resolve_table_relation_in_hint(const ParseNode &table_node,
                                                   NULL,
                                                   is_db_explicit,
                                                   is_org))){
-    LOG_WARN("fail to resolve catalog and db information", K(ret));
+    // Ignore invalid database names in hints, as for invalid table names below.
+    if (OB_ERR_TOO_LONG_IDENT != tmp_ret && OB_WRONG_DB_NAME != tmp_ret) {
+      ret = tmp_ret;
+      LOG_WARN("fail to resolve catalog and db information", K(ret));
+    }
   } else if (OB_TMP_FAIL(resolve_tablename_info(table_node.children_[0], table_in_hint.table_name_))) {
     if(OB_ERR_TOO_LONG_IDENT != tmp_ret && OB_WRONG_TABLE_NAME != tmp_ret){
       ret = tmp_ret;
