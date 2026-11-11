@@ -8150,9 +8150,22 @@ int ObRootService::admin_set_config(obrpc::ObAdminSetConfigArg &arg)
     }
   }
 
+  // ROOTSERVICE_EVENT_ADD_TRUNCATE bounded text but did not SQL-escape quotes or backslashes.
+  // Bound item text here and use ROOTSERVICE_EVENT_ADD with ObHexEscapeSqlStr to preserve
+  // arg/old_value bytes without truncating the escaped representation.
+  const int result = ret;
   for (int64_t i = 0; i < arg.items_.count(); i++) {
-    const char *old_value_str = (i < old_values.count()) ? old_values.at(i).ptr() : "";
-    ROOTSERVICE_EVENT_ADD_TRUNCATE("root_service", "admin_set_config", K(ret), "arg", arg.items_.at(i), "is_inner", arg.is_inner_, "old_value", old_value_str);
+    int ret = OB_SUCCESS;
+    const char *old_value = (i < old_values.count()) ? old_values.at(i).ptr() : "";
+    HEAP_VAR(char[MAX_ROOTSERVICE_EVENT_VALUE_LENGTH + 1], text) {
+      ret = ROOTSERVICE_EVENT_ADD("root_service", "admin_set_config", "ret", result,
+                                  "arg", ObHexEscapeSqlStr(ObString(arg.items_.at(i).to_string(text, sizeof(text)), text)),
+                                  "is_inner", arg.is_inner_,
+                                  "old_value", ObHexEscapeSqlStr(ObString(old_value)));
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to add set config event", KR(ret), K(i));
+    }
   }
   return ret;
 }

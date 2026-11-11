@@ -12,6 +12,9 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_config_helper.h"
+#ifdef OB_BUILD_AUDIT_SECURITY
+#include "sql/audit/ob_audit_log_format_options.h"
+#endif
 #include "share/ob_resource_limit.h"
 #include "src/observer/ob_server.h"
 #include "share/config/ob_config_mode_name_def.h"
@@ -1825,6 +1828,21 @@ bool ObConfigSchemaHistoryArchiveExpireTimeChecker::check(const ObConfigItem &t)
     }
   }
   return is_valid;
+}
+
+bool ObConfigAuditLogFormatOptionsChecker::check(const ObConfigItem &t) const
+{
+  bool valid = false;
+#ifdef OB_BUILD_AUDIT_SECURITY
+  ObAuditLogFormatOptions options;
+  const ObString text(t.str());
+  const uint64_t tenant_id = is_user_tenant(MTL_ID()) ? MTL_ID() : OB_SYS_TENANT_ID;
+  valid = OB_SUCCESS == options.parse(text)
+          && (text.empty() || OB_SUCCESS == ObAuditLogFormatOptions::check_data_version(tenant_id));
+#else
+  valid = ObString(t.str()).empty();
+#endif
+  return valid;
 }
 
 } // end of namepace common

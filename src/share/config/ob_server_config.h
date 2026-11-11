@@ -80,6 +80,7 @@ const char* const ZONE_DEPLOY_MODE = "zone_deploy_mode";
 const char* const ENABLE_LOGONLY_REPLICA = "enable_logonly_replica";
 const char* const ENABLE_GTS_STANDALONE = "enable_gts_standalone";
 const char* const ENABLE_STANDBY_SEMI_SYNC = "enable_standby_semi_sync";
+const char* const AUDIT_LOG_FORMAT_OPTIONS = "audit_log_format_options";
 
 class ObServerMemoryConfig;
 
