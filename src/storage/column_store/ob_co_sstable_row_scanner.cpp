@@ -35,6 +35,7 @@ ObCOSSTableRowScanner::ObCOSSTableRowScanner()
     group_by_project_idx_(0),
     group_size_(0),
     batch_size_(1),
+    next_group_size_(INITIAL_GROUP_SIZE),
     column_group_cnt_(-1),
     current_(OB_INVALID_CS_ROW_ID),
     end_(OB_INVALID_CS_ROW_ID),
@@ -133,6 +134,7 @@ void ObCOSSTableRowScanner::reset()
   end_ = OB_INVALID_CS_ROW_ID;
   group_size_ = 0;
   batch_size_ = 1;
+  next_group_size_ = INITIAL_GROUP_SIZE;
   reverse_scan_ = false;
   state_ = BEGIN;
   blockscan_state_ = MAX_STATE;
@@ -167,6 +169,7 @@ void ObCOSSTableRowScanner::reuse()
   end_ = OB_INVALID_CS_ROW_ID;
   group_size_ = 0;
   batch_size_ = 1;
+  next_group_size_ = INITIAL_GROUP_SIZE;
   reverse_scan_ = false;
   state_ = BEGIN;
   blockscan_state_ = MAX_STATE;
@@ -1017,19 +1020,25 @@ int ObCOSSTableRowScanner::refresh_blockscan_checker(const blocksstable::ObDatum
 int ObCOSSTableRowScanner::get_next_group_size(const ObCSRowId begin, int64_t &group_size)
 {
   int ret = OB_SUCCESS;
+  const int64_t target_group_size = MIN(next_group_size_, batch_size_);
   group_size = 0;
   if (reverse_scan_) {
     if (begin < end_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected rowid", K(begin), K(end_));
     } else {
-      group_size = MIN(batch_size_, begin - end_ + 1);
+      group_size = MIN(target_group_size, begin - end_ + 1);
     }
   } else if (begin > end_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected rowid", K(begin), K(end_));
   } else {
-    group_size = MIN(batch_size_, end_ - begin + 1);
+    group_size = MIN(target_group_size, end_ - begin + 1);
+  }
+  if (OB_SUCC(ret) && group_size > 0 && group_size < batch_size_) {
+    // Start with smaller groups so filter reordering can take effect earlier,
+    // then grow toward the configured batch size.
+    next_group_size_ = MIN(target_group_size * 2, batch_size_);
   }
   return ret;
 }

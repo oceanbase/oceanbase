@@ -77,6 +77,7 @@ public:
                K_(group_by_project_idx),
                K_(group_size),
                K_(batch_size),
+               K_(next_group_size),
                K_(column_group_cnt),
                K_(current),
                K_(end),
@@ -106,6 +107,7 @@ protected:
     return ret;
   }
 private:
+  static constexpr int64_t INITIAL_GROUP_SIZE = 8192;
   static const ScanState STATE_TRANSITION[BlockScanState::MAX_STATE];
   virtual int init_row_scanner(
       const ObTableIterParam &param,
@@ -224,6 +226,7 @@ private:
   int32_t group_by_project_idx_;
   int64_t group_size_;
   int64_t batch_size_;
+  int64_t next_group_size_;
   int64_t column_group_cnt_;
   ObCSRowId current_;
   ObCSRowId end_;

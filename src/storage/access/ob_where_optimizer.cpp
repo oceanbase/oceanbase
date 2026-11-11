@@ -11,6 +11,8 @@ namespace oceanbase
 namespace storage
 {
 #define REORDER_FILTER_INTERVAL 32
+#define REORDER_CO_FILTER_ROW_INTERVAL 262144 // 32 * 8192
+
 ObWhereOptimizer::ObWhereOptimizer()
   : iter_param_(nullptr)
   , filter_(nullptr)
@@ -192,7 +194,7 @@ int ObWhereOptimizer::reorder_co_filter()
       LOG_WARN("Failed to analyze in co where optimzier", K(ret));
     } else {
       reorder_filter_times_ = 0;
-      reorder_filter_interval_ = REORDER_FILTER_INTERVAL;
+      reorder_filter_interval_ = MAX(1L, REORDER_CO_FILTER_ROW_INTERVAL / iter_param_->get_storage_rowsets_size());
     }
   } else {
     ++reorder_filter_times_;

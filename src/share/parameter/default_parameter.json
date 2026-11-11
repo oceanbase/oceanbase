@@ -152,6 +152,11 @@
           "comment": "default to column format for AP"
         },
         {
+          "name": "storage_rowsets_size",
+          "value": 65536,
+          "comment": "increase the maximum storage batch size for column scans in AP workloads"
+        },
+        {
           "name": "_io_read_batch_size",
           "value": "128K",
           "comment": "Maximum batch size in one read io request"
