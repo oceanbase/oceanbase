@@ -211,9 +211,10 @@ int ObODPSJNITableRowIterator::init(const storage::ObTableScanParam *scan_param)
     }
     if (OB_ERR_UNKNOWN_TIME_ZONE == ret) {
       ret = OB_SUCCESS;
-      MEMCPY(ob_time_.tz_name_, timezone_str_.ptr(), timezone_str_.length());
-      ob_time_.tz_name_[timezone_str_.length()] = '\0';
-      ob_time_.is_tz_name_valid_ = true;
+      const ObString tz_name = timezone_str_.trim();
+      if (OB_FAIL(ob_time_.set_tz_name(tz_name))) {
+        LOG_WARN("invalid time zone name", K(tz_name), K(ret));
+      }
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(odps_params_map_.set_refactored(

@@ -1921,16 +1921,15 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
                       if (OB_ERR_UNKNOWN_TIME_ZONE == ret) {
                         ret = OB_SUCCESS;
                         ObTime ob_time(DT_TYPE_ORACLE_TTZ);
-                        MEMCPY(ob_time.tz_name_, timezone_str_.ptr(), timezone_str_.length());
-                        ob_time.tz_name_[timezone_str_.length()] = '\0';
-                        ob_time.is_tz_name_valid_ = true;
                         ObTimeConvertCtx cvrt_ctx(TZ_INFO(session_ptr_), true);
                         ObOTimestampData tmp_ot_data;
                         tmp_ot_data.time_ctx_.tz_desc_ = 0;
                         tmp_ot_data.time_ctx_.store_tz_id_ = 0;
                         tmp_ot_data.time_us_ = *v * 1000;
-
-                        if (OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(ObTimestampLTZType, tmp_ot_data,
+                        const ObString tz_name = timezone_str_.trim();
+                        if (OB_FAIL(ob_time.set_tz_name(tz_name))) {
+                          LOG_WARN("invalid time zone name", K(tz_name), K(ret));
+                        } else if (OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(ObTimestampLTZType, tmp_ot_data,
                                                                           NULL, ob_time))) {
                           LOG_WARN("failed to convert otimestamp_to_ob_time", K(ret));
                         } else if (OB_FAIL(ObTimeConverter::str_to_tz_offset(cvrt_ctx, ob_time))) {
@@ -2687,16 +2686,15 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
                   if (OB_ERR_UNKNOWN_TIME_ZONE == ret) {
                     ret = OB_SUCCESS;
                     ObTime ob_time(DT_TYPE_ORACLE_TTZ);
-                    MEMCPY(ob_time.tz_name_, timezone_str_.ptr(), timezone_str_.length());
-                    ob_time.tz_name_[timezone_str_.length()] = '\0';
-                    ob_time.is_tz_name_valid_ = true;
                     ObTimeConvertCtx cvrt_ctx(TZ_INFO(session_ptr_), true);
                     ObOTimestampData tmp_ot_data;
                     tmp_ot_data.time_ctx_.tz_desc_ = 0;
                     tmp_ot_data.time_ctx_.store_tz_id_ = 0;
                     tmp_ot_data.time_us_ = *v * 1000;
-
-                    if (OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(ObTimestampLTZType, tmp_ot_data,
+                    const ObString tz_name = timezone_str_.trim();
+                    if (OB_FAIL(ob_time.set_tz_name(tz_name))) {
+                      LOG_WARN("invalid time zone name", K(tz_name), K(ret));
+                    } else if (OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(ObTimestampLTZType, tmp_ot_data,
                                                                       NULL, ob_time))) {
                       LOG_WARN("failed to convert otimestamp_to_ob_time", K(ret));
                     } else if (OB_FAIL(ObTimeConverter::str_to_tz_offset(cvrt_ctx, ob_time))) {
