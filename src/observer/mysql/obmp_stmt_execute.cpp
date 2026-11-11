@@ -2717,6 +2717,13 @@ int ObMPStmtExecute::parse_complex_param_value(ObIAllocator &allocator,
       OX (param.set_param_meta(param.get_meta()));
     }
   }
+  if (OB_FAIL(ret) && param.is_pl_extend()) {
+    int tmp_ret = pl::ObUserDefinedType::destruct_obj(param, session);
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("failed to destruct complex parameter", K(ret), K(tmp_ret));
+    }
+    param.reset();
+  }
   return ret;
 }
 
