@@ -1304,20 +1304,24 @@ const char *calc_md5_cstr(const char *buf, const int64_t length)
 
   static const int64_t MD5_SUM_LEN = 16;
   static const int64_t MD5_STR_LEN = MD5_SUM_LEN * 2 + 1;
-  static char MD5_SUM_BUF[MD5_SUM_LEN];
-  static char MD5_STR_BUF[MD5_STR_LEN];
+  static const int64_t MD5_STR_BUF_CNT = 4;
+  unsigned char md5_sum_buf[MD5_SUM_LEN];
+  static thread_local char md5_str_bufs[MD5_STR_BUF_CNT][MD5_STR_LEN];
+  static thread_local int64_t tls_md5_str_buf_idx = 0;
   const unsigned char *in_buf = reinterpret_cast<const unsigned char *>(buf);
-  unsigned char *out_buf = reinterpret_cast<unsigned char *>(MD5_SUM_BUF);
 
   if (NULL == buf) {
     md5_cstr = "NULL";
   } else {
+    char *md5_str_buf = md5_str_bufs[tls_md5_str_buf_idx];
+    tls_md5_str_buf_idx = (tls_md5_str_buf_idx + 1) % MD5_STR_BUF_CNT;
     // Calculate MD5
-    (void)MD5(in_buf, length, out_buf);
+    (void)MD5(in_buf, length, md5_sum_buf);
     // Print to hex
-    (void)to_hex_cstr(MD5_SUM_BUF, MD5_SUM_LEN, MD5_STR_BUF, MD5_STR_LEN);
-    (void)ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, MD5_STR_BUF, MD5_STR_LEN, MD5_STR_BUF, MD5_STR_LEN);
-    md5_cstr = MD5_STR_BUF;
+    (void)to_hex_cstr(reinterpret_cast<const char *>(md5_sum_buf),
+        MD5_SUM_LEN, md5_str_buf, MD5_STR_LEN);
+    (void)ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, md5_str_buf, MD5_STR_LEN, md5_str_buf, MD5_STR_LEN);
+    md5_cstr = md5_str_buf;
   }
   return md5_cstr;
 }
