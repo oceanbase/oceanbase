@@ -6704,7 +6704,8 @@ int ObJoinOrder::filter_indexes_by_flashback_query(const TableItem &table_item,
                  || OB_ISNULL(snapshot_expr->get_param_expr(0)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected flashback query cast expression", K(ret), KPC(snapshot_expr));
-  } else if (!query_ctx->check_opt_compat_version(COMPAT_VERSION_5_0_2)) {
+  } else if (!query_ctx->check_opt_compat_version(COMPAT_VERSION_4_4_2_BP4,
+                                                 COMPAT_VERSION_4_5_0, COMPAT_VERSION_5_0_2)) {
     // do nothing
   } else {
     if (T_FUN_SYS_CAST == snapshot_expr->get_expr_type()

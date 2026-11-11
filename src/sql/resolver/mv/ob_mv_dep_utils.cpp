@@ -590,7 +590,8 @@ int ObMVDepUtils::check_mview_refresh_interval_order(ObISQLClient &sql_client,
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(mview_ids.count()));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("failed to get min data version", KR(ret), K(tenant_id));
-  } else if (compat_version < DATA_VERSION_5_0_2_0) {
+  } else if (!((MOCK_DATA_VERSION_4_4_2_4 <= compat_version && DATA_VERSION_4_5_0_0 > compat_version)
+               || DATA_VERSION_5_0_2_0 <= compat_version)) {
   } else if (OB_FAIL(sql.assign_fmt(
                  "WITH RECURSIVE up_dep (mview_id, refresh_interval) AS ("
                  "  SELECT mv.mview_id, mv.refresh_interval FROM %s.%s mv "
@@ -658,7 +659,8 @@ int ObMVDepUtils::check_mview_refresh_interval_order(ObISQLClient &sql_client,
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(mview_id));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("failed to get min data version", KR(ret), K(tenant_id));
-  } else if (compat_version < DATA_VERSION_5_0_2_0) {
+  } else if (!((MOCK_DATA_VERSION_4_4_2_4 <= compat_version && DATA_VERSION_4_5_0_0 > compat_version)
+               || DATA_VERSION_5_0_2_0 <= compat_version)) {
   } else if (OB_FAIL(sql.assign_fmt(
                  "WITH RECURSIVE up_dep (mview_id, refresh_interval) AS ("
                  "  SELECT mv.mview_id, mv.refresh_interval "

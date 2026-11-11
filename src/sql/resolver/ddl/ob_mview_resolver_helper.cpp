@@ -616,12 +616,13 @@ int ObMViewResolverHelper::resolve_mv_sched_suspended(const uint64_t tenant_id,
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get min data version", KR(ret), K(tenant_id));
-  } else if (OB_UNLIKELY(DATA_VERSION_5_0_2_0 > data_version)) {
+  } else if (OB_UNLIKELY(!((MOCK_DATA_VERSION_4_4_2_4 <= data_version && DATA_VERSION_4_5_0_0 > data_version)
+                         || DATA_VERSION_5_0_2_0 <= data_version))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("tenant data version does not support suspending mview refresh",
              KR(ret), K(tenant_id), K(data_version));
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "tenant's data version is below 5.0.2.0, suspend mview refresh is");
+                   "suspend mview refresh for this tenant's data version is");
   } else {
     sched_suspended = true;
   }

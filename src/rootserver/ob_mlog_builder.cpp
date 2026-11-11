@@ -1026,7 +1026,8 @@ int ObMLogBuilder::check_enable_mlog_seq_first_rowkey(const uint64_t tenant_id, 
   is_enable = false;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get data version", KR(ret), K(tenant_id));
-  } else if (data_version >= DATA_VERSION_5_0_2_0) {
+  } else if ((MOCK_DATA_VERSION_4_4_2_4 <= data_version && DATA_VERSION_4_5_0_0 > data_version)
+             || DATA_VERSION_5_0_2_0 <= data_version) {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     if (tenant_config.is_valid()) {
       is_enable = tenant_config->_enable_mlog_seq_first_rowkey;

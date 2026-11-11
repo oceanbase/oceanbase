@@ -2620,7 +2620,8 @@ int ObTransformTempTable::construct_transform_hint(ObDMLStmt &stmt, void *trans_
 
 bool ObTransformTempTable::is_heuristic_and_cost_based_trans(const ObQueryCtx &query_ctx)
 {
-  return query_ctx.check_opt_compat_version(COMPAT_VERSION_5_0_2);
+  return query_ctx.check_opt_compat_version(COMPAT_VERSION_4_4_2_BP4,
+                                            COMPAT_VERSION_4_5_0, COMPAT_VERSION_5_0_2);
 }
 
 bool ObTransformTempTable::allow_cost_based_trans(const ObQueryCtx &query_ctx,

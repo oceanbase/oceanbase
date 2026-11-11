@@ -147,7 +147,8 @@ int ObMVCheckerRouter::check_normal_refresh(const ObSelectStmt &stmt,
   } else if (relation_checker_enabled) {
     checker_cnt = CHECKER_COUNT;
     // set priority of checkers
-    const bool prefer_relation_based = stmt.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_5_0_2);
+    const bool prefer_relation_based = stmt.get_query_ctx()->check_opt_compat_version(
+        COMPAT_VERSION_4_4_2_BP4, COMPAT_VERSION_4_5_0, COMPAT_VERSION_5_0_2);
     checker_order[0] = prefer_relation_based ? RELATION_CHECKER : PRINTER_CHECKER;
     checker_order[1] = prefer_relation_based ? PRINTER_CHECKER : RELATION_CHECKER;
   }

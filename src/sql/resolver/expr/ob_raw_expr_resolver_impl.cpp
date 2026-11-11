@@ -6309,14 +6309,18 @@ int ObRawExprResolverImpl::process_any_value_node(const ParseNode *node, ObRawEx
 {
   int ret = OB_SUCCESS;
   bool is_agg = false;
+  const uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
+  const bool is_supported_cluster_version =
+      (MOCK_CLUSTER_VERSION_4_4_2_4 <= cluster_version && CLUSTER_VERSION_4_5_0_0 > cluster_version)
+      || CLUSTER_VERSION_5_0_2_0 <= cluster_version;
   if (OB_ISNULL(node) || OB_UNLIKELY(2 != node->num_child_) || OB_ISNULL(node->children_)
       || OB_ISNULL(node->children_[1])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid any_value node", K(ret), K(node));
   } else if (lib::is_oracle_mode()) {
-    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_5_0_2_0) {
+    if (OB_UNLIKELY(!is_supported_cluster_version)) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("any_value is not supported in current cluster version", K(ret), K(GET_MIN_CLUSTER_VERSION()));
+      LOG_WARN("any_value is not supported in current cluster version", K(ret), K(cluster_version));
     } else if (OB_FAIL(process_agg_node(node, expr))) {
       LOG_WARN("failed to process any_value as aggregate function", K(ret));
     }
@@ -6327,7 +6331,7 @@ int ObRawExprResolverImpl::process_any_value_node(const ParseNode *node, ObRawEx
                  || T_HAVING_SCOPE == ctx_.current_scope_
                  || T_ORDER_SCOPE == ctx_.current_scope_
                  || T_NAMED_WINDOWS_SCOPE == ctx_.current_scope_)
-             && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_5_0_2_0) {
+             && is_supported_cluster_version) {
     if (OB_FAIL(process_agg_node(node, expr))) {
       LOG_WARN("failed to process any_value as aggregate function", K(ret));
     }

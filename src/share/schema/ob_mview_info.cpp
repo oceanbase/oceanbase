@@ -203,7 +203,8 @@ int ObMViewInfo::gen_insert_mview_dml(const uint64_t exec_tenant_id, ObDMLSqlSpl
   } else if (((data_version >= MOCK_DATA_VERSION_4_4_2_2 && data_version < DATA_VERSION_4_5_0_0)
               || (data_version >= DATA_VERSION_4_6_1_0)) && OB_FAIL(dml.add_uint64_column("compat_version", compat_version_))) {
     LOG_WARN("fail to add compat_version", K(ret));
-  } else if (data_version >= DATA_VERSION_5_0_2_0
+  } else if (((MOCK_DATA_VERSION_4_4_2_4 <= data_version && DATA_VERSION_4_5_0_0 > data_version)
+              || DATA_VERSION_5_0_2_0 <= data_version)
              && (OB_FAIL(dml.add_column("refresh_interval", refresh_interval_))
                  || OB_FAIL(dml.add_column("refresh_timeout_us", refresh_timeout_us_))
                  || OB_FAIL(dml.add_uint64_column("refresh_flags", refresh_flags_)))) {
@@ -288,7 +289,8 @@ int ObMViewInfo::gen_update_mview_attribute_dml(const uint64_t exec_tenant_id,
   } else if (((data_version >= MOCK_DATA_VERSION_4_4_2_2 && data_version < DATA_VERSION_4_5_0_0)
               || (data_version >= DATA_VERSION_4_6_1_0)) && OB_FAIL(dml.add_uint64_column("compat_version", compat_version_))) {
     LOG_WARN("fail to add compat_version", K(ret));
-  } else if (data_version >= DATA_VERSION_5_0_2_0
+  } else if (((MOCK_DATA_VERSION_4_4_2_4 <= data_version && DATA_VERSION_4_5_0_0 > data_version)
+              || DATA_VERSION_5_0_2_0 <= data_version)
              && (OB_FAIL(dml.add_column("refresh_interval", refresh_interval_))
                  || OB_FAIL(dml.add_column("refresh_timeout_us", refresh_timeout_us_))
                  || OB_FAIL(dml.add_uint64_column("refresh_flags", refresh_flags_)))) {
@@ -878,9 +880,9 @@ int ObMViewInfo::extract_mview_info(common::sqlclient::ObMySQLResult *result,
                                                         ObMVNestedRefreshMode, true, true, 0);
     EXTRACT_UINT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(*result, compat_version, mview_info, uint64_t, true, true, 0);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(*result, refresh_interval, mview_info,
-                                                        int64_t, true, false, 0);
+                                                        int64_t, true, true, 0);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(*result, refresh_timeout_us, mview_info,
-                                                        int64_t, true, false, 0);
+                                                        int64_t, true, true, 0);
     EXTRACT_UINT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(*result, refresh_flags, mview_info,
                                                         uint64_t, true, true, 0);
   }
