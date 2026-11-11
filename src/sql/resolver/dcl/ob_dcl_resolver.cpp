@@ -130,7 +130,6 @@ int ObDCLResolver::check_oracle_password_strength(int64_t tenant_id,
                                                   common::ObString &user_name)
 {
   int ret = OB_SUCCESS;
-  ObString old_password("NULL");
   ObString function_name;
   // 如果profile_id未指定, 使用默认profile.
   if (profile_id == OB_INVALID_ID) {
@@ -161,6 +160,9 @@ int ObDCLResolver::check_oracle_password_strength(int64_t tenant_id,
         sqlclient::ObMySQLResult *sql_result = NULL;
         ObISQLConnection *conn = NULL;
         ObInnerSQLConnectionPool *pool = NULL;
+        ObCStringHelper helper;
+        const char *escaped_user_name = NULL;
+        const char *escaped_password = NULL;
         share::ObSwitchCatalogHelper switch_catalog_helper;
         int tmp_ret = OB_SUCCESS;
         if (session_info_->is_in_external_catalog()
@@ -168,21 +170,26 @@ int ObDCLResolver::check_oracle_password_strength(int64_t tenant_id,
           LOG_WARN("failed to set catalog", K(ret));
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(sql.append_fmt("SELECT  %.*s('%.*s', '%.*s', %.*s) AS RES FROM DUAL",
-            function_name.length(), function_name.ptr(), 
-            user_name.length(), user_name.ptr(),
-            password.length(), password.ptr(),
-            old_password.length(), old_password.ptr()))) {
-          LOG_WARN("append sql failed", K(ret), K(sql));
-        } else if (OB_ISNULL(pool = static_cast<ObInnerSQLConnectionPool*>(
-                             sql_proxy->get_pool()))) {
+        } else if (OB_FAIL(helper.convert(ObHexEscapeSqlStr(user_name, false, true), escaped_user_name))) {
+          LOG_WARN("escape user name argument failed", K(ret));
+        } else if (OB_FAIL(helper.convert(ObHexEscapeSqlStr(password, false, true), escaped_password))) {
+          LOG_WARN("escape password argument failed", K(ret));
+        } else if (OB_ISNULL(escaped_user_name) || OB_ISNULL(escaped_password)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("escaped password verify argument is null", K(ret));
+        } else if (OB_FAIL(sql.append_fmt("SELECT %.*s('%s', '%s', NULL) AS RES FROM DUAL",
+                                          function_name.length(),
+                                          function_name.ptr(),
+                                          escaped_user_name,
+                                          escaped_password))) {
+          LOG_WARN("append password verify sql failed", K(ret));
+        } else if (OB_ISNULL(pool = static_cast<ObInnerSQLConnectionPool *>(sql_proxy->get_pool()))) {
           ret = OB_NOT_INIT;
           LOG_WARN("connection pool is NULL", K(ret));
         } else if (OB_FAIL(pool->acquire(session_info_, conn))) {
           LOG_WARN("failed to acquire inner connection", K(ret));
-        } else if (OB_FAIL(conn->execute_read(session_info_->get_effective_tenant_id(), 
-              sql.ptr(), res, true))) {
-          LOG_WARN("execute sql failed", K(ret), K(sql));
+        } else if (OB_FAIL(conn->execute_read(session_info_->get_effective_tenant_id(), sql.ptr(), res, true))) {
+          LOG_WARN("execute password verify function failed", K(ret));
         } else if (OB_ISNULL(sql_result = res.get_result())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("result is null", K(ret));

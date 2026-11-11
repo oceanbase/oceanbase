@@ -52,7 +52,16 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
 		LOG_ERROR("Failed to create ObCreateUserStmt", K(ret));
 	} else {
     stmt_ = create_user_stmt;
-		ParseNode *if_not_exist = const_cast<ParseNode*>(parse_tree.children_[0]);
+    if (ObSchemaChecker::is_ora_priv_check()) {
+      OZ(schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
+                                             session_info_->get_priv_user_id(),
+                                             ObString(""),
+                                             stmt::T_CREATE_USER,
+                                             session_info_->get_enable_role_array()),
+         session_info_->get_effective_tenant_id(),
+         session_info_->get_user_id());
+    }
+    ParseNode *if_not_exist = const_cast<ParseNode *>(parse_tree.children_[0]);
     ParseNode *users = const_cast<ParseNode*>(parse_tree.children_[1]);
     ParseNode *require_info = const_cast<ParseNode*>(parse_tree.children_[2]);
     ParseNode *resource_options = !lib::is_oracle_mode() ? const_cast<ParseNode*>(parse_tree.children_[3]) : NULL;
@@ -327,16 +336,6 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
           }
         }
       }
-    }
-
-    if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
-      OZ (schema_checker_->check_ora_ddl_priv(
-            session_info_->get_effective_tenant_id(),
-            session_info_->get_priv_user_id(),
-            ObString(""),
-            stmt::T_CREATE_USER,
-            session_info_->get_enable_role_array()),
-            session_info_->get_effective_tenant_id(), session_info_->get_user_id());
     }
   }
   return ret;

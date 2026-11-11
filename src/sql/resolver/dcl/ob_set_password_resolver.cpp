@@ -174,6 +174,16 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
     } else {
       plugin = user_info->get_plugin();
     }
+    // Check privileges before invoking the profile's password verify function.
+    if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check() && !set_pwd_stmt->get_for_current_user()) {
+      OZ(schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
+                                             session_info_->get_priv_user_id(),
+                                             ObString(""),
+                                             stmt::T_SET_PASSWORD,
+                                             session_info_->get_enable_role_array()),
+         session_info_->get_effective_tenant_id(),
+         session_info_->get_user_id());
+    }
     // resolve require and resource option
     if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(node->children_[3])) {
@@ -390,15 +400,6 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
                  K(ret),
                  K(params_.session_info_->get_priv_user_id()),
                  K(user_name));
-      } else if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()
-                 && set_pwd_stmt->get_for_current_user() == false) {
-        OZ(schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
-                                               session_info_->get_priv_user_id(),
-                                               ObString(""),
-                                               stmt::T_SET_PASSWORD,
-                                               session_info_->get_enable_role_array()),
-                                               session_info_->get_effective_tenant_id(),
-                                               session_info_->get_user_id());
       } else {
         // replace password to *** in query_string for audit
         ObString masked_sql;
