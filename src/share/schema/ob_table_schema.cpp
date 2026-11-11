@@ -6937,8 +6937,16 @@ int ObTableSchema::get_skip_index_col_attr_by_schema(
       LOG_WARN("unexpected null column schema", K(ret), K(i), KPC(rowkey_column));
     } else if (only_set_fts && FALSE_IT(skip_idx_attrs.at(attr_idx++).set_column_fts_attr(column_schema->get_skip_index_attr()))) {
     } else if (!only_set_fts && FALSE_IT(skip_idx_attrs.at(attr_idx++).set_column_attr(column_schema->get_skip_index_attr().get_packed_value()))) {
-    } else if (OB_NOT_NULL(column_types) && OB_FAIL(column_types->push_back(column_schema->get_meta_type()))) {
-      LOG_WARN("fail to push column meta type", K(ret));
+    } else if (OB_NOT_NULL(column_types)) {
+      ObObjMeta meta_type = column_schema->get_meta_type();
+      // Skip index size calculation needs the precision stored separately in the column schema.
+      if (meta_type.is_decimal_int()) {
+        meta_type.set_stored_precision(column_schema->get_accuracy().get_precision());
+        meta_type.set_scale(column_schema->get_accuracy().get_scale());
+      }
+      if (OB_FAIL(column_types->push_back(meta_type))) {
+        LOG_WARN("fail to push column meta type", K(ret));
+      }
     }
   }
   // add stored multi-version columns to column_types
@@ -6962,8 +6970,15 @@ int ObTableSchema::get_skip_index_col_attr_by_schema(
       // skip
     } else if (only_set_fts && FALSE_IT(skip_idx_attrs.at(attr_idx++).set_column_fts_attr(column_schema->get_skip_index_attr()))) {
     } else if (!only_set_fts && FALSE_IT(skip_idx_attrs.at(attr_idx++).set_column_attr(column_schema->get_skip_index_attr().get_packed_value()))) {
-    } else if (OB_NOT_NULL(column_types) && OB_FAIL(column_types->push_back(column_schema->get_meta_type()))) {
-      LOG_WARN("fail to push column meta type", K(ret));
+    } else if (OB_NOT_NULL(column_types)) {
+      ObObjMeta meta_type = column_schema->get_meta_type();
+      if (meta_type.is_decimal_int()) {
+        meta_type.set_stored_precision(column_schema->get_accuracy().get_precision());
+        meta_type.set_scale(column_schema->get_accuracy().get_scale());
+      }
+      if (OB_FAIL(column_types->push_back(meta_type))) {
+        LOG_WARN("fail to push column meta type", K(ret));
+      }
     }
   }
 
