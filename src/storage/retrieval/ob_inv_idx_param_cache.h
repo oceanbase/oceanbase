@@ -20,6 +20,8 @@ class ObInvIdxParamCache
 {
   typedef common::hash::ObHashMap<common::ObTabletID, double, hash::NoPthreadDefendMode>
       AvgDocTokenCntMap;
+  typedef common::hash::ObHashMap<common::ObTabletID, uint64_t, hash::NoPthreadDefendMode>
+      TotalDocCntMap;
 public:
   ObInvIdxParamCache();
   ~ObInvIdxParamCache();
@@ -31,16 +33,21 @@ public:
   int set_avg_doc_token_cnt(
       const common::ObTabletID &tablet_id,
       const double avg_doc_token_cnt);
-  int get_total_doc_cnt(uint64_t &total_doc_cnt) const;
-  int set_total_doc_cnt(const uint64_t total_doc_cnt);
+  int get_total_doc_cnt(
+      const common::ObTabletID &tablet_id,
+      uint64_t &total_doc_cnt) const;
+  int set_total_doc_cnt(
+      const common::ObTabletID &tablet_id,
+      const uint64_t total_doc_cnt);
 private:
   int init_avg_doc_token_cnt_map();
+  int init_total_doc_cnt_map();
 private:
   static constexpr int64_t DEFAULT_BUCKET_CNT = 16;
-  uint64_t total_doc_cnt_;
   AvgDocTokenCntMap avg_doc_token_cnt_map_;
+  TotalDocCntMap total_doc_cnt_map_;
   bool avg_doc_token_cnt_map_inited_;
-  bool total_doc_cnt_inited_;
+  bool total_doc_cnt_map_inited_;
 };
 
 } // namespace storage

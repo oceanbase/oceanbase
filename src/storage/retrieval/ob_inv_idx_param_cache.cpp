@@ -16,10 +16,10 @@ namespace storage
 {
 
 ObInvIdxParamCache::ObInvIdxParamCache()
-  : total_doc_cnt_(0),
-    avg_doc_token_cnt_map_(),
+  : avg_doc_token_cnt_map_(),
+    total_doc_cnt_map_(),
     avg_doc_token_cnt_map_inited_(false),
-    total_doc_cnt_inited_(false)
+    total_doc_cnt_map_inited_(false)
 {
 }
 
@@ -33,9 +33,11 @@ void ObInvIdxParamCache::reset()
   if (avg_doc_token_cnt_map_.created()) {
     avg_doc_token_cnt_map_.destroy();
   }
-  total_doc_cnt_ = 0;
+  if (total_doc_cnt_map_.created()) {
+    total_doc_cnt_map_.destroy();
+  }
   avg_doc_token_cnt_map_inited_ = false;
-  total_doc_cnt_inited_ = false;
+  total_doc_cnt_map_inited_ = false;
 }
 
 int ObInvIdxParamCache::get_avg_doc_token_cnt(
@@ -71,27 +73,54 @@ int ObInvIdxParamCache::set_avg_doc_token_cnt(
   return ret;
 }
 
-int ObInvIdxParamCache::get_total_doc_cnt(uint64_t &total_doc_cnt) const
+int ObInvIdxParamCache::get_total_doc_cnt(
+    const common::ObTabletID &tablet_id,
+    uint64_t &total_doc_cnt) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!total_doc_cnt_inited_)) {
+  total_doc_cnt = 0;
+  if (OB_UNLIKELY(!total_doc_cnt_map_inited_)) {
     ret = OB_ENTRY_NOT_EXIST;
     LOG_DEBUG("total doc cnt not inited", K(ret));
-  } else {
-    total_doc_cnt = total_doc_cnt_;
+  } else if (OB_FAIL(total_doc_cnt_map_.get_refactored(tablet_id, total_doc_cnt))) {
+    if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
+      LOG_WARN("failed to get total doc cnt", K(ret), K(tablet_id));
+    }
   }
   return ret;
 }
 
-int ObInvIdxParamCache::set_total_doc_cnt(const uint64_t total_doc_cnt)
+int ObInvIdxParamCache::set_total_doc_cnt(
+    const common::ObTabletID &tablet_id,
+    const uint64_t total_doc_cnt)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(total_doc_cnt_inited_)) {
-    ret = OB_ENTRY_EXIST;
-    LOG_WARN("total doc cnt already set", K(ret), K(total_doc_cnt), K_(total_doc_cnt));
+  if (total_doc_cnt_map_inited_) {
+    // skip
+  } else if (OB_FAIL(init_total_doc_cnt_map())) {
+    LOG_WARN("failed to init total doc cnt map", K(ret));
+  }
+
+  if (FAILEDx(total_doc_cnt_map_.set_refactored(tablet_id, total_doc_cnt))) {
+    LOG_WARN("failed to set total doc cnt", K(ret), K(tablet_id), K(total_doc_cnt));
+  }
+  return ret;
+}
+
+int ObInvIdxParamCache::init_total_doc_cnt_map()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(total_doc_cnt_map_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("total doc cnt map already inited", K(ret));
+  } else if (OB_FAIL(total_doc_cnt_map_.create(
+      DEFAULT_BUCKET_CNT,
+      "TotDocCntBkt",
+      "TotDocCntNode",
+      MTL_ID()))) {
+    LOG_WARN("failed to create total doc cnt map", K(ret));
   } else {
-    total_doc_cnt_ = total_doc_cnt;
-    total_doc_cnt_inited_ = true;
+    total_doc_cnt_map_inited_ = true;
   }
   return ret;
 }

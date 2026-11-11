@@ -26,6 +26,7 @@ void ObDASSearchCtx::reset()
   op_count_ = 0;
   rowid_meta_.reset();
   bm25_param_cache_.reset();
+  row_count_tablet_id_.reset();
 }
 
 int ObDASSearchCtx::init(
@@ -65,6 +66,7 @@ int ObDASSearchCtx::init(
     output_ = nullptr;
     table_row_count_.reset();
     rowid_meta_.reset();
+    row_count_tablet_id_.reset();
   }
   return ret;
 }
@@ -109,7 +111,20 @@ int ObDASSearchCtx::refresh_table_row_count()
       LOG_WARN("failed to estimate partition row count", K(ret), K(tablet_id));
     } else {
       table_row_count_ = ObDASSearchCost(logical_row_cnt);
+      row_count_tablet_id_ = tablet_id;
     }
+  }
+  return ret;
+}
+
+int ObDASSearchCtx::refresh_table_row_count_if_needed()
+{
+  int ret = OB_SUCCESS;
+  const common::ObTabletID &tablet_id = root_das_task_.get_scan_param().tablet_id_;
+  if (table_row_count_.is_valid() && row_count_tablet_id_ == tablet_id) {
+    // the cached table row count is still for the current tablet, skip refresh
+  } else if (OB_FAIL(refresh_table_row_count())) {
+    LOG_WARN("failed to refresh table row count", K(ret));
   }
   return ret;
 }

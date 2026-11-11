@@ -26,7 +26,6 @@ ObDASMatchPhraseOp::ObDASMatchPhraseOp(ObDASSearchCtx &search_ctx)
     token_helpers_(),
     token_iters_(),
     estimator_(),
-    bm25_param_estimated_(false),
     total_token_weight_(-1.0),
     decoder_(nullptr),
     counter_(nullptr),
@@ -110,6 +109,9 @@ int ObDASMatchPhraseOp::do_open()
       LOG_WARN("failed to open token iter", K(ret));
     }
   }
+  if (FAILEDx(estimate_bm25_param())) {
+    LOG_WARN("failed to estimate bm25 param", K(ret));
+  }
   return ret;
 }
 
@@ -121,14 +123,20 @@ int ObDASMatchPhraseOp::do_rescan()
     LOG_WARN("not initialized", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < token_helpers_.count(); ++i) {
-    if (OB_FAIL(token_helpers_[i]->rescan())) {
+    if (OB_FAIL(token_helpers_[i]->reuse())) {
+      LOG_WARN("failed to reuse token iter", K(ret));
+    } else if (FALSE_IT(token_iters_[i]->reuse())) {
+    } else if (OB_FAIL(token_helpers_[i]->rescan())) {
       LOG_WARN("failed to rescan token iter", K(ret));
-    } else {
-      token_iters_[i]->reuse();
     }
   }
-  bm25_param_estimated_ = false;
+  if (OB_SUCC(ret) && !token_helpers_.empty()) {
+    estimator_.switch_tablet_id(token_helpers_[0]->get_inv_idx_tablet_id());
+  }
   total_token_weight_ = -1.0;
+  if (FAILEDx(estimate_bm25_param())) {
+    LOG_WARN("failed to estimate bm25 param", K(ret));
+  }
   return ret;
 }
 
@@ -279,8 +287,6 @@ int ObDASMatchPhraseOp::do_next_rowid(ObDASRowID &next_id, double &score)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not initialized", K(ret));
-  } else if (OB_FAIL(estimate_bm25_param_on_demand())) {
-    LOG_WARN("failed to estimate bm25 param", K(ret));
   } else if (OB_FAIL(token_iters_[0]->get_next_row())) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("failed to get next row", K(ret));
@@ -303,8 +309,6 @@ int ObDASMatchPhraseOp::do_advance_to(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not initialized", K(ret));
-  } else if (OB_FAIL(estimate_bm25_param_on_demand())) {
-    LOG_WARN("failed to estimate bm25 param", K(ret));
   } else if (OB_FAIL(get_datum_from_rowid(target, target_datum))) {
     LOG_WARN("failed to get datum from target", K(ret));
   } else if (OB_FAIL(token_iters_[0]->advance_to(target_datum))) {
@@ -367,14 +371,12 @@ int ObDASMatchPhraseOp::do_calc_max_score(double &threshold)
   return ret;
 }
 
-int ObDASMatchPhraseOp::estimate_bm25_param_on_demand()
+int ObDASMatchPhraseOp::estimate_bm25_param()
 {
   int ret = OB_SUCCESS;
   uint64_t total_doc_cnt = 0;
   double avg_doc_token_cnt = 0.0;
-  if (bm25_param_estimated_) {
-    // skip
-  } else if (OB_FAIL(estimator_.do_estimation(search_ctx_))) {
+  if (OB_FAIL(estimator_.do_estimation(search_ctx_))) {
     LOG_WARN("failed to do inv idx bm25 param estimation on demand", K(ret));
   } else if (OB_FAIL(estimator_.get_bm25_param(total_doc_cnt, avg_doc_token_cnt))) {
     LOG_WARN("failed to get bm25 param", K(ret));
@@ -399,7 +401,6 @@ int ObDASMatchPhraseOp::estimate_bm25_param_on_demand()
       total_doc_cnt_expr->locate_datum_for_write(eval_ctx).set_int(total_doc_cnt);
       avg_doc_token_cnt_expr->locate_datum_for_write(eval_ctx).set_double(avg_doc_token_cnt);
     }
-    bm25_param_estimated_ = true;
   }
   return ret;
 }

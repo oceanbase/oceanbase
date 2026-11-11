@@ -162,14 +162,22 @@ int ObBM25IndexParamEstimator::init(
   return ret;
 }
 
+void ObBM25IndexParamEstimator::switch_tablet_id(const common::ObTabletID &new_tablet_id)
+{
+  if (tablet_id_ != new_tablet_id) {
+    tablet_id_ = new_tablet_id;
+    estimated_ = false;
+  }
+}
+
 int ObBM25IndexParamEstimator::do_estimation(sql::ObDASSearchCtx &search_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(param_cache_->get_total_doc_cnt(total_doc_cnt_))) {
-    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+  } else if (OB_FAIL(param_cache_->get_total_doc_cnt(tablet_id_, total_doc_cnt_))) {
+    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret && OB_HASH_NOT_EXIST != ret)) {
       LOG_WARN("failed to get total doc cnt", K(ret));
     } else if (OB_FAIL(do_total_doc_cnt_estimation_on_demand(search_ctx))) {
       LOG_WARN("failed to do total doc cnt estimation on demand", K(ret));
@@ -213,47 +221,57 @@ int ObBM25IndexParamEstimator::do_total_doc_cnt_estimation_on_demand(sql::ObDASS
   if (estimated_total_doc_cnt > 0) {
     total_doc_cnt_ = estimated_total_doc_cnt;
   } else {
-    // get total doc cnt by aggregation
-    ObTableScanParam total_doc_cnt_scan_param;
-    ObTabletID total_doc_cnt_tablet_id;
-    const ObDASScalarScanCtDef *total_doc_cnt_ctdef = ir_scan_ctdef_->get_doc_agg_scalar_ctdef();
-    ObDASScalarScanRtDef *total_doc_cnt_rtdef = ir_scan_rtdef_->get_doc_agg_scalar_rtdef();
-    ObExpr *total_doc_cnt_expr = nullptr;
-    ObNewRowIterator *total_doc_cnt_iter = nullptr;
-    if (OB_ISNULL(total_doc_cnt_ctdef) || OB_ISNULL(total_doc_cnt_rtdef)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null ptr", K(ret), KP(total_doc_cnt_ctdef), KP(total_doc_cnt_rtdef));
-    } else if (OB_ISNULL(total_doc_cnt_expr = total_doc_cnt_ctdef->pd_expr_spec_.pd_storage_aggregate_output_.at(0))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null total doc cnt expr", K(ret));
-    } else if (OB_FAIL(search_ctx.get_related_tablet_id(total_doc_cnt_ctdef, total_doc_cnt_tablet_id))) {
-      LOG_WARN("failed to get related tablet id", K(ret));
-    } else if (OB_FAIL(search_ctx.init_scan_param(
-        total_doc_cnt_tablet_id, total_doc_cnt_ctdef, total_doc_cnt_rtdef, total_doc_cnt_scan_param))) {
-      LOG_WARN("failed to init total doc cnt scan param", K(ret));
-    } else if (OB_FAIL(MTL(ObAccessService *)->table_scan(total_doc_cnt_scan_param, total_doc_cnt_iter))) {
-      LOG_WARN("failed to table scan", K(ret));
-    } else if (OB_ISNULL(total_doc_cnt_iter)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null total doc cnt iter", K(ret));
-    } else if (OB_FAIL(total_doc_cnt_iter->get_next_row())) {
-      LOG_WARN("failed to get next row", K(ret));
-    } else {
-      ObEvalCtx *eval_ctx = total_doc_cnt_rtdef->eval_ctx_;
-      if (total_doc_cnt_expr->enable_rich_format()
-          && is_valid_format(total_doc_cnt_expr->get_format(*eval_ctx))) {
-        total_doc_cnt_ = total_doc_cnt_expr->get_vector(*eval_ctx)->get_int(0);
-      } else {
-        total_doc_cnt_ = total_doc_cnt_expr->locate_expr_datum(*eval_ctx, 0).get_int();
-      }
+    if (ir_scan_ctdef_->use_scalar_scan_def_
+        && OB_FAIL(search_ctx.refresh_table_row_count_if_needed())) {
+      LOG_WARN("failed to refresh table row count", K(ret));
+    } else if (ir_scan_ctdef_->use_scalar_scan_def_
+               && search_ctx.get_row_count().is_valid()) {
+      total_doc_cnt_ = search_ctx.get_row_count().cost();
     }
 
-    if (nullptr != total_doc_cnt_iter) {
-      MTL(ObAccessService *)->revert_scan_iter(total_doc_cnt_iter);
+    if (OB_SUCC(ret) && 0 == total_doc_cnt_) {
+      // get total doc cnt by aggregation
+      ObTableScanParam total_doc_cnt_scan_param;
+      ObTabletID total_doc_cnt_tablet_id;
+      const ObDASScalarScanCtDef *total_doc_cnt_ctdef = ir_scan_ctdef_->get_doc_agg_scalar_ctdef();
+      ObDASScalarScanRtDef *total_doc_cnt_rtdef = ir_scan_rtdef_->get_doc_agg_scalar_rtdef();
+      ObExpr *total_doc_cnt_expr = nullptr;
+      ObNewRowIterator *total_doc_cnt_iter = nullptr;
+      if (OB_ISNULL(total_doc_cnt_ctdef) || OB_ISNULL(total_doc_cnt_rtdef)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ptr", K(ret), KP(total_doc_cnt_ctdef), KP(total_doc_cnt_rtdef));
+      } else if (OB_ISNULL(total_doc_cnt_expr = total_doc_cnt_ctdef->pd_expr_spec_.pd_storage_aggregate_output_.at(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null total doc cnt expr", K(ret));
+      } else if (OB_FAIL(search_ctx.get_related_tablet_id(total_doc_cnt_ctdef, total_doc_cnt_tablet_id))) {
+        LOG_WARN("failed to get related tablet id", K(ret));
+      } else if (OB_FAIL(search_ctx.init_scan_param(
+          total_doc_cnt_tablet_id, total_doc_cnt_ctdef, total_doc_cnt_rtdef, total_doc_cnt_scan_param))) {
+        LOG_WARN("failed to init total doc cnt scan param", K(ret));
+      } else if (OB_FAIL(MTL(ObAccessService *)->table_scan(total_doc_cnt_scan_param, total_doc_cnt_iter))) {
+        LOG_WARN("failed to table scan", K(ret));
+      } else if (OB_ISNULL(total_doc_cnt_iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null total doc cnt iter", K(ret));
+      } else if (OB_FAIL(total_doc_cnt_iter->get_next_row())) {
+        LOG_WARN("failed to get next row", K(ret));
+      } else {
+        ObEvalCtx *eval_ctx = total_doc_cnt_rtdef->eval_ctx_;
+        if (total_doc_cnt_expr->enable_rich_format()
+            && is_valid_format(total_doc_cnt_expr->get_format(*eval_ctx))) {
+          total_doc_cnt_ = total_doc_cnt_expr->get_vector(*eval_ctx)->get_int(0);
+        } else {
+          total_doc_cnt_ = total_doc_cnt_expr->locate_expr_datum(*eval_ctx, 0).get_int();
+        }
+      }
+
+      if (nullptr != total_doc_cnt_iter) {
+        MTL(ObAccessService *)->revert_scan_iter(total_doc_cnt_iter);
+      }
     }
   }
 
-  if (FAILEDx(param_cache_->set_total_doc_cnt(total_doc_cnt_))) {
+  if (FAILEDx(param_cache_->set_total_doc_cnt(tablet_id_, total_doc_cnt_))) {
     LOG_WARN("failed to set total doc cnt", K(ret));
   }
   return ret;

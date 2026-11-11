@@ -96,7 +96,7 @@ private:
   int find_intersection(ObDASRowID &rowid, double &score);
   int evaluate(double &score);
   int calculate_total_token_weight_on_demand();
-  int estimate_bm25_param_on_demand();
+  int estimate_bm25_param();
 private:
   ObArenaAllocator allocator_;
   const ObDASIRScanCtDef *ir_ctdef_;
@@ -105,7 +105,6 @@ private:
   ObFixedArray<ObDASTokenOpHelper *, ObIAllocator> token_helpers_;
   ObFixedArray<ObTextRetrievalBlockMaxIter *, ObIAllocator> token_iters_;
   ObBM25IndexParamEstimator estimator_;
-  bool bm25_param_estimated_;
   double total_token_weight_;
   ObFTSPositionListStore *decoder_;
   ObPhraseMatchCounter *counter_;

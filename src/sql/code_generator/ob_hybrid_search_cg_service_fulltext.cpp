@@ -442,16 +442,8 @@ int ObHybridSearchCgService::generate_text_ir_ctdef(ObLogTableScan &op,
   } else if (OB_FAIL(generate_text_ir_spec(index_info, fulltext_node, is_topk_query, inv_idx_tid, *ir_scan_ctdef))) {
     LOG_WARN("failed to generate text ir spec", K(ret));
   } else {
-    const ObCostTableScanInfo *est_cost_info = op.get_est_cost_info();
-    int partition_row_cnt = 0;
-    if (nullptr == est_cost_info
-        || nullptr == est_cost_info->table_meta_info_
-        || 0 == est_cost_info->table_meta_info_->part_count_) {
-      // No estimated info or approx agg not allowed, do total document count on execution;
-    } else {
-      partition_row_cnt = est_cost_info->table_meta_info_->table_row_count_ / est_cost_info->table_meta_info_->part_count_;
-    }
-    ir_scan_ctdef->estimated_total_doc_cnt_ = partition_row_cnt;
+    // Estimate the document count for the current tablet at execution.
+    ir_scan_ctdef->estimated_total_doc_cnt_ = 0;
   }
 
   return ret;
