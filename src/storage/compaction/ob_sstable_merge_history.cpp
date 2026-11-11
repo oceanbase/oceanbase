@@ -398,6 +398,13 @@ ObSSTableMergeHistory::ObSSTableMergeHistory(const bool need_free_param)
     lock_(common::ObLatchIds::OB_MERGE_BLOCK_INFO_MUTEX)
 {}
 
+void ObSSTableMergeHistory::destroy(ObIAllocator &allocator)
+{
+  // The base destroy frees the object without calling member destructors.
+  sstable_merge_block_info_array_.destroy();
+  ObIDiagnoseInfo::destroy(allocator);
+}
+
 void ObSSTableMergeHistory::reset()
 {
   static_info_.reset();

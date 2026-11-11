@@ -8,6 +8,7 @@
 #define protected public
 #include "src/storage/ob_i_store.h"
 #include "src/storage/compaction/ob_i_compaction_filter.h"
+#include "storage/compaction/ob_sstable_merge_history.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 namespace oceanbase
 {
@@ -286,6 +287,47 @@ TEST_F(TestDiagnoseInfoMgr, test_diagnose_tablet_mgr)
   ret = diagnose_tablet_mgr_->delete_diagnose_tablet(ls_id_, tablet_id, TYPE_RS_MAJOR_MERGE);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(0, diagnose_tablet_mgr_->diagnose_tablet_map_.size());
+}
+
+class CountFreeAllocator : public ObMalloc
+{
+public:
+  void free(void *ptr) override
+  {
+    if (nullptr != ptr) {
+      ++free_count_;
+      ObMalloc::free(ptr);
+    }
+  }
+  int64_t free_count_ = 0;
+};
+
+TEST_F(TestDiagnoseInfoMgr, test_merge_history_destroy_frees_array)
+{
+  // The array holds one element inline. Add two elements to force a heap allocation.
+  ObSSTableMergeHistory source;
+  ASSERT_EQ(OB_SUCCESS, source.sstable_merge_block_info_array_.push_back(ObSSTableMergeBlockInfo(1, 2)));
+  ASSERT_EQ(OB_SUCCESS, source.sstable_merge_block_info_array_.push_back(ObSSTableMergeBlockInfo(3, 4)));
+
+  // Copy the history and count calls that free the copied array's memory.
+  ObArenaAllocator allocator;
+  CountFreeAllocator array_allocator;
+  void *buf = allocator.alloc(sizeof(ObSSTableMergeHistory));
+  ASSERT_NE(nullptr, buf);
+  ObSSTableMergeHistory *copy = new (buf) ObSSTableMergeHistory(false);
+  copy->sstable_merge_block_info_array_.block_allocator_.set_allocator(&array_allocator);
+  copy->shallow_copy(&source);
+  ASSERT_EQ(2, copy->sstable_merge_block_info_array_.count());
+  ASSERT_NE(&source.sstable_merge_block_info_array_.at(0), &copy->sstable_merge_block_info_array_.at(0));
+  ASSERT_EQ(0, array_allocator.free_count_);
+
+  // Destroy through the base pointer, as the history pool does. Free the copy's array once and keep the source intact.
+  ObIDiagnoseInfo *info = copy;
+  info->destroy(allocator);
+  EXPECT_EQ(1, array_allocator.free_count_);
+  EXPECT_EQ(2, source.sstable_merge_block_info_array_.count());
+  EXPECT_EQ(1, source.sstable_merge_block_info_array_.at(0).multiplexed_macro_block_count_);
+  EXPECT_EQ(3, source.sstable_merge_block_info_array_.at(1).multiplexed_macro_block_count_);
 }
 
 }//end namespace unittest
