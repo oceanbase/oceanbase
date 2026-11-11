@@ -724,6 +724,7 @@ int ObTenantRoleTransitionService::check_sync_readiness_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_TENANT_NOT_REPLAY_TO_LATEST);
 int ObTenantRoleTransitionService::check_replay_readiness_(
     const share::ObAllTenantInfo &tenant_info,
     bool &is_ready,
@@ -748,7 +749,7 @@ int ObTenantRoleTransitionService::check_replay_readiness_(
           *sql_proxy_, cur_tenant_info,
           false /* do_gc */, result))) {
     LOG_WARN("fail to run transfer tick", KR(ret), K(tenant_id_));
-  } else if (!result.is_all_settled()) {
+  } else if (!result.is_all_settled() || ERRSIM_TENANT_NOT_REPLAY_TO_LATEST) {
     is_ready = false;
     try_print_wait_balance_task_user_error_(cur_tenant_info,
         result.get_unsettled_helper_tasks(), result.get_unsettled_balance_tasks(),
@@ -890,9 +891,8 @@ int ObTenantRoleTransitionService::do_readiness_check_(share::ObAllTenantInfo &t
     } while (need_continue && !THIS_WORKER.is_timeout());
     if (OB_FAIL(ret)
         && OB_OP_NOT_ALLOW != ret
-        && need_retry
         && (OB_TIMEOUT == ret
-            || !logservice::ObLogRestoreHandler::need_fail_when_switch_to_primary(ret))
+            || (need_retry && !logservice::ObLogRestoreHandler::need_fail_when_switch_to_primary(ret)))
         && last_readiness_error.is_valid()) {
       ret = convert_readiness_error_to_not_allow_(last_readiness_error);
     } else if (OB_SUCC(ret) && !is_ready && last_readiness_error.is_valid()) {
@@ -1330,7 +1330,6 @@ int ObTenantRoleTransitionService::get_tenant_ref_scn_(const share::SCN &sync_sc
   return ret;
 }
 
-ERRSIM_POINT_DEF(ERRSIM_TENANT_NOT_REPLAY_TO_LATEST);
 void ObTenantRoleTransitionService::try_print_wait_balance_task_user_error_(
     const share::ObAllTenantInfo &cur_tenant_info,
     const ObArray<ObBalanceTaskHelper> &ls_balance_tasks,
