@@ -797,8 +797,11 @@ int ObRbUtils::rb_to_string(ObIAllocator &allocator, const ObString &rb_bin, ObS
   ObRbBinType bin_type;
   uint32_t offset = RB_VERSION_SIZE + RB_BIN_TYPE_SIZE;
   ObStringBuffer res_buf(&allocator);
-  if (OB_FAIL(get_bin_type(rb_bin, bin_type))) {
+  // Native roaringbitmap arguments can reach this reader without upstream validation.
+  if (OB_FAIL(check_binary(rb_bin))) {
     LOG_WARN("invalid roaringbitmap binary string", K(ret));
+  } else if (OB_FAIL(get_bin_type(rb_bin, bin_type))) {
+    LOG_WARN("failed to get binary type", K(ret));
   } else {
     switch(bin_type) {
       case ObRbBinType::EMPTY: {
