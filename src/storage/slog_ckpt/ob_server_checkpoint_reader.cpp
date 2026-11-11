@@ -47,7 +47,6 @@ int ObServerCheckpointReader::read_tenant_meta_checkpoint(const MacroBlockId &en
     char *item_buf = nullptr;
     int64_t item_buf_len = 0;
     ObMetaDiskAddr addr;
-    int ret = OB_SUCCESS;
     int64_t idx = 0;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(tenant_meta_item_reader_.get_next_item(item_buf, item_buf_len, addr))) {
