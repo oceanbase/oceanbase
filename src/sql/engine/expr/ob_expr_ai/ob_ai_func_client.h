@@ -60,8 +60,6 @@ public:
                                   ObArray<ObJsonObject *> &data_array,
                                   ObArray<ObAIBatchItemResult> &results);
   // embedding service interface
-  int send_post_batch_no_wait(ObArray<ObJsonObject *> &data_array);
-  bool check_batch_finished();
   int get_batch_result(ObArray<ObJsonObject *> &responses);
   int get_batch_result(ObArray<ObAIBatchItemResult> &results);
 private:

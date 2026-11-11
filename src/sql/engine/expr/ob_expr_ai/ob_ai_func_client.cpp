@@ -349,64 +349,6 @@ int ObAIFuncClient::send_post_batch(common::ObIAllocator &allocator,
   return ret;
 }
 
-int ObAIFuncClient::send_post_batch_no_wait(ObArray<ObJsonObject *> &data_array)
-{
-  int ret = OB_SUCCESS;
-  if (data_array.empty() || OB_ISNULL(url_) || OB_ISNULL(header_list_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument for send_post_batch_no_wait", K(ret));
-  } else if (OB_ISNULL(curlm_)) {
-    if (OB_ISNULL(curlm_ = curl_multi_init())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("fail to init curl multi", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    const int64_t num_data = data_array.count();
-    for (int64_t i = 0; OB_SUCC(ret) && i < num_data; ++i) {
-      ObJsonObject *data_item = data_array.at(i);
-      CURL *curl_handle = curl_easy_init();
-      ObStringBuffer* response_buf = OB_NEWx(ObStringBuffer, allocator_, allocator_);
-      if (OB_ISNULL(data_item)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid data item", K(ret), K(i));
-      } else if (OB_ISNULL(curl_handle)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to create curl handle", K(ret), K(i));
-      } else if (OB_FAIL(init_easy_handle(curl_handle, data_item, *response_buf))) {
-        LOG_WARN("failed to init easy handle", K(ret), K(i));
-      } else if (OB_FAIL(curl_handles_.push_back(curl_handle))) {
-        LOG_WARN("failed to push back curl handle", K(ret), K(i));
-      } else if (OB_FAIL(response_buffers_.push_back(response_buf))) {
-        LOG_WARN("failed to push back response buffer", K(ret), K(i));
-      } else {
-        CURLMcode mc = curl_multi_add_handle(curlm_, curl_handle);
-        if (mc != CURLM_OK) {
-          ret = OB_CURL_ERROR;
-          LOG_WARN("failed to add handle to multi", K(ret), K(mc), K(i));
-        }
-      }
-    }
-    int running_handles = 0;
-    CURLMcode mc = curl_multi_perform(curlm_, &running_handles);
-    if (mc != CURLM_OK) {
-      ret = OB_CURL_ERROR;
-      LOG_WARN("curl_multi_perform failed", K(ret), K(mc));
-    }
-  }
-  return ret;
-}
-
-bool ObAIFuncClient::check_batch_finished()
-{
-  int running_handles = 0;
-  CURLMcode mc = curl_multi_perform(curlm_, &running_handles);
-  if (running_handles == 0) {
-    is_finished_.store(true);
-  }
-  return is_finished_.load();
-}
-
 int ObAIFuncClient::get_batch_result(ObArray<ObJsonObject *> &responses)
 {
   int ret = OB_SUCCESS;
