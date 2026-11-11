@@ -102,14 +102,18 @@ int ObCreateTableLikeHelper::check_schema_valid_(const ObTableSchema *&orig_tabl
     LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, helper.convert(arg_.origin_db_name_),
                                         helper.convert(arg_.origin_table_name_),
                    "BASE TABLE");
-  } else if ((orig_table_schema->is_partitioned_table()
-              || orig_table_schema->is_auto_partitioned_table()) && TMP_TABLE == arg_.table_type_) {
+  } else if (orig_table_schema->is_auto_partitioned_table() && TMP_TABLE == arg_.table_type_) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN(
-        "create temporary table like on table with partition not supported",
+        "create temporary table like on auto partitioned table not supported",
         KR(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "create temporary table like on table with partition is");
+                   "create temporary table like on auto partitioned table is");
+  } else if (TMP_TABLE == arg_.table_type_ && orig_table_schema->with_dynamic_partition_policy()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("create temporary table like on table with dynamic partition policy not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                   "create temporary table like on table with dynamic partition policy is");
   } else if (orig_table_schema->required_by_mv_fast_refresh()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN(
@@ -289,6 +293,11 @@ int ObCreateTableLikeHelper::generate_aux_table_schemas_()
       } else if (index_table_schema->is_in_recyclebin() ||
                  INDEX_STATUS_AVAILABLE != index_table_schema->get_index_status()) {
         continue;
+      } else if (TMP_TABLE == arg_.table_type_ && index_table_schema->is_auto_partitioned_table()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("create temporary table like on table with auto partitioned index not supported", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "create temporary table like on table with auto partitioned index is");
       } else {
         ObString index_name;
         ObString new_index_table_name;
