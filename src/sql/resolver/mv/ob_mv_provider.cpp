@@ -1037,6 +1037,25 @@ int ObMVProvider::create_select_item_for_mv_stmt(ObSelectStmt *stmt,
         }
       }
     }
+    ObSEArray<ObAliasRefRawExpr *, 4> group_alias_exprs;
+    if (OB_SUCC(ret) && OB_FAIL(ObTransformUtils::extract_alias_expr(stmt->get_group_exprs(), group_alias_exprs))) {
+      LOG_WARN("failed to extract group by aliases", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < group_alias_exprs.count(); ++i) {
+      ObAliasRefRawExpr *alias_expr = group_alias_exprs.at(i);
+      if (OB_ISNULL(alias_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("group by alias is unexpected null", K(ret));
+      } else if (!alias_expr->is_select_alias_ref()) {
+        // do nothing
+      } else if (OB_ISNULL(alias_expr->get_ref_select_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("select alias reference is unexpected null", K(ret));
+      } else if (alias_expr->get_ref_select_expr()->same_as(*select_expr)) {
+        // Checking and expansion use separate statement copies.
+        alias_expr->set_select_alias_ref(alias_name);
+      }
+    }
   }
   return ret;
 }
