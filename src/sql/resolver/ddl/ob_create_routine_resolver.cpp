@@ -1049,6 +1049,7 @@ int ObCreateRoutineResolver::resolve_impl(ObRoutineType routine_type,
 {
   int ret = OB_SUCCESS;
   bool need_reset_default_database = false;
+  bool need_restore_database_collation = false;
   uint64_t old_database_id = OB_INVALID_ID;
   ObSqlString old_database_name;
   ObObj old_character_set_database;
@@ -1087,15 +1088,11 @@ int ObCreateRoutineResolver::resolve_impl(ObRoutineType routine_type,
       LOG_WARN("fail to get database schema", K(ret));
       LOG_USER_ERROR(OB_ERR_BAD_DATABASE, crt_routine_arg->db_name_.length(), crt_routine_arg->db_name_.ptr());
     }
+    OX (routine_database_collation = database_schema->get_collation_type());
     if (OB_FAIL(ret)) {
     } else if (database_schema->get_database_name_str() != session_info_->get_database_name()) {
-      routine_database_collation = database_schema->get_collation_type();
       OZ (old_database_name.append(session_info_->get_database_name()));
       OX (old_database_id = session_info_->get_database_id());
-      if (use_database_collation && !reuse_routine_info) {
-        OZ (session_info_->get_sys_variable(share::SYS_VAR_CHARACTER_SET_DATABASE, old_character_set_database));
-        OZ (session_info_->get_sys_variable(share::SYS_VAR_COLLATION_DATABASE, old_collation_database));
-      }
       // Resolve signature types with the caller database's charset defaults.
       OX (need_reset_default_database = true);
       OZ (session_info_->set_default_database(database_schema->get_database_name_str()));
@@ -1124,8 +1121,11 @@ int ObCreateRoutineResolver::resolve_impl(ObRoutineType routine_type,
     }
     OZ (resolve_param_list(param_node, *crt_routine_arg));
   }
-  if (OB_SUCC(ret) && need_reset_default_database && use_database_collation && !reuse_routine_info) {
+  if (OB_SUCC(ret) && use_database_collation && !reuse_routine_info) {
     // Local variables use the owning database's creation-time defaults.
+    OZ (session_info_->get_sys_variable(share::SYS_VAR_CHARACTER_SET_DATABASE, old_character_set_database));
+    OZ (session_info_->get_sys_variable(share::SYS_VAR_COLLATION_DATABASE, old_collation_database));
+    OX (need_restore_database_collation = true);
     const int64_t db_collation = static_cast<int64_t>(routine_database_collation);
     OZ (session_info_->update_sys_variable(share::SYS_VAR_CHARACTER_SET_DATABASE, db_collation));
     OZ (session_info_->update_sys_variable(share::SYS_VAR_COLLATION_DATABASE, db_collation));
@@ -1155,17 +1155,18 @@ int ObCreateRoutineResolver::resolve_impl(ObRoutineType routine_type,
     } else {
       session_info_->set_database_id(old_database_id);
     }
-    if (use_database_collation && !reuse_routine_info) {
-      if (OB_SUCCESS != (tmp_ret = session_info_->update_sys_variable(
-              share::SYS_VAR_CHARACTER_SET_DATABASE, old_character_set_database))) {
-        ret = OB_SUCCESS == ret ? tmp_ret : ret;
-        LOG_WARN("failed to restore database character set", K(ret), K(tmp_ret));
-      }
-      if (OB_SUCCESS != (tmp_ret = session_info_->update_sys_variable(
-              share::SYS_VAR_COLLATION_DATABASE, old_collation_database))) {
-        ret = OB_SUCCESS == ret ? tmp_ret : ret;
-        LOG_WARN("failed to restore database collation", K(ret), K(tmp_ret));
-      }
+  }
+  if (need_restore_database_collation) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = session_info_->update_sys_variable(
+            share::SYS_VAR_CHARACTER_SET_DATABASE, old_character_set_database))) {
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      LOG_WARN("failed to restore database character set", K(ret), K(tmp_ret));
+    }
+    if (OB_SUCCESS != (tmp_ret = session_info_->update_sys_variable(
+            share::SYS_VAR_COLLATION_DATABASE, old_collation_database))) {
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      LOG_WARN("failed to restore database collation", K(ret), K(tmp_ret));
     }
   }
 
