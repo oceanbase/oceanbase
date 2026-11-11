@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "plugin/external_table/ob_external_java_plugin.h"
+#include "plugin/external_table/ob_jdbc_catalog_plugin.h"
 
 #include <string>
 #include <apache-arrow/arrow/api.h>
@@ -27,6 +28,10 @@
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/engine/ob_exec_context.h"
 #include "storage/access/ob_dml_param.h"
+#include "share/catalog/jdbc/ob_jdbc_catalog_types.h"
+#include "share/rc/ob_tenant_base.h"
+#include "lib/utility/ob_defer.h"
+#include "lib/worker.h"
 
 namespace oceanbase {
 
@@ -36,10 +41,6 @@ using namespace sql;
 namespace plugin {
 
 using namespace external;
-
-constexpr const char *PLUGIN_NAME_PROPERTY_NAME = "plugin_name";
-constexpr const char *PARAMETERS_PROPERTY_NAME  = "parameters";
-constexpr const char *DATA_SOURCE_FACTORY_CLASS_NAME = "com/oceanbase/external/internal/DataSourceFactory";
 
 ////////////////////////////////////////////////////////////////////////////////
 // class ObJavaLogLabelSetter
@@ -83,10 +84,40 @@ int ObJavaDataSourceFactoryHelper::init()
   } else if (OB_FAIL(data_source_factory_class_.from_local_ref(data_source_factory_class, jni_env))) {
     LOG_WARN("failed to create global ref of data source factory class", K(ret));
   }
-  OBJNI_RUN(create_data_source_method_ = jni_env->GetStaticMethodID(
-      data_source_factory_class, "create", "(Ljava/util/Map;)Lcom/oceanbase/external/api/DataSource;"));
+  OBJNI_RUN(create_data_source_method_ = jni_env->GetStaticMethodID(data_source_factory_class,
+                                                                    "create",
+                                                                    "(Ljava/lang/String;[B)Lcom/oceanbase/external/api/DataSource;"));
   CK(OB_NOT_NULL(create_data_source_method_));
+  OBJNI_RUN(validate_data_source_method_ = jni_env->GetStaticMethodID(ObJniTool::instance().jni_utils_class(),
+                                                                      "validateProperties",
+                                                                      "(Lcom/oceanbase/external/api/DataSource;)V"));
 
+  CK(OB_NOT_NULL(validate_data_source_method_));
+  OBJNI_RUN(close_scanner_method_ = jni_env->GetStaticMethodID(ObJniTool::instance().jni_utils_class(),
+                                                               "closeScanner",
+                                                               "(Lorg/apache/arrow/vector/ipc/ArrowReader;)V"));
+  CK(OB_NOT_NULL(close_scanner_method_));
+
+  return ret;
+}
+
+int ObJavaDataSourceFactoryHelper::close_scanner(jobject scanner)
+{
+  int ret = OB_SUCCESS;
+  JNIEnv *jni_env = nullptr;
+  if (OB_NOT_NULL(scanner)) {
+    if (OB_ISNULL(close_scanner_method_)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("close scanner method is not initialized", K(ret));
+    } else if (OB_FAIL(ObJniTool::instance().get_jni_env(jni_env))) {
+      LOG_WARN("failed to get jni env", K(ret));
+    } else if (OB_ISNULL(jni_env)) {
+      ret = OB_JNI_ENV_ERROR;
+      LOG_WARN("get jni env success but got null", K(ret));
+    } else {
+      OBJNI_RUN(jni_env->CallStaticVoidMethod(ObJniTool::instance().jni_utils_class(), close_scanner_method_, scanner));
+    }
+  }
   return ret;
 }
 
@@ -125,36 +156,54 @@ int ObJavaDataSourceFactoryHelper::create_data_source(const ObString &parameters
   int ret = OB_SUCCESS;
   JNIEnv *jni_env = nullptr;
   jobject data_source_object = nullptr;
-  jobject java_properties = nullptr;
+  jstring java_plugin_name = nullptr;
+  jbyteArray java_parameters = nullptr;
   LOCAL_REF_GUARD_ENV(data_source_object, jni_env);
-  LOCAL_REF_GUARD_ENV(java_properties, jni_env);
+  LOCAL_REF_GUARD_ENV(java_plugin_name, jni_env);
+  LOCAL_REF_GUARD_ENV(java_parameters, jni_env);
 
-  const ObString map_kvs[] = {
-    ObString(PLUGIN_NAME_PROPERTY_NAME), plugin_name,
-    ObString(PARAMETERS_PROPERTY_NAME),  parameters
-  };
   if (OB_ISNULL(data_source_factory_class_.handle())) {
     ret = OB_NOT_INIT;
     LOG_WARN("cannot create data source. data source factory class is null", K(ret));
   } else if (OB_FAIL(ObJniTool::instance().get_jni_env(jni_env))) {
     LOG_WARN("failed to get jni env", K(ret));
+  } else if (OB_FAIL(ObJniTool::instance().create_java_string(jni_env, plugin_name, java_plugin_name))) {
+    LOG_WARN("failed to create java plugin name", K(ret));
+  } else if (OB_FAIL(ObJniTool::instance().create_java_bytes(jni_env, parameters, java_parameters))) {
+    LOG_WARN("failed to create java parameters", K(ret));
   }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObJniTool::instance().create_java_map(
-      jni_env, map_kvs, sizeof(map_kvs)/sizeof(map_kvs[0]), java_properties))) {
-    LOG_WARN("failed to create java properties map", K(ret));
-  }
-
-  OBJNI_RUN(data_source_object = jni_env->CallStaticObjectMethod((jclass)data_source_factory_class_.handle(),
+  OBJNI_RUN(data_source_object = jni_env->CallStaticObjectMethod(data_source_factory_class_.class_handle(),
                                                                  create_data_source_method_,
-                                                                 java_properties));
+                                                                 java_plugin_name,
+                                                                 java_parameters));
+
   CK (OB_NOT_NULL(data_source_object));
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(data_source_object_ref.from_local_ref(data_source_object, jni_env))) {
     LOG_WARN("failed to create global ref of data source object", K(ret));
   }
 
+  return ret;
+}
+
+int ObJavaDataSourceFactoryHelper::validate_data_source(jobject data_source_object)
+{
+  int ret = OB_SUCCESS;
+  JNIEnv *jni_env = nullptr;
+  if (OB_ISNULL(data_source_object)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("data source object is null", K(ret));
+  } else if (OB_ISNULL(validate_data_source_method_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("validate data source method is not initialized", K(ret));
+  } else if (OB_FAIL(ObJniTool::instance().get_jni_env(jni_env))) {
+    LOG_WARN("failed to get jni env", K(ret));
+  } else if (OB_ISNULL(jni_env)) {
+    ret = OB_JNI_ENV_ERROR;
+    LOG_WARN("get jni env success but got null", K(ret));
+  } else {
+    OBJNI_RUN(jni_env->CallStaticVoidMethod(ObJniTool::instance().jni_utils_class(), validate_data_source_method_, data_source_object));
+  }
   return ret;
 }
 
@@ -219,30 +268,14 @@ int ObJavaExternalPlugin::validate_properties(ObIAllocator &allocator,
                                               ObString &parameters)
 {
   int ret = OB_SUCCESS;
-  ObJavaExternalDataEngine *engine = nullptr;
-  ObJavaGlobalRef create_data_source_object;
-  ObArenaAllocator arena_allocator;
-  ObString plugin_name_value;
   ObJavaLogGuard java_log_guard;
+  ObJavaGlobalRef create_data_source_object;
   if (OB_FAIL(ob_alloc_shared(java_log_guard, allocator))) {
     LOG_WARN("failed to create java log guard", K(ret));
   } else if (OB_FAIL(data_source_factory_.create_data_source(parameters, plugin_name, create_data_source_object))) {
     LOG_WARN("failed to create data source object", K(ret));
-  } else if (OB_ISNULL(engine = OB_NEWx(ObJavaExternalDataEngine,
-                                        &arena_allocator,
-                                        parameters,
-                                        std::move(create_data_source_object),
-                                        data_source_factory_,
-                                        java_log_guard))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory for ObJavaExternalDataEngine", K(sizeof(ObJavaExternalDataEngine)));
-  } else if (OB_FAIL(engine->init())) {
-    LOG_WARN("failed to init data engine", K(ret));
-  }
-
-  if (OB_NOT_NULL(engine)) {
-    OB_DELETEx(ObJavaExternalDataEngine, &arena_allocator, engine);
-    engine = nullptr;
+  } else if (OB_FAIL(data_source_factory_.validate_data_source(create_data_source_object.handle()))) {
+    LOG_WARN("failed to validate java data source properties", K(ret));
   }
   LOG_TRACE("validate properties done", K(ret));
   return ret;
@@ -281,6 +314,37 @@ int ObJavaExternalPlugin::create_data_engine(ObIAllocator &allocator,
   return ret;
 }
 
+int ObJavaExternalPlugin::supports_jdbc_catalog(const ObString &plugin_name, bool &supported)
+{
+  return ObJdbcCatalogPlugin::supports(plugin_name, supported);
+}
+
+int ObJavaExternalPlugin::create_jdbc_catalog_plugin(ObIAllocator &allocator,
+                                                     const ObString &plugin_name,
+                                                     ObJdbcCatalogPlugin *&jdbc_catalog_plugin)
+{
+  int ret = OB_SUCCESS;
+  bool supported = false;
+  jdbc_catalog_plugin = nullptr;
+  if (OB_FAIL(supports_jdbc_catalog(plugin_name, supported))) {
+    LOG_WARN("failed to check java jdbc catalog support", K(ret), K(plugin_name));
+  } else if (!supported) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("java external plugin does not support jdbc catalog", K(ret), K(plugin_name));
+  } else if (OB_ISNULL(jdbc_catalog_plugin = OB_NEWx(ObJdbcCatalogPlugin, &allocator))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate jdbc catalog plugin", K(ret));
+  } else if (OB_FAIL(jdbc_catalog_plugin->init(plugin_name))) {
+    LOG_WARN("failed to initialize jdbc catalog plugin", K(ret), K(plugin_name));
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(jdbc_catalog_plugin)) {
+    jdbc_catalog_plugin->destroy(allocator);
+    jdbc_catalog_plugin = nullptr;
+  }
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // ObJavaExternalDataEngine
 ObJavaExternalDataEngine::ObJavaExternalDataEngine(const ObString &parameters,
@@ -302,35 +366,34 @@ int ObJavaExternalDataEngine::init()
 {
   int ret = OB_SUCCESS;
   JNIEnv *jni_env = nullptr;
-  jclass data_source_class = nullptr;
-  LOCAL_REF_GUARD_ENV(data_source_class, jni_env);
+  jclass jni_utils_class = ObJniTool::instance().jni_utils_class();
   if (OB_ISNULL(data_source_object_.handle())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(data_source_object_.handle()));
   } else if (OB_FAIL(ObJniTool::instance().get_jni_env(jni_env))) {
     LOG_WARN("failed to get jni env", K(ret));
-  } else if (OB_ISNULL(data_source_class = jni_env->GetObjectClass(data_source_object_.handle()))) {
+  } else if (OB_ISNULL(jni_utils_class)) {
     ret = OB_JNI_CLASS_NOT_FOUND_ERROR;
-    LOG_WARN("failed to get the class of data source object", K(ret));
+    LOG_WARN("jni utils class is null", K(ret));
   }
-  OBJNI_RUN(create_scanner_method_ = jni_env->GetMethodID(data_source_class,
-                                                          "createScanner",
-                                                          "(Ljava/util/Map;)Lorg/apache/arrow/vector/ipc/ArrowReader;"));
+  OBJNI_RUN(create_scanner_method_ = jni_env->GetStaticMethodID(jni_utils_class,
+                                                                "createScanner",
+                                                                "(Lcom/oceanbase/external/api/DataSource;Ljava/util/Map;)Lorg/apache/arrow/vector/ipc/ArrowReader;"));
   CK (OB_NOT_NULL(create_scanner_method_));
+  OBJNI_RUN(create_catalog_scanner_method_ = jni_env->GetStaticMethodID(jni_utils_class,
+                                                                        "createScanner",
+                                                                        "(Lcom/oceanbase/external/api/DataSource;Ljava/sql/Connection;Ljava/util/Map;)Lorg/"
+                                                                        "apache/arrow/vector/ipc/ArrowReader;"));
+  CK(OB_NOT_NULL(create_catalog_scanner_method_));
 
-  //OBJNI_RUN(split_task_method_ = jni_env->GetMethodID(data_source_class,
-  //                                                    "splitTask",
-  //                                                  "(J)Ljava/util/List;"));
-  //CK(OB_NOT_NULL(split_task_method_));
-
-  OBJNI_RUN(pushdown_filters_method_ = jni_env->GetMethodID(data_source_class,
-                                                            "pushdownFilters",
-                                                            "(Ljava/util/List;)Ljava/util/List;"));
+  OBJNI_RUN(pushdown_filters_method_ = jni_env->GetStaticMethodID(jni_utils_class,
+                                                                  "pushdownFilters",
+                                                                  "(Lcom/oceanbase/external/api/DataSource;Ljava/util/List;)Ljava/util/List;"));
   CK(OB_NOT_NULL(pushdown_filters_method_));
 
-  OBJNI_RUN(display_string_method_ = jni_env->GetMethodID(data_source_class,
-                                                          "toDisplayString",
-                                                          "()Ljava/lang/String;"));
+  OBJNI_RUN(display_string_method_ = jni_env->GetStaticMethodID(jni_utils_class,
+                                                                "toDisplayString",
+                                                                "(Lcom/oceanbase/external/api/DataSource;)[B"));
   CK(OB_NOT_NULL(display_string_method_));
   LOG_TRACE("java external data engine init done", K(ret));
   return ret;
@@ -354,11 +417,13 @@ int ObJavaExternalDataEngine::display(ObIAllocator &allocator, ObString &display
   } else if (OB_FAIL(ObJniTool::instance().get_jni_env(jni_env))) {
     LOG_WARN("failed to get jni env", K(ret));
   }
-  OBJNI_RUN(jdisplay_string = jni_env->CallObjectMethod(data_source_object_.handle(), display_string_method_));
+  OBJNI_RUN(jdisplay_string = jni_env->CallStaticObjectMethod(
+      ObJniTool::instance().jni_utils_class(), display_string_method_, data_source_object_.handle()));
   CK (OB_NOT_NULL(jdisplay_string));
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObJniTool::instance().string_from_java(jni_env, (jstring)jdisplay_string, allocator, display_string))) {
+  } else if (OB_FAIL(ObJniTool::instance().bytes_from_java(
+      jni_env, static_cast<jbyteArray>(jdisplay_string), allocator, display_string))) {
     LOG_WARN("failed to convert java string to obstring", K(ret));
   }
   return ret;
@@ -424,8 +489,9 @@ int ObJavaExternalDataEngine::pushdown_filters(ObIAllocator &allocator,
   }
 
   // export C++ arrow into C
-  struct ArrowArray array_c;
-  struct ArrowSchema schema_c;
+  struct ArrowArray array_c = {};
+  struct ArrowSchema schema_c = {};
+  ObArrowCDataGuard export_guard(array_c, schema_c);
   if (OB_FAIL(ret)) {
   } else if (OBARROW_FAIL(ExportRecordBatch(*arrow_filter_list, &array_c, &schema_c))) {
     LOG_WARN("failed to export record batch to C", K(obstatus));
@@ -449,15 +515,15 @@ int ObJavaExternalDataEngine::pushdown_filters(ObIAllocator &allocator,
   OBJNI_RUN(jsql_filter_list = jni_env->CallStaticObjectMethod(
       jni_utils_class, parse_sql_filter_method, jvector_schema_root));
   // call java pushdown_filters
-  OBJNI_RUN(accept_filter_list = jni_env->CallObjectMethod(
-      data_source_object_.handle(), pushdown_filters_method_, jsql_filter_list));
+  OBJNI_RUN(accept_filter_list = jni_env->CallStaticObjectMethod(
+      jni_utils_class, pushdown_filters_method_, data_source_object_.handle(), jsql_filter_list));
 
   ObArray<ObString> java_accept_filter_list;
   java_accept_filter_list.set_label(OB_PLUGIN_MEMORY_LABEL);
   java_accept_filter_list.set_tenant_id(MTL_ID());
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObJniTool::instance().string_list_from_java(
-          jni_env, accept_filter_list, allocator, java_accept_filter_list))) {
+  } else if (OB_FAIL(ObJniTool::instance().bytes_list_from_java(
+      jni_env, accept_filter_list, allocator, java_accept_filter_list))) {
     LOG_WARN("failed to convert java list to ob list", K(ret));
   } else if (java_accept_filter_list.count() > index_map.count()) {
     ret = OB_PLUGIN_ERROR;
@@ -488,45 +554,100 @@ int ObJavaExternalDataEngine::open_scanner(ObIAllocator &allocator,
   LOCAL_REF_GUARD_ENV(java_scanner_object, jni_env);
   jobject extra_parameters = nullptr;
   LOCAL_REF_GUARD_ENV(extra_parameters, jni_env);
+  ObJavaExternalScanner *java_scanner = nullptr;
+  ObJavaGlobalRef scanner_global_ref;
+  bool scanner_transferred = false;
+  bool failed_scanner_connection_reusable = false;
+  DEFER(
+    // Close an unowned Java cursor before the C++ scanner releases its connection.
+    if (!scanner_transferred && OB_NOT_NULL(java_scanner_object)) {
+      const int close_ret = data_source_factory_.close_scanner(java_scanner_object);
+      if (OB_SUCCESS != close_ret) {
+        LOG_WARN("failed to close unowned java scanner", K(close_ret), K(ret));
+      }
+      if (OB_NOT_NULL(jni_env)) {
+        jni_env->DeleteLocalRef(java_scanner_object);
+        java_scanner_object = nullptr;
+      }
+    }
+    if (OB_NOT_NULL(java_scanner)) {
+      if (failed_scanner_connection_reusable && OB_SUCCESS == THIS_WORKER.check_status()) {
+        java_scanner->get_connection_guard().mark_reusable();
+        const int release_ret = java_scanner->get_connection_guard().release();
+        if (OB_SUCCESS != release_ret) {
+          LOG_WARN("failed to release jdbc connection after expected scanner error", K(release_ret));
+        }
+      }
+      java_scanner->mark_failed();
+      OB_DELETEx(ObJavaExternalScanner, &allocator, java_scanner);
+    }
+  );
+  const storage::ObTableScanParam *storage_param = param.storage_param();
   if (OB_ISNULL(data_source_object_.handle()) || OB_ISNULL(create_scanner_method_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("can't open scanner as the engine is not inited", KP(data_source_object_.handle()), KP(create_scanner_method_));
+    LOG_WARN("java data engine is not initialized", K(ret));
   } else if (OB_FAIL(ObJniTool::instance().get_jni_env(jni_env))) {
     LOG_WARN("failed to get jni env", K(ret));
+  } else if (OB_ISNULL(jni_env) || OB_ISNULL(storage_param)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("jni env or storage param is null", K(ret), KP(jni_env), KP(storage_param));
+  } else if (OB_ISNULL(java_scanner = OB_NEWx(ObJavaExternalScanner, &allocator,
+                 data_source_factory_, java_log_guard_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate java external scanner", K(ret));
+  } else if (share::ObLakeTableFormat::JDBC == storage_param->lake_table_format_) {
+    share::ObJdbcConnectionPoolKey key;
+    share::ObJdbcConnectionPoolMgr *mgr = MTL(share::ObJdbcConnectionPoolMgr *);
+    key.tenant_id_ = MTL_ID();
+    if (storage_param->tenant_id_ != key.tenant_id_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("jdbc scan tenant does not match current tenant", K(ret), K(storage_param->tenant_id_), K(key));
+    } else if (OB_ISNULL(mgr)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("jdbc connection pool manager is null", K(ret));
+    } else if (OB_FAIL(share::ObJdbcTableMetadataParser::parse_scan_parameters(
+                 parameters_, key.catalog_id_, key.catalog_schema_version_))) {
+      LOG_WARN("failed to parse jdbc scan parameters", K(ret));
+    } else if (OB_FAIL(mgr->acquire(key, storage_param->timeout_, java_scanner->get_connection_guard()))) {
+      LOG_WARN("failed to acquire jdbc scan connection", K(ret), K(key));
+    }
   }
-
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(create_scanner_parameters(param, jni_env, extra_parameters))) {
     LOG_WARN("failed to create scanner parameters", K(ret));
+  } else if (java_scanner->get_connection_guard().is_valid()) {
+    ObJdbcCatalogPlugin *jdbc_plugin = java_scanner->get_connection_guard().catalog_plugin();
+    if (OB_NOT_NULL(jdbc_plugin)) {
+      OBJNI_RUN_JDBC(*jdbc_plugin,
+          java_scanner_object = jni_env->CallStaticObjectMethod(ObJniTool::instance().jni_utils_class(),
+              create_catalog_scanner_method_, data_source_object_.handle(),
+              java_scanner->get_connection_guard().connection(), extra_parameters), failed_scanner_connection_reusable);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("jdbc scan connection has no catalog plugin", K(ret));
+    }
+    // Successful construction transfers cursor ownership; later failures must close it.
+    if (OB_SUCC(ret)) {
+      failed_scanner_connection_reusable = false;
+    }
+  } else {
+    OBJNI_RUN(java_scanner_object = jni_env->CallStaticObjectMethod(ObJniTool::instance().jni_utils_class(),
+        create_scanner_method_, data_source_object_.handle(), extra_parameters));
   }
-
-  LOG_TRACE("before call 'createScanner'", K(ret));
-  OBJNI_RUN(java_scanner_object = jni_env->CallObjectMethod(data_source_object_.handle(),
-                                                            create_scanner_method_,
-                                                            extra_parameters));
-  LOG_TRACE("after call 'createScanner'", K(ret));
-
-  CK (OB_NOT_NULL(java_scanner_object));
-  ObJavaGlobalRef scanner_global_ref;
+  CK(OB_NOT_NULL(java_scanner_object));
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(scanner_global_ref.from_local_ref(java_scanner_object, jni_env))) {
-    LOG_WARN("failed to create scanner global ref", K(ret));
-  } else if (OB_ISNULL(scanner = OB_NEWx(ObJavaExternalScanner,
-                                         &allocator,
-                                         std::move(scanner_global_ref),
-                                         data_source_factory_,
-                                         java_log_guard_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory for ObJavaExternalScanner", K(sizeof(ObJavaExternalScanner)));
-  } else if (OB_FAIL(scanner->init())) {
-    LOG_WARN("failed to init java external scanner", K(ret));
+    LOG_WARN("failed to create global ref of java scanner", K(ret));
+  } else {
+    scanner_transferred = true;
+    if (OB_FAIL(java_scanner->init(std::move(scanner_global_ref)))) {
+      LOG_WARN("failed to initialize java external scanner", K(ret));
+    }
   }
-
-  if (OB_FAIL(ret) && OB_NOT_NULL(scanner)) {
-    OB_DELETEx(ObExternalScanner, &allocator, scanner);
-    scanner = nullptr;
+  if (OB_SUCC(ret)) {
+    scanner = java_scanner;
+    java_scanner = nullptr;
   }
-  LOG_TRACE("java external data engine create scanner done", K(ret));
   return ret;
 }
 
@@ -538,7 +659,7 @@ int ObJavaExternalDataEngine::create_param_store_jobject(const ObExternalTableSc
   ObArrowStatus obstatus(ret);
 
   const ParamStore *param_store = nullptr;
-  if (OB_ISNULL(param.storage_param()->op_) ||
+  if (OB_ISNULL(param.storage_param()) || OB_ISNULL(param.storage_param()->op_) ||
       OB_ISNULL(param.storage_param()->op_->get_eval_ctx().exec_ctx_.get_physical_plan_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
@@ -551,7 +672,9 @@ int ObJavaExternalDataEngine::create_param_store_jobject(const ObExternalTableSc
   shared_ptr<Schema> schema;
   SchemaBuilder schema_builder;
   ArrayVector columns;
-  columns.reserve(param_store->count());
+  if (OB_SUCC(ret) && OB_NOT_NULL(param_store)) {
+    columns.reserve(param_store->count());
+  }
   shared_ptr<Array> array_value;
   shared_ptr<RecordBatch> record_batch;
   for (int64_t i = 0; OB_SUCC(ret) && i < param_store->count(); i++) {
@@ -585,8 +708,9 @@ int ObJavaExternalDataEngine::create_param_store_jobject(const ObExternalTableSc
   }
 
   // export C++ arrow into C
-  struct ArrowArray array_c;
-  struct ArrowSchema schema_c;
+  struct ArrowArray array_c = {};
+  struct ArrowSchema schema_c = {};
+  ObArrowCDataGuard export_guard(array_c, schema_c);
   jobject jvector_schema_root = nullptr;
   LOCAL_REF_GUARD_ENV(jvector_schema_root, jni_env);
   if (OB_FAIL(ret) || !record_batch) {
@@ -661,12 +785,12 @@ int ObJavaExternalDataEngine::create_scanner_parameters(const ObExternalTableSca
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObJniTool::instance().create_java_string(jni_env, KEY_NAME_COLUMNS, columns_name))) {
     LOG_WARN("failed to create java string", K(ret), KCSTRING(KEY_NAME_COLUMNS));
-  } else if (OB_FAIL(ObJniTool::instance().create_java_list_from_array_string(jni_env, param.columns(), java_columns))) {
+  } else if (OB_FAIL(ObJniTool::instance().create_java_bytes_list(jni_env, param.columns(), java_columns))) {
     LOG_WARN("failed to create java columns", K(ret));
   } else if (OB_NOT_NULL(param.storage_param()->external_pushdown_filters_)) {
     if (OB_FAIL(ObJniTool::instance().create_java_string(jni_env, KEY_NAME_FILTERS, filters_name))) {
       LOG_WARN("failed to create java string", K(ret), KCSTRING(KEY_NAME_FILTERS));
-    } else if (OB_FAIL(ObJniTool::instance().create_java_list_from_array_string(
+    } else if (OB_FAIL(ObJniTool::instance().create_java_bytes_list(
         jni_env, *param.storage_param()->external_pushdown_filters_, java_filters))) {
       LOG_WARN("failed to create java filters", K(ret));
     }
@@ -731,11 +855,9 @@ int ObJavaExternalDataEngine::create_filters(const ObExternalTableScanParam &sca
 }
 ////////////////////////////////////////////////////////////////////////////////
 // ObJavaExternalScanner
-ObJavaExternalScanner::ObJavaExternalScanner(ObJavaGlobalRef &&java_scanner_object,
-                                             ObJavaDataSourceFactoryHelper &data_source_factory,
+ObJavaExternalScanner::ObJavaExternalScanner(ObJavaDataSourceFactoryHelper &data_source_factory,
                                              ObJavaLogGuard &java_log_guard)
-    : java_scanner_object_(std::move(java_scanner_object)),
-      data_source_factory_(data_source_factory),
+    : data_source_factory_(data_source_factory),
       java_log_guard_(java_log_guard)
 {
   MEMSET(&arrow_stream_, 0, sizeof(arrow_stream_));
@@ -744,6 +866,12 @@ ObJavaExternalScanner::ObJavaExternalScanner(ObJavaGlobalRef &&java_scanner_obje
 ObJavaExternalScanner::~ObJavaExternalScanner()
 {
   destroy();
+}
+
+int ObJavaExternalScanner::init(ObJavaGlobalRef &&java_scanner_object)
+{
+  java_scanner_object_ = std::move(java_scanner_object);
+  return init();
 }
 
 int ObJavaExternalScanner::init()
@@ -755,6 +883,7 @@ int ObJavaExternalScanner::init()
   } else if (OB_FAIL(data_source_factory_.export_arrow_stream(java_scanner_object_.handle(), arrow_stream_))) {
     LOG_WARN("failed to export arrow stream", K(ret));
   }
+  reusable_ = OB_SUCC(ret);
   LOG_TRACE("init java external scanner done", K(ret));
   return ret;
 }
@@ -766,21 +895,60 @@ int ObJavaExternalScanner::rescan(const ObExternalTableScanParam &param)
 
 void ObJavaExternalScanner::destroy()
 {
-  if (OB_NOT_NULL(arrow_stream_.release)) {
-    arrow_stream_.release(&arrow_stream_);
-    if (OB_NOT_NULL(arrow_stream_.release)) {
-      arrow_stream_.release = nullptr; // double check
-    }
+  const int ret = close();
+  if (OB_SUCCESS != ret) {
+    LOG_WARN("failed to close java scanner", K(ret));
   }
-  java_scanner_object_.clear();
-  java_log_guard_.reset();
+}
+
+int ObJavaExternalScanner::close()
+{
+  int ret = OB_SUCCESS;
+  if (!closed_) {
+    closed_ = true;
+    const bool catalog_scanner = connection_guard_.is_valid();
+    // Cancellation can end the consumer without another next() call. It must not make that
+    // lease reusable just because cursor cleanup itself succeeds.
+    if (catalog_scanner) {
+      ret = THIS_WORKER.check_status();
+    }
+    if (OB_NOT_NULL(java_scanner_object_.handle())
+        && (catalog_scanner || OB_ISNULL(arrow_stream_.release))) {
+      const int close_ret = data_source_factory_.close_scanner(java_scanner_object_.handle());
+      if (OB_SUCC(ret)) {
+        ret = close_ret;
+      }
+    }
+    record_batch_.reset();
+    if (OB_NOT_NULL(arrow_stream_.release)) {
+      // JDBC reader close is idempotent; the Arrow callback must not hide a cursor-close failure.
+      arrow_stream_.release(&arrow_stream_);
+    }
+    MEMSET(&arrow_stream_, 0, sizeof(arrow_stream_));
+    const int clear_ret = java_scanner_object_.clear();
+    if (OB_SUCC(ret)) {
+      ret = clear_ret;
+    }
+    if (OB_SUCC(ret) && reusable_) {
+      connection_guard_.mark_reusable();
+    }
+    const int release_ret = connection_guard_.release();
+    if (OB_SUCCESS != release_ret) {
+      LOG_WARN("failed to release jdbc scan connection", K(ret), K(release_ret));
+    }
+    if (OB_SUCC(ret)) {
+      ret = release_ret;
+    }
+    java_log_guard_.reset();
+  }
+  return ret;
 }
 
 int ObJavaExternalScanner::schema(std::shared_ptr<arrow::Schema> &schema)
 {
   int ret = OB_SUCCESS;
   int arrow_ret = 0;
-  struct ArrowSchema schema_c;
+  struct ArrowSchema schema_c = {};
   ObArrowStatus obstatus(ret);
   if (schema_) {
     schema = schema_;
@@ -790,6 +958,13 @@ int ObJavaExternalScanner::schema(std::shared_ptr<arrow::Schema> &schema)
              K(ret), KP(arrow_stream_.get_schema), KP(arrow_stream_.get_last_error));
   } else if (0 != (arrow_ret = arrow_stream_.get_schema(&arrow_stream_, &schema_c))) {
     ret = OB_JNI_ERROR;
+    if (connection_guard_.is_valid()) {
+      ret = OB_JNI_JAVA_EXCEPTION_ERROR;
+      const char *message = arrow_stream_.get_last_error(&arrow_stream_);
+      if (OB_NOT_NULL(message)) {
+        LOG_USER_ERROR(OB_JNI_JAVA_EXCEPTION_ERROR, static_cast<int>(STRLEN(message)), message);
+      }
+    }
     LOG_WARN("failed to get schema from arrow stream",
              K(ret), K(arrow_ret), KCSTRING(arrow_stream_.get_last_error(&arrow_stream_)));
   } else if (OBARROW_FAIL(arrow::ImportSchema(&schema_c).Value(&schema_))) {
@@ -797,6 +972,12 @@ int ObJavaExternalScanner::schema(std::shared_ptr<arrow::Schema> &schema)
   } else {
     schema = schema_;
     LOG_TRACE("get schema success", KCSTRING(schema->ToString(true/*metadata*/).c_str()));
+  }
+  if (OB_NOT_NULL(schema_c.release)) {
+    schema_c.release(&schema_c);
+  }
+  if (OB_FAIL(ret)) {
+    reusable_ = false;
   }
   LOG_TRACE("get schema from external java scanner", K(ret));
   return ret;
@@ -807,10 +988,12 @@ int ObJavaExternalScanner::next(int64_t capacity, arrow::RecordBatch *&record_ba
   int ret = OB_SUCCESS;
   int arrow_ret = 0;
   ObArrowStatus obstatus(ret);
-  struct ArrowArray array_c;
+  struct ArrowArray array_c = {};
   record_batch_ret = nullptr;
   shared_ptr<arrow::Schema> tmp_schema;
-  if (OB_UNLIKELY(OB_ISNULL(arrow_stream_.get_next) || OB_ISNULL(arrow_stream_.get_last_error))) {
+  if (closed_) {
+    ret = OB_ITER_END;
+  } else if (OB_UNLIKELY(OB_ISNULL(arrow_stream_.get_next) || OB_ISNULL(arrow_stream_.get_last_error))) {
     ret = OB_NOT_INIT;
     LOG_WARN("failed to get next rows as the 'get_next' or 'get_last_error' is null", K(ret));
   }else if (!schema_ && OB_FAIL(this->schema(tmp_schema))) {
@@ -818,6 +1001,13 @@ int ObJavaExternalScanner::next(int64_t capacity, arrow::RecordBatch *&record_ba
     LOG_WARN("failed to get schema", K(ret));
   } else if (0 != (arrow_ret = arrow_stream_.get_next(&arrow_stream_, &array_c))) {
     ret = OB_JNI_ERROR;
+    if (connection_guard_.is_valid()) {
+      ret = OB_JNI_JAVA_EXCEPTION_ERROR;
+      const char *message = arrow_stream_.get_last_error(&arrow_stream_);
+      if (OB_NOT_NULL(message)) {
+        LOG_USER_ERROR(OB_JNI_JAVA_EXCEPTION_ERROR, static_cast<int>(STRLEN(message)), message);
+      }
+    }
     LOG_WARN("failed to get next from java", K(ret), KCSTRING(arrow_stream_.get_last_error(&arrow_stream_)));
   } else if (OB_ISNULL(array_c.release)) {
     ret = OB_ITER_END;
@@ -829,6 +1019,18 @@ int ObJavaExternalScanner::next(int64_t capacity, arrow::RecordBatch *&record_ba
   } else {
     record_batch_ret = record_batch_.get();
     LOG_DEBUG("got record batch", KCSTRING(record_batch_ret->ToString().c_str()));
+  }
+  if (OB_NOT_NULL(array_c.release)) {
+    array_c.release(&array_c);
+  }
+  if (OB_FAIL(ret)) {
+    if (OB_ITER_END != ret) {
+      reusable_ = false;
+    }
+    const int close_ret = close();
+    if (OB_ITER_END == ret && OB_SUCCESS != close_ret) {
+      ret = close_ret;
+    }
   }
   LOG_TRACE("get next batch rows from java external scanner", K(ret));
   return ret;

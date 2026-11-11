@@ -8184,6 +8184,17 @@ int ObPLResolver::resolve_call(const ObStmtNodeTree *parse_tree, ObPLCallStmt *s
                                                             expr_params,
                                                             routine_type,
                                                             routine_info))) {
+          int tmp_ret = OB_SUCCESS;
+          if (dblink_name.empty()
+              && OB_TMP_FAIL(ObResolverUtils::check_external_catalog_for_call(schema_checker,
+                                                                              resolve_ctx_.session_info_.get_effective_tenant_id(),
+                                                                              *name_node,
+                                                                              db_name,
+                                                                              package_name,
+                                                                              sp_name,
+                                                                              ret))) {
+            LOG_WARN("failed to check external catalog for call", K(tmp_ret), K(db_name));
+          }
           LOG_WARN("resolve routine failed", K(ret));
           if (OB_ERR_SP_DOES_NOT_EXIST == ret) {
             LOG_USER_ERROR(OB_ERR_SP_DOES_NOT_EXIST, "PROCEDURE",

@@ -38,16 +38,21 @@ int ObPLDependencyUtil::add_dependency_object_impl(ObPLDependencyTable &dep_tbl,
                                                   const ObSchemaObjVersion &obj_version)
 {
   int ret = OB_SUCCESS;
-  bool exists = false;
-  for (ObPLDependencyTable::iterator it = dep_tbl.begin();
-                                 it < dep_tbl.end(); it++) {
-    if (*it == obj_version) {
-      exists = true;
-      break;
+
+  if (OB_UNLIKELY(common::is_external_object_id(obj_version.object_id_))) {
+    // do not add mock table id to dependency table
+  } else {
+    bool exists = false;
+    for (ObPLDependencyTable::iterator it = dep_tbl.begin();
+                                  it < dep_tbl.end(); it++) {
+      if (*it == obj_version) {
+        exists = true;
+        break;
+      }
     }
-  }
-  if (!exists) {
-    OZ (dep_tbl.push_back(obj_version));
+    if (!exists) {
+      OZ (dep_tbl.push_back(obj_version));
+    }
   }
   return ret;
 }

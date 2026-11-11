@@ -270,6 +270,18 @@ int ObCatalogResolver::resolve_catalog_properties(const ParseNode &properties_no
         }
         break;
       }
+      case ObCatalogProperties::CatalogType::JDBC_TYPE: {
+        if (data_version < DATA_VERSION_4_4_2_4) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("jdbc catalog supported in 4.4.2.4", K(data_version));
+        } else {
+          ObJdbcCatalogProperties properties;
+          OZ(properties.resolve_catalog_properties(properties_node));
+          OZ(properties.encrypt(*allocator_));
+          OZ(properties.to_string_with_alloc(catalog_properties, *allocator_));
+        }
+        break;
+      }
       default: {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not supported catalog type", K(type));

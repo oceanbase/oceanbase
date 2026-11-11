@@ -90,6 +90,9 @@ int ObPluginExternalTableRowIterator::init(const ObTableScanParam *scan_param)
   }
 
   if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(scanner_)) {
+      scanner_->mark_failed();
+    }
     destroy();
   }
   return ret;
@@ -103,9 +106,12 @@ int ObPluginExternalTableRowIterator::rescan(const ObTableScanParam *scan_param)
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
   } else {
+    if (OB_NOT_NULL(scanner_)) {
+      ret = scanner_->close();
+    }
     reset();
 
-    if (OB_FAIL(open_scanner(scan_param))) {
+    if (OB_SUCC(ret) && OB_FAIL(open_scanner(scan_param))) {
       LOG_WARN("failed to init external scan param", K(ret));
     }
   }
@@ -326,6 +332,9 @@ int ObPluginExternalTableRowIterator::get_next_rows(int64_t &count, int64_t capa
     }
   }
 
+  if (OB_SUCCESS != ret && OB_ITER_END != ret && OB_NOT_NULL(scanner_)) {
+    scanner_->mark_failed();
+  }
   LOG_DEBUG("got rows", K(ret), K(count), K(capacity));
   return ret;
 }

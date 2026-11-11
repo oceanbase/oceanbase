@@ -208,6 +208,17 @@ int64_t ObJniExceptionResult::to_string(char buf[], int64_t buf_len) const
   return pos;
 }
 
+int ObJniExceptionResult::get_message(ObIAllocator &allocator, ObString &message) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(exception_printer_) || OB_ISNULL(jni_env_) || OB_ISNULL(exception_)) {
+    ret = OB_NOT_INIT;
+  } else {
+    ret = exception_printer_->throwable_to_message(jni_env_, exception_, allocator, message);
+  }
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // ObJniExceptionPrinter
 ObJniExceptionPrinter::~ObJniExceptionPrinter()
@@ -232,6 +243,9 @@ int ObJniExceptionPrinter::init(JNIEnv *jni_env)
   OBJNI_BOOTSTRAP_RUN(get_exception_message_method_ = jni_env->GetStaticMethodID(jni_utils_class,
                                                                        "getExceptionMessage",
                                                                        "(Ljava/lang/Throwable;Z)Ljava/lang/String;"));
+  OBJNI_BOOTSTRAP_RUN(get_exception_message_utf8_method_ = jni_env->GetStaticMethodID(jni_utils_class,
+                                                                       "getExceptionMessageUtf8",
+                                                                       "(Ljava/lang/Throwable;)[B"));
   return ret;
 }
 
@@ -270,6 +284,28 @@ int ObJniExceptionPrinter::throwable_to_string(JNIEnv *jni_env, jthrowable throw
   } else {
     databuff_printf(buf, buf_len, pos, "%.*s", message_size, message_buffer);
     OBJNI_BOOTSTRAP_RUN(jni_env->ReleaseStringUTFChars(message, message_buffer));
+  }
+  return ret;
+}
+
+int ObJniExceptionPrinter::throwable_to_message(JNIEnv *jni_env,
+                                                jthrowable throwable,
+                                                ObIAllocator &allocator,
+                                                ObString &message)
+{
+  int ret = OB_SUCCESS;
+  jbyteArray java_message = nullptr;
+  LOCAL_REF_GUARD_ENV(java_message, jni_env);
+  if (OB_ISNULL(jni_env) || OB_ISNULL(throwable)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_ISNULL(jni_utils_class_.handle()) || OB_ISNULL(get_exception_message_utf8_method_)) {
+    ret = OB_NOT_INIT;
+  } else {
+    OBJNI_BOOTSTRAP_RUN(java_message = static_cast<jbyteArray>(jni_env->CallStaticObjectMethod(
+        jni_utils_class_.class_handle(), get_exception_message_utf8_method_, throwable)));
+    if (OB_SUCC(ret)) {
+      ret = ObJniTool::instance().bytes_from_java(jni_env, java_message, allocator, message);
+    }
   }
   return ret;
 }
@@ -950,6 +986,125 @@ int ObJniTool::create_java_list_from_array_string(JNIEnv *jni_env, const ObIArra
     java_list = nullptr;
   }
   LOG_TRACE("create java list done", K(ret), K(oblist.count()));
+  return ret;
+}
+
+int ObJniTool::create_java_bytes(JNIEnv *jni_env, const ObString &str, jbyteArray &java_bytes)
+{
+  int ret = OB_SUCCESS;
+  java_bytes = nullptr;
+  if (OB_ISNULL(jni_env) || str.length() < 0 || (str.length() > 0 && OB_ISNULL(str.ptr()))) {
+    ret = OB_INVALID_ARGUMENT;
+  }
+  OBJNI_RUN(java_bytes = jni_env->NewByteArray(str.length()));
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(java_bytes)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else if (str.length() > 0) {
+    OBJNI_RUN(jni_env->SetByteArrayRegion(
+        java_bytes, 0, str.length(), reinterpret_cast<const jbyte *>(str.ptr())));
+  }
+  return ret;
+}
+
+int ObJniTool::bytes_from_java(JNIEnv *jni_env,
+                               jbyteArray java_bytes,
+                               ObIAllocator &allocator,
+                               ObString &str)
+{
+  int ret = OB_SUCCESS;
+  jsize length = 0;
+  char *bytes = nullptr;
+  str.reset();
+  if (OB_ISNULL(jni_env) || OB_ISNULL(java_bytes)) {
+    ret = OB_INVALID_ARGUMENT;
+  }
+  OBJNI_RUN(length = jni_env->GetArrayLength(java_bytes));
+  if (OB_SUCC(ret)
+      && OB_ISNULL(bytes = static_cast<char *>(allocator.alloc(static_cast<int64_t>(length) + 1)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(bytes)) {
+    if (length > 0) {
+      OBJNI_RUN(jni_env->GetByteArrayRegion(java_bytes, 0, length, reinterpret_cast<jbyte *>(bytes)));
+    }
+    if (OB_SUCC(ret)) {
+      bytes[length] = '\0';
+      str.assign_ptr(bytes, length);
+    }
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(bytes)) {
+    allocator.free(bytes);
+  }
+  return ret;
+}
+
+int ObJniTool::create_java_bytes_list(JNIEnv *jni_env,
+                                      const ObIArray<ObString> &values,
+                                      jobject &java_list)
+{
+  int ret = OB_SUCCESS;
+  jclass list_class = nullptr;
+  jobject result = nullptr;
+  jmethodID constructor = nullptr;
+  jmethodID add = nullptr;
+  LOCAL_REF_GUARD_ENV(list_class, jni_env);
+  LOCAL_REF_GUARD_ENV(result, jni_env);
+  java_list = nullptr;
+  if (OB_ISNULL(jni_env)) {
+    ret = OB_INVALID_ARGUMENT;
+  }
+  OBJNI_RUN(list_class = jni_env->FindClass("java/util/ArrayList"));
+  OBJNI_RUN(constructor = jni_env->GetMethodID(list_class, "<init>", "()V"));
+  OBJNI_RUN(add = jni_env->GetMethodID(list_class, "add", "(Ljava/lang/Object;)Z"));
+  OBJNI_RUN(result = jni_env->NewObject(list_class, constructor));
+  for (int64_t i = 0; OB_SUCC(ret) && i < values.count(); ++i) {
+    jbyteArray value = nullptr;
+    LOCAL_REF_GUARD_ENV(value, jni_env);
+    OZ(create_java_bytes(jni_env, values.at(i), value));
+    OBJNI_RUN(jni_env->CallBooleanMethod(result, add, value));
+  }
+  if (OB_SUCC(ret)) {
+    java_list = result;
+    result = nullptr;
+  }
+  return ret;
+}
+
+int ObJniTool::bytes_list_from_java(JNIEnv *jni_env,
+                                    jobject java_list,
+                                    ObIAllocator &allocator,
+                                    ObIArray<ObString> &values)
+{
+  int ret = OB_SUCCESS;
+  jclass list_class = nullptr;
+  jclass bytes_class = nullptr;
+  jmethodID size = nullptr;
+  jmethodID get = nullptr;
+  jint count = 0;
+  jboolean is_bytes = JNI_FALSE;
+  LOCAL_REF_GUARD_ENV(list_class, jni_env);
+  LOCAL_REF_GUARD_ENV(bytes_class, jni_env);
+  if (OB_ISNULL(jni_env) || OB_ISNULL(java_list)) {
+    ret = OB_INVALID_ARGUMENT;
+  }
+  OBJNI_RUN(list_class = jni_env->FindClass("java/util/List"));
+  OBJNI_RUN(bytes_class = jni_env->FindClass("[B"));
+  OBJNI_RUN(size = jni_env->GetMethodID(list_class, "size", "()I"));
+  OBJNI_RUN(get = jni_env->GetMethodID(list_class, "get", "(I)Ljava/lang/Object;"));
+  OBJNI_RUN(count = jni_env->CallIntMethod(java_list, size));
+  for (jint i = 0; OB_SUCC(ret) && i < count; ++i) {
+    jobject value = nullptr;
+    ObString str;
+    LOCAL_REF_GUARD_ENV(value, jni_env);
+    OBJNI_RUN(value = jni_env->CallObjectMethod(java_list, get, i));
+    OBJNI_RUN(is_bytes = jni_env->IsInstanceOf(value, bytes_class));
+    if (OB_SUCC(ret) && (OB_ISNULL(value) || JNI_TRUE != is_bytes)) {
+      ret = OB_INVALID_ARGUMENT;
+    }
+    OZ(bytes_from_java(jni_env, static_cast<jbyteArray>(value), allocator, str));
+    OZ(values.push_back(str));
+  }
   return ret;
 }
 

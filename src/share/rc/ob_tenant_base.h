@@ -293,6 +293,7 @@ class ObTabletSplitTaskCache;
 #endif
 class ObBackupDestIOPermissionMgr;
 class ObInspectionService;
+class ObJdbcConnectionPoolMgr;
 namespace schema
 {
   class ObTenantSchemaService;
@@ -545,7 +546,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       share::schema::ObAddIntervalPartitionController*, \
       observer::ObTenantTabletCleanupService*, \
       share::schema::ObSchemaHistoryRecycleService*, \
-      share::ObInspectionService*                    \
+      share::ObInspectionService*,                   \
+      share::ObJdbcConnectionPoolMgr*                \
   )
 
 

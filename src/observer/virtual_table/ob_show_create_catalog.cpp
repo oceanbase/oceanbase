@@ -256,6 +256,21 @@ int ObShowCreateCatalog::print_catalog_definition(const uint64_t tenant_id,
           }
           break;
         }
+        case ObCatalogProperties::CatalogType::JDBC_TYPE: {
+          ObJdbcCatalogProperties properties;
+          if (OB_FAIL(properties.load_from_string(properties_string, allocator))) {
+            LOG_WARN("failed to load jdbc catalog properties", K(ret));
+          } else if (OB_FAIL(properties.decrypt(allocator))) {
+            LOG_WARN("failed to decrypt jdbc catalog properties", K(ret));
+          } else if (OB_FAIL(print_jdbc_catalog_definition(properties,
+                                                            allocator,
+                                                            buf,
+                                                            buf_len,
+                                                            pos))) {
+            LOG_WARN("failed to print jdbc catalog definition", K(ret));
+          }
+          break;
+        }
         default: {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid catalog type", K(ret), K(catalog_type));
@@ -443,6 +458,43 @@ int ObShowCreateCatalog::print_filesystem_catalog_definition(
     --pos;
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n) "))) {
       LOG_WARN("failed to print )", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObShowCreateCatalog::print_jdbc_catalog_definition(
+    const ObJdbcCatalogProperties &properties,
+    ObIAllocator &allocator,
+    char *buf,
+    const int64_t &buf_len,
+    int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  ObString masked_url;
+  ObObj url_obj;
+  if (OB_FAIL(ObJdbcCatalogProperties::mask_url_for_show(properties.url_,
+                                                       allocator,
+                                                       masked_url))) {
+    LOG_WARN("failed to mask jdbc catalog url", K(ret));
+  } else if (OB_FAIL(databuff_printf(buf,
+                                     buf_len,
+                                     pos,
+                                     "\n  %s = ",
+                                     ObJdbcCatalogProperties::OPTION_NAMES[ObJdbcCatalogProperties::JDBC_URL]))) {
+    LOG_WARN("failed to print jdbc url property name", K(ret));
+  } else {
+    url_obj.set_varchar(masked_url);
+    if (OB_FAIL(url_obj.print_sql_literal(buf, buf_len, pos))) {
+      LOG_WARN("failed to print jdbc url literal", K(ret));
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ","))) {
+      LOG_WARN("failed to print jdbc url property delimiter", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    --pos;
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n) "))) {
+      LOG_WARN("failed to print jdbc catalog closing parenthesis", K(ret));
     }
   }
   return ret;

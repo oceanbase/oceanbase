@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SHARE_SCHEMA
 
 #include "ob_external_table_column_schema_helper.h"
+#include "lib/timezone/ob_timezone_info.h"
 
 namespace oceanbase
 {
@@ -166,10 +167,12 @@ int ObExternalTableColumnSchemaHelper::setup_decimal(const bool &is_oracle_mode,
                                                      ObColumnSchemaV2 &column_schema)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(precision > OB_MAX_DECIMAL_PRECISION)) {
+  const int16_t max_precision = is_oracle_mode ? OB_MAX_NUMBER_PRECISION : OB_MAX_DECIMAL_PRECISION;
+  const int16_t max_scale = is_oracle_mode ? OB_MAX_NUMBER_PRECISION : OB_MAX_DECIMAL_SCALE;
+  if (OB_UNLIKELY(precision > max_precision)) {
     ret = OB_ERR_TOO_BIG_PRECISION;
     LOG_WARN("precision of number overflow", K(ret), K(scale), K(precision));
-  } else if (OB_UNLIKELY(scale > OB_MAX_DECIMAL_SCALE)) {
+  } else if (OB_UNLIKELY(scale > max_scale)) {
     ret = OB_ERR_TOO_BIG_SCALE;
     LOG_WARN("scale of number overflow", K(ret), K(scale), K(precision));
   } else if (OB_UNLIKELY(precision < scale)) {
@@ -313,6 +316,29 @@ int ObExternalTableColumnSchemaHelper::setup_time(const bool &is_oracle_mode,
   } else {
     column_schema.set_data_type(ObTimeType);
     column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[MYSQL_MODE][ObTimeType]);
+  }
+  return ret;
+}
+
+int ObExternalTableColumnSchemaHelper::setup_interval_ds(const int16_t &day_precision,
+                                                         const int16_t &second_precision,
+                                                         ObColumnSchemaV2 &column_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(day_precision < 0
+                  || day_precision > MAX_SCALE_FOR_ORACLE_TEMPORAL
+                  || second_precision < 0
+                  || second_precision > MAX_SCALE_FOR_ORACLE_TEMPORAL)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid interval day to second precision",
+             K(ret), K(day_precision), K(second_precision));
+  } else {
+    column_schema.set_data_type(ObIntervalDSType);
+    set_column_accuracy(ORACLE_MODE, ObIntervalDSType, column_schema);
+    column_schema.set_data_scale(
+        ObIntervalScaleUtil::interval_ds_scale_to_ob_scale(
+            static_cast<int8_t>(day_precision),
+            static_cast<int8_t>(second_precision)));
   }
   return ret;
 }

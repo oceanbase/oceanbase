@@ -138,7 +138,8 @@ private:
    * If ob_sql_type_str failed to call, and the error code returned is OB_SIZE_OVERFLOW.
    * realloc memory to the size of OB_MAX_EXTENDED_TYPE_INFO_LENGTH, then try again
    */
-  int get_type_str(const share::schema::ObColumnSchemaV2 &column_schema,
+  int get_type_str(const share::schema::ObTableSchema &table_schema,
+                   const share::schema::ObColumnSchemaV2 &column_schema,
                    const int16_t default_length_semantics,
                    ObString &type_val);
   static int get_udt_type_name(share::schema::ObSchemaGetterGuard *schema_guard,

@@ -10423,10 +10423,36 @@ int ObSPIService::resolve_ref_objects(const ParseResult &parse_result,
     } else {
       switch (current_obj->type_) {
       case REF_REL: {
+        if (T_RELATION_FACTOR == current_obj->node_->type_
+            && current_obj->node_->num_child_ > 2
+            && OB_NOT_NULL(current_obj->node_->children_)
+            && OB_NOT_NULL(current_obj->node_->children_[2])) {
+          break;
+        }
         ObString db_name;
         ObString rel_name;
         const ObTableSchema *table_schema = NULL;
-        if (OB_FAIL(ObStmtResolver::resolve_ref_factor(current_obj->node_, &session, rel_name, db_name))) {
+        const ObCatalogSchema *catalog_schema = NULL;
+        const ParseNode *catalog_node = current_obj->node_->num_child_ == 4
+                                         ? current_obj->node_->children_[3] : NULL;
+        if (OB_NOT_NULL(catalog_node)) {
+          const ObString catalog_name(static_cast<int32_t>(catalog_node->str_len_), catalog_node->str_value_);
+          if (OB_FAIL(schema_guard.get_catalog_schema_by_name(session.get_effective_tenant_id(),
+                                                               catalog_name, catalog_schema))) {
+            LOG_WARN("failed to get catalog schema", K(ret), K(catalog_name));
+          } else if (OB_ISNULL(catalog_schema)) {
+            ret = OB_CATALOG_NOT_EXIST;
+            LOG_USER_ERROR(OB_CATALOG_NOT_EXIST, catalog_name.length(), catalog_name.ptr());
+          }
+        } else if (is_external_catalog_id(session.get_current_default_catalog())) {
+          OZ (schema_guard.get_catalog_schema_by_id(session.get_effective_tenant_id(),
+                                                     session.get_current_default_catalog(), catalog_schema));
+          CK (OB_NOT_NULL(catalog_schema));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_NOT_NULL(catalog_schema) && is_external_catalog_id(catalog_schema->get_catalog_id())) {
+          // do nothing
+        } else if (OB_FAIL(ObStmtResolver::resolve_ref_factor(current_obj->node_, &session, rel_name, db_name))) {
           LOG_WARN("failed to resolve ref factor", K(ret));
         } else if (OB_FAIL(schema_guard.get_table_schema(session.get_effective_tenant_id(),
                                                          db_name,

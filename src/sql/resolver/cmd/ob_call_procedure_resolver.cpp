@@ -432,6 +432,17 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
                                                       dblink_name,
                                                       &(call_proc_info->get_allocator()),
                                                       &synonym_checker))) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_ISNULL(dblink_node) && dblink_name.empty()
+            && OB_TMP_FAIL(ObResolverUtils::check_external_catalog_for_call(*schema_checker_,
+                                                                            session_info_->get_effective_tenant_id(),
+                                                                            *name_node,
+                                                                            db_name,
+                                                                            package_name,
+                                                                            sp_name,
+                                                                            ret))) {
+          LOG_WARN("failed to check external catalog for call", K(tmp_ret), K(db_name));
+        }
         LOG_WARN("failed to get routine info", K(ret), K(db_name), K(package_name), K(sp_name));
       } else if (OB_ISNULL(proc_info)) {
         ret = OB_ERR_UNEXPECTED;

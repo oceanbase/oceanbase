@@ -230,6 +230,7 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   //external table
   external_table_partition_ = other.external_table_partition_;
   catalog_name_ = other.catalog_name_;
+  is_catalog_explicit_ = other.is_catalog_explicit_;
   external_location_id_ = other.external_location_id_;
   SampleInfo *buf = NULL;
   if (is_json_table()

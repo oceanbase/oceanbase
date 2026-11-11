@@ -28,7 +28,8 @@ enum class ObLakeTableFormat
   INVALID = 0,
   ICEBERG,
   HIVE,
-  ODPS
+  ODPS,
+  JDBC,
 };
 
 enum class ObURISelectionMode
@@ -46,6 +47,8 @@ public:
     ODPS_TYPE,
     FILESYSTEM_TYPE,
     HMS_TYPE,
+    REST_TYPE,
+    JDBC_TYPE,
     MAX_TYPE
   };
   ObCatalogProperties() : type_(CatalogType::INVALID_TYPE) {}
@@ -145,6 +148,39 @@ public:
   virtual int decrypt(ObIAllocator &allocator) override;
 
   common::ObString warehouse_;
+};
+
+class ObJdbcCatalogProperties : public ObCatalogProperties
+{
+public:
+  enum ObJdbcCatalogOptions {
+    JDBC_URL = 0,
+    MAX_OPTIONS
+  };
+  static constexpr const char *OPTION_NAMES[] = {
+      "URL",
+  };
+
+  ObJdbcCatalogProperties() : ObCatalogProperties(CatalogType::JDBC_TYPE) {}
+  virtual ~ObJdbcCatalogProperties() = default;
+  virtual int to_json_kv_string(char *buf, const int64_t buf_len, int64_t &pos) const override;
+  virtual int load_from_string(const common::ObString &str,
+                               common::ObIAllocator &allocator) override;
+  virtual int resolve_catalog_properties(const ParseNode &node) override;
+  virtual int encrypt(common::ObIAllocator &allocator) override;
+  virtual int decrypt(common::ObIAllocator &allocator) override;
+
+  static int mask_url_for_show(const common::ObString &url,
+                               common::ObIAllocator &allocator,
+                               common::ObString &masked_url);
+  static int resolve_plugin_name(const common::ObString &url,
+                                 common::ObString &plugin_name);
+
+  common::ObString url_;
+
+private:
+  static constexpr char JDBC_URL_PREFIX[] = "jdbc:";
+  static constexpr char JDBC_URL_MASK[] = "********";
 };
 
 class ObHMSCatalogProperties : public ObCatalogProperties

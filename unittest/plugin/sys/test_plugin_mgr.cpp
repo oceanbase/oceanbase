@@ -17,6 +17,7 @@
 #include "plugin/sys/ob_plugin_mgr.h"
 #include "plugin/sys/ob_plugin_handle.h"
 #include "plugin/sys/ob_plugin_entry_handle.h"
+#include "oceanbase/ob_plugin_external.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::plugin;
@@ -65,6 +66,50 @@ public:
   virtual int init(ObPluginParam *param) { return OB_SUCCESS; }
   virtual int deinit(ObPluginParam *param) { return OB_SUCCESS; }
 };
+
+TEST(TestObPluginMgr, accept_supported_plugin_api_versions)
+{
+  ObPluginMgr mgr;
+  ObPlugin plugin = {"oceanbase", OBP_MAKE_VERSION(1, 0, 0), "mulan", nullptr, nullptr};
+  for (ObPluginVersion version : {OBP_MAKE_VERSION(0, 1, 0), OBP_MAKE_VERSION(0, 2, 0),
+                                 OBP_PLUGIN_API_VERSION_CURRENT}) {
+    ObPluginHandle handle;
+    ASSERT_EQ(OB_SUCCESS, handle.init(&mgr, version, ObString("version_test"), &plugin));
+    EXPECT_EQ(OB_SUCCESS, handle.valid());
+  }
+}
+
+TEST(TestObPluginMgr, reject_incompatible_plugin_api_before_initialization)
+{
+  ObPluginMgr mgr;
+  ObPlugin plugin = {"oceanbase", OBP_MAKE_VERSION(1, 0, 0), "mulan", nullptr, nullptr};
+  for (ObPluginVersion version : {OBP_MAKE_VERSION(0, 0, 0), OBP_MAKE_VERSION(0, 0, 255),
+                                 OBP_MAKE_VERSION(0, 4, 0)}) {
+    ObPluginHandle handle;
+    EXPECT_EQ(OB_PLUGIN_VERSION_INCOMPATIBLE,
+              handle.init(&mgr, version, ObString("version_test"), &plugin));
+    EXPECT_EQ(nullptr, handle.plugin());
+  }
+}
+
+TEST(TestObPluginMgr, reject_old_external_interface_before_descriptor_use)
+{
+  ObTestPluginAdaptor descriptor;
+  ObPluginHandle plugin_handle;
+  for (ObPluginVersion version : {OBP_PLUGIN_API_VERSION_0_2_0,
+                                 OBP_EXTERNAL_INTERFACE_VERSION_CURRENT, OBP_MAKE_VERSION(0, 4, 0)}) {
+    ObPluginEntry entry;
+    entry.interface_type = OBP_PLUGIN_TYPE_EXTERNAL;
+    entry.name = ObString("version_test");
+    entry.interface_version = version;
+    entry.descriptor = &descriptor;
+    entry.plugin_handle = &plugin_handle;
+    ObPluginEntryHandle handle;
+    EXPECT_EQ(version == OBP_EXTERNAL_INTERFACE_VERSION_CURRENT ? OB_SUCCESS : OB_PLUGIN_VERSION_INCOMPATIBLE,
+              handle.init(entry));
+    EXPECT_FALSE(handle.ready());
+  }
+}
 
 TEST(TestObPluginMgr, test_find_plugin_with_version)
 {

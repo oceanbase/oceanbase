@@ -1224,7 +1224,8 @@ private: // member functions
   int extract_plugin_external_table_pushdown_filters(ObIArray<ObRawExpr*> &filters,
                                                      ObString external_properties_str,
                                                      ObIArray<ObRawExpr*> &nonpushdown_filters,
-                                                     ObIArray<ObString> &external_pushdown_filters) const;
+                                                     ObIArray<ObString> &external_pushdown_filters,
+                                                     const bool is_jdbc_catalog) const;
   int check_ext_filter_need_duplicate(const ObRawExpr *expr, int64_t &file_column_count,
                                       bool &need_duplicate) const;
 

@@ -636,6 +636,7 @@ int ObStaticEngineCG::clear_all_exprs_specific_flag(
 void ObStaticEngineCG::exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &exprs,
                                                    const bool is_column_store_tbl,
                                                    const bool need_return_lob_locator,
+                                                   const bool is_jdbc_catalog,
                                                    bool &found)
 {
   bool new_vector_support = is_column_store_tbl && IS_CLUSTER_VERSION_AFTER_4_3_1_0;
@@ -657,7 +658,9 @@ void ObStaticEngineCG::exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &
           // tinytext and text support vectorize in 4.1
           found = true;
         }
-      } else if (need_return_lob_locator && lib::is_oracle_mode() && col->get_result_type().get_type() == ObLongTextType) {
+      } else if (need_return_lob_locator && lib::is_oracle_mode()
+                 && col->get_result_type().get_type() == ObLongTextType
+                 && !is_jdbc_catalog) {
         found = true;
       } else if (col->get_result_type().is_geometry()) {
         found = true;
@@ -11338,7 +11341,14 @@ int ObStaticEngineCG::check_op_vectorization(ObLogicalOperator *op, ObSqlSchemaG
       LOG_WARN("get column store info failed", K(ret));
     } else {
       const bool need_return_lob_locator = op->get_plan()->get_optimizer_context().get_session_info()->need_return_lob_locator();
-      exprs_not_support_vectorize(tsc->get_access_exprs(), is_col_store_tbl, need_return_lob_locator, disable_vectorize);
+      const bool is_jdbc_catalog = OB_NOT_NULL(table_schema)
+                                   && table_schema->is_external_table()
+                                   && ObLakeTableFormat::JDBC == table_schema->get_lake_table_format();
+      exprs_not_support_vectorize(tsc->get_access_exprs(),
+                                  is_col_store_tbl,
+                                  need_return_lob_locator,
+                                  is_jdbc_catalog,
+                                  disable_vectorize);
     }
     if (OB_FAIL(ret)) {
     } else if (tsc->is_multivalue_index_scan()) {

@@ -33,10 +33,13 @@ const char *ObCatalogProperties::CATALOG_TYPE_STR[] = {
     "ODPS",
     "FILESYSTEM",
     "HMS",
+    "REST",
+    "JDBC",
 };
 static_assert(array_elements(ObCatalogProperties::CATALOG_TYPE_STR) == static_cast<size_t>(ObCatalogProperties::CatalogType::MAX_TYPE), "Not enough initializer for ObCatalogProperties");
 static_assert(array_elements(ObODPSCatalogProperties::OPTION_NAMES) == static_cast<size_t>(ObODPSCatalogProperties::ObOdpsCatalogOptions::MAX_OPTIONS), "Not enough initializer for ObODPSCatalogProperties");
 static_assert(array_elements(ObFilesystemCatalogProperties::OPTION_NAMES) == static_cast<size_t>(ObFilesystemCatalogProperties::ObFilesystemCatalogOptions::MAX_OPTIONS), "Not enough initializer for ObFilesystemCatalogProperties");
+static_assert(array_elements(ObJdbcCatalogProperties::OPTION_NAMES) == static_cast<size_t>(ObJdbcCatalogProperties::ObJdbcCatalogOptions::MAX_OPTIONS), "Not enough initializer for ObJdbcCatalogProperties");
 
 int ObCatalogProperties::to_string_with_alloc(ObString &str, ObIAllocator &allocator) const
 {
@@ -47,6 +50,7 @@ int ObCatalogProperties::to_string_with_alloc(ObString &str, ObIAllocator &alloc
   do {
     buf_len *= 2;
     ret = OB_SUCCESS;
+    pos = 0;
     if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buf_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc buf", K(ret), K(buf_len));
@@ -720,6 +724,200 @@ int ObFilesystemCatalogProperties::decrypt(ObIAllocator &allocator)
 }
 
 /*---------------------End of ObODPSCatalogProperties----------------------*/
+
+/*---------------------Start of ObJdbcCatalogProperties----------------------*/
+int ObJdbcCatalogProperties::resolve_plugin_name(const ObString &url,
+                                                 ObString &plugin_name)
+{
+  int ret = OB_SUCCESS;
+  const int64_t prefix_len = sizeof(JDBC_URL_PREFIX) - 1;
+  int64_t subprotocol_end = prefix_len;
+  plugin_name.reset();
+  if (OB_UNLIKELY(url.length() <= prefix_len
+                  || 0 != ObString(prefix_len, url.ptr()).case_compare(JDBC_URL_PREFIX))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid jdbc catalog url prefix", K(ret));
+  } else {
+    while (subprotocol_end < url.length() && ':' != url.ptr()[subprotocol_end]) {
+      ++subprotocol_end;
+    }
+    if (OB_UNLIKELY(prefix_len == subprotocol_end || subprotocol_end == url.length())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid jdbc catalog url subprotocol", K(ret));
+    } else {
+      plugin_name.assign_ptr(url.ptr() + prefix_len,
+                             static_cast<int32_t>(subprotocol_end - prefix_len));
+    }
+  }
+  return ret;
+}
+
+int ObJdbcCatalogProperties::to_json_kv_string(char *buf,
+                                               const int64_t buf_len,
+                                               int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s":")", OPTION_NAMES[JDBC_URL]));
+  OZ(hex_print(url_.ptr(), url_.length(), buf, buf_len, pos));
+  OZ(databuff_printf(buf, buf_len, pos, "\""));
+  return ret;
+}
+
+int ObJdbcCatalogProperties::load_from_string(const ObString &str, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  json::Value *data = NULL;
+  json::Parser parser;
+  ObArenaAllocator temp_allocator(ObMemAttr(MTL_ID(), "JdbcProps"));
+  bool has_url = false;
+  if (OB_UNLIKELY(str.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("format string is empty", K(ret));
+  } else if (OB_FAIL(parser.init(&temp_allocator))) {
+    LOG_WARN("parser init failed", K(ret));
+  } else if (OB_FAIL(parser.parse(str.ptr(), str.length(), data))) {
+    LOG_WARN("parse jdbc catalog properties failed", K(ret), "properties_len", str.length());
+  } else if (OB_ISNULL(data) || json::JT_OBJECT != data->get_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid jdbc catalog properties", K(ret));
+  } else {
+    DLIST_FOREACH_X(it, data->get_object(), OB_SUCC(ret))
+    {
+      if (0 == it->name_.case_compare(OPTION_NAMES[JDBC_URL])) {
+        if (OB_ISNULL(it->value_) || json::JT_STRING != it->value_->get_type()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid jdbc url property", K(ret));
+        } else {
+          ObObj obj;
+          if (OB_FAIL(ObHexUtilsBase::unhex(it->value_->get_string(), allocator, obj))) {
+            LOG_WARN("failed to decode jdbc url", K(ret));
+          } else if (!obj.is_null()) {
+            url_ = obj.get_string();
+            has_url = true;
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && (!has_url || url_.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("jdbc catalog url is empty", K(ret));
+  }
+  return ret;
+}
+
+int ObJdbcCatalogProperties::resolve_catalog_properties(const ParseNode &node)
+{
+  int ret = OB_SUCCESS;
+  const ParseNode *child = NULL;
+  const ParseNode *child_value = NULL;
+  for (int32_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
+    if (OB_ISNULL(child = node.children_[i])
+        || 1 != child->num_child_
+        || OB_ISNULL(child_value = child->children_[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid parse node", K(ret));
+    } else {
+      switch (child->type_) {
+        case T_EXTERNAL_FILE_FORMAT_TYPE: {
+          break;
+        }
+        case T_URI: {
+          if (1 != child->value_) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid jdbc catalog url property", K(ret), K(child->value_));
+          } else {
+            url_ = ObString(child_value->str_len_, child_value->str_value_).trim_space_only();
+          }
+          break;
+        }
+        default: {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid jdbc catalog option", K(ret), K(child->type_));
+          break;
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (url_.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "jdbc catalog's url can't be empty");
+  } else if (url_.length() >= OB_MAX_EXTERNAL_TABLE_PROPERTIES_ITEM_LENGTH) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "jdbc catalog's url is too long");
+  } else {
+    ObString plugin_name;
+    if (OB_FAIL(resolve_plugin_name(url_, plugin_name))) {
+      LOG_WARN("failed to resolve jdbc catalog plugin name", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObJdbcCatalogProperties::encrypt(ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  ObString encrypted_url;
+  if (OB_FAIL(encrypt_str(url_, encrypted_url, allocator))) {
+    LOG_WARN("failed to encrypt jdbc url", K(ret), "url_len", url_.length());
+  } else {
+    url_ = encrypted_url;
+  }
+  return ret;
+}
+
+int ObJdbcCatalogProperties::decrypt(ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  ObString decrypted_url;
+  if (OB_FAIL(decrypt_str(url_, decrypted_url, allocator))) {
+    LOG_WARN("failed to decrypt jdbc url", K(ret), "url_len", url_.length());
+  } else {
+    url_ = decrypted_url;
+  }
+  return ret;
+}
+
+int ObJdbcCatalogProperties::mask_url_for_show(const ObString &url,
+                                               ObIAllocator &allocator,
+                                               ObString &masked_url)
+{
+  int ret = OB_SUCCESS;
+  masked_url.reset();
+  if (OB_UNLIKELY(url.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("jdbc url is empty", K(ret));
+  } else {
+    ObString plugin_name;
+    bool valid_prefix = OB_SUCCESS == resolve_plugin_name(url, plugin_name)
+                        && OB_NOT_NULL(plugin_name.ptr());
+    for (int64_t i = 0; valid_prefix && i < plugin_name.length(); ++i) {
+      const char ch = plugin_name.ptr()[i];
+      valid_prefix = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
+                     || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-'
+                     || ch == '.' || ch == '+';
+    }
+    // Retain only jdbc:<subprotocol>:; everything after it is driver-defined
+    // and may contain credentials. Malformed prefixes are masked in full.
+    const int64_t prefix_len = valid_prefix ? sizeof(JDBC_URL_PREFIX) - 1 + plugin_name.length() + 1 : 0;
+    const int64_t masked_len = prefix_len + sizeof(JDBC_URL_MASK) - 1;
+    char *buf = static_cast<char *>(allocator.alloc(masked_len + 1));
+    if (OB_NOT_NULL(buf)) {
+      MEMCPY(buf, url.ptr(), prefix_len);
+      MEMCPY(buf + prefix_len, JDBC_URL_MASK, sizeof(JDBC_URL_MASK));
+      masked_url.assign_ptr(buf, static_cast<int32_t>(masked_len));
+    } else {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate jdbc url mask", K(ret), K(masked_len));
+    }
+  }
+  return ret;
+}
+
+/*---------------------End of ObJdbcCatalogProperties----------------------*/
+
 /*---------------------Start of ObHMSCatalogProperties----------------------*/
 int ObHMSCatalogProperties::to_json_kv_string(char *buf, const int64_t buf_len, int64_t &pos) const
 {

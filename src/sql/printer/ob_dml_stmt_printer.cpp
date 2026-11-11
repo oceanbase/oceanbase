@@ -40,7 +40,7 @@ ObDMLStmtPrinter::ObDMLStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, con
     print_cte_(false),
     schema_guard_(schema_guard),
     print_params_(print_params),
-    expr_printer_(buf, buf_len, pos, schema_guard_, print_params_, param_store),
+    expr_printer_(buf, buf_len, pos, schema_guard_, print_params_, param_store, session),
     param_store_(param_store),
     session_(session)
 {
@@ -332,7 +332,8 @@ int ObDMLStmtPrinter::print_table_with_transpose(const TableItem *table_item)
         MEMSET(expr_str_buf, 0 , sizeof(expr_str_buf));
         int64_t pos = 0;
         ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
-                                      schema_guard_, stmt_->get_query_ctx()->get_timezone_info());
+                                      schema_guard_, stmt_->get_query_ctx()->get_timezone_info(),
+                                      NULL, session_);
         if (OB_FAIL(expr_printer.do_print(aggr_pair.expr_, T_NONE_SCOPE, true))) {
           LOG_WARN("print expr definition failed", KPC(aggr_pair.expr_), K(ret));
         } else {
@@ -2746,17 +2747,28 @@ int ObDMLStmtPrinter::print_with()
   return ret;
 }
 
-// 0. oracle模式不拼，因为oracle还不支持catalog.db.table的语法
 // 1. external catalog一定要反拼，当解析出external catalog时说明已经升级完成了
 // 2. internal catalog不一定反拼
 // 2.1 反拼view definition时不拼internal（否则要刷case且会被用户感知）
 // 2.2 升级期间不拼（旧的server解析不了拼出来的sql）
-bool ObDMLStmtPrinter::need_print_catalog_name(const ObString& catalog_name)
+// 3. PL 语境只反拼显式 catalog。隐式 catalog 不反拼，运行时解析
+bool ObDMLStmtPrinter::need_print_catalog_name(const TableItem &table_item)
 {
   bool need_print = false;
-  if (is_oracle_mode()) {
+  const ObString &catalog_name = table_item.catalog_name_;
+  const ObSqlCtx *sql_ctx = NULL;
+  if (OB_NOT_NULL(session_) && OB_NOT_NULL(session_->get_cur_exec_ctx())) {
+    sql_ctx = session_->get_cur_exec_ctx()->get_sql_ctx();
+  }
+  if (catalog_name.empty()) {
+  } else if (OB_NOT_NULL(sql_ctx)
+             && PLSql == sql_ctx->exec_type_
+             && sql_ctx->is_prepare_stage_
+             && !table_item.is_catalog_explicit_) {
+    // do nothing
   } else if (!ObCatalogUtils::is_internal_catalog_name(catalog_name)) {
     need_print = true;
+  } else if (is_oracle_mode()) {
   } else if (print_params_.not_print_internal_catalog_ || GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_4_3_5_2) {
   } else {
     need_print = true;

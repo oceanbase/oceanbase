@@ -35,12 +35,14 @@ ObRawExprPrinter::ObRawExprPrinter()
       param_store_(NULL),
       schema_guard_(NULL),
       print_cte_(false),
-      stmt_(NULL)
+      stmt_(NULL),
+      session_(NULL)
 {
 }
 
 ObRawExprPrinter::ObRawExprPrinter(char *buf, int64_t buf_len, int64_t *pos, ObSchemaGetterGuard *schema_guard,
-                                   ObObjPrintParams print_params, const ParamStore *param_store)
+                                   ObObjPrintParams print_params, const ParamStore *param_store,
+                                   const ObSQLSessionInfo *session)
     : buf_(buf),
       buf_len_(buf_len),
       pos_(pos),
@@ -51,7 +53,8 @@ ObRawExprPrinter::ObRawExprPrinter(char *buf, int64_t buf_len, int64_t *pos, ObS
       param_store_(param_store),
       schema_guard_(schema_guard),
       print_cte_(false),
-      stmt_(NULL)
+      stmt_(NULL),
+      session_(session)
 {
 }
 
@@ -60,7 +63,8 @@ ObRawExprPrinter::~ObRawExprPrinter()
 }
 
 void ObRawExprPrinter::init(char *buf, int64_t buf_len, int64_t *pos, ObSchemaGetterGuard *schema_guard,
-                            ObObjPrintParams print_params, const ParamStore *param_store)
+                            ObObjPrintParams print_params, const ParamStore *param_store,
+                            const ObSQLSessionInfo *session)
 {
   buf_ = buf;
   buf_len_ = buf_len;
@@ -69,6 +73,7 @@ void ObRawExprPrinter::init(char *buf, int64_t buf_len, int64_t *pos, ObSchemaGe
   schema_guard_ = schema_guard;
   print_params_ = print_params;
   param_store_ = param_store;
+  session_ = session;
 }
 
 int ObRawExprPrinter::do_print(ObRawExpr *expr, ObStmtScope scope, bool only_column_namespace, bool print_cte)
@@ -418,7 +423,9 @@ int ObRawExprPrinter::print(ObQueryRefRawExpr *expr)
                                            static_cast<ObSelectStmt*>(stmt),
                                            schema_guard_,
                                            print_params_,
-                                           param_store_);
+                                           param_store_,
+                                           false,
+                                           session_);
           if (print_cte_) {
             stmt_printer.enable_print_temp_table_as_cte();
           }

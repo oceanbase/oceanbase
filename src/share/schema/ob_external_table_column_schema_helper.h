@@ -58,6 +58,9 @@ public:
   static int setup_date(const bool &is_oracle_mode,
                         ObColumnSchemaV2 &column_schema);
   static int setup_time(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
+  static int setup_interval_ds(const int16_t &day_precision,
+                               const int16_t &second_precision,
+                               ObColumnSchemaV2 &column_schema);
   static int setup_timestamp_ns(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
   static int setup_timestamp_tz_ns(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
 };

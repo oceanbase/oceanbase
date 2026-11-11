@@ -60,6 +60,7 @@
 #include "sql/resolver/cmd/ob_event_stmt.h"
 #include "sql/resolver/cmd/ob_location_utils_stmt.h"
 #include "share/ob_cluster_version.h"
+#include "share/catalog/ob_catalog_utils.h"
 
 namespace oceanbase {
 using namespace share;
@@ -516,7 +517,8 @@ int get_privs_by_table_item(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("basic stmt is not dml stmt", K(ret), K(basic_stmt->get_stmt_type()));
   } else {
-    if (is_mysql_mode()) {
+    if (is_mysql_mode()
+        && ObCatalogUtils::is_internal_catalog_name(table_item->catalog_name_)) {
       if (table_item->is_view_table_) {
         if (OB_FAIL(add_col_priv_to_need_priv(basic_stmt,
                                               *table_item,
@@ -858,11 +860,6 @@ int add_col_priv_to_need_priv(
   need_priv.is_for_update_ = table_item.for_update_;
   need_priv.grantee_id_ = grantee_id;
   need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
-  if (need_priv.catalog_ != OB_INTERNAL_CATALOG_NAME) {
-    need_priv.priv_level_ = OB_PRIV_CATALOG_LEVEL;
-    need_priv.priv_set_ = OB_PRIV_USE_CATALOG;
-    ADD_NEED_PRIV(need_priv);
-  }
   const uint64_t table_id = table_item.table_id_;
   visitor.set_relation_scope();
   visitor.remove_scope(SCOPE_DML_COLUMN);
@@ -1398,6 +1395,46 @@ int add_nec_loc_priv_in_dml(
   return ret;
 }
 
+int add_catalog_priv_in_dml(
+    uint64_t user_id,
+    const ObSqlCtx &ctx,
+    const TableItem &table_item,
+    ObIArray<ObOraNeedPriv> &need_privs,
+    uint64_t check_flag)
+{
+  int ret = OB_SUCCESS;
+  const ObCatalogSchema *catalog_schema = NULL;
+  ObPackedObjPriv packed_priv = 0;
+  if (ObCatalogUtils::is_internal_catalog_name(table_item.catalog_name_)) {
+    // do nothing
+  } else if (OB_ISNULL(ctx.schema_guard_) || OB_ISNULL(ctx.session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema guard or session info is null", K(ret), KP(ctx.schema_guard_), KP(ctx.session_info_));
+  } else if (OB_FAIL(ctx.schema_guard_->get_catalog_schema_by_name(
+                 ctx.session_info_->get_effective_tenant_id(),
+                 table_item.catalog_name_,
+                 catalog_schema))) {
+    LOG_WARN("failed to get catalog schema", K(ret), K(table_item.catalog_name_));
+  } else if (OB_ISNULL(catalog_schema)) {
+    ret = OB_CATALOG_NOT_EXIST;
+    LOG_WARN("catalog schema is null", K(ret), K(table_item.catalog_name_));
+  } else if (OB_FAIL(ObPrivPacker::pack_raw_obj_priv(
+                 NO_OPTION, OBJ_PRIV_ID_USE_CATALOG, packed_priv))) {
+    LOG_WARN("failed to pack use catalog privilege", K(ret));
+  } else {
+    ObOraNeedPriv need_priv;
+    need_priv.grantee_id_ = user_id;
+    need_priv.obj_id_ = catalog_schema->get_catalog_id();
+    need_priv.obj_level_ = OBJ_LEVEL_FOR_TAB_PRIV;
+    need_priv.obj_type_ = static_cast<uint64_t>(ObObjectType::CATALOG);
+    need_priv.check_flag_ = check_flag;
+    need_priv.obj_privs_ = packed_priv;
+    need_priv.owner_id_ = OB_ORA_SYS_USER_ID;
+    OZ (add_need_priv(need_privs, need_priv));
+  }
+  return ret;
+}
+
 int add_procs_priv_in_dml(
     uint64_t user_id,
     const ObSqlCtx &ctx,
@@ -1671,6 +1708,8 @@ int get_dml_stmt_ora_need_privs(
           if (OB_ISNULL(table_item)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("table item is null");
+          } else if (!ObCatalogUtils::is_internal_catalog_name(table_item->catalog_name_)) {
+            OZ (add_catalog_priv_in_dml(user_id, ctx, *table_item, need_privs, check_flag));
           } else if (stmt::T_MERGE != stmt_type
                     && (TableItem::BASE_TABLE == table_item->type_
                         || TableItem::ALIAS_TABLE == table_item->type_
@@ -1959,7 +1998,6 @@ int get_dml_stmt_need_privs(
             if ((is_mysql_mode() && need_priv.catalog_ != OB_INTERNAL_CATALOG_NAME)
                 || (is_oracle_mode() && need_priv.catalog_ != OB_INTERNAL_CATALOG_NAME_UPPER)) {
               need_priv.priv_level_ = OB_PRIV_CATALOG_LEVEL;
-              priv_set |= OB_PRIV_USE_CATALOG;
             }
             //no check for information_schema select
             if (stmt::T_SELECT != dml_stmt->get_stmt_type()) {
@@ -2035,7 +2073,14 @@ int get_dml_stmt_need_privs(
               // }
             }
             if (OB_SUCC(ret)) {
-              if (lib::is_mysql_mode()) {
+              if (OB_PRIV_CATALOG_LEVEL == need_priv.priv_level_) {
+                if (lib::is_mysql_mode()) {
+                  need_priv.priv_set_ |= OB_PRIV_USE_CATALOG;
+                } else {
+                  need_priv.priv_set_ = OB_PRIV_USE_CATALOG;
+                }
+                ADD_NEED_PRIV(need_priv);
+              } else if (lib::is_mysql_mode()) {
                 if (OB_FAIL(add_col_priv_to_need_priv(basic_stmt,
                                                       *table_item,
                                                       session_priv.tenant_id_,

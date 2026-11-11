@@ -723,6 +723,9 @@ ob_set_subtarget(ob_share catalog
   catalog/odps/ob_odps_catalog_utils.cpp
   catalog/odps/ob_odps_catalog.cpp
   catalog/filesystem/ob_filesystem_catalog.cpp
+  catalog/jdbc/ob_jdbc_catalog.cpp
+  catalog/jdbc/ob_jdbc_catalog_types.cpp
+  catalog/jdbc/ob_jdbc_connection_pool.cpp
   catalog/hive/thrift/transport/ob_t_sasl_client_transport.cpp
   catalog/hive/thrift/transport/ob_t_sasl_transport.cpp
   catalog/hive/thrift/transport/ob_t_sasl.cpp

@@ -1443,11 +1443,42 @@ int ObExternalFileFormat::mock_gen_column_def(
       break;
     }
     case PLUGIN_FORMAT: {
-      if (OB_FAIL(temp_str.append_fmt("get_path(%s, '%.*s')",
-                                      N_EXTERNAL_FILE_ROW,
-                                      column.get_column_name_str().length(),
-                                      column.get_column_name_str().ptr()))) {
-        LOG_WARN("fail to append sql str", K(ret));
+      const ObString &column_name = column.get_column_name_str();
+      bool use_hex_literal = false;
+      if (lib::is_mysql_mode() && OB_NOT_NULL(column_name.ptr())) {
+        for (int64_t i = 0; !use_hex_literal && i < column_name.length(); ++i) {
+          const unsigned char ch = static_cast<unsigned char>(column_name.ptr()[i]);
+          use_hex_literal = '\\' == ch || ch < 0x20 || ch >= 0x7f;
+        }
+      }
+      // Hex literals preserve name bytes across MySQL SQL modes and connection charsets. Doubling quotes is sufficient for Oracle and plain ASCII names.
+      const ObHexEscapeSqlStr escaped_name(column_name, false, true);
+      const int64_t buffer_len =
+          (use_hex_literal ? column_name.length() * 2
+                           : column_name.length() + escaped_name.get_extra_length())
+          + 1;
+
+      char *buffer = static_cast<char *>(allocator.alloc(buffer_len));
+      int64_t length = 0;
+      if (OB_ISNULL(buffer)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate escaped column name", K(ret), K(buffer_len));
+      } else if (use_hex_literal) {
+        if (OB_FAIL(hex_print(column_name.ptr(), column_name.length(), buffer, buffer_len, length))) {
+          LOG_WARN("fail to encode column name as hex", K(ret), K(column_name));
+        }
+      } else {
+        length = escaped_name.to_string(buffer, buffer_len);
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(temp_str.append_fmt("get_path(%s, %s'", N_EXTERNAL_FILE_ROW,
+                                        use_hex_literal ? "X" : ""))) {
+          LOG_WARN("fail to append get_path prefix", K(ret));
+        } else if (OB_FAIL(temp_str.append(buffer, length))) {
+          LOG_WARN("fail to append escaped column name", K(ret));
+        } else if (OB_FAIL(temp_str.append("')"))) {
+          LOG_WARN("fail to append get_path suffix", K(ret));
+        }
       }
       break;
     }

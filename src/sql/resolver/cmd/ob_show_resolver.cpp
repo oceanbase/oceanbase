@@ -2872,6 +2872,9 @@ int ObShowResolver::resolve_show_from_table(const ParseNode *from_table_node,
                     helper.convert(show_table_name));
               }
             }
+          } else if (OB_JNI_JAVA_EXCEPTION_ERROR == ret) {
+            // Preserve the original Java exception
+            LOG_WARN("fail to resolve table name", K(ret));
           } else {
             if (lib::is_oracle_mode() && node_type == T_SHOW_COLUMNS) {
               ObSqlString full_obj_name;

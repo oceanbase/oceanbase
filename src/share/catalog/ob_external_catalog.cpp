@@ -84,6 +84,9 @@ int ObILakeTableMetadata::build_table_schema(share::schema::ObTableSchema *&tabl
   int ret = OB_SUCCESS;
   if (OB_FAIL(do_build_table_schema(table_schema))) {
     LOG_WARN("do_build_table_schema failed", K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("built lake table schema is null", K(ret));
   } else {
     // 因为 table_schema 可能是从 ObKVCache 里面拿出来的
     // 此时里面的 database_id 和 table_id 可能是以前 sql 查询临时生成的 id
@@ -93,8 +96,10 @@ int ObILakeTableMetadata::build_table_schema(share::schema::ObTableSchema *&tabl
     table_schema->set_table_id(table_id_);
     table_schema->set_catalog_id(catalog_id_);
     table_schema->set_table_type(schema::EXTERNAL_TABLE);
-    table_schema->set_collation_type(CS_TYPE_UTF8MB4_BIN);
-    table_schema->set_charset_type(CHARSET_UTF8MB4);
+    if (ObLakeTableFormat::JDBC != table_schema->get_lake_table_format()) {
+      table_schema->set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      table_schema->set_charset_type(CHARSET_UTF8MB4);
+    }
     // append mocked pk column
     uint64_t COL_IDS[2] = {OB_HIDDEN_FILE_ID_COLUMN_ID, OB_HIDDEN_LINE_NUMBER_COLUMN_ID};
     const char *COL_NAMES[2] = {OB_HIDDEN_FILE_ID_COLUMN_NAME, OB_HIDDEN_LINE_NUMBER_COLUMN_NAME};

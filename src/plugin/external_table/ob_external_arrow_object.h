@@ -13,6 +13,7 @@
 #pragma once
 
 #include "plugin/external_table/ob_external_arrow_status.h"
+#include <apache-arrow/arrow/c/abi.h>
 
 namespace oceanbase {
 
@@ -22,6 +23,26 @@ class ObObj;
 
 namespace plugin {
 namespace external {
+
+class ObArrowCDataGuard final
+{
+public:
+  ObArrowCDataGuard(ArrowArray &array, ArrowSchema &schema) : array_(array), schema_(schema) {}
+  ~ObArrowCDataGuard()
+  {
+    if (OB_NOT_NULL(array_.release)) {
+      array_.release(&array_);
+    }
+    if (OB_NOT_NULL(schema_.release)) {
+      schema_.release(&schema_);
+    }
+  }
+
+private:
+  ArrowArray &array_;
+  ArrowSchema &schema_;
+  DISALLOW_COPY_AND_ASSIGN(ObArrowCDataGuard);
+};
 
 /**
  * Map from ObObj to Arrow Type

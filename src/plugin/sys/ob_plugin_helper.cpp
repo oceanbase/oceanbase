@@ -16,6 +16,7 @@
 #include "share/ob_server_struct.h"
 #include "storage/fts/ob_fts_stop_word.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
+#include "plugin/interface/ob_plugin_external_intf.h"
 #include "plugin/sys/ob_plugin_helper.h"
 #include "plugin/sys/ob_plugin_mgr.h"
 #include "plugin/sys/ob_plugin_entry_handle.h"
@@ -37,15 +38,17 @@ int ObPluginHelper::find_plugin_entry(const ObString &name,
   int ret = OB_SUCCESS;
   entry_handle = nullptr;
   if (OB_FAIL(GCTX.plugin_mgr_->find_plugin(type, name, entry_handle))) {
-    LOG_DEBUG("failed to find parser", K(name), K(ret));
+    LOG_DEBUG("failed to find plugin", K(name), K(type), K(ret));
   } else if (OB_ISNULL(entry_handle)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("find plugin success but got null", K(name), K(ret));
   } else if (!entry_handle->ready()) {
     ret = OB_FUNCTION_NOT_DEFINED;
     LOG_WARN("plugin is not ready", K(name));
-  } else if (entry_handle->entry().interface_version > interface_current_version) {
-    ret = OB_FUNCTION_NOT_DEFINED;
+  } else if (entry_handle->entry().interface_version > interface_current_version
+             || (OBP_PLUGIN_TYPE_EXTERNAL == type
+                 && entry_handle->entry().interface_version != interface_current_version)) {
+    ret = OBP_PLUGIN_TYPE_EXTERNAL == type ? OB_PLUGIN_VERSION_INCOMPATIBLE : OB_FUNCTION_NOT_DEFINED;
     LOG_WARN("invalid interface version",
              K(ObPluginVersionAdaptor(entry_handle->entry().interface_version)),
              K(ObPluginVersionAdaptor(interface_current_version)));
@@ -126,6 +129,43 @@ int ObPluginHelper::find_external_table(const common::ObString &name,
   }
   return ret;
 }
+
+int ObPluginHelper::find_jdbc_catalog(const common::ObString &name,
+                                      ObIExternalDescriptor *&external_desc,
+                                      ObString &registered_name)
+{
+  int ret = OB_SUCCESS;
+  bool supported = false;
+  ObPluginEntryHandle *entry_handle = nullptr;
+  ObIExternalDescriptor *found_external_desc = nullptr;
+  external_desc = nullptr;
+  registered_name.reset();
+  if (OB_FAIL(find_plugin_entry(name, OBP_PLUGIN_TYPE_EXTERNAL, OBP_EXTERNAL_INTERFACE_VERSION_CURRENT, entry_handle))) {
+    LOG_DEBUG("failed to find jdbc catalog plugin entry", K(name));
+  } else if (OB_ISNULL(entry_handle->entry().plugin_handle)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("find a plugin entry without plugin handle", K(ret), KPC(entry_handle));
+  } else if (entry_handle->entry().interface_version < OBP_EXTERNAL_JDBC_CATALOG_INTERFACE_VERSION) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_DEBUG("external plugin interface does not support jdbc catalog",
+              K(ret), K(name),
+              K(ObPluginVersionAdaptor(entry_handle->entry().interface_version)));
+  } else {
+    found_external_desc = reinterpret_cast<ObIExternalDescriptor *>(entry_handle->entry().descriptor);
+    if (OB_FAIL(found_external_desc->supports_jdbc_catalog(name, supported))) {
+      LOG_WARN("failed to check jdbc catalog support", K(ret), K(name));
+    } else if (!supported) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_DEBUG("external plugin does not support jdbc catalog", K(ret), K(name));
+    } else {
+      external_desc = found_external_desc;
+      registered_name = entry_handle->entry_name();
+      LOG_DEBUG("find jdbc catalog plugin entry successfully", K(name), K(registered_name));
+    }
+  }
+  return ret;
+}
+
 int ObPluginHelper::register_plugin_entry(ObPluginParamPtr param,
                                           ObPluginType type,
                                           const char *name,

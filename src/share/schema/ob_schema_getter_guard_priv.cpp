@@ -1741,6 +1741,35 @@ int ObSchemaGetterGuard::check_single_obj_priv(
             }
           }
         }
+      } else if (static_cast<uint64_t>(ObObjectType::CATALOG) == need_priv.obj_type_ && OBJ_PRIV_ID_USE_CATALOG == i) {
+        int tmp_ret = sql::ObOraSysChecker::check_ora_user_sys_priv(*this,
+                                                                    tenant_id,
+                                                                    uid_to_be_check,
+                                                                    "",
+                                                                    PRIV_ID_USE_ANY_CATALOG,
+                                                                    role_id_array);
+        if (OB_SUCCESS == tmp_ret) {
+          // USE ANY CATALOG also permits access to an individual catalog.
+        } else if (OB_ERR_NO_PRIVILEGE != tmp_ret) {
+          ret = tmp_ret;
+          LOG_WARN("failed to check use any catalog privilege", K(ret), K(tenant_id),
+                   K(uid_to_be_check), K(need_priv.obj_id_));
+        } else {
+          OZ (sql::ObOraSysChecker::check_ora_obj_priv(*this,
+                                                      tenant_id,
+                                                      uid_to_be_check,
+                                                      need_priv.db_name_,
+                                                      need_priv.obj_id_,
+                                                      need_priv.obj_level_,
+                                                      need_priv.obj_type_,
+                                                      i,
+                                                      need_priv.check_flag_,
+                                                      need_priv.owner_id_,
+                                                      role_id_array),
+              tenant_id, uid_to_be_check, need_priv.db_name_, need_priv.obj_id_,
+              need_priv.obj_level_, need_priv.obj_type_, i, need_priv.check_flag_,
+              need_priv.owner_id_, need_priv.grantee_id_);
+        }
       } else {
         // Other cases
         OZ (sql::ObOraSysChecker::check_ora_obj_priv(*this,

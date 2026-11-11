@@ -319,6 +319,13 @@ public:
                                     ObString &routine_name,
                                     ObString &dblink_name,
                                     ObIArray<ObSchemaObjVersion> *deps = nullptr);
+  static int check_external_catalog_for_call(ObSchemaChecker &schema_checker,
+                                             const uint64_t tenant_id,
+                                             const ParseNode &sp_access_name_node,
+                                             const ObString &db_name,
+                                             const ObString &package_name,
+                                             const ObString &routine_name,
+                                             int &call_ret);
   static int resolve_sp_name(ObSQLSessionInfo &session_info,
                              const ParseNode &sp_name_node,
                              ObString &db_name,
@@ -931,7 +938,8 @@ public:
     uint64_t column_idx,
     const common::ObString &data_access_path,
     const common::ObString &refined_column_name,
-    ObRawExpr *&expr);
+    ObRawExpr *&expr,
+    const ObExternalFileFormat &format);
   //only used for DDL resolver, resolve a PSEUDO column expr for validation and printer not for execution
   static int resolve_external_table_column_def(ObRawExprFactory &expr_factory,
                                                const ObTableSchema &external_table_schema,

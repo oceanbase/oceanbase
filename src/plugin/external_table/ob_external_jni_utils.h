@@ -91,10 +91,12 @@ public:
   void destroy(JNIEnv *jni_env = nullptr);
   int throwable_to_string(JNIEnv *jni_env, jthrowable throwable, bool log_stack,
                           char buf[], int64_t buf_len, int64_t &pos);
+  int throwable_to_message(JNIEnv *jni_env, jthrowable throwable, ObIAllocator &allocator, ObString &message);
 
 private:
   ObJavaGlobalRef    jni_utils_class_;
   jmethodID          get_exception_message_method_ = nullptr;
+  jmethodID          get_exception_message_utf8_method_ = nullptr;
 };
 
 /**
@@ -112,6 +114,7 @@ public:
   void init_members(JNIEnv *env, jthrowable exception, ObJniExceptionPrinter &exception_printer);
   void set_exception_name(const char *exception_name) { exception_name_ = exception_name; }
   bool exception_occured() const { return exception_ != nullptr; }
+  int get_message(ObIAllocator &allocator, ObString &message) const;
 
   int64_t to_string(char buf[], int64_t buf_len) const;
 
@@ -164,6 +167,11 @@ public:
    */
   int create_java_string(JNIEnv *jni_env, const char *c_str, jstring &java_str_ret);
   int create_java_string(JNIEnv *jni_env, const ObString &str, jstring &java_str_ret);
+
+  int create_java_bytes(JNIEnv *jni_env, const ObString &str, jbyteArray &java_bytes);
+  int bytes_from_java(JNIEnv *jni_env, jbyteArray java_bytes, ObIAllocator &allocator, ObString &str);
+  int create_java_bytes_list(JNIEnv *jni_env, const ObIArray<ObString> &values, jobject &java_list);
+  int bytes_list_from_java(JNIEnv *jni_env, jobject java_list, ObIAllocator &allocator, ObIArray<ObString> &values);
 
   /**
    * from java List<Integer> to oceanbase ObArray<int64_t>

@@ -28,6 +28,7 @@ namespace plugin {
 
 class ObExternalScanner;
 class ObExternalDataEngine;
+class ObJdbcCatalogPlugin;
 
 class ObIExternalDescriptor : public ObIPluginDescriptor
 {
@@ -60,6 +61,22 @@ public:
                                  const ObString &parameters,
                                  const ObString &plugin_name,
                                  ObExternalDataEngine *&data_engine) = 0;
+
+  virtual int supports_jdbc_catalog(const ObString &plugin_name, bool &supported)
+  {
+    UNUSED(plugin_name);
+    supported = false;
+    return OB_SUCCESS;
+  }
+
+  virtual int create_jdbc_catalog_plugin(ObIAllocator &allocator,
+                                         const ObString &plugin_name,
+                                         ObJdbcCatalogPlugin *&jdbc_catalog_plugin)
+  {
+    UNUSEDx(allocator, plugin_name);
+    jdbc_catalog_plugin = nullptr;
+    return OB_NOT_SUPPORTED;
+  }
 };
 
 class ObExternalDataEngine
@@ -119,6 +136,12 @@ public:
    * @details You should return array columns in the same order with `shema`.
    */
   virtual int next(int64_t capacity, arrow::RecordBatch *&record_batch) = 0;
+  virtual void mark_failed() {}
+  virtual int close()
+  {
+    destroy();
+    return OB_SUCCESS;
+  }
 
   virtual void destroy() = 0;
 };

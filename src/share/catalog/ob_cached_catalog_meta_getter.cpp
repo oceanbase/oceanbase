@@ -269,7 +269,8 @@ int ObCachedCatalogSchemaMgr::get_lake_table_metadata(ObIAllocator &allocator,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("lake_table_metadata is null", K(ret));
     } else if (ObLakeTableFormat::ICEBERG == lake_table_metadata->get_format_type()
-               || ObLakeTableFormat::HIVE == lake_table_metadata->get_format_type()) {
+               || ObLakeTableFormat::HIVE == lake_table_metadata->get_format_type()
+               || ObLakeTableFormat::JDBC == lake_table_metadata->get_format_type()) {
       // todo
       // do not cache now
     } else {

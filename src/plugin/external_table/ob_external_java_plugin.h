@@ -18,9 +18,12 @@
 #include "plugin/interface/ob_plugin_external_intf.h"
 #include "lib/jni_env/ob_java_helper.h"
 #include "plugin/external_table/ob_external_jni_utils.h"
+#include "share/catalog/jdbc/ob_jdbc_connection_pool.h"
 
 namespace oceanbase {
 namespace plugin {
+
+constexpr char DATA_SOURCE_FACTORY_CLASS_NAME[] = "com/oceanbase/external/internal/DataSourceFactory";
 
 class ObJavaLogLabelSetter final
 {
@@ -46,13 +49,17 @@ public:
   int create_data_source(const ObString &parameters,
                          const ObString &plugin_name,
                          ObJavaGlobalRef &data_source_object);
+  int validate_data_source(jobject data_source_object);
   int export_arrow_stream(jobject record_batch_reader_object, ArrowArrayStream &arrow_stream);
+  int close_scanner(jobject scanner);
   int import_record_batch(struct ArrowArray *array_c, struct ArrowSchema *schema_c, jobject &vector_schema_root_ret);
 private:
   ObJavaGlobalRef data_source_factory_class_;
   jmethodID create_data_source_method_ = nullptr;
+  jmethodID validate_data_source_method_ = nullptr;
   jmethodID export_arrow_stream_method_ = nullptr;
   jmethodID import_record_batch_method_ = nullptr;
+  jmethodID close_scanner_method_ = nullptr;
 };
 
 class ObJavaExternalPlugin final : public ObIExternalDescriptor
@@ -77,6 +84,11 @@ public:
                          const ObString &parameters,
                          const ObString &plugin_name,
                          ObExternalDataEngine *&data_engine) override;
+
+  int supports_jdbc_catalog(const ObString &plugin_name, bool &supported) override;
+  int create_jdbc_catalog_plugin(ObIAllocator &allocator,
+                                 const ObString &plugin_name,
+                                 ObJdbcCatalogPlugin *&jdbc_catalog_plugin) override;
 
 private:
   ObJavaDataSourceFactoryHelper data_source_factory_;
@@ -123,6 +135,7 @@ private:
   ObJavaGlobalRef data_source_object_;
 
   jmethodID create_scanner_method_       = nullptr;
+  jmethodID create_catalog_scanner_method_ = nullptr;
   jmethodID split_task_method_           = nullptr;
   jmethodID pushdown_filters_method_     = nullptr;
   jmethodID display_string_method_       = nullptr;
@@ -140,10 +153,12 @@ private:
 class ObJavaExternalScanner final : public ObExternalScanner
 {
 public:
-  ObJavaExternalScanner(ObJavaGlobalRef &&java_scanner_object,
-                        ObJavaDataSourceFactoryHelper &data_source_factory,
+  ObJavaExternalScanner(ObJavaDataSourceFactoryHelper &data_source_factory,
                         ObJavaLogGuard &java_log_guard);
   ~ObJavaExternalScanner() override;
+
+  share::ObJdbcConnectionGuard &get_connection_guard() { return connection_guard_; }
+  int init(ObJavaGlobalRef &&java_scanner_object);
 
   /// @copydoc ObExternalScanner::init
   int init() override;
@@ -153,6 +168,8 @@ public:
 
   /// @copydoc ObExternalScanner::destroy
   void destroy() override;
+  void mark_failed() override { reusable_ = false; }
+  int close() override;
 
   /// @copydoc ObExternalScanner::schema
   int schema(std::shared_ptr<arrow::Schema> &schema) override;
@@ -168,6 +185,9 @@ protected:
 
   ObJavaDataSourceFactoryHelper      &data_source_factory_;
   ObJavaLogGuard                      java_log_guard_;
+  share::ObJdbcConnectionGuard        connection_guard_;
+  bool reusable_ = false;
+  bool closed_ = false;
 };
 
 } // namespace plugin

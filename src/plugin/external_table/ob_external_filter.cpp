@@ -307,7 +307,15 @@ int ObArrowExprBuilder::build_column_ref_expr(const ObColumnRefRawExpr &column_e
 {
   int ret = OB_SUCCESS;
   arrow_expr_ret.reset();
-  const ObString &column_name = column_expr.get_column_name();
+  ObString column_name = column_expr.get_column_name();
+  const ObRawExpr *dependant_expr = column_expr.get_dependant_expr();
+  if (OB_NOT_NULL(dependant_expr)
+      && T_PSEUDO_EXTERNAL_FILE_COL == dependant_expr->get_expr_type()) {
+    const ObPseudoColumnRawExpr &file_column_expr = static_cast<const ObPseudoColumnRawExpr &>(*dependant_expr);
+    if (!file_column_expr.get_data_access_path().empty()) {
+      column_name = file_column_expr.get_data_access_path();
+    }
+  }
   field_ = arrow::field(ObArrowFilterConstants::COLUMN_REF_FIELD_NAME, arrow::utf8(), false/*nullable*/);
   value_ = make_shared<StringScalar>(StringScalar(string(column_name.ptr(), column_name.length())));
 

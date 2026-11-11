@@ -279,6 +279,7 @@ int ObTableColumns::get_udt_type_name(share::schema::ObSchemaGetterGuard *schema
 }
 
 int ObTableColumns::get_type_str(
+    const share::schema::ObTableSchema &table_schema,
     const share::schema::ObColumnSchemaV2 &column_schema,
     const int16_t default_length_semantics,
     ObString &type_val)
@@ -298,7 +299,12 @@ int ObTableColumns::get_type_str(
                             column_schema.get_sub_data_type() : static_cast<uint64_t>(column_schema.get_geo_type());
   int64_t pos = 0;
 
-  if (lib::is_oracle_mode() && column_schema.is_common_user_defined_sql_type()) {
+  if (ObLakeTableFormat::JDBC == table_schema.get_lake_table_format()
+      && ObNullType == column_schema.get_data_type()) {
+    if (OB_FAIL(databuff_printf(column_type_str_, column_type_str_len_, pos, "UNSUPPORTED"))) {
+      LOG_WARN("failed to format unsupported jdbc column type", K(ret));
+    }
+  } else if (lib::is_oracle_mode() && column_schema.is_common_user_defined_sql_type()) {
     if (OB_FAIL(get_udt_type_name(schema_guard_, pl::get_tenant_id_by_object_id(sub_type), sub_type, column_type_str_, column_type_str_len_, pos))) {
       LOG_WARN("failed to get udt type name", K(ret), K(column_schema.get_tenant_id()), K(sub_type));
     }
@@ -425,7 +431,8 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
     case TYPE: {
       ObString type_val;
       const ObLengthSemantics default_length_semantics = session_->get_local_nls_length_semantics();
-      if (OB_FAIL(get_type_str(column_schema,
+      if (OB_FAIL(get_type_str(table_schema,
+                               column_schema,
                                default_length_semantics,
                                type_val))) {
           LOG_WARN("fail to get data type str",K(ret), K(column_schema.get_data_type()));

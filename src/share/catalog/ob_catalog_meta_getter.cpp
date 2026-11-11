@@ -16,6 +16,7 @@
 
 #include "share/catalog/filesystem/ob_filesystem_catalog.h"
 #include "share/catalog/hive/ob_hms_catalog.h"
+#include "share/catalog/jdbc/ob_jdbc_catalog.h"
 #include "share/catalog/odps/ob_odps_catalog.h"
 
 namespace oceanbase
@@ -323,6 +324,18 @@ int ObCatalogMetaGetter::get_catalog_(const uint64_t tenant_id,
                                            schema->get_catalog_properties(),
                                            &location_schema_provider_))) {
             LOG_WARN("failed to init hive catalog", K(ret));
+          }
+          break;
+        }
+        case ObCatalogProperties::CatalogType::JDBC_TYPE: {
+          catalog = OB_NEWx(ObJdbcCatalog, &allocator_, allocator_, schema_getter_guard_, schema->get_schema_version());
+          if (OB_ISNULL(catalog)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("jdbc catalog alloc failed", K(ret));
+          } else if (OB_FAIL(catalog->init(schema->get_tenant_id(),
+                                           schema->get_catalog_id(),
+                                           schema->get_catalog_properties()))) {
+            LOG_WARN("failed to init jdbc catalog", K(ret));
           }
           break;
         }

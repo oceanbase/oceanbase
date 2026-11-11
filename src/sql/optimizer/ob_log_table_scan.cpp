@@ -18,6 +18,7 @@
 #include "plugin/interface/ob_plugin_external_intf.h"
 #include "sql/optimizer/ob_lake_table_partition_info.h"
 #include "sql/optimizer/file_prune/ob_hive_file_pruner.h"
+#include "sql/table_format/jdbc/ob_jdbc_filter_utils.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -1124,7 +1125,8 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
         if (OB_FAIL(extract_plugin_external_table_pushdown_filters(scan_pushdown_filters,
                                                                    table_schema->get_external_properties(),
                                                                    nonpushdown_filters,
-                                                                   *external_pushdown_filters))) {
+                                                                   *external_pushdown_filters,
+                                                                   ObLakeTableFormat::JDBC == table_schema->get_lake_table_format()))) {
           LOG_WARN("failed to pushdown filters to external table", K(ret));
         } else {
           need_dup_filter = false;
@@ -1170,7 +1172,8 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
 int ObLogTableScan::extract_plugin_external_table_pushdown_filters(ObIArray<ObRawExpr*> &filters,
                                                                    ObString external_properties_str,
                                                                    ObIArray<ObRawExpr*> &nonpushdown_filters,
-                                                                   ObIArray<ObString> &external_pushdown_filters) const
+                                                                   ObIArray<ObString> &external_pushdown_filters,
+                                                                   const bool is_jdbc_catalog) const
 {
   int ret = OB_SUCCESS;
   const ParamStore *param_store = nullptr;
@@ -1179,6 +1182,7 @@ int ObLogTableScan::extract_plugin_external_table_pushdown_filters(ObIArray<ObRa
   ObMemAttr mem_attr(MTL_ID(), "ExternPushdown");
   ObArenaAllocator arena_allocator(mem_attr);
   ObIAllocator *allocator = nullptr;
+  ObSEArray<ObRawExpr *, 16> candidates;
 
   const auto &flags = get_filter_before_index_flags();
   ObExternalFileFormat::FormatType format_type = ObExternalFileFormat::FormatType::INVALID_FORMAT;
@@ -1198,15 +1202,30 @@ int ObLogTableScan::extract_plugin_external_table_pushdown_filters(ObIArray<ObRa
   } else if (OB_UNLIKELY(OB_ISNULL(data_engine))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data engine is null", K(ret));
-  } else if (filters.count() == 0) {
-  } else if (OB_FAIL(data_engine->pushdown_filters(*allocator, *param_store, filters, external_pushdown_filters))) {
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
+      bool requires_local = false;
+      if (is_jdbc_catalog
+          && OB_FAIL(jdbc::ObJdbcFilterUtils::check_filter_requires_local(filters.at(i), *param_store, requires_local))) {
+        LOG_WARN("failed to check jdbc filter types", K(ret), K(i));
+      } else if (requires_local) {
+        OZ(nonpushdown_filters.push_back(filters.at(i)));
+      } else {
+        OZ(candidates.push_back(filters.at(i)));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (candidates.empty()) {
+  } else if (OB_FAIL(data_engine->pushdown_filters(*allocator, *param_store, candidates, external_pushdown_filters))) {
     LOG_WARN("failed to detect pushdown filters by external table data engine", K(ret));
-  } else if (external_pushdown_filters.count() > filters.count()) {
-    LOG_WARN("invalid pushdown filters number", K(external_pushdown_filters.count()), K(filters.count()));
+  } else if (external_pushdown_filters.count() != candidates.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid pushdown filters number", K(ret), K(external_pushdown_filters.count()), K(candidates.count()));
   } else {
     for (int64_t i = external_pushdown_filters.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
       const ObString &filter_info = external_pushdown_filters.at(i);
-      ObRawExpr *filter = filters.at(i);
+      ObRawExpr *filter = candidates.at(i);
       if (filter_info.empty()) {
         if (OB_FAIL(nonpushdown_filters.push_back(filter))) {
           LOG_WARN("failed to push filter into nonpushdown_filters", K(ret), K(i));

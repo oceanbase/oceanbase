@@ -210,6 +210,7 @@ struct TableItem
     transpose_table_def_ = NULL;
     // assign default value for compatibility
     catalog_name_ = lib::is_oracle_mode() ? OB_INTERNAL_CATALOG_NAME_UPPER : OB_INTERNAL_CATALOG_NAME;
+    is_catalog_explicit_ = false;
     external_location_id_ = common::OB_INVALID_ID;  // 检查权限时临时外表拿不到tableschema
   }
 
@@ -235,7 +236,7 @@ struct TableItem
                KPC_(function_table_expr),
                K_(flashback_query_type), KPC_(flashback_query_expr), K_(table_type),
                K_(exec_params), KPC_(sample_info), K_(mview_id), K_(need_expand_rt_mv),
-               K_(external_table_partition), K_(catalog_name), K_(external_location_id),
+               K_(external_table_partition), K_(catalog_name), K_(is_catalog_explicit), K_(external_location_id),
                K_(is_mv_proctime_table));
 
   enum TableType
@@ -361,6 +362,7 @@ struct TableItem
   // Whether a column list is explicitly specified for this table.
   bool is_column_list_specified_;
   bool is_recursive_union_fake_table_; //mark whether this table is a tmp fake table for resolve the recursive cte table
+  bool is_catalog_explicit_; // mark whether the catalog name is explicitly specified, eg. catalog.db.table
   share::schema::ObTableType table_type_;
   share::ObLakeTableFormat lake_table_format_;
   CTEType cte_type_;

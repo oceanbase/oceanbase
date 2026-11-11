@@ -21,6 +21,7 @@ namespace oceanbase {
 namespace common {
 struct ObDatum;
 class ObIVector;
+class ObTimeZoneInfo;
 }
 
 namespace sql {
@@ -87,6 +88,19 @@ public:
   int load(const Array &, sql::ObEvalCtx &, sql::ObExpr *) override;
 };
 
+template <typename ArrowType>
+class ObIntToDecimalArrowDataLoader : public ObArrowDataLoader
+{
+public:
+  ~ObIntToDecimalArrowDataLoader() override { destroy(); }
+
+  int init(const DataType &, const sql::ObDatumMeta &) override;
+  int load(const Array &, sql::ObEvalCtx &, sql::ObExpr *) override;
+
+private:
+  int32_t output_int_bytes_ = 0;
+};
+
 /**
  * load arrow string(utf8)/binary to char/varchar/binary/text/blob type
  */
@@ -122,8 +136,19 @@ public:
   int load(const Array &, sql::ObEvalCtx &, sql::ObExpr *) override;
 };
 
+template <typename ArrowType>
+class ObStringToIntervalDSArrowDataLoader : public ObArrowDataLoader
+{
+public:
+  int init(const DataType &arrow_type, const sql::ObDatumMeta &ob_type) override;
+  int load(const Array &, sql::ObEvalCtx &, sql::ObExpr *) override;
+
+private:
+  int8_t interval_scale_ = -1;
+};
+
 /**
- * Load string to MySQLDateTime or DateTime
+ * Load string to MySQLDateTime, DateTime or Oracle TIMESTAMP
  */
 template <typename ArrowType>
 class ObStringToDateTimeArrowDataLoader : public ObArrowDataLoader
@@ -132,7 +157,10 @@ public:
   int init(const DataType &arrow_type, const sql::ObDatumMeta &ob_type) override;
   int load(const Array &, sql::ObEvalCtx &, sql::ObExpr *) override;
 private:
-  using DateTimeHandler = int (*)(const common::ObString &, ObIVector *, int64_t);
+  using DateTimeHandler = int (*)(const common::ObString &,
+                                  const common::ObTimeZoneInfo *,
+                                  ObIVector *,
+                                  int64_t);
   DateTimeHandler datetime_handler_ = nullptr;
 };
 
@@ -191,6 +219,12 @@ public:
 };
 
 class ObBoolToIntArrowDataLoader : public ObArrowDataLoader
+{
+public:
+  int load(const Array &, sql::ObEvalCtx &, sql::ObExpr *) override;
+};
+
+class ObDoubleToFloatArrowDataLoader : public ObArrowDataLoader
 {
 public:
   int load(const Array &, sql::ObEvalCtx &, sql::ObExpr *) override;

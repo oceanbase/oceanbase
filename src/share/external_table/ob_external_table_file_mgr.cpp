@@ -755,6 +755,13 @@ int ObExternalTableFileManager::get_mocked_external_table_files(
         OZ(external_files.push_back(file));
       }
     }
+  } else if (ObExternalFileFormat::FormatType::PLUGIN_FORMAT == external_table_type
+             && ObLakeTableFormat::JDBC == das_ctdef.lake_table_format_) {
+    ObExternalFileInfo file;
+    file.file_size_ = -1;
+    file.file_id_ = 1;
+    file.file_addr_ = GCTX.self_addr();
+    OZ(external_files.push_back(file));
   } else if (ObExternalFileFormat::FormatType::ODPS_FORMAT == external_table_type) {
     if (is_part_table) {
       for (int64_t i = 0; OB_SUCC(ret) && i < partition_ids.count(); i++) {

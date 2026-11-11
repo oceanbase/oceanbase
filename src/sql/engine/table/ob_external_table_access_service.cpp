@@ -686,17 +686,26 @@ int ObExternalTableRowIterator::init_exprs(const storage::ObTableScanParam *scan
     const ObIArray<bool> &output_sel_mask = scan_param->table_param_->get_output_sel_mask();
     for (int i = 0; OB_SUCC(ret) && i < scan_param->column_ids_.count(); i++) {
       ObExpr *cur_expr = scan_param->output_exprs_->at(i);
-      switch (scan_param->column_ids_.at(i)) {
-        case OB_HIDDEN_LINE_NUMBER_COLUMN_ID:
-          line_number_expr_ = cur_expr;
-          break;
-        case OB_HIDDEN_FILE_ID_COLUMN_ID:
-          file_id_expr_ = cur_expr;
-          break;
-        default:
-          OZ (column_exprs_.push_back(cur_expr));
-          OZ (column_sel_mask_.push_back(output_sel_mask.at(i)));
-          break;
+      if (OB_ISNULL(cur_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("external table access expr is null", K(ret), K(i));
+      } else if (ObNullType == cur_expr->datum_meta_.type_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Catalog remote column type");
+        LOG_WARN("unsupported catalog column type", K(ret), K(i), K(cur_expr->datum_meta_));
+      } else {
+        switch (scan_param->column_ids_.at(i)) {
+          case OB_HIDDEN_LINE_NUMBER_COLUMN_ID:
+            line_number_expr_ = cur_expr;
+            break;
+          case OB_HIDDEN_FILE_ID_COLUMN_ID:
+            file_id_expr_ = cur_expr;
+            break;
+          default:
+            OZ (column_exprs_.push_back(cur_expr));
+            OZ (column_sel_mask_.push_back(output_sel_mask.at(i)));
+            break;
+        }
       }
     }
     if (OB_SUCC(ret) && column_exprs_.count() != scan_param->ext_column_dependent_exprs_->count()) {

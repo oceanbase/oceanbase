@@ -43,6 +43,11 @@ int ObPluginHandle::init(ObPluginMgr *plugin_mgr, const ObString &dl_dir, const 
   } else if (OB_FAIL(dl_handle_->read_value<ObPluginVersion>(OBP_DYNAMIC_PLUGIN_API_VERSION_NAME, api_version_))) {
     LOG_WARN("failed to read interface version value from dl",
              K(OBP_DYNAMIC_PLUGIN_API_VERSION_NAME), K(dl_dir), K(dl_name), K(ret));
+  } else if (api_version_ < OBP_PLUGIN_API_VERSION
+             || api_version_ > OBP_PLUGIN_API_VERSION_CURRENT) {
+    ret = OB_PLUGIN_VERSION_INCOMPATIBLE;
+    LOG_WARN("plugin API version is incompatible with server", K(ret), K(api_version_),
+             K(OBP_PLUGIN_API_VERSION_CURRENT));
   } else if (OB_FAIL(dl_handle_->read_symbol(OBP_DYNAMIC_PLUGIN_PLUGIN_NAME, reinterpret_cast<void *&>(plugin_)))) {
     LOG_WARN("failed to read plugins from dl", K(OBP_DYNAMIC_PLUGIN_PLUGIN_NAME), K(dl_dir), K(dl_name), K(ret));
   } else if (OB_ISNULL(plugin_)) {
@@ -71,10 +76,14 @@ int ObPluginHandle::init(ObPluginMgr *plugin_mgr, ObPluginVersion api_version, O
   if (OB_NOT_NULL(dl_handle_) || OB_NOT_NULL(plugin_)) {
     ret = OB_INIT_TWICE;
   } else if (OB_ISNULL(plugin_mgr) ||
-             api_version > OBP_PLUGIN_API_VERSION_CURRENT ||
              OB_ISNULL(plugin)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KP(plugin_mgr), K(api_version), K(OBP_PLUGIN_API_VERSION_CURRENT), KP(plugin));
+  } else if (api_version < OBP_PLUGIN_API_VERSION
+             || api_version > OBP_PLUGIN_API_VERSION_CURRENT) {
+    ret = OB_PLUGIN_VERSION_INCOMPATIBLE;
+    LOG_WARN("plugin API version is incompatible with server", K(ret), K(api_version),
+             K(OBP_PLUGIN_API_VERSION_CURRENT));
   } else {
     api_version_ = api_version;
     plugin_      = plugin;
@@ -107,7 +116,6 @@ int ObPluginHandle::valid() const
   int ret = OB_SUCCESS;
   if (OB_ISNULL(plugin_)) {
     ret = OB_ERROR;
-  } else if (OB_ISNULL(dl_handle_)) {
   } else if (this->plugin_api_version() < OBP_PLUGIN_API_VERSION
              || this->plugin_api_version() > OBP_PLUGIN_API_VERSION_CURRENT) {
     ret = OB_PLUGIN_VERSION_INCOMPATIBLE;

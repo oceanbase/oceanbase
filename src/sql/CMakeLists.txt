@@ -1688,6 +1688,11 @@ ob_set_subtarget(ob_sql hive
   table_format/hive/ob_hive_table_metadata.cpp
 )
 
+ob_set_subtarget(ob_sql jdbc
+  table_format/jdbc/ob_jdbc_filter_utils.cpp
+  table_format/jdbc/ob_jdbc_table_metadata.cpp
+)
+
 ob_set_subtarget(ob_sql odps
   table_format/odps/ob_odps_table_metadata.cpp
 )

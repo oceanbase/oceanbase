@@ -27,6 +27,7 @@ class ObTimeZoneInfo;
 namespace sql
 {
 class ObDMLStmt;
+class ObSQLSessionInfo;
 
 class ObRawExprPrinter
 {
@@ -116,11 +117,13 @@ public:
   ObRawExprPrinter();
   ObRawExprPrinter(char *buf, int64_t buf_len, int64_t *pos, ObSchemaGetterGuard *schema_guard,
                    common::ObObjPrintParams print_params = common::ObObjPrintParams(),
-                   const ParamStore *param_store = NULL);
+                   const ParamStore *param_store = NULL,
+                   const ObSQLSessionInfo *session = NULL);
   virtual ~ObRawExprPrinter();
 
   void init(char *buf, int64_t buf_len, int64_t *pos, ObSchemaGetterGuard *schema_guard,
-            ObObjPrintParams print_params, const ParamStore *param_store = NULL);
+            ObObjPrintParams print_params, const ParamStore *param_store = NULL,
+            const ObSQLSessionInfo *session = NULL);
   void set_stmt(const ObDMLStmt *stmt) { stmt_ = stmt; }
   // stmt中会出现若干expr, 为了避免反复实例化，这里将expr作为do_print的参数
   int do_print(ObRawExpr *expr, ObStmtScope scope, bool only_column_namespace = false, bool print_cte = false);
@@ -201,6 +204,7 @@ private:
   ObSchemaGetterGuard *schema_guard_;
   bool print_cte_;
   const ObDMLStmt *stmt_;
+  const ObSQLSessionInfo *session_;
 };
 
 } // end namespace sql

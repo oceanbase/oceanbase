@@ -9774,9 +9774,18 @@ TYPE COMP_EQ STRING_VALUE
 {
  malloc_non_terminal_node($$, result->malloc_pool_, T_WAREHOUSE, 1, $3);
 }
+| URL COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_URI, 1, $3);
+  $$->value_ = 1; /* distinguish URL from the existing URI catalog property */
+  $3->stmt_loc_.first_column_ = @3.first_column - 1;
+  $3->stmt_loc_.last_column_ = @3.last_column - 1;
+  result->contain_sensitive_data_ = true;
+}
 | URI COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_URI, 1, $3);
+  $$->value_ = 0;
 }
 | PRINCIPAL COMP_EQ STRING_VALUE
 {

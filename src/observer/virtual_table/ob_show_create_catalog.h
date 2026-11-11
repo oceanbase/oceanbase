@@ -54,6 +54,11 @@ private:
                                           char *buf,
                                           const int64_t &buf_len,
                                           int64_t &pos) const;
+  int print_jdbc_catalog_definition(const share::ObJdbcCatalogProperties &properties,
+                                    common::ObIAllocator &allocator,
+                                    char *buf,
+                                    const int64_t &buf_len,
+                                    int64_t &pos) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObShowCreateCatalog);

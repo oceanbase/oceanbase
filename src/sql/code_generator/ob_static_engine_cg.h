@@ -220,6 +220,7 @@ public:
   inline static void exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &exprs,
                                                  const bool is_column_store_tbl,
                                                  const bool need_return_lob_locator,
+                                                 const bool is_jdbc_catalog,
                                                  bool &found);
   inline uint64_t get_cur_cluster_version() { return cur_cluster_version_; }
 

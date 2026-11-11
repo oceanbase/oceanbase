@@ -1705,7 +1705,7 @@ int ObResultSet::ExternalRetrieveInfo::build(
     } else if (param_info.empty() && into_exprs_.empty()) {
       if (stmt.is_dml_stmt()) {
         OZ (ObSQLUtils::reconstruct_sql(allocator_, &stmt, stmt.get_query_ctx()->get_sql_stmt(),
-                                        schema_guard, session_info.create_obj_print_params()));
+                                        schema_guard, session_info.create_obj_print_params(), NULL, &session_info));
       } else {
         // other stmt do not need reconstruct.
       }
@@ -1714,7 +1714,7 @@ int ObResultSet::ExternalRetrieveInfo::build(
         OZ (recount_dynamic_param_info(param_info));
       }
       OZ (ObSQLUtils::reconstruct_sql(allocator_, &stmt, stmt.get_query_ctx()->get_sql_stmt(),
-                                      schema_guard, session_info.create_obj_print_params()));
+                                      schema_guard, session_info.create_obj_print_params(), NULL, &session_info));
       /*
        * stmt里的？是按照表达式resolve的顺序编号的，这个顺序在prepare阶段需要依赖的
        * 但是route_sql里的？需要按照入参在符号表里的下标进行编号，这个编号是proxy做路由的时候依赖的，所以这里要改掉stmt里QUESTIONMARK的值
@@ -1769,7 +1769,7 @@ int ObResultSet::ExternalRetrieveInfo::build(
         }
       }
       OZ (ObSQLUtils::reconstruct_sql(allocator_, &stmt, route_sql_,
-                                      schema_guard, session_info.create_obj_print_params()));
+                                      schema_guard, session_info.create_obj_print_params(), NULL, &session_info));
     }
   }
   LOG_INFO("reconstruct sql:", K(stmt.get_query_ctx()->get_prepare_param_count()),

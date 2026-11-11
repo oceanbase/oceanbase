@@ -2257,6 +2257,48 @@ int ObResolverUtils::resolve_sp_access_name(ObSchemaChecker &schema_checker,
   return ret;
 }
 
+int ObResolverUtils::check_external_catalog_for_call(ObSchemaChecker &schema_checker,
+                                                     const uint64_t tenant_id,
+                                                     const ParseNode &sp_access_name_node,
+                                                     const ObString &db_name,
+                                                     const ObString &package_name,
+                                                     const ObString &routine_name,
+                                                     int &call_ret)
+{
+  int ret = OB_SUCCESS;
+
+  const ObCatalogSchema *catalog_schema = NULL;
+  uint64_t database_id = OB_INVALID_ID;
+  if (OB_ERR_BAD_DATABASE != call_ret
+      && OB_ERR_PACKAGE_DOSE_NOT_EXIST != call_ret
+      && OB_ERR_SP_DOES_NOT_EXIST != call_ret) {
+    // do nothing
+  } else if (OB_ISNULL(sp_access_name_node.children_)
+             || OB_ISNULL(sp_access_name_node.children_[0])
+             || OB_ISNULL(sp_access_name_node.children_[1])) {
+    // do nothing
+  } else if (OB_ISNULL(schema_checker.get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema guard is null", K(ret));
+  } else if (OB_FAIL(schema_checker.get_schema_guard()->get_catalog_schema_by_name(tenant_id, db_name, catalog_schema))) {
+    LOG_WARN("failed to get catalog schema by name", K(ret), K(tenant_id), K(db_name));
+  } else if (OB_ISNULL(catalog_schema) || !is_external_catalog_id(catalog_schema->get_catalog_id())) {
+    // do nothing
+  } else if (OB_FAIL(schema_checker.get_database_id(tenant_id, db_name, database_id))) {
+    if (OB_ERR_BAD_DATABASE == ret) {
+      ret = OB_SUCCESS;
+      call_ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "call procedure in catalog is");
+      LOG_WARN("call procedure in external catalog is not supported",
+               K(call_ret), K(db_name), K(package_name), K(routine_name));
+    } else {
+      LOG_WARN("failed to get database id", K(ret), K(tenant_id), K(db_name));
+    }
+  }
+
+  return ret;
+}
+
 int ObResolverUtils::resolve_sp_name(ObSQLSessionInfo &session_info,
                                      const ParseNode &sp_name_node,
                                      ObString &db_name,
@@ -5764,7 +5806,8 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
     uint64_t column_idx,
     const ObString &data_access_path,
     const ObString &refined_column_name,
-    ObRawExpr *&expr)
+    ObRawExpr *&expr,
+    const ObExternalFileFormat &format)
 {
   int ret = OB_SUCCESS;
   ObPseudoColumnRawExpr *file_column_expr = nullptr;
@@ -5803,7 +5846,10 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
                                                 cast_expr->get_cast_mode(), type_ctx, dst_type))) {
             LOG_WARN("get cast dest type failed", K(ret));
           } else {
-            if (dst_type.is_string_or_lob_locator_type() || dst_type.is_enum_or_set()) {
+            const bool preserve_binary_lob = format.format_type_ == ObExternalFileFormat::PLUGIN_FORMAT
+                                               && ob_is_blob(dst_type.get_type(), dst_type.get_collation_type());
+            if (!preserve_binary_lob
+                && (dst_type.is_string_or_lob_locator_type() || dst_type.is_enum_or_set())) {
               // string data stored in parquet file as UTF8 format
               dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
               dst_type.set_collation_level(CS_LEVEL_IMPLICIT);
@@ -5821,15 +5867,19 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
           file_column_expr->set_collation_type(column_expr->get_collation_type());
           file_column_expr->set_collation_level(column_expr->get_collation_level());
           file_column_expr->set_subschema_id(column_expr->get_subschema_id());
-          if ((column_expr->get_result_type().is_string_or_lob_locator_type()
-               || column_expr->get_result_type().is_enum_or_set())
-              && ObCharset::charset_type_by_coll(column_expr->get_collation_type()) != CHARSET_UTF8MB4) {
-            // string data stored in parquet file as UTF8 format
-            file_column_expr->set_collation_type(CS_TYPE_UTF8MB4_BIN);
-          }
-          if (ob_is_text_tc(column_expr->get_data_type())
-              && is_oracle_mode() && CS_TYPE_BINARY == column_expr->get_collation_type()) {
-            file_column_expr->set_data_type(ObRawType);
+          const bool preserve_binary_lob = format.format_type_ == ObExternalFileFormat::PLUGIN_FORMAT
+                                             && ob_is_blob(column_expr->get_data_type(), column_expr->get_collation_type());
+          if (!preserve_binary_lob) {
+            if ((column_expr->get_result_type().is_string_or_lob_locator_type()
+                 || column_expr->get_result_type().is_enum_or_set())
+                && ObCharset::charset_type_by_coll(column_expr->get_collation_type()) != CHARSET_UTF8MB4) {
+              // string data stored in parquet file as UTF8 format
+              file_column_expr->set_collation_type(CS_TYPE_UTF8MB4_BIN);
+            }
+            if (ob_is_text_tc(column_expr->get_data_type())
+                && is_oracle_mode() && CS_TYPE_BINARY == column_expr->get_collation_type()) {
+              file_column_expr->set_data_type(ObRawType);
+            }
           }
           if (ob_is_enum_or_set_type(column_expr->get_data_type())) {
             file_column_expr->set_data_type(ObCharType);

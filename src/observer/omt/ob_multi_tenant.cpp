@@ -25,6 +25,7 @@
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"   // ObSharedMemAllocMgr
 #include "share/ob_global_autoinc_service.h"
 #include "share/catalog/hive/ob_hms_client_pool.h"
+#include "share/catalog/jdbc/ob_jdbc_connection_pool.h"
 #include "logservice/archiveservice/ob_archive_service.h"    // ObArchiveService
 #include "logservice/data_dictionary/ob_data_dict_service.h" // ObDataDictService
 #include "ob_tenant_mtl_helper.h"
@@ -652,6 +653,7 @@ int ObMultiTenant::init(ObAddr myaddr,
 
     MTL_BIND2(ObSQLCCLRuleManager::mtl_new, ObSQLCCLRuleManager::mtl_init, nullptr, nullptr, nullptr, ObSQLCCLRuleManager::mtl_destroy);
     MTL_BIND2(mtl_new_default, ObHMSClientPoolMgr::mtl_init, nullptr, ObHMSClientPoolMgr::mtl_stop, ObHMSClientPoolMgr::mtl_wait, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, ObJdbcConnectionPoolMgr::mtl_init, nullptr, ObJdbcConnectionPoolMgr::mtl_stop, ObJdbcConnectionPoolMgr::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, share::schema::ObAddIntervalPartitionController::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(ObTenantTabletCleanupService::mtl_new, mtl_init_default, mtl_start_default, mtl_stop_default, mtl_wait_default, ObTenantTabletCleanupService::mtl_destroy);
     MTL_BIND2(mtl_new_default, share::schema::ObSchemaHistoryRecycleService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);

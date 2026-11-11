@@ -34,6 +34,7 @@ ob_set_subtarget(ob_plugin external_table
   external_table/ob_external_struct.cpp
   external_table/ob_external_table_schema.cpp
   external_table/ob_plugin_external_table_row_iter.cpp
+  external_table/ob_jdbc_catalog_plugin.cpp
 )
 
 ob_server_add_target(ob_plugin)

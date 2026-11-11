@@ -15,6 +15,7 @@
 #include "plugin/sys/ob_plugin_handle.h"
 #include "plugin/sys/ob_plugin_utils.h"
 #include "plugin/interface/ob_plugin_intf.h"
+#include "oceanbase/ob_plugin_external.h"
 
 namespace oceanbase {
 namespace plugin {
@@ -57,6 +58,10 @@ int ObPluginEntryHandle::init(const ObPluginEntry &plugin_entry)
   if (!plugin_entry.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("try to init an invalid plugin", K(plugin_entry));
+  } else if (OBP_PLUGIN_TYPE_EXTERNAL == plugin_entry.interface_type
+             && plugin_entry.interface_version != OBP_EXTERNAL_INTERFACE_VERSION_CURRENT) {
+    ret = OB_PLUGIN_VERSION_INCOMPATIBLE;
+    LOG_WARN("external plugin interface version is incompatible with server", K(ret), K(plugin_entry));
   } else {
     plugin_entry_ = plugin_entry;
     state_  = ObPluginState::UNINIT;

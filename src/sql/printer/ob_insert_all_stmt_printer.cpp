@@ -37,7 +37,8 @@ int ObInsertAllStmtPrinter::do_print()
                        pos_,
                        schema_guard_,
                        print_params_,
-                       param_store_);
+                       param_store_,
+                       session_);
     if (OB_FAIL(print())) {
       LOG_WARN("fail to print stmt", K(ret));
     }

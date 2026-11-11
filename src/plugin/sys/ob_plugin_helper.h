@@ -41,6 +41,9 @@ public:
   static int find_ftparser(const common::ObString &parser_name, ObIFTParserDesc *&ftparser, ObPluginParam *&param);
 
   static int find_external_table(const common::ObString &name, ObIExternalDescriptor *&external_desc);
+  static int find_jdbc_catalog(const common::ObString &name,
+                               ObIExternalDescriptor *&external_desc,
+                               common::ObString &registered_name);
 
   template<typename T>
   static int register_builtin_ftparser(ObPluginParamPtr param, const char *name, const char *description)

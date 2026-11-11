@@ -56,7 +56,7 @@ namespace sql
                              table_item->synonym_db_name_;                  \
     ObString table_name = table_item->synonym_name_.empty() ? table_item->table_name_ : table_item->synonym_name_ ; \
     if (table_item->cte_type_ == TableItem::NOT_CTE) {								      \
-      if (!catalog_name.empty() && table_item->type_ == TableItem::BASE_TABLE && need_print_catalog_name(catalog_name)) { \
+      if (!catalog_name.empty() && table_item->is_basic_table() && need_print_catalog_name(*table_item)) { \
         PRINT_IDENT_WITH_QUOT(catalog_name);                                \
         DATA_PRINTF(".");                                                   \
       }                                                                     \
@@ -163,7 +163,7 @@ public:
   int print_search_and_cycle(const ObSelectStmt *sub_select_stmt);
   bool is_root_stmt() const { return is_root_; }
   int print_with();
-  bool need_print_catalog_name(const ObString& catalog_name);
+  bool need_print_catalog_name(const TableItem &table_item);
   int print_flashback_info(const TableItem *table_item);
 private:
   // added for json table

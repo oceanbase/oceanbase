@@ -3860,6 +3860,7 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
       }
       if (OB_SUCC(ret)) {
         table_item->external_location_id_ = table_schema->get_external_location_id();
+        table_item->is_catalog_explicit_ = table_node->num_child_ == 4 && OB_NOT_NULL(table_node->children_[3]);
       }
 
       if (OB_SUCCESS == ret && table_item->is_view_table_) {
@@ -10799,7 +10800,7 @@ int ObDMLResolver::resolve_external_table_generated_column(
                               table_item.table_id_, table_item.table_name_,
                               col.col_name_, cast_expr, column_schema,
                               column_index_type, file_column_idx, data_access_path,
-                              refined_expr_name, real_ref_expr))) {
+                              refined_expr_name, real_ref_expr, format))) {
             LOG_WARN("fail to build file column expr", K(ret));
           }
         }
