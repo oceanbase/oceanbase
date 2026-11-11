@@ -6804,8 +6804,16 @@ int ObTableSchema::get_skip_index_col_attr(const bool is_major, common::ObIArray
         LOG_WARN("unexpected null column schema", K(ret), K(i), KPC(rowkey_column));
       } else if (OB_FAIL(skip_idx_attrs.push_back(column_schema->get_skip_index_attr()))) {
         LOG_WARN("failed to add rowkey skip index attr", K(ret), K(i), KPC(column_schema));
-      } else if (OB_FAIL(column_types.push_back(column_schema->get_meta_type()))) {
-        LOG_WARN("fail to push column meta type", K(ret));
+      } else {
+        ObObjMeta meta_type = column_schema->get_meta_type();
+        // Skip index size calculation needs the precision stored separately in the column schema.
+        if (meta_type.is_decimal_int()) {
+          meta_type.set_stored_precision(column_schema->get_accuracy().get_precision());
+          meta_type.set_scale(column_schema->get_accuracy().get_scale());
+        }
+        if (OB_FAIL(column_types.push_back(meta_type))) {
+          LOG_WARN("fail to push column meta type", K(ret));
+        }
       }
     }
     // add dummy idx for stored multi-version columns
@@ -6834,8 +6842,15 @@ int ObTableSchema::get_skip_index_col_attr(const bool is_major, common::ObIArray
         // skip
       } else if (OB_FAIL(skip_idx_attrs.push_back(column_schema->get_skip_index_attr()))) {
         LOG_WARN("failed to add skip index attr", K(ret));
-      } else if (OB_FAIL(column_types.push_back(column_schema->get_meta_type()))) {
-        LOG_WARN("fail to push column meta type", K(ret));
+      } else {
+        ObObjMeta meta_type = column_schema->get_meta_type();
+        if (meta_type.is_decimal_int()) {
+          meta_type.set_stored_precision(column_schema->get_accuracy().get_precision());
+          meta_type.set_scale(column_schema->get_accuracy().get_scale());
+        }
+        if (OB_FAIL(column_types.push_back(meta_type))) {
+          LOG_WARN("fail to push column meta type", K(ret));
+        }
       }
     }
   }
