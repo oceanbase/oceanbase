@@ -17,6 +17,7 @@
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
 #include "share/ob_vec_index_builder_util.h"
+#include "share/schema/ob_schema_guard_wrapper.h"
 
 namespace oceanbase {
 namespace storage {
@@ -571,8 +572,11 @@ int ObVectorIndexRefresher::do_rebuild() {
   if (OB_SUCC(ret) && domain_table_schema->is_vec_hnsw_index()) {
     const ObString &index_name = domain_table_schema->get_table_name_str();
     bool compatible = false;
-    if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(
-                   schema_guard, tenant_id, domain_table_schema->get_database_id(), index_name,
+    share::schema::ObSchemaGuardWrapper schema_guard_wrapper(tenant_id, GCTX.schema_service_);
+    if (OB_FAIL(schema_guard_wrapper.init(schema_guard))) {
+      LOG_WARN("fail to init schema guard wrapper", K(ret), K(tenant_id));
+    } else if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(
+                   schema_guard_wrapper, tenant_id, domain_table_schema->get_database_id(), index_name,
                    INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL, &allocator, snapshot_schema))) {
       LOG_WARN("failed to get snapshot schema", K(ret), K(index_name));
     } else if (OB_ISNULL(snapshot_schema)) {

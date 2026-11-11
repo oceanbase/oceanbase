@@ -673,7 +673,7 @@ int ObDependencyInfo::collect_all_dep_objs_inner_recursive(uint64_t tenant_id,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("result is null", K(ret));
       } else {
-        while (OB_SUCC(result->next())) {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
           int64_t tmp_obj_id = OB_INVALID_ID;
           int64_t tmp_type = static_cast<int64_t> (share::schema::ObObjectType::INVALID);
           EXTRACT_INT_FIELD_MYSQL(*result, "dep_obj_id", tmp_obj_id, int64_t);
@@ -745,7 +745,7 @@ int ObDependencyInfo::collect_all_dep_objs_inner_rcte(uint64_t tenant_id,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("result is null", K(ret));
       } else {
-        while (OB_SUCC(result->next())) {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
           int64_t tmp_obj_id = OB_INVALID_ID;
           int64_t tmp_type = static_cast<int64_t> (share::schema::ObObjectType::INVALID);
           EXTRACT_INT_FIELD_MYSQL(*result, "dep_obj_id", tmp_obj_id, int64_t);

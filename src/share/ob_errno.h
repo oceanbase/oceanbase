@@ -2077,6 +2077,7 @@ constexpr int OB_AI_FUNC_MODEL_EXISTS = -11119;
 constexpr int OB_ERROR_DURING_COMMIT = -11120;
 constexpr int OB_ERR_INVALID_PRIVILEGE_ON_SENSITIVE_RULES = -11127;
 constexpr int OB_ERR_INVALID_USERENV_PARAMETER = -11131;
+constexpr int OB_NOT_SUPPORTED_FOR_PARALLEL_DDL = -11134;
 constexpr int OB_ERR_UNRESOLVED_TABLE_LOCK = -11136;
 constexpr int OB_ERR_DUPLICATE_TABLE_LOCK = -11137;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
@@ -2086,19 +2087,19 @@ constexpr int OB_ERR_UPDATE_TWICE = -30926;
 constexpr int OB_ERR_FLASHBACK_QUERY_WITH_UPDATE = -32491;
 constexpr int OB_ERR_UPDATE_ON_EXPR = -38104;
 constexpr int OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = -38105;
+constexpr int OB_ERR_DATA_TRUNCATED_V2 = -4249;
+constexpr int OB_ERR_TRUNCATED_WRONG_VALUE_V2 = -5222;
+constexpr int OB_ERR_VALUE_LARGER_THAN_ALLOWED_V2 = -4374;
+constexpr int OB_ERR_INCORRECT_STRING_VALUE_V2 = -4258;
 constexpr int OB_INVALID_NUMERIC_V2 = -5114;
 constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
-constexpr int OB_ERR_INCORRECT_STRING_VALUE_V2 = -4258;
-constexpr int OB_ERR_DATA_TRUNCATED_V2 = -4249;
-constexpr int OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2 = -4226;
-constexpr int OB_ERR_DATA_TOO_LONG_V2 = -5167;
 constexpr int OB_DATA_OUT_OF_RANGE_V2 = -4224;
-constexpr int OB_ERR_VALUE_LARGER_THAN_ALLOWED_V2 = -4374;
-constexpr int OB_INVALID_DATE_VALUE_V2 = -4219;
-constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 constexpr int OB_ERR_INVALID_MONTH_V2 = -5641;
+constexpr int OB_ERR_DATA_TOO_LONG_V2 = -5167;
+constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
+constexpr int OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2 = -4226;
 constexpr int OB_ERR_NON_NUMERIC_CHARACTER_VALUE_V2 = -5663;
-constexpr int OB_ERR_TRUNCATED_WRONG_VALUE_V2 = -5222;
+constexpr int OB_INVALID_DATE_VALUE_V2 = -4219;
 
 
 #define OB_SUCCESS__USER_ERROR_MSG "Success"
@@ -4617,6 +4618,7 @@ constexpr int OB_ERR_TRUNCATED_WRONG_VALUE_V2 = -5222;
 #define OB_ERROR_DURING_COMMIT__USER_ERROR_MSG "Got error during COMMIT: %s"
 #define OB_ERR_INVALID_PRIVILEGE_ON_SENSITIVE_RULES__USER_ERROR_MSG "Privilege not allowed for sensitive rules"
 #define OB_ERR_INVALID_USERENV_PARAMETER__USER_ERROR_MSG "invalid USERENV parameter"
+#define OB_NOT_SUPPORTED_FOR_PARALLEL_DDL__USER_ERROR_MSG "Operation not supported in parallel DDL path"
 #define OB_ERR_UNRESOLVED_TABLE_LOCK__USER_ERROR_MSG "Unresolved table name %.*s in locking clause."
 #define OB_ERR_DUPLICATE_TABLE_LOCK__USER_ERROR_MSG "Table %.*s appears in multiple locking clauses."
 #define OB_CDC_STREAM_ALREADY_EXISTS__USER_ERROR_MSG "CDC stream '%.*s' already exists"
@@ -4644,19 +4646,19 @@ constexpr int OB_ERR_TRUNCATED_WRONG_VALUE_V2 = -5222;
 #define OB_ERR_FLASHBACK_QUERY_WITH_UPDATE__USER_ERROR_MSG "snapshot expression not allowed here"
 #define OB_ERR_UPDATE_ON_EXPR__USER_ERROR_MSG "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
+#define OB_ERR_DATA_TRUNCATED_V2__USER_ERROR_MSG "Data truncated for column '%.*s' value '%.*s'"
+#define OB_ERR_TRUNCATED_WRONG_VALUE_V2__USER_ERROR_MSG "Incorrect %.*s value: '%.*s' for column '%.*s'"
+#define OB_ERR_VALUE_LARGER_THAN_ALLOWED_V2__USER_ERROR_MSG "value '%.*s' larger than specified precision allowed for this column '%.*s'"
+#define OB_ERR_INCORRECT_STRING_VALUE_V2__USER_ERROR_MSG "Incorrect string value: '%.*s' for column '%.*s'"
 #define OB_INVALID_NUMERIC_V2__USER_ERROR_MSG "invalid number value: '%.*s' for column '%.*s'"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
-#define OB_ERR_INCORRECT_STRING_VALUE_V2__USER_ERROR_MSG "Incorrect string value: '%.*s' for column '%.*s'"
-#define OB_ERR_DATA_TRUNCATED_V2__USER_ERROR_MSG "Data truncated for column '%.*s' value '%.*s'"
-#define OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2__USER_ERROR_MSG "Incorrect %.*s value: '%.*s' for column '%.*s'"
-#define OB_ERR_DATA_TOO_LONG_V2__USER_ERROR_MSG "Data too long for column '%.*s' value '%.*s'"
 #define OB_DATA_OUT_OF_RANGE_V2__USER_ERROR_MSG "Out of range value for column '%.*s' value '%.*s'"
-#define OB_ERR_VALUE_LARGER_THAN_ALLOWED_V2__USER_ERROR_MSG "value '%.*s' larger than specified precision allowed for this column '%.*s'"
-#define OB_INVALID_DATE_VALUE_V2__USER_ERROR_MSG "Incorrect %.*s value: '%.*s' for column '%.*s'"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_MONTH_V2__USER_ERROR_MSG "not a valid month for column '%.*s' value '%.*s'"
+#define OB_ERR_DATA_TOO_LONG_V2__USER_ERROR_MSG "Data too long for column '%.*s' value '%.*s'"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2__USER_ERROR_MSG "Incorrect %.*s value: '%.*s' for column '%.*s'"
 #define OB_ERR_NON_NUMERIC_CHARACTER_VALUE_V2__USER_ERROR_MSG "a non-numeric character was found where a numeric was expected for column '%.*s' value '%.*s'"
-#define OB_ERR_TRUNCATED_WRONG_VALUE_V2__USER_ERROR_MSG "Incorrect %.*s value: '%.*s' for column '%.*s'"
+#define OB_INVALID_DATE_VALUE_V2__USER_ERROR_MSG "Incorrect %.*s value: '%.*s' for column '%.*s'"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -9691,6 +9693,8 @@ constexpr int OB_ERR_TRUNCATED_WRONG_VALUE_V2 = -5222;
 #define OB_ERR_INVALID_PRIVILEGE_ON_SENSITIVE_RULES__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11127, Privilege not allowed for sensitive rules"
 #define OB_ERR_INVALID_USERENV_PARAMETER__ORA_USER_ERROR_MSG "ORA-02003: invalid USERENV parameter"
 #define OB_ERR_INVALID_USERENV_PARAMETER__OBE_USER_ERROR_MSG "OBE-02003: invalid USERENV parameter"
+#define OB_NOT_SUPPORTED_FOR_PARALLEL_DDL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11134, Operation not supported in parallel DDL path"
+#define OB_NOT_SUPPORTED_FOR_PARALLEL_DDL__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11134, Operation not supported in parallel DDL path"
 #define OB_ERR_UNRESOLVED_TABLE_LOCK__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11136, Unresolved table name %.*s in locking clause."
 #define OB_ERR_UNRESOLVED_TABLE_LOCK__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11136, Unresolved table name %.*s in locking clause."
 #define OB_ERR_DUPLICATE_TABLE_LOCK__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11137, Table %.*s appears in multiple locking clauses."
@@ -9745,34 +9749,34 @@ constexpr int OB_ERR_TRUNCATED_WRONG_VALUE_V2 = -5222;
 #define OB_ERR_UPDATE_ON_EXPR__OBE_USER_ERROR_MSG "OBE-38104: Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__OBE_USER_ERROR_MSG "OBE-08006: specified row no longer exists"
+#define OB_ERR_DATA_TRUNCATED_V2__ORA_USER_ERROR_MSG "ORA-00600: Data truncated for column '%.*s' value '%.*s'"
+#define OB_ERR_DATA_TRUNCATED_V2__OBE_USER_ERROR_MSG "OBE-00600: Data truncated for column '%.*s' value '%.*s'"
+#define OB_ERR_TRUNCATED_WRONG_VALUE_V2__ORA_USER_ERROR_MSG "ORA-00600: Incorrect %.*s value: '%.*s' for column '%.*s'"
+#define OB_ERR_TRUNCATED_WRONG_VALUE_V2__OBE_USER_ERROR_MSG "OBE-00600: Incorrect %.*s value: '%.*s' for column '%.*s'"
+#define OB_ERR_VALUE_LARGER_THAN_ALLOWED_V2__ORA_USER_ERROR_MSG "ORA-01438: value '%.*s' larger than specified precision allowed for this column '%.*s'"
+#define OB_ERR_VALUE_LARGER_THAN_ALLOWED_V2__OBE_USER_ERROR_MSG "OBE-01438: value '%.*s' larger than specified precision allowed for this column '%.*s'"
+#define OB_ERR_INCORRECT_STRING_VALUE_V2__ORA_USER_ERROR_MSG "ORA-00600: Incorrect string value: '%.*s' for column '%.*s'"
+#define OB_ERR_INCORRECT_STRING_VALUE_V2__OBE_USER_ERROR_MSG "OBE-00600: Incorrect string value: '%.*s' for column '%.*s'"
 #define OB_INVALID_NUMERIC_V2__ORA_USER_ERROR_MSG "ORA-01722: invalid number value: '%.*s' for column '%.*s'"
 #define OB_INVALID_NUMERIC_V2__OBE_USER_ERROR_MSG "OBE-01722: invalid number value: '%.*s' for column '%.*s'"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
-#define OB_ERR_INCORRECT_STRING_VALUE_V2__ORA_USER_ERROR_MSG "ORA-00600: Incorrect string value: '%.*s' for column '%.*s'"
-#define OB_ERR_INCORRECT_STRING_VALUE_V2__OBE_USER_ERROR_MSG "OBE-00600: Incorrect string value: '%.*s' for column '%.*s'"
-#define OB_ERR_DATA_TRUNCATED_V2__ORA_USER_ERROR_MSG "ORA-00600: Data truncated for column '%.*s' value '%.*s'"
-#define OB_ERR_DATA_TRUNCATED_V2__OBE_USER_ERROR_MSG "OBE-00600: Data truncated for column '%.*s' value '%.*s'"
-#define OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2__ORA_USER_ERROR_MSG "ORA-00600: Incorrect %.*s value: '%.*s' for column '%.*s'"
-#define OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2__OBE_USER_ERROR_MSG "OBE-00600: Incorrect %.*s value: '%.*s' for column '%.*s'"
-#define OB_ERR_DATA_TOO_LONG_V2__ORA_USER_ERROR_MSG "ORA-12899: Data too long for column '%.*s' value '%.*s'"
-#define OB_ERR_DATA_TOO_LONG_V2__OBE_USER_ERROR_MSG "OBE-12899: Data too long for column '%.*s' value '%.*s'"
 #define OB_DATA_OUT_OF_RANGE_V2__ORA_USER_ERROR_MSG "ORA-01438: Out of range value for column '%.*s' value '%.*s'"
 #define OB_DATA_OUT_OF_RANGE_V2__OBE_USER_ERROR_MSG "OBE-01438: Out of range value for column '%.*s' value '%.*s'"
-#define OB_ERR_VALUE_LARGER_THAN_ALLOWED_V2__ORA_USER_ERROR_MSG "ORA-01438: value '%.*s' larger than specified precision allowed for this column '%.*s'"
-#define OB_ERR_VALUE_LARGER_THAN_ALLOWED_V2__OBE_USER_ERROR_MSG "OBE-01438: value '%.*s' larger than specified precision allowed for this column '%.*s'"
-#define OB_INVALID_DATE_VALUE_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect %.*s value: '%.*s' for column '%.*s'"
-#define OB_INVALID_DATE_VALUE_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect %.*s value: '%.*s' for column '%.*s'"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_MONTH_V2__ORA_USER_ERROR_MSG "ORA-01843: not a valid month for column '%.*s' value '%.*s'"
 #define OB_ERR_INVALID_MONTH_V2__OBE_USER_ERROR_MSG "OBE-01843: not a valid month for column '%.*s' value '%.*s'"
+#define OB_ERR_DATA_TOO_LONG_V2__ORA_USER_ERROR_MSG "ORA-12899: Data too long for column '%.*s' value '%.*s'"
+#define OB_ERR_DATA_TOO_LONG_V2__OBE_USER_ERROR_MSG "OBE-12899: Data too long for column '%.*s' value '%.*s'"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2__ORA_USER_ERROR_MSG "ORA-00600: Incorrect %.*s value: '%.*s' for column '%.*s'"
+#define OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2__OBE_USER_ERROR_MSG "OBE-00600: Incorrect %.*s value: '%.*s' for column '%.*s'"
 #define OB_ERR_NON_NUMERIC_CHARACTER_VALUE_V2__ORA_USER_ERROR_MSG "ORA-01858: a non-numeric character was found where a numeric was expected for column '%.*s' value '%.*s'"
 #define OB_ERR_NON_NUMERIC_CHARACTER_VALUE_V2__OBE_USER_ERROR_MSG "OBE-01858: a non-numeric character was found where a numeric was expected for column '%.*s' value '%.*s'"
-#define OB_ERR_TRUNCATED_WRONG_VALUE_V2__ORA_USER_ERROR_MSG "ORA-00600: Incorrect %.*s value: '%.*s' for column '%.*s'"
-#define OB_ERR_TRUNCATED_WRONG_VALUE_V2__OBE_USER_ERROR_MSG "OBE-00600: Incorrect %.*s value: '%.*s' for column '%.*s'"
+#define OB_INVALID_DATE_VALUE_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect %.*s value: '%.*s' for column '%.*s'"
+#define OB_INVALID_DATE_VALUE_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect %.*s value: '%.*s' for column '%.*s'"
 
-extern int g_all_ob_errnos[2543];
+extern int g_all_ob_errnos[2544];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

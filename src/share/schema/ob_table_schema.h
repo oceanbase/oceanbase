@@ -66,6 +66,7 @@ enum class ObLakeTableFormat;
 namespace schema
 {
 class ObSchemaGetterGuard;
+class ObSchemaGuardWrapper;
 class ObColDesc;
 class ObConstraint;
 class ObColumnSchemaV2;
@@ -1836,7 +1837,7 @@ public:
                                        bool &has_prefix_idx_col_deps,
                                        bool &can_change_prefix_column_length,
                                        const ObColumnSchemaV2 *&prefix_column) const;
-  int check_functional_index_columns_depend(const ObColumnSchemaV2 &data_column_schema, ObSchemaGetterGuard &schema_guard, bool &has_prefix_idx_col_deps) const;
+  int check_functional_index_columns_depend(const ObColumnSchemaV2 &data_column_schema, ObSchemaGuardWrapper &schema_guard, bool &has_prefix_idx_col_deps) const;
   int check_column_has_multivalue_index_depend(const ObColumnSchemaV2 &data_column_schema, bool &has_func_idx_col_deps) const;
   int add_base_table_id(uint64_t base_table_id) { return base_table_ids_.push_back(base_table_id); }
   int add_depend_table_id(uint64_t depend_table_id) { return depend_table_ids_.push_back(depend_table_id); }

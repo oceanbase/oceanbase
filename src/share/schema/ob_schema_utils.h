@@ -32,6 +32,10 @@ namespace common
 {
 class ObISQLClient;
 }
+namespace obrpc
+{
+class ObAlterTableArg;
+}
 
 namespace share
 {
@@ -42,6 +46,7 @@ class ObColumnSchemaV2;
 class ObServerSchemaService;
 struct SchemaKey;
 class AlterTableSchema;
+class ObSchemaGuardWrapper;
 class ObSchemaUtils
 {
 public:
@@ -436,6 +441,14 @@ public:
     CREATE_INDEX = 2,
     CREATE_VIEW = 3,
     DROP_TABLE = 4,
+    ADD_COLUMN = 5,
+    DROP_COLUMN = 6,
+    ADD_PARTITION = 7,
+    ADD_SUB_PARTITION = 8,
+    DROP_PARTITION = 9,
+    DROP_SUB_PARTITION = 10,
+    TRUNCATE_PARTITION = 11,
+    TRUNCATE_SUB_PARTITION = 12,
     MAX_TYPE // can not > 32
   };
 
@@ -463,6 +476,27 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObParallelDDLControlMode);
 };
 
+// On can_parallel_alter==false, `reason` points to a static string naming the
+// field that blocked parallel DDL (forwarded to LOG_WARN by callers).
+bool is_parallel_alter_table_data_version_supported(const uint64_t data_version);
+int check_alter_table_arg_for_parallel(const obrpc::ObAlterTableArg &arg,
+                                       bool &can_parallel_alter,
+                                       const char *&reason);
+// Check that non-column-operation fields in ObAlterTableArg are all in their
+// default/safe state for parallel DDL. Thin wrapper over
+// ObAlterTableArg::has_no_non_column_operation() — add new whitelist entries
+// there rather than here.
+int check_non_column_arg_for_parallel(const obrpc::ObAlterTableArg &arg,
+                                      bool &can_parallel,
+                                      const char *&reason);
+bool is_drop_column_lob(const ObColumnSchemaV2 &column_schema);
+int count_drop_column_lob_columns(const ObTableSchema &table_schema,
+                                  int64_t &lob_column_count);
+int check_drop_column_can_parallel(const obrpc::ObAlterTableArg &arg,
+                                   const ObTableSchema &orig_table_schema,
+                                   ObSchemaGuardWrapper &schema_guard,
+                                   bool &can_parallel_alter,
+                                   const char *&reason);
 class ObTenantDDLCountGuard
 {
 public:
@@ -476,6 +510,7 @@ private:
 };
 
 } // end schema
+
 } // end share
 } // end oceanbase
 

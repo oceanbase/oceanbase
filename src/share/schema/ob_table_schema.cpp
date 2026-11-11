@@ -13,6 +13,7 @@
 #include "share/ob_fts_index_builder_util.h"
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_table_schema.h"
+#include "share/schema/ob_schema_guard_wrapper.h"
 
 #include "share/catalog/ob_external_catalog.h"
 #include "share/schema/ob_part_mgr_util.h"
@@ -7407,7 +7408,7 @@ int ObTableSchema::check_column_has_multivalue_index_depend(
 
 int ObTableSchema::check_functional_index_columns_depend(
   const ObColumnSchemaV2 &data_column_schema,
-  ObSchemaGetterGuard &schema_guard,
+  ObSchemaGuardWrapper &schema_guard,
   bool &has_func_idx_col_deps) const
 {
   int ret = OB_SUCCESS;

@@ -38,6 +38,7 @@ class ObLSAttr;
 namespace schema
 {
 class ObSchemaGetterGuard;
+class ObSchemaGuardWrapper;
 class ObPartitionSchema;
 class ObPartition;
 class ObTableSchema;
@@ -165,7 +166,7 @@ public:
   // thus, need the data_table_schema from the latest_schema_guard.
   ObNewTableTabletAllocator(
       const uint64_t tenant_id,
-      share::schema::ObSchemaGetterGuard &schema_guard,
+      share::schema::ObSchemaGuardWrapper &schema_guard_wrapper,
       common::ObISQLClient *sql_proxy,
       const bool use_parallel_ddl = false,
       const share::schema::ObTableSchema *data_table_schema = nullptr);
@@ -177,8 +178,7 @@ public:
       ObMySQLTransaction &trans,
       const share::schema::ObTableSchema &table_schema,
       const share::schema::ObTablegroupSchema *tablegroup_schema,
-      bool is_add_partition = false,
-      share::schema::ObLatestSchemaGuard *latest_schema_guard = NULL);
+      bool is_add_partition = false);
   int prepare_like(
       const share::schema::ObTableSchema &table_schema);
   int prepare_for_oracle_temp_table(
@@ -203,18 +203,7 @@ private:
       const share::schema::ObTableSchema &table_schema);
   int alloc_ls_for_in_tablegroup_tablet(
       const share::schema::ObTableSchema &table_schema,
-      const share::schema::ObTablegroupSchema &tablegroup_schema,
-      share::schema::ObLatestSchemaGuard *latest_schema_guard = NULL);
-  // Fetch only the first user/sys/tmp table (primary) in the tablegroup.
-  // Avoid loading full schemas for every table in the tablegroup, which can be very
-  // slow when the tablegroup contains a large number of tables.
-  // When latest_schema_guard != NULL, multiple tables may be created in the same DDL
-  // transaction, so we must read the latest state to satisfy tablegroup constraints.
-  // Returns OB_SUCCESS with primary_table_schema = NULL when the tablegroup is empty.
-  int get_primary_table_schema_in_tablegroup_(
-      const share::schema::ObTablegroupSchema &tablegroup_schema,
-      share::schema::ObLatestSchemaGuard *latest_schema_guard,
-      const share::schema::ObTableSchema *&primary_table_schema);
+      const share::schema::ObTablegroupSchema &tablegroup_schema);
   int alloc_ls_for_normal_table_tablet(
       const share::schema::ObTableSchema &table_schema);
   int alloc_ls_for_duplicate_table_(
@@ -333,6 +322,9 @@ private:
   int get_first_table_primary_zone_(
       const share::schema::ObTableSchema &primary_schema,
       common::ObZone &target_zone);
+  int get_table_schema_(
+      const uint64_t table_id,
+      const share::schema::ObTableSchema *&table_schema);
   int64_t fetch_ls_offset() {
     return ATOMIC_FAA(&alloc_tablet_ls_offset_, 1);
   }
@@ -349,7 +341,7 @@ private:
   };
 private:
   uint64_t tenant_id_;
-  share::schema::ObSchemaGetterGuard &schema_guard_;
+  share::schema::ObSchemaGuardWrapper &schema_guard_wrapper_;
   common::ObISQLClient *sql_proxy_;
   ObBalanceGroupLSStatOperator bg_ls_stat_operator_;
   MyStatus status_;

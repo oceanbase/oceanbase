@@ -259,7 +259,9 @@ ObDDLHelper::ObDDLHelper(
     lock_object_id_map_(),
     allocator_(),
     parallel_ddl_type_(parallel_ddl_type),
-    schema_guard_wrapper_(tenant_id, schema_service, !enable_ddl_parallel, external_trans),
+    local_schema_guard_(),
+    latest_schema_guard_(schema_service, tenant_id, external_trans),
+    schema_guard_wrapper_(tenant_id, schema_service),
     enable_ddl_parallel_(enable_ddl_parallel),
     trans_(schema_service_,
            false, /*need_end_signal*/
@@ -287,6 +289,9 @@ int ObDDLHelper::init(rootserver::ObDDLService &ddl_service)
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schema_service is null", KR(ret));
+  } else if (OB_UNLIKELY(!enable_ddl_parallel_ && OB_NOT_NULL(external_trans_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("external_trans requires enable_ddl_parallel", KR(ret));
   } else if (OB_FAIL(lock_database_name_map_.create(
              OBJECT_BUCKET_NUM, "LockDBNameMap", "LockDBNameMap"))) {
     LOG_WARN("fail to create lock database name map", KR(ret));
@@ -303,9 +308,18 @@ int ObDDLHelper::init(rootserver::ObDDLService &ddl_service)
     task_id_ = OB_INVALID_ID;
     schema_version_cnt_ = 0;
     object_id_cnt_ = 0;
-    if (OB_FAIL(schema_guard_wrapper_.init(&ddl_service))) {
+    if (enable_ddl_parallel_) {
+      if (OB_FAIL(schema_guard_wrapper_.init(latest_schema_guard_))) {
+        LOG_WARN("fail to init schema guard wrapper", KR(ret));
+      }
+    } else if (OB_FAIL(ddl_service.get_tenant_schema_guard_with_version_in_inner_table(
+        tenant_id_, local_schema_guard_))) {
+      LOG_WARN("fail to get tenant schema guard with version in inner table",
+               KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(schema_guard_wrapper_.init(local_schema_guard_))) {
       LOG_WARN("fail to init schema guard wrapper", KR(ret));
-    } else {
+    }
+    if (OB_SUCC(ret)) {
       inited_ = true;
     }
   }
@@ -458,7 +472,14 @@ int ObDDLHelper::execute()
     LOG_WARN("fail to lock objects", KR(ret));
   }
   /* ----------------------------------------------
-   * 3. fetch & generate schema:
+   * 3. check after lock:
+   * - validate schemas and args after all locks are acquired.
+   */
+  if (FAILEDx(check_after_lock_())) {
+    LOG_WARN("fail to check after lock", KR(ret));
+  }
+  /* ----------------------------------------------
+   * 4. fetch & generate schema:
    * - fetch the latest schemas from inner table.
    * - generate schema with arg and the latests schemas.
    */
@@ -466,7 +487,7 @@ int ObDDLHelper::execute()
     LOG_WARN("fail to generate schemas", KR(ret));
   }
   /* ----------------------------------------------
-   * 4. calculate needed schema version count, register task id & generate schema versions:
+   * 5. calculate needed schema version count, register task id & generate schema versions:
    * - generate an appropriate number of schema versions for this DDL and register task id.
    * - concurrent DDL trans will be committed in descending order of version later.
    * - when has external_trans_, we need to skip calc_schema_version and gen_task_id_and_schema_versions. The reason is that
@@ -481,14 +502,14 @@ int ObDDLHelper::execute()
     LOG_WARN("fail to gen task id and schema versions", KR(ret));
   }
   /* ----------------------------------------------
-   * 5. operate schemas:
+   * 6. operate schemas:
    * - persist schema in inner table.
    */
   if (FAILEDx(operate_schemas_())) {
     LOG_WARN("fail to create schemas", KR(ret));
   }
   /* ----------------------------------------------
-   * 6. [optional] serialize increment data dictionary:
+   * 7. [optional] serialize increment data dictionary:
    * - if table/database/tenant schema changed, records changed schemas in log and commits with DDL trans.
    */
   if (FAILEDx(serialize_inc_schema_dict_())) {
@@ -496,14 +517,14 @@ int ObDDLHelper::execute()
   }
 
   /* ----------------------------------------------
-   * 7. operate before commit
+   * 8. operate before commit
    */
   if (FAILEDx(operation_before_commit_())) {
     LOG_WARN("fail to do operation before commits", KR(ret));
   }
 
   /* ----------------------------------------------
-   * 8. wait and end ddl trans:
+   * 9. wait and end ddl trans:
    * - wait concurrent DDL trans with smallest schema version ended.
    * - abort/commit ddl trans.
    * - check schema version
@@ -950,16 +971,18 @@ int ObDDLHelper::obj_lock_obj_id(
 }
 
 int ObDDLHelper::check_dep_objs_consistent(
-    ObArray<std::pair<uint64_t, share::schema::ObObjectType>> &l,
-    ObArray<std::pair<uint64_t, share::schema::ObObjectType>> &r)
+    ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &l,
+    ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &r)
 {
   int ret = OB_SUCCESS;
   if (l.count() != r.count()) {
     ret = OB_ERR_PARALLEL_DDL_CONFLICT;
     LOG_WARN("dep objs count not consistent", KR(ret), K(l.count()), K(r.count()));
   } else {
-    lib::ob_sort(l.begin(), l.end(), dep_compare_func_);
-    lib::ob_sort(r.begin(), r.end(), dep_compare_func_);
+    if (l.count() > 1) {
+      lib::ob_sort(l.get_data(), l.get_data() + l.count(), dep_compare_func_);
+      lib::ob_sort(r.get_data(), r.get_data() + r.count(), dep_compare_func_);
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < l.count(); i++) {
       if (l.at(i).first != r.at(i).first) {
         ret = OB_ERR_PARALLEL_DDL_CONFLICT;
