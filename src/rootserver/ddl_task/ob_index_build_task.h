@@ -160,6 +160,20 @@ private:
   int hold_snapshot(common::ObMySQLTransaction &trans, const int64_t snapshot);
   int hold_snapshot(common::ObMySQLTransaction &trans, const ObIArray<ObTabletID> &data_tablet_ids, const int64_t snapshot);
   int release_snapshot(const int64_t snapshot);
+  // For data_format_version_ < DATA_VERSION_4_6_1_0, collect all rowkey-doc tablets.
+  int append_rowkey_doc_snapshot_tablets(
+      const share::schema::ObTableSchema &data_table_schema,
+      common::ObIArray<common::ObTabletID> &tablet_ids);
+  // For data_format_version_ >= DATA_VERSION_4_6_1_0, collect rowkey-doc tablets by partition indexes.
+  int append_rowkey_doc_snapshot_tablets(
+      const share::schema::ObTableSchema &data_table_schema,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const common::ObIArray<int64_t> &part_idx,
+      const common::ObIArray<int64_t> &subpart_idx,
+      common::ObIArray<common::ObTabletID> &tablet_ids);
+  int get_rowkey_doc_snapshot_table_id(
+      const share::schema::ObTableSchema &data_table_schema,
+      uint64_t &rowkey_doc_table_id);
   int update_index_status_in_schema(
       const share::schema::ObTableSchema &index_schema,
       const share::schema::ObIndexStatus new_status,
