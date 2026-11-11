@@ -87,6 +87,8 @@ int ObField::full_deep_copy(const ObField &other, ObIAllocator *allocator)
       charsetnr_ = other.charsetnr_;
       flags_ = other.flags_;
       length_ = other.length_;
+      schema_version_ = other.schema_version_;
+      elem_schema_version_ = other.elem_schema_version_;
       is_hidden_rowid_ = other.is_hidden_rowid_;
       inout_mode_ = other.inout_mode_;
       is_paramed_select_item_ = other.is_paramed_select_item_;
@@ -143,6 +145,8 @@ int ObField::deep_copy(const ObField &other, ObIAllocator *allocator)
       charsetnr_ = other.charsetnr_;
       flags_ = other.flags_;
       length_ = other.length_;
+      schema_version_ = other.schema_version_;
+      elem_schema_version_ = other.elem_schema_version_;
       is_hidden_rowid_ = other.is_hidden_rowid_;
       inout_mode_ = other.inout_mode_;
 
@@ -167,7 +171,7 @@ int ObField::deep_copy(const ObField &other, ObIAllocator *allocator)
 }
 
 OB_SERIALIZE_MEMBER(ObField, type_.meta_, type_owner_, type_name_, accuracy_, flags_, length_,
-                    cname_);
+                    cname_, schema_version_, elem_schema_version_);
 
 void ObField::reset()
 {
@@ -178,6 +182,8 @@ void ObField::reset()
   org_tname_.assign(NULL, 0);
   type_.reset();
   type_.set_type(ObExtendType);
+  schema_version_ = OB_INVALID_VERSION;
+  elem_schema_version_ = OB_INVALID_VERSION;
   paramed_ctx_ = NULL;
   param_store_idx_ = OB_INVALID_INDEX;
 }

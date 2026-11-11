@@ -70,6 +70,7 @@ public:
   ObObj type_; // value type
   ObString type_owner_; // udt relation name, only valid when type is ObExtended
   ObString type_name_; // udt relation name, only valid when type is ObExtended
+  int64_t schema_version_; // schema version for named UDT
   ObObj default_value_; //default value, only effective when command was COM_FIELD_LIST
   ObAccuracy accuracy_;
   uint16_t charsetnr_;    //collation of table, this is to correspond with charset.
@@ -83,16 +84,17 @@ public:
   ObString elem_type_owner_;
   ObString elem_type_name_;
   int64_t param_store_idx_;
+  int64_t elem_schema_version_;
 
   ObField()
     : dname_(), tname_(), org_tname_(), cname_(), org_cname_(), type_(),
-      type_owner_(), type_name_(),
+      type_owner_(), type_name_(), schema_version_(OB_INVALID_VERSION),
       default_value_(ObObj::make_nop_obj()), accuracy_(),
       charsetnr_(CS_TYPE_UTF8MB4_GENERAL_CI),
       flags_(0), length_(0), paramed_ctx_(NULL), is_paramed_select_item_(false),
       is_hidden_rowid_(false), inout_mode_(0),
       elem_type_owner_(), elem_type_name_(),
-      param_store_idx_(-1)
+      param_store_idx_(-1), elem_schema_version_(OB_INVALID_VERSION)
   {
   }
 
