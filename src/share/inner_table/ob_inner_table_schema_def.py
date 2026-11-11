@@ -18661,7 +18661,32 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_optstat_catalog_user_prefs',
   keywords = all_def_keywords['__all_optstat_catalog_user_prefs']))
 
-# 12601: __all_virtual_sandbox_process
+def_table_schema(
+  owner = 'fangwu.lcc',
+  table_name = '__all_virtual_sandbox_process',
+  table_id = '12601',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('pid', 'int'),
+    ('sandbox_state', 'varchar:32'),
+    ('process_state', 'varchar:4'),
+    ('process_name', 'varchar:16'),
+    ('cpu_usage', 'double'),
+    ('cpu_time', 'int'),
+    ('memory_usage', 'int'),
+    ('start_time', 'timestamp'),
+    ('execute_path', 'varchar:MAX_PATH_SIZE'),
+    ('root_path', 'varchar:MAX_PATH_SIZE'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12602',

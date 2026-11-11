@@ -1314,6 +1314,7 @@ public:
   static int all_virtual_catalog_table_opt_stat_gather_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_audit_log_encryption_password_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_optstat_catalog_user_prefs_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sandbox_process_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_optstat_catalog_global_prefs_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_worker_group_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_keyword_schema(share::schema::ObTableSchema &table_schema);
@@ -4832,6 +4833,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_catalog_table_opt_stat_gather_history_schema,
   ObInnerTableSchema::all_virtual_audit_log_encryption_password_schema,
   ObInnerTableSchema::all_virtual_optstat_catalog_user_prefs_schema,
+  ObInnerTableSchema::all_virtual_sandbox_process_schema,
   ObInnerTableSchema::all_virtual_optstat_catalog_global_prefs_schema,
   ObInnerTableSchema::all_virtual_tenant_worker_group_schema,
   ObInnerTableSchema::all_virtual_keyword_schema,
@@ -7309,6 +7311,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_VECTOR_SEGMENT_INFO_TID,
   OB_ALL_VIRTUAL_JAVA_POLICY_HISTORY_TID,
   OB_ALL_VIRTUAL_CATALOG_TABLE_OPT_STAT_GATHER_HISTORY_TID,
+  OB_ALL_VIRTUAL_SANDBOX_PROCESS_TID,
   OB_ALL_VIRTUAL_TENANT_WORKER_GROUP_TID,
   OB_ALL_VIRTUAL_KEYWORD_TID,
   OB_ALL_VIRTUAL_TABLE_OPT_STAT_INVALIDATE_PLAN_TID,
@@ -10706,6 +10709,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_VECTOR_SEGMENT_INFO_TNAME,
   OB_ALL_VIRTUAL_JAVA_POLICY_HISTORY_TNAME,
   OB_ALL_VIRTUAL_CATALOG_TABLE_OPT_STAT_GATHER_HISTORY_TNAME,
+  OB_ALL_VIRTUAL_SANDBOX_PROCESS_TNAME,
   OB_ALL_VIRTUAL_TENANT_WORKER_GROUP_TNAME,
   OB_ALL_VIRTUAL_KEYWORD_TNAME,
   OB_ALL_VIRTUAL_TABLE_OPT_STAT_INVALIDATE_PLAN_TNAME,
@@ -13202,6 +13206,7 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_SS_LOCAL_CACHE_DIAGNOSE_INFO_TID,
   OB_ALL_VIRTUAL_DDL_DAG_MONITOR_TID,
   OB_ALL_VIRTUAL_VECTOR_SEGMENT_INFO_TID,
+  OB_ALL_VIRTUAL_SANDBOX_PROCESS_TID,
   OB_ALL_VIRTUAL_TENANT_WORKER_GROUP_TID,
   OB_ALL_VIRTUAL_MVIEW_REFRESH_TIMER_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,

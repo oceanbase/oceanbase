@@ -6999,6 +6999,27 @@ spare4	varchar(4096)	YES		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_catalog_table_opt_stat_gather_history;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_sandbox_process;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+pid	bigint(20)	NO		NULL	
+sandbox_state	varchar(32)	NO		NULL	
+process_state	varchar(4)	NO		NULL	
+process_name	varchar(16)	NO		NULL	
+cpu_usage	double	NO		NULL	
+cpu_time	bigint(20)	NO		NULL	
+memory_usage	bigint(20)	NO		NULL	
+start_time	timestamp(6)	NO		NULL	
+execute_path	varchar(1024)	NO		NULL	
+root_path	varchar(1024)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sandbox_process;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_sandbox_process runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_tenant_worker_group;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	

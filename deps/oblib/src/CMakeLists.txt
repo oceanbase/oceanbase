@@ -31,7 +31,6 @@ target_include_directories(
   ${DEP_DIR}/include/krb5
   ${DEP_DIR}/include/re2
   ${USSL_INCLUDE_DIRS}
-  ${DEP_DIR}/python3/include/python3.13
 )
 
 if(OB_BUILD_OPENSOURCE)

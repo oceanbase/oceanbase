@@ -40,6 +40,8 @@ ob_set_subtarget(ob_server common
   ob_startup_accel_task_handler.cpp
   ob_srv_rpc_handler.cpp
   ob_check_params.cpp
+  ob_sandbox_client.cpp
+  ob_sandbox_manager.cpp
 )
 
 ob_set_subtarget(ob_server common_mixed
@@ -643,6 +645,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_sql_plan.cpp
   virtual_table/ob_all_virtual_opt_stat_gather_monitor.cpp
   virtual_table/ob_all_virtual_thread.cpp
+  virtual_table/ob_all_virtual_sandbox_process.cpp
   virtual_table/ob_all_virtual_tenant_worker_group.cpp
   virtual_table/ob_all_virtual_cgroup_config.cpp
   virtual_table/ob_all_virtual_shared_storage_quota.cpp

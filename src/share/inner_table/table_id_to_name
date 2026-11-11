@@ -1420,6 +1420,7 @@
 # 12599: __all_audit_log_encryption_password  # BASE_TABLE_NAME
 # 12600: __all_virtual_optstat_catalog_user_prefs
 # 12600: __all_optstat_catalog_user_prefs  # BASE_TABLE_NAME
+# 12601: __all_virtual_sandbox_process
 # 12602: __all_virtual_optstat_catalog_global_prefs
 # 12602: __all_optstat_catalog_global_prefs  # BASE_TABLE_NAME
 # 12603: __all_virtual_tenant_worker_group

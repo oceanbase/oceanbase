@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <time.h>
-void do_log(int level, const char* file, int lineno, const char* func, const char* format, ...) {
+void pnio_do_log(int level, const char* file, int lineno, const char* func, const char* format, ...) {
   va_list ap;
   va_start(ap, format);
   g_log_func(level, file, lineno, func, format, ap);
