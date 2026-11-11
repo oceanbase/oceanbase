@@ -31,17 +31,13 @@ public:
   virtual void reclaim() override;
 protected:
   virtual int calc_scan_range() override;
-  int inner_calc_scan_range(const ObIArray<blocksstable::ObDatumRange> *&ranges,
-                            common::ObSEArray<blocksstable::ObDatumRange, 32> &cow_ranges,
-                            int64_t curr_scan_index_,
-                            blocksstable::ObDatumRowkey &curr_rowkey,
-                            bool calc_di_base_range);
   virtual int construct_iters() override;
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row);
   virtual int is_range_valid() const override;
   virtual int pause(bool& do_pause) override final;
   virtual int get_current_range(ObDatumRange& current_range) const override;
   virtual int get_range_count() const override { return ranges_->count(); }
+  virtual int switch_di_base_table(ObITable *table) override;
 private:
   const ObIArray<blocksstable::ObDatumRange> *ranges_;
   common::ObSEArray<blocksstable::ObDatumRange, 32> cow_ranges_;

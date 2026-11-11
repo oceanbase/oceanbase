@@ -417,6 +417,7 @@
    ASSERT_EQ(OB_SUCCESS, context_.init(query_flag, store_ctx_, query_allocator_,
                                        query_allocator_, version_range));
    context_.ls_id_ = ls_id_;
+   context_.tablet_id_ = ObTabletID(tablet_id_);
    context_.limit_param_ = nullptr;
    context_.is_inited_ = true;
  }
@@ -557,6 +558,7 @@
    ASSERT_EQ(OB_SUCCESS, context_.init(query_flag, store_ctx_, query_allocator_,
                                        query_allocator_, version_range));
    context_.ls_id_ = ls_id_;
+   context_.tablet_id_ = ObTabletID(tablet_id_);
    context_.limit_param_ = nullptr;
    context_.is_inited_ = true;
  }

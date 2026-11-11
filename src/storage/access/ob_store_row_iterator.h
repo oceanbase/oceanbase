@@ -80,6 +80,11 @@ public:
     UNUSED(rowkey);
     return OB_NOT_SUPPORTED;
   }
+  virtual int get_blockscan_border_rowkey(blocksstable::ObDatumRowkey &border_rowkey)
+  {
+    UNUSED(border_rowkey);
+    return OB_NOT_IMPLEMENT;
+  }
   virtual int set_ignore_shadow_row() { return OB_NOT_SUPPORTED; }
   virtual bool can_blockscan() const
   {
@@ -116,13 +121,12 @@ public:
         IteratorCOMultiScan == iter_type;
   }
   OB_INLINE bool is_reclaimed() const { return is_reclaimed_; }
-  virtual int get_next_rowkey(const bool need_set_border_rowkey,
-                              int64_t &curr_scan_index,
+  virtual int probe_next_rowkey() const { return OB_NOT_IMPLEMENT; }
+  virtual int get_next_rowkey(int64_t &curr_scan_index,
                               blocksstable::ObDatumRowkey& rowkey,
-                              blocksstable::ObDatumRowkey &border_rowkey,
                               common::ObIAllocator &allocator)
   {
-    UNUSEDx(need_set_border_rowkey, curr_scan_index, rowkey, border_rowkey, allocator);
+    UNUSEDx(curr_scan_index, rowkey, allocator);
     return OB_NOT_IMPLEMENT;
   }
 

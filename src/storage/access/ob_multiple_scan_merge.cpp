@@ -129,35 +129,68 @@ int ObMultipleScanMerge::inner_get_next_rows()
 int ObMultipleScanMerge::calc_scan_range()
 {
   int ret = OB_SUCCESS;
-
-  if (NULL == access_ctx_) {
+  if (OB_ISNULL(access_ctx_)) {
     ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "multiple scan merge not inited", K(ret));
   } else {
-    if (curr_rowkey_.is_valid()) {
-      if (range_ != &cow_range_) {
-        cow_range_ = *range_;
-        range_ = &cow_range_;
+    if (OB_FAIL(calc_scan_range_by_rowkey(access_ctx_,
+                                          range_,
+                                          cow_range_,
+                                          curr_rowkey_,
+                                          false/*calc_di_base_range*/))) {
+      STORAGE_LOG(WARN, "fail to calculate scan range", K(ret));
+    } else if (OB_UNLIKELY(!range_->is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "invalid range", K(ret), KPC(range_));
+    } else {
+      STORAGE_LOG(INFO, "calculate scan range", K(ret), KPC(range_));
+      if (use_di_merge_scan()) {
+        // 1. fast refresh table (RefreshTableState::NONE == refresh_table_state_)
+        //   1.1 di base is not changed, calculate its own scan_range
+        //   1.2 di base empty before refresh table, di_base_curr_rowkey_ is invalid, use same scan_range
+        // 2. drain refresh table
+        //    DI_BASE has caught up with the incremental data, use same scan_range
+        if (RefreshTableState::NONE == refresh_table_state_ && di_base_curr_rowkey_.is_valid()) {
+          if (OB_FAIL(calc_scan_range_by_rowkey(access_ctx_,
+                                                di_base_range_,
+                                                di_base_cow_range_,
+                                                di_base_curr_rowkey_,
+                                                true/*calc_di_base_range*/))) {
+            STORAGE_LOG(WARN, "fail to calculate scan range", K(ret));
+          } else {
+            STORAGE_LOG(INFO, "calculate di base scan range", K(ret), KPC(di_base_range_), K(di_base_curr_rowkey_));
+          }
+        } else {
+          di_base_cow_range_ = *range_;
+          di_base_range_ = &di_base_cow_range_;
+        }
       }
-      cow_range_.change_boundary(curr_rowkey_, access_ctx_->query_flag_.is_reverse_scan());
-      // As memtable will use reverse scan when start rowkey is greater than end rowkey instead of
-      // empty result, make the range correct
-      if (access_ctx_->query_flag_.is_reverse_scan() && curr_rowkey_.is_min_rowkey())
-      {
-        cow_range_.start_key_.set_min_rowkey();
-      } else if (!access_ctx_->query_flag_.is_reverse_scan() && curr_rowkey_.is_max_rowkey()) {
-        cow_range_.end_key_.set_max_rowkey();
-      }
-    }
-    if (di_base_curr_rowkey_.is_valid()) {
-      if (di_base_range_ != &di_base_cow_range_) {
-        di_base_cow_range_ = *di_base_range_;
-        di_base_range_ = &di_base_cow_range_;
-      }
-      di_base_cow_range_.change_boundary(di_base_curr_rowkey_, access_ctx_->query_flag_.is_reverse_scan(), true);
     }
   }
+  return ret;
+}
 
+int ObMultipleScanMerge::switch_di_base_table(ObITable *table)
+{
+  int ret = OB_SUCCESS;
+  ObStoreRowIterator *iter = get_di_base_iter();
+  if (OB_ISNULL(iter) || OB_ISNULL(table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null iter or table", K(ret), KP(iter), KP(table));
+  } else if (OB_FAIL(calc_scan_range_by_rowkey(access_ctx_,
+                                               di_base_range_,
+                                               di_base_cow_range_,
+                                               di_base_curr_rowkey_,
+                                               true/*calc_di_base_range*/))) {
+    STORAGE_LOG(WARN, "fail to calculate scn range", K(ret));
+  } else {
+    STORAGE_LOG(INFO, "calculate di base scan range", K(ret), KPC(di_base_range_), K(di_base_curr_rowkey_));
+    iter->reuse();
+    if (OB_FAIL(iter->init(access_param_->iter_param_, *access_ctx_, table, di_base_range_))) {
+      STORAGE_LOG(WARN, "fail to initialize cloned DI base iterator", K(ret));
+    } else if (OB_FAIL(iter->refresh_blockscan_checker(curr_rowkey_))) {
+      STORAGE_LOG(WARN, "fail to restore DI base border", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -230,7 +263,7 @@ int ObMultipleScanMerge::construct_iters()
         }
       }
       if (OB_SUCC(ret)) {
-        need_scan_di_base_ = use_di_merge_scan();
+        need_scan_di_base_ = get_di_base_iter_cnt() > 0;
       }
     }
 
@@ -764,10 +797,8 @@ int ObMultipleScanMerge::pause(bool& do_pause)
         } else if (OB_ISNULL(iter = iters_.at(consumers_[0]))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected null iter", K(ret), K(consumers_[0]));
-        } else if (OB_FAIL(iter->get_next_rowkey(true,
-                                                 curr_scan_index_,
+        } else if (OB_FAIL(iter->get_next_rowkey(curr_scan_index_,
                                                  next_rowkey,
-                                                 border_rowkey,
                                                  *access_ctx_->allocator_))) {
           if (OB_UNLIKELY(ret != OB_ERR_UNSUPPORTED_TYPE )) {
             LOG_WARN("Failed to get next rowkey", K(iter->get_iter_type()));
@@ -785,6 +816,8 @@ int ObMultipleScanMerge::pause(bool& do_pause)
           // cannot do pause
           do_pause = false;
         // TODO @cuiyuntian.cyt support keep order blockscan
+        } else if (OB_FAIL(iter->get_blockscan_border_rowkey(border_rowkey))) {
+          LOG_WARN("failed to get blockscan border rowkey", K(ret));
         } else if (OB_FAIL(next_rowkey.compare(border_rowkey, read_info->get_datum_utils(), cmp_ret))) {
           LOG_WARN("failed to compare rowkey", K(ret), K(next_rowkey), K(border_rowkey));
         } else if ((!is_reverse_scan && cmp_ret > 0) || (is_reverse_scan && cmp_ret < 0)) {

@@ -1375,7 +1375,9 @@ int ObAccessService::reuse_scan_iter(const bool switch_param, ObNewRowIterator *
     //do nothing
   } else if (iter->get_type() == ObNewRowIterator::ObTableScanIterator) {
     ObTableScanIterator *scan_iter = static_cast<ObTableScanIterator*>(iter);
-    if (OB_LIKELY(!switch_param)) {
+    if (OB_FAIL(scan_iter->prepare_for_reuse())) {
+      LOG_WARN("failed to prepare for reuse", K(ret), KPC(scan_iter));
+    } else if (OB_LIKELY(!switch_param)) {
       scan_iter->reuse();
     } else {
       scan_iter->reset_for_switch();

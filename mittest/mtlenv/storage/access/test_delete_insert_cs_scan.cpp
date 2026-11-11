@@ -1818,11 +1818,8 @@ TEST_F(TestDeleteInsertCSScan, test_refresh_table)
       ObStoreRowIterator *iter = scan_merge.get_di_base_iter();
       int64_t di_base_curr_scan_index = -1;
       blocksstable::ObDatumRowkey di_base_curr_rowkey;
-      blocksstable::ObDatumRowkey di_base_border_rowkey;
-      if (OB_FAIL(iter->get_next_rowkey(false,
-                                        di_base_curr_scan_index,
+      if (OB_FAIL(iter->get_next_rowkey(di_base_curr_scan_index,
                                         di_base_curr_rowkey,
-                                        di_base_border_rowkey,
                                         *context_.allocator_))) {
         LOG_WARN("Failed to get di base rowkey", K(ret));
         ret = OB_SUCCESS;

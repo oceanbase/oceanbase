@@ -21,6 +21,7 @@
 #include "storage/concurrency_control/ob_data_validation_service.h"
 #include "storage/truncate_info/ob_truncate_partition_filter.h"
 #include "share/ob_partition_split_query.h"
+#include "storage/blocksstable/ob_sstable.h"
 
 namespace oceanbase
 {
@@ -30,6 +31,84 @@ using namespace share::schema;
 using namespace sql;
 namespace storage
 {
+
+struct ObMultipleMerge::DIBaseStash
+{
+public:
+  DIBaseStash()
+    : allocator_(ObMemAttr(MTL_ID(), "DIBaseStash")),
+      table_(nullptr),
+      rowkey_read_info_(nullptr),
+      is_inited_(false)
+  {
+  }
+  ~DIBaseStash() { reset(); }
+  bool is_valid() const { return is_inited_; }
+  void reset()
+  {
+    tablet_iter_.reset();
+    table_ = nullptr;
+    table_handle_.reset();
+    if (nullptr != rowkey_read_info_) {
+      rowkey_read_info_->reset();
+      rowkey_read_info_->~ObRowkeyReadInfo();
+      allocator_.free(rowkey_read_info_);
+      rowkey_read_info_ = nullptr;
+    }
+    allocator_.reset();
+    is_inited_ = false;
+  }
+  int deep_copy_sstable(ObSSTable *orig_sstable)
+  {
+    int ret = OB_SUCCESS;
+    ObSSTable *copied_sstable = nullptr;
+    if (OB_ISNULL(orig_sstable)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid args", K(ret), KPC(orig_sstable));
+    } else if (OB_FAIL(ObSSTable::copy_from_old_sstable(*orig_sstable, allocator_, copied_sstable))) {
+      LOG_WARN("fail to copy sstable", K(ret));
+    } else if (OB_FAIL(table_handle_.set_sstable(copied_sstable, &allocator_))) {
+      LOG_WARN("fail to set sstable", K(ret));
+    }
+    return ret;
+  }
+  int deep_copy_rowkey_read_info(const ObRowkeyReadInfo &rowkey_read_info)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(!rowkey_read_info.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid args", K(ret), K(rowkey_read_info));
+    } else if (OB_NOT_NULL(rowkey_read_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rowkey read info already exists", K(ret), K(rowkey_read_info_));
+    } else {
+      const int64_t rowkey_info_copy_size = rowkey_read_info.get_deep_copy_size();
+      char *buf = nullptr;
+      if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(rowkey_info_copy_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc buf", K(ret), K(rowkey_info_copy_size));
+      } else if (OB_FAIL(rowkey_read_info.deep_copy(buf, rowkey_info_copy_size, rowkey_read_info_))) {
+        LOG_WARN("fail to deep copy rowkey read info", K(ret), K(rowkey_read_info));
+      } else if (OB_UNLIKELY(nullptr == rowkey_read_info_ || !rowkey_read_info_->is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected copied rowkey read info", K(ret), K(rowkey_read_info), KPC(rowkey_read_info_));
+      }
+    }
+    return ret;
+  }
+  TO_STRING_KV(K(tablet_iter_),
+               KPC(table_),
+               K(table_handle_),
+               KP(rowkey_read_info_),
+               K(is_inited_));
+public:
+  ObArenaAllocator allocator_;
+  ObTabletTableIterator tablet_iter_;
+  ObSSTable *table_;
+  ObTableHandleV2 table_handle_;
+  ObRowkeyReadInfo *rowkey_read_info_;
+  bool is_inited_;
+};
 
 ObMultipleMerge::ObMultipleMerge()
     : padding_allocator_("MULTI_MERGE_PAD"),
@@ -65,7 +144,10 @@ ObMultipleMerge::ObMultipleMerge()
       stmt_iter_pool_(nullptr),
       out_project_cols_(),
       lob_reader_(),
-      scan_state_(ScanState::NONE)
+      scan_state_(ScanState::NONE),
+      refresh_table_state_(RefreshTableState::NONE),
+      start_time_ns_(0),
+      di_base_stash_(nullptr)
   {
 }
 
@@ -107,6 +189,13 @@ ObMultipleMerge::~ObMultipleMerge()
   }
   if (OB_UNLIKELY(nullptr != access_ctx_ && nullptr != access_ctx_->truncate_part_filter_)) {
     access_ctx_->truncate_part_filter_->uncombined_from_pd_filter();
+  }
+  if (nullptr != di_base_stash_) {
+    di_base_stash_->~DIBaseStash();
+    if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
+      access_ctx_->stmt_allocator_->free(di_base_stash_);
+    }
+    di_base_stash_ = nullptr;
   }
 }
 
@@ -158,6 +247,7 @@ int ObMultipleMerge::init(
     access_ctx_ = &context;
     cur_row_.count_ = access_param_->iter_param_.out_cols_project_->count();
     scan_state_ = ScanState::NONE;
+    refresh_table_state_ = RefreshTableState::NONE;
     read_memtable_only_ = false;
     for (int64_t i = cur_row_.get_column_count(); i < param.get_out_col_cnt(); ++i) {
       cur_row_.storage_datums_[i].set_nop();
@@ -335,45 +425,13 @@ int ObMultipleMerge::save_curr_rowkey()
   int ret = OB_SUCCESS;
   // TODO remove this after delete store_rowkey from memtable
   const ObColDescIArray *rowkey_col_descs = nullptr;
-  blocksstable::ObDatumRowkey di_base_border_rowkey;
-  ObAggStoreBase *agg_store = nullptr;
-  if (access_param_->iter_param_.enable_pd_aggregate()) {
-    if (access_param_->iter_param_.plan_use_new_format()) {
-      agg_store = static_cast<ObAggregatedStoreVec *>(block_row_store_);
-    } else {
-      agg_store = static_cast<ObAggregatedStore *>(block_row_store_);
-    }
-  }
 
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "The ObMultipleMerge has not been inited, ", K(ret));
-  } else if (ScanState::BATCH == scan_state_) {
+  } else if (OB_UNLIKELY(ScanState::BATCH == scan_state_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "can not do refresh in batch", K(ret), K(scan_state_), K_(unprojected_row), KPC_(block_row_store));
-  } else if (use_di_merge_scan()) {
-    // save di base curr rowkey and di base border rowkey
-    ObStoreRowIterator *iter = get_di_base_iter();
-    if (OB_ISNULL(iter)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("di base iter is null", K(ret));
-    } else if (nullptr != agg_store && OB_FAIL(agg_store->set_ignore_eval_index_info(true))) { // disable eval index info temporarily
-      LOG_WARN("Failed to set ignore eval index info", K(ret));
-    } else if (OB_FAIL(iter->get_next_rowkey(ScanState::DI_BASE == scan_state_,
-                                             di_base_curr_scan_index_,
-                                             di_base_curr_rowkey_,
-                                             di_base_border_rowkey,
-                                             *access_ctx_->allocator_))) {
-      if (OB_ERR_UNSUPPORTED_TYPE != ret) {
-        LOG_WARN("Failed to get di base rowkey", K(ret), KPC(iter));
-      }
-    }
-    if (OB_SUCC(ret) && nullptr != agg_store && OB_FAIL(agg_store->set_ignore_eval_index_info(false))) {
-      LOG_WARN("Failed to set ignore eval index info", K(ret));
-    }
-  } else {
-    di_base_curr_rowkey_.reset();
-    di_base_curr_scan_index_ = 0;
   }
 
   if (OB_SUCC(ret)) {
@@ -392,9 +450,14 @@ int ObMultipleMerge::save_curr_rowkey()
         curr_scan_index_ = unprojected_row_.scan_index_;
       }
     } else if (ScanState::DI_BASE == scan_state_) {
-      tmp_rowkey = di_base_border_rowkey;
-      if ((access_ctx_->query_flag_.is_reverse_scan() && tmp_rowkey.is_min_rowkey()) ||
-          (!access_ctx_->query_flag_.is_reverse_scan() && tmp_rowkey.is_max_rowkey())) {
+      ObStoreRowIterator *iter = get_di_base_iter();
+      if (OB_ISNULL(iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("di base iterator is null", K(ret));
+      } else if (OB_FAIL(iter->get_blockscan_border_rowkey(tmp_rowkey))) {
+        LOG_WARN("fail to get blockscan border rowkey", K(ret), KPC(iter));
+      } else if ((access_ctx_->query_flag_.is_reverse_scan() && tmp_rowkey.is_min_rowkey()) ||
+                 (!access_ctx_->query_flag_.is_reverse_scan() && tmp_rowkey.is_max_rowkey())) {
         curr_scan_index_ = get_range_count() - 1;
       } else {
         curr_scan_index_ = unprojected_row_.scan_index_;
@@ -417,10 +480,7 @@ int ObMultipleMerge::save_curr_rowkey()
       LOG_WARN("Fail to transfer store rowkey", K(ret), K(curr_rowkey_));
     }
   }
-  if (OB_SUCC(ret)) {
-    LOG_INFO("save refresh table info", K(ret), K_(curr_rowkey), K_(di_base_curr_rowkey),
-             K_(curr_scan_index), K_(di_base_curr_scan_index), K_(scan_state));
-  }
+  FLOG_INFO("save refresh table info", K(ret), K(curr_rowkey_), K(curr_scan_index_), K(scan_state_));
   return ret;
 }
 
@@ -674,6 +734,16 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
                 }
                 ret = OB_SUCCESS;
                 scan_state_ = ScanState::SINGLE_ROW;
+                if (RefreshTableState::NONE != refresh_table_state_) {
+                  // if vector_store is empty, must switch to NONE to avoid get SINGLE_ROW before refresh table
+                  // if vector_store is not empty, must switch to SUSPEND_REFRESH to prevent loss of the last batch
+                  RefreshTableState next_state = vector_store->is_end()
+                                                   ? RefreshTableState::SUSPEND_REFRESH
+                                                   : RefreshTableState::NONE;
+                  if (OB_FAIL(switch_refresh_table_state(next_state))) {
+                    LOG_WARN("fail to finish drain refresh", K(ret), K(next_state));
+                  }
+                }
               }
             }
             break;
@@ -803,6 +873,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
       ? static_cast<ObAggregatedStoreVec *>(block_row_store_) : nullptr;
     sql::ObEvalCtx &eval_ctx = access_param_->get_op()->get_eval_ctx();
     int64_t batch_size = max(1, access_param_->get_op()->get_batch_size());
+    ScanState last_scan_state = ScanState::NONE;
     bool need_init_expr_header = true;
     reuse_lob_locator();
     if (need_padding_) {
@@ -822,6 +893,8 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
                  K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), KPC_(access_param));
       } else {
         is_unprojected_row_valid_ = false;
+        need_init_expr_header = last_scan_state != scan_state_;
+        last_scan_state = scan_state_;
         switch(scan_state_) {
           case ScanState::BATCH: {
             bool can_batch = false;
@@ -831,14 +904,11 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
               LOG_WARN("fail to check can batch scan", K(ret));
             } else if (!can_batch) {
               scan_state_ = ScanState::SINGLE_ROW;
-              need_init_expr_header = true;
               break;
             } else if (need_init_expr_header && access_param_->iter_param_.use_new_format()) {
               sql::ObEvalCtx &eval_ctx = access_param_->get_op()->get_eval_ctx();
               if (OB_FAIL(init_exprs_vector_header(access_param_->output_exprs_, eval_ctx, eval_ctx.max_batch_size_))) {
                 LOG_WARN("Failed to init vector", K(ret), K_(eval_ctx.max_batch_size));
-              } else {
-                need_init_expr_header = false;
               }
             }
             if (OB_FAIL(ret)) {
@@ -850,7 +920,6 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
                 // OB_ITER_END should use fuse to make sure no greater key in dynamic data
                 ret = OB_SUCCESS;
                 // pd_agg/pd_groupby not set in cg scanner, need reset expr format
-                need_init_expr_header = true;
                 scan_state_ = ScanState::SINGLE_ROW;
               }
             }
@@ -863,8 +932,6 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
               sql::ObEvalCtx &eval_ctx = access_param_->get_op()->get_eval_ctx();
               if (OB_FAIL(init_exprs_vector_header(access_param_->output_exprs_, eval_ctx, eval_ctx.max_batch_size_))) {
                 LOG_WARN("Failed to init vector", K(ret), K_(eval_ctx.max_batch_size));
-              } else {
-                need_init_expr_header = false;
               }
             }
             if (OB_FAIL(ret)) {
@@ -877,8 +944,12 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
                   need_scan_di_base_ = false;
                 }
                 ret = OB_SUCCESS;
-                need_init_expr_header = true;
                 scan_state_ = ScanState::SINGLE_ROW;
+                if (RefreshTableState::NONE != refresh_table_state_) {
+                  if (OB_FAIL(switch_refresh_table_state(RefreshTableState::NONE))) {
+                    LOG_WARN("fail to switch refresh table state", K(ret));
+                  }
+                }
               }
             }
             break;
@@ -891,7 +962,6 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
               } else if (OB_PUSHDOWN_STATUS_CHANGED == ret) {
                 ret = OB_SUCCESS;
                 scan_state_ = ScanState::BATCH;
-                need_init_expr_header = true;
                 break;
               } else {
                 if (need_scan_di_base_) {
@@ -900,7 +970,6 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
                     LOG_WARN("Fail to prepare di base blockscan", K(ret), K_(is_unprojected_row_valid),
                              K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), KPC_(access_param));
                   } else {
-                    need_init_expr_header = true;
                     break;
                   }
                 }
@@ -914,7 +983,6 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
                     LOG_WARN("Fail to prepare di base blockscan", K(ret), K_(is_unprojected_row_valid),
                              K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K_(unprojected_row), KPC_(access_param));
                   } else if (unprojected_row_.row_flag_.is_delete() || unprojected_row_.is_insert_filtered_) {
-                    need_init_expr_header = true;
                     break;
                   }
                 } else if (!iter_del_row_) {
@@ -935,7 +1003,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
             } else {
               ObDatumRow *out_row = nullptr;
               if (access_param_->iter_param_.use_new_format() &&
-                  (need_init_expr_header || (agg_store_vec->has_aggr_with_expr() && 0 == agg_store_vec->get_row_count())) &&
+                  (need_init_expr_header || 0 == agg_store_vec->get_row_count()) &&
                   OB_FAIL(init_exprs_uniform_header(access_param_->output_exprs_, access_param_->get_op()->get_eval_ctx(), batch_size))) {
                 LOG_WARN("Failed to init vector", K(ret), KPC_(access_param));
               } else if (OB_FAIL(process_fuse_row(
@@ -951,13 +1019,6 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
                   LOG_WARN("fail to aggregate row", K(ret));
                 } else {
                   LOG_DEBUG("aggregate next row", K(ret), K(unprojected_row_));
-                }
-              }
-              if (OB_SUCC(ret)) {
-                if (ScanState::SINGLE_ROW == scan_state_) {
-                  need_init_expr_header = false;
-                } else {
-                  need_init_expr_header = true;
                 }
               }
             }
@@ -1147,6 +1208,33 @@ int ObMultipleMerge::process_fuse_row(const bool not_using_static_engine,
   return ret;
 }
 
+int ObMultipleMerge::prepare_for_reuse()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (refresh_table_state_ != RefreshTableState::NONE) {
+    reuse_iter_array();
+    if (nullptr != di_base_stash_) {
+      di_base_stash_->reset();
+    }
+    if (get_table_param_->tablet_iter_.table_iter()->is_valid()) {
+      access_param_->iter_param_.rowkey_read_info_ =
+        &get_table_param_->tablet_iter_.get_tablet()->get_rowkey_read_info();
+    } else if (OB_FAIL(refresh_tablet_iter())) {
+      STORAGE_LOG(WARN, "fail to refresh tablet iter", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(prepare_read_tables(true/*refresh*/))) {
+      LOG_WARN("failed to prepare read tables for reuse", K(ret));
+    } else {
+      refresh_table_state_ = RefreshTableState::NONE;
+    }
+  }
+  return ret;
+}
+
 void ObMultipleMerge::reset()
 {
   update_and_report_tablet_stat();
@@ -1163,6 +1251,9 @@ void ObMultipleMerge::reuse()
 {
   update_and_report_tablet_stat();
   reuse_iter_array();
+  if (nullptr != di_base_stash_) {
+    di_base_stash_->reset();
+  }
   range_idx_delta_ = 0;
   unprojected_row_.row_flag_.reset();
   if (nullptr != block_row_store_) {
@@ -1170,12 +1261,14 @@ void ObMultipleMerge::reuse()
   }
   lob_reader_.reuse();
   scan_state_ = ScanState::NONE;
+  refresh_table_state_ = RefreshTableState::NONE;
   is_unprojected_row_valid_ = false;
   need_scan_di_base_ = false;
   curr_scan_index_ = 0;
   di_base_curr_scan_index_ = 0;
   curr_rowkey_.reset();
   di_base_curr_rowkey_.reset();
+  start_time_ns_ = 0;
 }
 
 void ObMultipleMerge::reclaim()
@@ -1214,6 +1307,13 @@ void ObMultipleMerge::inner_reset()
   if (OB_UNLIKELY(nullptr != access_ctx_ && nullptr != access_ctx_->truncate_part_filter_)) {
     access_ctx_->truncate_part_filter_->uncombined_from_pd_filter();
   }
+  if (nullptr != di_base_stash_) {
+    di_base_stash_->~DIBaseStash();
+    if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
+      access_ctx_->stmt_allocator_->free(di_base_stash_);
+    }
+    di_base_stash_ = nullptr;
+  }
   padding_allocator_.reset();
   access_param_ = NULL;
   access_ctx_ = NULL;
@@ -1227,6 +1327,7 @@ void ObMultipleMerge::inner_reset()
   read_memtable_only_ = false;
   lob_reader_.reset();
   scan_state_ = ScanState::NONE;
+  refresh_table_state_ = RefreshTableState::NONE;
   iter_del_row_ = false;
   is_unprojected_row_valid_ = false;
   need_scan_di_base_ = false;
@@ -1235,6 +1336,7 @@ void ObMultipleMerge::inner_reset()
   major_table_version_ = 0;
   curr_rowkey_.reset();
   di_base_curr_rowkey_.reset();
+  start_time_ns_ = 0;
 }
 
 void ObMultipleMerge::reset_iter_array(const bool can_reuse)
@@ -1669,10 +1771,11 @@ int ObMultipleMerge::prepare_read_tables(bool refresh)
     } else if (OB_FAIL(prepare_tables_from_iterator(*table_store_iter, false/*has_split_extra_tables*/, &get_table_param_->sample_info_))) {
       LOG_WARN("failed to prepare tables from iter", K(ret), KPC(table_store_iter));
     }
-  } else if (!refresh && get_table_param_->tablet_iter_.table_iter()->is_valid()) {
+  } else if (get_table_param_->tablet_iter_.table_iter()->is_valid()) {
     if (OB_FAIL(prepare_tables_from_iterator(
         *get_table_param_->tablet_iter_.table_iter(),
-        nullptr != get_table_param_->tablet_iter_.get_split_extra_tablet_handles_ptr()))) {
+        nullptr != get_table_param_->tablet_iter_.get_split_extra_tablet_handles_ptr(),
+        &get_table_param_->sample_info_))) {
       LOG_WARN("prepare tables fail", K(ret), K(get_table_param_->tablet_iter_.table_iter()));
     }
   } else if (FALSE_IT(get_table_param_->tablet_iter_.table_iter()->reset())) {
@@ -1817,9 +1920,6 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
   return ret;
 }
 
-#ifdef ERRSIM
-ERRSIM_POINT_DEF(ERRSIM_SET_NEED_REFRESH);
-#endif
 int ObMultipleMerge::refresh_table_on_demand()
 {
   int ret = OB_SUCCESS;
@@ -1827,64 +1927,242 @@ int ObMultipleMerge::refresh_table_on_demand()
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObMultipleMerge has not been inited", K(ret));
-  } else if (ScanState::NONE == scan_state_) {
-    STORAGE_LOG(DEBUG, "skip refresh table");
-  } else if (get_table_param_->sample_info_.is_block_sample() ||
-             (nullptr != block_row_store_ && !block_row_store_->can_refresh())) {
-    // TODO : @yuanzhe refactor block sample for table refresh
-    STORAGE_LOG(DEBUG, "skip refresh table for block sample, aggregated in prefetch or group by pushdown",
-        K(get_table_param_->sample_info_.is_block_sample()), KPC(block_row_store_));
+  } else if (RefreshTableState::NONE != refresh_table_state_) {
+    // already in drain refresh table process, skip check
+    if (OB_FAIL(switch_refresh_table_state_on_demand())) {
+      STORAGE_LOG(WARN, "fail to switch refresh table state on demand", K(ret), K(refresh_table_state_));
+    }
   } else if (OB_FAIL(check_need_refresh_table(need_refresh))) {
     STORAGE_LOG(WARN, "fail to check need refresh table", K(ret));
-#ifdef ERRSIM
-  } else if (need_refresh || ERRSIM_SET_NEED_REFRESH) {
-#else
   } else if (need_refresh) {
-#endif
-    bool refreshed = false;
-    bool is_di_merge_scan = use_di_merge_scan();
-    if (ScanState::BATCH == scan_state_) {
-      STORAGE_LOG(TRACE, "in vectorize batch scan, do refresh at next time",
-                  "tablet_id", access_param_->iter_param_.tablet_id_);
-      if (OB_NOT_NULL(block_row_store_)) {
-        block_row_store_->disable();
-      }
-    } else if (!is_unprojected_row_valid_ && ScanState::SINGLE_ROW == scan_state_) {
-      // do nothing
-    } else if (nullptr != block_row_store_
-               && access_param_->iter_param_.enable_pd_aggregate()
-               && access_param_->iter_param_.plan_use_new_format()
-               && OB_FAIL(static_cast<ObAggregatedStoreVec *>(block_row_store_)->do_aggregate())) {
+    if (nullptr != block_row_store_
+        && access_param_->iter_param_.enable_pd_aggregate()
+        && access_param_->iter_param_.plan_use_new_format()
+        && OB_FAIL(static_cast<ObAggregatedStoreVec *>(block_row_store_)->do_aggregate())) {
       STORAGE_LOG(WARN, "fail to aggregate rows", K(ret));
-    } else if (OB_FAIL(save_curr_rowkey())) {
-      if (OB_ERR_UNSUPPORTED_TYPE == ret) {
-        ret = OB_SUCCESS;
-        // do nothing
+    } else if (FALSE_IT(access_param_->iter_param_.set_use_stmt_iter_pool())) {
+    } else if (OB_FAIL(access_ctx_->alloc_iter_pool(access_param_->iter_param_.is_use_column_store()))) {
+      LOG_WARN("Failed to init iter pool", K(ret));
+    } else if (FALSE_IT(stmt_iter_pool_ = access_ctx_->get_stmt_iter_pool())) {
+    } else if (need_scan_di_base_ && OB_FAIL(probe_di_base_next_rowkey())) {
+      if (OB_UNLIKELY(OB_ERR_UNSUPPORTED_TYPE != ret)) {
+        STORAGE_LOG(WARN, "fail to probe di base next rowkey", K(ret));
       } else {
-        STORAGE_LOG(WARN, "fail to save current rowkey", K(ret));
+        // not support refresh table when di base cannot get next rowkey
+        // NOTE: with heavy incremental data or multi di base, memtable may not be released for a long time
+        ret = OB_SUCCESS;
       }
-    } else if (FALSE_IT(reset_iter_array(access_param_->is_use_global_iter_pool()))) {
-    } else if (OB_FAIL(refresh_tablet_iter())) {
-      STORAGE_LOG(WARN, "fail to refresh tablet iter", K(ret));
-    } else if (OB_FAIL(prepare_read_tables(true/*refresh*/))) {
-      STORAGE_LOG(WARN, "fail to prepare read tables", K(ret));
-    } else if (OB_FAIL(check_base_version(is_di_merge_scan))) {
-      STORAGE_LOG(WARN, "di base snapshot version changed", K(ret));
-    } else if (OB_FAIL(reset_tables())) {
-      STORAGE_LOG(WARN, "fail to reset tables", K(ret));
-    } else if (OB_UNLIKELY(access_param_->iter_param_.need_truncate_filter()) &&
-               OB_FAIL(prepare_truncate_filter())) {
-      LOG_WARN("failed to prepare truncate filter", K(ret));
-    } else if (nullptr != block_row_store_ && OB_FAIL(block_row_store_->reuse_for_refresh_table())) {
-      STORAGE_LOG(WARN, "fail to reuse block row store", K(ret));
+    } else if (OB_FAIL(save_curr_rowkey())) {
+      STORAGE_LOG(WARN, "fail to save current rowkey", K(ret));
     } else {
-      refreshed = true;
+      bool fast_refresh_table = true;
+      bool can_refresh_tablet = true;
+      if (need_scan_di_base_) {
+        const ObITable::TableKey old_di_base_key = tables_.at(0)->get_key();
+        ObITable *new_di_base_table = nullptr;
+        if (OB_FAIL(stash_tablet_iter())) {
+          STORAGE_LOG(WARN, "fail to stash tablet iter", K(ret));
+        } else if (OB_FAIL(refresh_tablet_iter())) {
+          STORAGE_LOG(WARN, "fail to refresh tablet iter", K(ret));
+        } else if (OB_FAIL(get_table_param_->tablet_iter_.table_iter()->get_boundary_table(false/*is_last*/, new_di_base_table))) {
+          STORAGE_LOG(WARN, "fail to get boundary table", K(ret));
+        } else {
+          // fast refresh only when di base is unchanged
+          // prohibit tablet refresh in do_refresh_table: a second refresh may load newer
+          // tables and make di base changed, invalidating the fast path
+          fast_refresh_table = nullptr != new_di_base_table && new_di_base_table->get_key() == old_di_base_key;
+          can_refresh_tablet = !fast_refresh_table;
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (fast_refresh_table) {
+        if (use_di_merge_scan() && OB_FAIL(save_di_base_curr_rowkey())) {
+          STORAGE_LOG(WARN, "fail to save di base curr rowkey", K(ret));
+        } else if (OB_FAIL(do_refresh_table(can_refresh_tablet))) {
+          STORAGE_LOG(WARN, "fail to refresh table", K(ret));
+        }
+      } else {
+        if (OB_FAIL(switch_refresh_table_state(RefreshTableState::HOLD_DRAIN))) {
+          STORAGE_LOG(WARN, "fail to start drain refresh", K(ret));
+        }
+      }
     }
+  }
+  return ret;
+}
 
-    if (OB_SUCC(ret) && refreshed) {
-      STORAGE_LOG(INFO, "table refreshed", "tablet_id", access_param_->iter_param_.tablet_id_,
-                  K(curr_scan_index_), K(di_base_curr_scan_index_), K(scan_state_), K(use_di_merge_scan()), K_(major_table_version));
+int ObMultipleMerge::do_refresh_table(const bool can_refresh_tablet)
+{
+  int ret = OB_SUCCESS;
+  reuse_iter_array();
+  if (!can_refresh_tablet) {
+    // can not refresh tablet, avoid di base changed
+  } else if (get_table_param_->tablet_iter_.is_valid()
+             && !get_table_param_->tablet_iter_.table_iter()->check_store_expire()) {
+    // tablet has been refreshed and store not expired, skip refresh tablet
+    access_param_->iter_param_.rowkey_read_info_ =
+        &get_table_param_->tablet_iter_.get_tablet()->get_rowkey_read_info();
+  } else if (OB_FAIL(refresh_tablet_iter())) {
+    STORAGE_LOG(WARN, "fail to refresh tablet iter", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(prepare_read_tables(true/*refresh*/))) {
+    STORAGE_LOG(WARN, "fail to prepare read tables", K(ret));
+  } else if (use_di_merge_scan()) {
+    need_scan_di_base_ = false;
+    if (nullptr != di_base_stash_) {
+      di_base_stash_->reset();
     }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (nullptr != block_row_store_ && OB_FAIL(block_row_store_->reuse_for_refresh_table())) {
+    STORAGE_LOG(WARN, "fail to reuse block row store", K(ret));
+  } else if (OB_FAIL(reset_tables())) {
+    STORAGE_LOG(WARN, "fail to reset tables", K(ret));
+  } else if (access_param_->iter_param_.need_truncate_filter() && OB_FAIL(prepare_truncate_filter())) {
+    STORAGE_LOG(WARN, "fail to prepare truncate filter", K(ret));
+  } else {
+    STORAGE_LOG(INFO, "table refreshed", "tablet_id", access_param_->iter_param_.tablet_id_,
+                K(curr_scan_index_), K(scan_state_), K(refresh_table_state_), K(major_table_version_));
+  }
+  return ret;
+}
+
+int ObMultipleMerge::switch_refresh_table_state_on_demand()
+{
+  int ret = OB_SUCCESS;
+  switch (refresh_table_state_) {
+    case RefreshTableState::HOLD_DRAIN:
+      // check if time threshold is reached, if reached, switch to clone drain
+      if (ObTimeUtility::current_time_ns() - start_time_ns_ > RETRY_QUERY_THRESHOLD_NS) {
+        if (OB_FAIL(switch_refresh_table_state(RefreshTableState::CLONE_DRAIN))) {
+          STORAGE_LOG(WARN, "fail to switch refresh table state", K(ret));
+        }
+      }
+      break;
+    case RefreshTableState::CLONE_DRAIN:
+      // check new tablet is expired, if expired, reset tablet iter
+      if (get_table_param_->tablet_iter_.is_valid() &&
+          get_table_param_->tablet_iter_.table_iter()->check_store_expire()) {
+        get_table_param_->tablet_iter_.reset();
+      }
+      break;
+    case RefreshTableState::SUSPEND_REFRESH:
+      if (OB_FAIL(switch_refresh_table_state(RefreshTableState::NONE))) {
+        STORAGE_LOG(WARN, "fail to switch refresh table state", K(ret));
+      }
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected refresh table state", K(ret), K(refresh_table_state_));
+      break;
+  }
+  return ret;
+}
+
+/**
+ * state machine:
+ *
+ *     NONE ◄────────────────────────────────────┐
+ *      │                                        │
+ *      │                                [SUSPEND_REFRESH]
+ *      │                                        │
+ *      ▼                                        │
+ *  HOLD_DRAIN ── drain end ────────────────────►┤
+ *      │                                        │
+ *      │ time reached                           │
+ *      │                                        │
+ *      ▼                                        │
+ * CLONE_DRAIN ── drain end ────────────────────►┘
+ *
+ */
+int ObMultipleMerge::switch_refresh_table_state(const RefreshTableState refresh_table_state)
+{
+  int ret = OB_SUCCESS;
+  bool update_state = true;
+  switch (refresh_table_state) {
+    case RefreshTableState::NONE:
+      // drain end, do refresh table
+      if (OB_UNLIKELY(RefreshTableState::HOLD_DRAIN != refresh_table_state_ &&
+                      RefreshTableState::CLONE_DRAIN != refresh_table_state_ &&
+                      RefreshTableState::SUSPEND_REFRESH != refresh_table_state_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected refresh table state", K(ret), K(refresh_table_state_), K(refresh_table_state));
+      } else if (OB_FAIL(do_refresh_table())) {
+        LOG_WARN("fail to refresh table", K(ret));
+      } else {
+        start_time_ns_ = 0;
+      }
+      break;
+    case RefreshTableState::HOLD_DRAIN:
+      // continue DI_BASE scan with the stashed old tablet until time reach threshold
+      if (OB_UNLIKELY(RefreshTableState::NONE != refresh_table_state_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected refresh table state", K(ret), K(refresh_table_state_), K(refresh_table_state));
+      } else {
+        start_time_ns_ = ObTimeUtility::current_time_ns();
+        access_param_->iter_param_.rowkey_read_info_ = &di_base_stash_->tablet_iter_.get_tablet()->get_rowkey_read_info();
+        if (nullptr != block_row_store_ && OB_FAIL(block_row_store_->reuse_for_refresh_table())) {
+          LOG_WARN("fail to reuse block row store", K(ret));
+        } else if (ScanState::SINGLE_ROW == scan_state_) {
+          if (OB_UNLIKELY(!is_unprojected_row_valid_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected unprojected row invalid", K(ret));
+          } else if (OB_FAIL(prepare_di_base_blockscan(false/*di_base_only*/, &unprojected_row_))) {
+            LOG_WARN("fail to prepare di base blockscan", K(ret));
+          } else {
+            scan_state_ = ScanState::DI_BASE;
+          }
+        } else if (OB_UNLIKELY(ScanState::DI_BASE != scan_state_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected scan state", K(ret), K(scan_state_));
+        }
+        if (OB_SUCC(ret)) {
+          FLOG_INFO("hold tablet drain di base", "tablet_id", access_param_->iter_param_.tablet_id_,
+              K(curr_scan_index_), K(scan_state_), K(refresh_table_state_), K(major_table_version_));
+        }
+      }
+      break;
+    case RefreshTableState::CLONE_DRAIN:
+      // clone tablet and continue DI_BASE scan to the border
+      if (OB_UNLIKELY(RefreshTableState::HOLD_DRAIN != refresh_table_state_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected refresh table state", K(ret), K(refresh_table_state_), K(refresh_table_state));
+      } else if (OB_FAIL(probe_di_base_next_rowkey())) {
+        if (OB_UNLIKELY(OB_ERR_UNSUPPORTED_TYPE != ret)) {
+          STORAGE_LOG(WARN, "fail to probe di base next rowkey", K(ret));
+        } else {
+          // current di base may scan to range end and cannot get next rowkey, wait for next round
+          ret = OB_SUCCESS;
+          update_state = false;
+        }
+      } else if (OB_FAIL(clone_and_switch_di_base_table())) {
+        LOG_WARN("fail to clone and switch di base table", K(ret));
+      } else if (nullptr != block_row_store_ && OB_FAIL(block_row_store_->reuse_for_refresh_table())) {
+        LOG_WARN("fail to reuse block row store", K(ret));
+      } else {
+        FLOG_INFO("clone sstable drain di base", "tablet_id", access_param_->iter_param_.tablet_id_,
+          K(curr_scan_index_), K(scan_state_), K(refresh_table_state_), K(major_table_version_));
+      }
+      break;
+    case RefreshTableState::SUSPEND_REFRESH:
+      // drain end with pending batch in vector_store, defer refresh table until it is returned
+      if (OB_UNLIKELY(RefreshTableState::HOLD_DRAIN != refresh_table_state_ &&
+                      RefreshTableState::CLONE_DRAIN != refresh_table_state_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected refresh table state", K(ret), K(refresh_table_state_), K(refresh_table_state));
+      } else {
+        FLOG_INFO("drain di base end, suspend refresh", "tablet_id", access_param_->iter_param_.tablet_id_,
+          K(curr_scan_index_), K(scan_state_), K(refresh_table_state_), K(major_table_version_), K(di_base_iters_.count()));
+      }
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected refresh table state", K(ret), K(refresh_table_state_));
+      break;
+  }
+  if (OB_SUCC(ret) && update_state) {
+    refresh_table_state_ = refresh_table_state;
   }
   return ret;
 }
@@ -1893,41 +2171,62 @@ int ObMultipleMerge::refresh_tablet_iter()
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
-  if (OB_UNLIKELY(!get_table_param_->tablet_iter_.is_valid())) {
+  // reset first, in case get_read_tables fail and rowkey_read_info_ become dangling
+  access_param_->iter_param_.rowkey_read_info_ = nullptr;
+  const int64_t remain_timeout = THIS_WORKER.get_timeout_remain();
+  const share::ObLSID &ls_id = access_ctx_->ls_id_;
+  const common::ObTabletID &tablet_id = access_ctx_->tablet_id_;
+  const int64_t snapshot_version = generate_read_tables_version();
+  if (OB_UNLIKELY(remain_timeout <= 0)) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("timeout reached", K(ret), K(ls_id), K(tablet_id), K(remain_timeout));
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet iter is invalid", K(ret), K(get_table_param_->tablet_iter_));
+    LOG_WARN("ls is null", K(ret), K(ls_handle));
+  } else if (ls_handle.get_ls()->is_logonly_replica()) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("logonly replica do not need merge tablet", KR(ret), K(ls_id));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(
+      tablet_id,
+      remain_timeout,
+      snapshot_version,
+      snapshot_version,
+      get_table_param_->tablet_iter_,
+      false/*allow_not_ready*/,
+      true/*need_split_src_table*/,
+      true/*need_split_dst_table*/))) {
+    LOG_WARN("failed to refresh tablet iterator", K(ret), K(ls_id), K_(get_table_param), KP_(access_param));
   } else {
-    // reset first, in case get_read_tables fail and rowkey_read_info_ become dangling
-    access_param_->iter_param_.rowkey_read_info_ = nullptr;
-    const int64_t remain_timeout = THIS_WORKER.get_timeout_remain();
-    const share::ObLSID &ls_id = access_ctx_->ls_id_;
-    const common::ObTabletID &tablet_id = get_table_param_->tablet_iter_.get_tablet()->get_tablet_meta().tablet_id_;
-    const int64_t snapshot_version = generate_read_tables_version();
-    if (OB_UNLIKELY(remain_timeout <= 0)) {
-      ret = OB_TIMEOUT;
-      LOG_WARN("timeout reached", K(ret), K(ls_id), K(tablet_id), K(remain_timeout));
-    } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-      LOG_WARN("failed to get ls", K(ret), K(ls_id));
-    } else if (OB_ISNULL(ls_handle.get_ls())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls is null", K(ret), K(ls_handle));
-    } else if (ls_handle.get_ls()->is_logonly_replica()) {
-      ret = OB_STATE_NOT_MATCH;
-      LOG_WARN("logonly replica do not need merge tablet", KR(ret), K(ls_id));
-    } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(
-        tablet_id,
-        remain_timeout,
-        snapshot_version,
-        snapshot_version,
-        get_table_param_->tablet_iter_,
+    get_table_param_->refreshed_merge_ = this;
+    access_param_->iter_param_.rowkey_read_info_ =
+      &(get_table_param_->tablet_iter_.get_tablet_handle().get_obj()->get_rowkey_read_info());
+  }
+
+  if (OB_SUCC(ret)) {
+    get_table_param_->tablet_iter_.table_iter()->reset();
+    const bool need_split_src_table = access_param_->iter_param_.is_tablet_spliting();
+    const bool need_split_dst_table = true;
+    if (OB_UNLIKELY(get_table_param_->frozen_version_ != -1)) {
+      if (!get_table_param_->sample_info_.is_no_sample()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("sample query does not support frozen_version", K(ret), K_(get_table_param), KP_(access_param));
+      } else if (OB_FAIL(get_table_param_->tablet_iter_.refresh_read_tables_from_tablet(
+          get_table_param_->frozen_version_,
+          false/*allow_not_ready*/,
+          true/*major_sstable_only*/,
+          need_split_src_table,
+          need_split_dst_table))) {
+        LOG_WARN("get table iterator fail", K(ret), K_(get_table_param), KP_(access_param));
+      }
+    } else if (OB_FAIL(get_table_param_->tablet_iter_.refresh_read_tables_from_tablet(
+        generate_read_tables_version(),
         false/*allow_not_ready*/,
-        true/*need_split_src_table*/,
-        true/*need_split_dst_table*/))) {
-      LOG_WARN("failed to refresh tablet iterator", K(ret), K(ls_id), K_(get_table_param), KP_(access_param));
-    } else {
-      get_table_param_->refreshed_merge_ = this;
-      access_param_->iter_param_.rowkey_read_info_ =
-        &(get_table_param_->tablet_iter_.get_tablet_handle().get_obj()->get_rowkey_read_info());
+        false/*major_sstable_only*/,
+        need_split_src_table,
+        need_split_dst_table))) {
+      LOG_WARN("get table iterator fail", K(ret), K_(get_table_param), KP_(access_param));
     }
   }
   return ret;
@@ -2143,31 +2442,6 @@ void ObMultipleMerge::dump_table_statistic_for_4377()
   LOG_ERROR("==================== End table info ====================");
 }
 
-int ObMultipleMerge::check_base_version(const bool is_di_merge_scan) const {
-  int ret = OB_SUCCESS;
-  if (access_param_->iter_param_.is_delete_insert_) {
-    ObITable *table = nullptr;
-    if (OB_FAIL(tables_.at(0, table))) {
-      STORAGE_LOG(WARN, "Fail to get the first store", K(ret));
-    } else if (is_di_merge_scan) {
-      if (OB_UNLIKELY(access_ctx_->trans_version_range_.base_version_ <= 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected trans version range for delete insert scan", K(ret), K(access_ctx_->trans_version_range_));
-      } else if (!table->is_major_sstable() ||
-                 access_ctx_->trans_version_range_.base_version_ != table->get_snapshot_version()) { // retry query
-        ret = OB_SNAPSHOT_DISCARDED;
-        FLOG_INFO("di base snapshot version changed, retry to scan", K(ret), "tablet_id", access_param_->iter_param_.tablet_id_,
-                  "base_version", access_ctx_->trans_version_range_.base_version_, "new_version", table->get_snapshot_version(),
-                  K(table->get_key()));
-      }
-    } else if (table->is_major_sstable()) {
-      ret = OB_SNAPSHOT_DISCARDED;
-      FLOG_INFO("new major generated for di scan, retry to scan", K(ret), "tablet_id", access_param_->iter_param_.tablet_id_,
-                "new_version", table->get_snapshot_version(), K(table->get_key()));
-    }
-  }
-  return ret;
-}
 
 void ObMultipleMerge::set_base_version() const {
   // When the major table is currently being processed, the snapshot version is taken and placed
@@ -2262,6 +2536,240 @@ int ObMultipleMerge::prepare_truncate_filter()
       LOG_WARN("Failed to build truncate part filter", K(ret));
     }
   }
+  return ret;
+}
+
+OB_INLINE int ObMultipleMerge::check_need_refresh_table(bool &need_refresh)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+#ifdef ERRSIM
+  tmp_ret = OB_E(EventTable::EN_FORCE_REFRESH_TABLE) OB_SUCCESS;
+#endif
+  need_refresh = false;
+  if (get_table_param_->sample_info_.is_block_sample() ||
+      (nullptr != block_row_store_ && !block_row_store_->can_refresh())) {
+    // TODO : @yuanzhe refactor block sample for table refresh
+    STORAGE_LOG(DEBUG, "skip refresh table for block sample, aggregated in prefetch or group by pushdown",
+        K(get_table_param_->sample_info_.is_block_sample()), KPC(block_row_store_));
+  } else if (access_param_->iter_param_.is_mds_query_) {
+    // skip refresh table for mds query
+  } else if (get_table_param_->tablet_iter_.table_iter()->check_store_expire() || OB_SUCCESS != tmp_ret) {
+    if (ScanState::NONE == scan_state_) {
+      STORAGE_LOG(DEBUG, "skip refresh table");
+    } else if (ScanState::SINGLE_ROW == scan_state_) {
+      if (is_unprojected_row_valid_) {
+        need_refresh = true;
+      }
+    } else if (ScanState::BATCH == scan_state_) {
+      STORAGE_LOG(TRACE, "in vectorize batch scan, do refresh at next time",
+                  "tablet_id", access_param_->iter_param_.tablet_id_);
+      if (OB_NOT_NULL(block_row_store_)) {
+        block_row_store_->disable();
+      }
+    } else if (ScanState::DI_BASE == scan_state_) {
+      need_refresh = true;
+    } else {
+      ret = OB_ERR_UNSUPPORTED_TYPE;
+      STORAGE_LOG(WARN, "unsupported scan state", K(ret), K(scan_state_));
+    }
+  }
+
+  return ret;
+}
+
+int ObMultipleMerge::probe_di_base_next_rowkey()
+{
+  int ret = OB_SUCCESS;
+  ObStoreRowIterator *iter = get_di_base_iter();
+  if (OB_ISNULL(iter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null di base iterator", K(ret));
+  } else if (OB_FAIL(iter->probe_next_rowkey())) {
+    if (OB_UNLIKELY(OB_ERR_UNSUPPORTED_TYPE != ret)) {
+      LOG_WARN("fail to probe di base rowkey", K(ret), KPC(iter));
+    }
+  }
+  return ret;
+}
+
+int ObMultipleMerge::save_di_base_curr_rowkey()
+{
+  int ret = OB_SUCCESS;
+  di_base_curr_rowkey_.reset();
+  di_base_curr_scan_index_ = 0;
+  if (need_scan_di_base_) {
+    ObAggStoreBase *agg_store = nullptr;
+    if (access_param_->iter_param_.enable_pd_aggregate()) {
+      if (access_param_->iter_param_.plan_use_new_format()) {
+        agg_store = static_cast<ObAggregatedStoreVec *>(block_row_store_);
+      } else {
+        agg_store = static_cast<ObAggregatedStore *>(block_row_store_);
+      }
+    }
+    ObStoreRowIterator *iter = get_di_base_iter();
+    if (OB_ISNULL(iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("di base iterator is null", K(ret));
+    } else if (nullptr != agg_store && OB_FAIL(agg_store->set_ignore_eval_index_info(true))) { // disable eval index info temporarily
+      LOG_WARN("fail to disable index aggregation", K(ret));
+    } else if (OB_FAIL(get_di_base_iter()->get_next_rowkey(di_base_curr_scan_index_,
+                                                           di_base_curr_rowkey_,
+                                                           *access_ctx_->allocator_))) {
+      LOG_WARN("fail to get next rowkey", K(ret));
+    }
+    if (nullptr != agg_store) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(agg_store->set_ignore_eval_index_info(false))) { // enable eval index info
+        LOG_WARN("fail to enable index aggregation", K(tmp_ret));
+        ret = COVER_SUCC(tmp_ret);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMultipleMerge::stash_tablet_iter()
+{
+  int ret = OB_SUCCESS;
+  if (nullptr == di_base_stash_ && OB_ISNULL(di_base_stash_ = OB_NEWx(DIBaseStash, access_ctx_->stmt_allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate di base stash", K(ret));
+  } else if (OB_FAIL(di_base_stash_->tablet_iter_.assign(get_table_param_->tablet_iter_))) {
+    LOG_WARN("fail to hold di base tablet", K(ret));
+  } else if (OB_UNLIKELY(tables_.empty() || !tables_.at(0)->is_major_sstable())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected di base table", K(ret), K(tables_));
+  } else {
+    di_base_stash_->table_ = static_cast<ObSSTable *>(tables_.at(0));
+    di_base_stash_->is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObMultipleMerge::clone_and_switch_di_base_table()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(di_base_stash_) || OB_UNLIKELY(!di_base_stash_->tablet_iter_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected di base stash", K(ret));
+  } else if (OB_FAIL(di_base_stash_->deep_copy_sstable(di_base_stash_->table_))) {
+    LOG_WARN("fail to deep copy di base table", K(ret));
+  } else if (OB_FAIL(di_base_stash_->deep_copy_rowkey_read_info(
+                       static_cast<const ObRowkeyReadInfo &>(di_base_stash_->tablet_iter_.get_tablet()->get_rowkey_read_info())))) {
+    LOG_WARN("fail to deep copy rowkey read info", K(ret));
+  } else if (FALSE_IT(access_param_->iter_param_.rowkey_read_info_ = di_base_stash_->rowkey_read_info_)) {
+  } else if (OB_FAIL(save_di_base_curr_rowkey())) {
+    LOG_WARN("fail to save di base curr rowkey", K(ret));
+  } else if (OB_FAIL(switch_di_base_table(di_base_stash_->table_handle_.get_table()))) {
+    LOG_WARN("fail to switch di base table", K(ret));
+  } else {
+    // release old tablet
+    di_base_stash_->table_ = nullptr;
+    di_base_stash_->tablet_iter_.reset();
+  }
+  return ret;
+}
+
+int ObMultipleMerge::calc_scan_range_by_rowkey(ObTableAccessContext *access_ctx,
+                                               const ObDatumRange *&range,
+                                               ObDatumRange &cow_range,
+                                               const ObDatumRowkey &curr_rowkey,
+                                               const bool calc_di_base_range)
+{
+  int ret = OB_SUCCESS;
+  if (curr_rowkey.is_valid()) {
+    if (range != &cow_range) {
+      cow_range = *range;
+      range = &cow_range;
+    }
+    cow_range.change_boundary(curr_rowkey, access_ctx->query_flag_.is_reverse_scan(), calc_di_base_range);
+    // As memtable will use reverse scan when start rowkey is greater than end rowkey instead of
+    // empty result, make the range correct
+    if (access_ctx->query_flag_.is_reverse_scan() && curr_rowkey.is_min_rowkey()) {
+      cow_range.start_key_.set_min_rowkey();
+    } else if (!access_ctx->query_flag_.is_reverse_scan() && curr_rowkey.is_max_rowkey()) {
+      cow_range.end_key_.set_max_rowkey();
+    }
+  }
+  return ret;
+}
+
+int ObMultipleMerge::calc_scan_range_by_rowkey(ObTableAccessParam *access_param,
+                                               ObTableAccessContext *access_ctx,
+                                               const ObIArray<ObDatumRange> *&ranges,
+                                               ObIArray<ObDatumRange> &cow_ranges,
+                                               const int64_t curr_scan_index,
+                                               const ObDatumRowkey &curr_rowkey,
+                                               int64_t &range_idx_delta,
+                                               const bool calc_di_base_range)
+{
+  int ret = OB_SUCCESS;
+  const ObITableReadInfo *read_info = nullptr;
+
+  if (!curr_rowkey.is_valid()) {
+    // no row has been iterated
+  } else if (NULL == access_param || NULL == access_ctx) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "multiple multi scan merge not inited", K(ret), KP(access_param), KP(access_ctx));
+  } else if (OB_ISNULL(ranges)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "ranges is NULL", K(ret));
+  } else if (OB_ISNULL(read_info = access_param->iter_param_.get_read_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected null read info", K(ret));
+  } else {
+    ObSEArray<ObDatumRange, 32> tmp_ranges;
+    if (OB_FAIL(tmp_ranges.assign(*ranges))) {
+      STORAGE_LOG(WARN, "fail to assign ranges", K(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      const bool is_reverse_scan = access_ctx->query_flag_.is_reverse_scan();
+      int64_t l = curr_scan_index;
+      int64_t r = tmp_ranges.count();
+
+      if (ranges != &cow_ranges) {
+        ranges = &cow_ranges;
+      }
+      cow_ranges.reset();
+      for (int64_t i = l; i < r && OB_SUCC(ret); ++i) {
+        ObDatumRange &range = tmp_ranges.at(i);
+        if (curr_scan_index == i) {
+          int cmp_ret = 0;
+          const ObDatumRowkey &range_key = is_reverse_scan ? range.get_start_key() : range.get_end_key();
+          if (OB_FAIL(range_key.compare(curr_rowkey, read_info->get_datum_utils(), cmp_ret))) {
+            STORAGE_LOG(WARN, "Failed to cmopare range key ", K(ret), K(range_key), K(curr_rowkey));
+            // notice, ranges should be pushed in when curr_rowkey is min/max
+          } else if ((is_reverse_scan && cmp_ret < 0) || (!is_reverse_scan && cmp_ret > 0) ||
+                     (calc_di_base_range && cmp_ret == 0) || // right border is closed in di base
+                     (((curr_scan_index + 1) == r) && access_param->iter_param_.is_delete_insert_)) {
+            range.change_boundary(curr_rowkey, is_reverse_scan, calc_di_base_range);
+            // As memtable will use reverse scan when start rowkey is greater than end rowkey instead of
+            // empty result, make the range correct
+            if (is_reverse_scan && curr_rowkey.is_min_rowkey()) {
+              range.start_key_.set_min_rowkey();
+            } else if (!is_reverse_scan && curr_rowkey.is_max_rowkey()) {
+              range.end_key_.set_max_rowkey();
+            }
+            if (OB_UNLIKELY(!range.is_valid())) {
+              ret = OB_ERR_UNEXPECTED;
+              STORAGE_LOG(WARN, "invalid range", K(ret), K(range));
+            } else if (OB_FAIL(cow_ranges.push_back(range))) {
+              STORAGE_LOG(WARN, "push back range failed", K(ret));
+            } else if (!calc_di_base_range) {
+              range_idx_delta += i;
+            }
+          } else if (!calc_di_base_range) {
+            range_idx_delta += (i + 1);
+          }
+        } else if (OB_FAIL(cow_ranges.push_back(range))) {
+          STORAGE_LOG(WARN, "push back range failed", K(ret));
+        }
+      }
+    }
+  }
+
   return ret;
 }
 

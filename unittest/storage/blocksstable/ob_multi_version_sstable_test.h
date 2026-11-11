@@ -165,6 +165,14 @@ public:
       const int64_t snapshot_version);
 public:
   ObITable::TableType get_merged_table_type() const;
+  void prepare_data_iter(const char **micro_data)
+  {
+    data_iter_cursor_ = 0;
+    for (int64_t i = 0; i < MAX_MICRO_BLOCK_CNT; i++) {
+      data_iter_[i].reset();
+    }
+    OK(data_iter_[0].from(micro_data[0]));
+  }
   void prepare_table_schema(
       const char **micro_data,
       const int64_t schema_rowkey_cnt,

@@ -58,6 +58,7 @@ protected:
   int locate_blockscan_border();
   virtual int pause(bool& do_pause) override;
   virtual int get_current_range(ObDatumRange& current_range) const;
+  virtual int switch_di_base_table(ObITable *table) override;
 private:
   int prepare_blockscan(ObStoreRowIterator &iter);
 protected:

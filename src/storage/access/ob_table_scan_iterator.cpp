@@ -253,6 +253,33 @@ int ObTableScanIterator::switch_scan_param(T &iter)
   return ret;
 }
 
+int ObTableScanIterator::prepare_for_reuse()
+{
+#define PREPARE_REFRESHED_ITER(refreshed_iter, iter)                                      \
+  if (OB_SUCC(ret) && refreshed_iter == (void *)iter) {                                   \
+    if (OB_FAIL(iter->prepare_for_reuse())) {                                             \
+      STORAGE_LOG(WARN, "failed to prepare refreshed iter for reuse", K(ret), KPC(iter)); \
+    }                                                                                     \
+  }
+
+  int ret = OB_SUCCESS;
+  ACTIVE_GLOBAL_ITERATOR_GUARD(ret, cached_iter_node_);
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "table scan iterator is not inited", K(ret));
+  } else if (nullptr == get_table_param_.refreshed_merge_) {
+    // do nothing
+  } else {
+    PREPARE_REFRESHED_ITER(get_table_param_.refreshed_merge_, single_merge_);
+    PREPARE_REFRESHED_ITER(get_table_param_.refreshed_merge_, get_merge_);
+    PREPARE_REFRESHED_ITER(get_table_param_.refreshed_merge_, scan_merge_);
+    PREPARE_REFRESHED_ITER(get_table_param_.refreshed_merge_, multi_scan_merge_);
+    PREPARE_REFRESHED_ITER(get_table_param_.refreshed_merge_, skip_scan_merge_);
+  }
+#undef PREPARE_REFRESHED_ITER
+  return ret;
+}
+
 void ObTableScanIterator::reuse()
 {
   table_scan_range_.reset();

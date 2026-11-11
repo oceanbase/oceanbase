@@ -58,6 +58,7 @@ public:
   virtual int get_next_row() override { blocksstable::ObDatumRow *r = nullptr; return get_next_row(r); }
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;
   int rescan(ObTableScanParam &scan_param);
+  int prepare_for_reuse();
   void reuse();
   void reset_for_switch();
   virtual void reset();

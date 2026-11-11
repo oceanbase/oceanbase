@@ -45,6 +45,13 @@ protected:
     BATCH,
     DI_BASE,
   };
+  enum class RefreshTableState
+  {
+    NONE,
+    HOLD_DRAIN,
+    CLONE_DRAIN,
+    SUSPEND_REFRESH,
+  };
 public:
 
   ObMultipleMerge();
@@ -63,6 +70,7 @@ public:
       ObGetTableParam &get_table_param);
   virtual int get_next_row(blocksstable::ObDatumRow *&row);
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;
+  int prepare_for_reuse();
   virtual void reset();
   virtual void reuse();
   // used for global cached query iterator
@@ -78,10 +86,26 @@ public:
   OB_INLINE bool is_read_memtable_only() const { return read_memtable_only_; }
   OB_INLINE const common::ObIArray<share::schema::ObColDesc> &get_out_project_cells() { return out_project_cols_; }
   OB_INLINE ObNopPos &get_nop_pos() { return nop_pos_; }
-  OB_INLINE bool use_di_merge_scan() const { return di_base_iters_.count() > 0; }
   OB_INLINE void set_iter_del_row(const bool iter_del_row) { iter_del_row_ = iter_del_row; }
-  OB_INLINE bool need_iter_del_row() const { return iter_del_row_ || use_di_merge_scan(); }
+  OB_INLINE bool need_iter_del_row() const { return iter_del_row_ || get_di_base_iter_cnt() > 0; }
   OB_INLINE blocksstable::ObDatumRow &get_unprojected_row() { return unprojected_row_; }
+
+  static int calc_scan_range_by_rowkey(
+    ObTableAccessContext *access_ctx,
+    const blocksstable::ObDatumRange *&range,
+    blocksstable::ObDatumRange &cow_range,
+    const blocksstable::ObDatumRowkey &curr_rowkey,
+    const bool calc_di_base_range);
+  static int calc_scan_range_by_rowkey(
+    ObTableAccessParam *access_param,
+    ObTableAccessContext *access_ctx,
+    const common::ObIArray<blocksstable::ObDatumRange> *&ranges,
+    common::ObIArray<blocksstable::ObDatumRange> &cow_ranges,
+    const int64_t curr_scan_index,
+    const blocksstable::ObDatumRowkey &curr_rowkey,
+    int64_t &range_idx_delta,
+    const bool calc_di_base_range);
+
 protected:
   int open();
   virtual int calc_scan_range() = 0;
@@ -113,6 +137,9 @@ protected:
   ScanState get_scan_state() const { return scan_state_; }
   int prepare_di_base_blockscan(bool di_base_only, ObDatumRow *row = nullptr);
   virtual int get_range_count() const { return 1; }
+  OB_INLINE bool use_di_merge_scan() const { return access_param_->iter_param_.is_delete_insert_; }
+  OB_INLINE int64_t get_di_base_iter_cnt() const { return use_di_merge_scan() ? di_base_iters_.count() : 0; }
+  virtual int switch_di_base_table(ObITable *table) { return OB_NOT_SUPPORTED; }
 private:
   int get_next_normal_row(blocksstable::ObDatumRow *&row);
   int get_next_normal_rows(int64_t &count, int64_t capacity);
@@ -131,9 +158,11 @@ private:
   int refresh_table_on_demand();
   int refresh_tablet_iter();
   OB_INLINE int check_need_refresh_table(bool &need_refresh);
+  int do_refresh_table(const bool can_refresh_tablet = true);
+  int switch_refresh_table_state_on_demand();
+  int switch_refresh_table_state(const RefreshTableState state);
   int save_curr_rowkey();
   int reset_tables();
-  int check_base_version(const bool is_di_merge_scan) const;
   int check_filtered(const blocksstable::ObDatumRow &row, bool &filtered);
   int process_fuse_row(const bool not_using_static_engine,
                        blocksstable::ObDatumRow &in_row,
@@ -150,6 +179,15 @@ private:
   void inner_reset();
   int refresh_filter_params_on_demand(const bool is_open);
   int prepare_truncate_filter();
+
+  int probe_di_base_next_rowkey();
+  int save_di_base_curr_rowkey();
+
+  int stash_tablet_iter();
+  int clone_and_switch_di_base_table();
+
+public:
+  const static int64_t RETRY_QUERY_THRESHOLD_NS = 1 * 1000 * 1000 * 1000L; // 1s
 
 protected:
   common::ObArenaAllocator padding_allocator_;
@@ -186,30 +224,14 @@ protected:
   common::ObSEArray<share::schema::ObColDesc, 32> out_project_cols_;
   ObLobDataReader lob_reader_;
   ScanState scan_state_;
+  RefreshTableState refresh_table_state_;
+  int64_t start_time_ns_;
+  struct DIBaseStash;
+  DIBaseStash *di_base_stash_;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObMultipleMerge);
 };
-
-OB_INLINE int ObMultipleMerge::check_need_refresh_table(bool &need_refresh)
-{
-  int ret = OB_SUCCESS;
-
-  if (access_param_->iter_param_.is_mds_query_) {
-    need_refresh = false;
-  } else {
-    need_refresh = get_table_param_->tablet_iter_.table_iter()->check_store_expire();
-  }
-#ifdef ERRSIM
-  ret = OB_E(EventTable::EN_FORCE_REFRESH_TABLE) ret;
-  if (OB_FAIL(ret)) {
-    ret = OB_SUCCESS;
-    need_refresh = true;
-  }
-#endif
-
-  return ret;
-}
 
 }
 }

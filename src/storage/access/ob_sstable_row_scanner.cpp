@@ -964,16 +964,13 @@ int ObSSTableRowScanner<PrefetchType>::try_refreshing_blockscan_checker_for_colu
 }
 
 template<typename PrefetchType>
-int ObSSTableRowScanner<PrefetchType>::get_next_rowkey(const bool need_set_border_rowkey,
-                                                       int64_t &curr_scan_index,
+int ObSSTableRowScanner<PrefetchType>::get_next_rowkey(int64_t &curr_scan_index,
                                                        blocksstable::ObDatumRowkey& rowkey,
-                                                       blocksstable::ObDatumRowkey &border_rowkey,
                                                        common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   const ObDatumRow *row = nullptr;
   ObDatumRowkey tmp_rowkey;
-  border_rowkey.reset();
   rowkey.reset();
   block_row_store_->disable();
   bool is_delete_insert = iter_param_->is_delete_insert_; // save is_delete_insert_
@@ -1004,10 +1001,6 @@ int ObSSTableRowScanner<PrefetchType>::get_next_rowkey(const bool need_set_borde
     curr_scan_index = cur_range_idx_;
   }
 
-  // get di base border rowkey
-  if (OB_SUCC(ret) && need_set_border_rowkey) {
-    border_rowkey = prefetcher_.get_border_rowkey();
-  }
   const_cast<ObTableIterParam*>(iter_param_)->is_delete_insert_ = is_delete_insert; // restore is_delete_insert_
   return ret;
 }
