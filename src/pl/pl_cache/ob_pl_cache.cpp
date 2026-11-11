@@ -1369,15 +1369,15 @@ int ObPLObjectSet::before_cache_evicted()
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (plan_cache->get_mem_hold() > plan_cache->get_mem_high()) {
+  } else if (plan_cache->get_mem_used() > plan_cache->get_mem_high()) {
     if (compile_time >= LONG_COMPILE_TIME) {
       LOG_WARN("Plan cache size reached upper limit and evict obj which need long time to re-compile",
                   K(ret), K(plan_cache->get_tenant_id()), K(stat_array), K(compile_time),
-                  K(plan_cache->get_mem_hold()), K(plan_cache->get_mem_high()));
+                  K(plan_cache->get_mem_used()), K(plan_cache->get_mem_high()));
     } else {
       LOG_TRACE("Plan cache size reached upper limit need check plan cache mem conf",
                   K(ret), K(plan_cache->get_tenant_id()), K(stat_array),
-                  K(plan_cache->get_mem_hold()), K(plan_cache->get_mem_high()));
+                  K(plan_cache->get_mem_used()), K(plan_cache->get_mem_high()));
     }
   } else if (has_out_of_date_obj) {
     LOG_TRACE("Remove out_of_dated pl cache obj which has mismatched dep schema version",

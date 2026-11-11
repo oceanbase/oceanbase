@@ -228,7 +228,7 @@ int ObPLCacheMgr::add_pl_cache(ObPlanCache *lib_cache, ObILibCacheObject *pl_obj
   } else if (OB_ISNULL(pl_object)) {
      ret = OB_INVALID_ARGUMENT;
      PL_CACHE_LOG(WARN, "invalid physical plan", K(ret));
-  } else if (lib_cache->get_mem_hold() > lib_cache->get_mem_limit()) {
+  } else if (lib_cache->get_mem_used() > lib_cache->get_mem_limit()) {
      ret = OB_REACH_MEMORY_LIMIT;
      PL_CACHE_LOG(WARN, "lib cache memory used reach the high water mark",
      K(lib_cache->get_mem_used()), K(lib_cache->get_mem_limit()), K(ret));
