@@ -2869,6 +2869,7 @@ int ObCollectionType::init_session_var(const ObPLResolveCtx &resolve_ctx,
                                             false));
       OX (default_construct ? coll->set_inited() : void(NULL));
       if (OB_SUCC(ret) && !is_associative_array_type() && !default_construct) {
+        coll->set_count(OB_INVALID_COUNT);
         coll->set_null();
       }
       if (OB_FAIL(ret)) {

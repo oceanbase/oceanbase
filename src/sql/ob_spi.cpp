@@ -5686,6 +5686,7 @@ int ObSPIService::spi_construct_collection(
                              *coll,
                              0,
                              false));
+      OX (coll->set_is_null(false));
     }
   }
   return ret;
