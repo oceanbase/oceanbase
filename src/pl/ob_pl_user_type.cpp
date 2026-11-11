@@ -5374,7 +5374,7 @@ int ObPLCollection::set_row(const ObIArray<ObObj> &row, int64_t idx, bool deep_c
               allocator_->free(new_record);
             }
           } else {
-            OX (new_record->set_data(row));
+            OZ (new_record->set_data(row));
             OX (data_obj.set_extend(reinterpret_cast<int64_t>(new_record),
                                     PL_RECORD_TYPE,
                                     ObRecordType::get_init_size(element_.get_field_count())));
