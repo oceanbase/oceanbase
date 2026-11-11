@@ -7,11 +7,10 @@
 
 #include "sql/table_format/iceberg/spec/schema.h"
 
+#include "lib/charset/ob_charset.h"
+#include "share/schema/ob_external_table_column_schema_helper.h"
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/table_format/iceberg/ob_iceberg_utils.h"
-#include "share/schema/ob_external_table_column_schema_helper.h"
-
-#include <regex>
 
 namespace oceanbase
 {
@@ -21,6 +20,49 @@ namespace sql
 {
 namespace iceberg
 {
+
+namespace
+{
+// Validate the decimal syntax and range before narrowing the converted values.
+int parse_decimal_type(const ObString &type_str, int16_t &precision, int16_t &scale)
+{
+  int ret = OB_SUCCESS;
+  if (type_str.length() < 9 || !type_str.prefix_match_ci("decimal(")
+      || type_str.ptr()[type_str.length() - 1] != ')') {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid decimal type syntax", K(ret), K(type_str));
+  } else {
+    ObString parameters(type_str.length() - 9, type_str.ptr() + 8);
+    ObString parts[2];
+    parts[0] = parameters.split_on(',').trim();
+    parts[1] = parameters.trim();
+    int64_t values[2] = {0, 0};
+    for (int i = 0; OB_SUCC(ret) && i < 2; ++i) {
+      int err = 0;
+      if (!parts[i].is_numeric() || parts[i].ptr()[0] == '-') {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid decimal type parameter", K(ret), K(type_str), K(i));
+      } else if (OB_FALSE_IT(values[i]
+                             = ObCharset::strntoll(parts[i].ptr(), parts[i].length(), 10, &err))) {
+      } else if (0 != err) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("failed to convert decimal type parameter", K(ret), K(type_str), K(i), K(err));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (values[0] <= 0 || values[0] > OB_MAX_DECIMAL_PRECISION || values[1] > values[0]
+          || values[1] > OB_MAX_DECIMAL_SCALE) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid decimal type precision or scale", K(ret), K(type_str));
+      } else {
+        precision = static_cast<int16_t>(values[0]);
+        scale = static_cast<int16_t>(values[1]);
+      }
+    }
+  }
+  return ret;
+}
+} // namespace
 
 Schema::Schema(ObIAllocator &allocator)
     : SpecWithAllocator(allocator), identifier_field_ids(allocator), fields(allocator)
@@ -229,17 +271,15 @@ int Schema::set_column_schema_type_by_type_str(const ObString type_str,
       LOG_WARN("failed to setup double");
     }
   } else if (type_str.prefix_match_ci(TYPE_DECIMAL)) {
-    std::string tmp_type_str(type_str.ptr(), type_str.length());
-    std::regex decimal_regex(R"(decimal\(\s*(\d+)\s*,\s*(\d+)\s*\))");
-    std::smatch match;
-    if (!std::regex_match(tmp_type_str, match, decimal_regex)) {
-      ret = OB_INVALID_ARGUMENT;
+    int16_t precision = 0;
+    int16_t scale = 0;
+    if (OB_FAIL(parse_decimal_type(type_str, precision, scale))) {
       LOG_WARN("invalid decimal type", K(ret), K(type_str));
     } else if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_decimal(lib::is_oracle_mode(),
-                                                                        std::stoi(match[1].str()), // precision
-                                                                        std::stoi(match[2].str()), // scale
+                                                                        precision,
+                                                                        scale,
                                                                         column_schema))) {
-      LOG_WARN("failed to setup decimal");
+      LOG_WARN("failed to setup decimal", K(ret));
     }
   } else if (0 == type_str.case_compare(TYPE_DATE)) {
     if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_date(lib::is_oracle_mode(), column_schema))) {
@@ -397,16 +437,14 @@ int Schema::parse_primitive_type_in_complex_type(ObIAllocator &allocator,
   } else if (0 == type_str.case_compare(TYPE_DOUBLE)) {
     return_type = "DOUBLE";
   } else if (type_str.prefix_match_ci(TYPE_DECIMAL)) {
-    std::string tmp_type_str(type_str.ptr(), type_str.length());
-    std::regex decimal_regex(R"(decimal\(\s*(\d+)\s*,\s*(\d+)\s*\))");
-    std::smatch match;
-    if (std::regex_match(tmp_type_str, match, decimal_regex)) {
-      ObSqlString sql_string;
-      OZ(sql_string.append_fmt("DECIMAL(%d, %d)",std::stoi(match[1].str()), std::stoi(match[2].str())));
-      OZ(ob_write_string(allocator, sql_string.string(), return_type));
-    } else {
-      ret = OB_INVALID_ARGUMENT;
+    int16_t precision = 0;
+    int16_t scale = 0;
+    if (OB_FAIL(parse_decimal_type(type_str, precision, scale))) {
       LOG_WARN("invalid decimal type", K(ret), K(type_str));
+    } else {
+      ObSqlString sql_string;
+      OZ(sql_string.append_fmt("DECIMAL(%d, %d)", precision, scale));
+      OZ(ob_write_string(allocator, sql_string.string(), return_type));
     }
   } else if (0 == type_str.case_compare(TYPE_DATE)) {
     return_type = "DATE";

@@ -629,22 +629,30 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
         } else if (!value.has_value()) {
           obj.set_null();
         } else if (column_schema->get_data_precision() <= 0
-                   || column_schema->get_data_scale() <= 0) {
+                   || column_schema->get_data_precision() > OB_MAX_DECIMAL_PRECISION
+                   || column_schema->get_data_scale() < 0
+                   || column_schema->get_data_scale() > column_schema->get_data_precision()) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid decimal type", K(ret));
         } else {
           int32_t buffer_size = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
               column_schema->get_data_precision());
-          uint8_t *buf = static_cast<uint8_t *>(allocator.alloc(buffer_size));
-          memset(buf, 0, buffer_size);
-          if (OB_ISNULL(buf)) {
+          const ObString &bytes = value.value();
+          uint8_t *buf = nullptr;
+          if (OB_UNLIKELY(bytes.length() <= 0 || bytes.length() > buffer_size)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid decimal partition value length",
+                     K(ret),
+                     K(bytes.length()),
+                     K(buffer_size));
+          } else if (OB_ISNULL(buf = static_cast<uint8_t *>(allocator.alloc(buffer_size)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("failed to allocate memory", K(ret));
           } else {
-            const ObString &bytes = value.value();
+            // Avro decimals are big-endian two's complement; DecimalInt is little-endian.
+            MEMSET(buf, (static_cast<uint8_t>(bytes.ptr()[0]) & 0x80) ? 0xff : 0, buffer_size);
             for (int32_t i = 0; i < bytes.length(); i++) {
-              const uint8_t &tmp = bytes.ptr()[i];
-              buf[buffer_size - 1 - i] = tmp;
+              buf[i] = static_cast<uint8_t>(bytes.ptr()[bytes.length() - 1 - i]);
             }
             ObDecimalInt *decint = reinterpret_cast<ObDecimalInt *>(buf);
             obj.set_decimal_int(buffer_size, column_schema->get_data_scale(), decint);

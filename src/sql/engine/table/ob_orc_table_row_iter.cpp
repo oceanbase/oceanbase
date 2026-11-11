@@ -3798,15 +3798,33 @@ int ObOrcTableRowIterator::DataLoader::set_values_for_varchar_array(
       int64_t offset = 0;
       for (int i = 0; OB_SUCC(ret) && i < parent_offsets.count(); i++) {
         int64_t row_str_length = 0;
-        for (int j = offset; OB_SUCC(ret) && j < offset + parent_offsets.at(i); j++) {
-          ObLength length = string_batch->length[j];
+        const int64_t element_count = parent_offsets.at(i);
+        if (OB_UNLIKELY(element_count < 0 || offset > string_batch->numElements
+                        || element_count > string_batch->numElements - offset)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid array element count", K(ret), K(offset), K(element_count));
+        } else if (OB_UNLIKELY(element_count > MAX_ARRAY_ELEMENT_SIZE)) {
+          ret = OB_SIZE_OVERFLOW;
+          LOG_WARN("array has too many elements", K(ret), K(element_count));
+        }
+        // Iceberg skips column accuracy checks, but must still fit the array representation.
+        int64_t max_data_length = 0;
+        if (OB_SUCC(ret)) {
+          max_data_length = MAX_ARRAY_SIZE - sizeof(uint32_t)
+                            - element_count * (sizeof(uint8_t) + sizeof(uint32_t));
+        }
+        for (int64_t j = offset; OB_SUCC(ret) && j < offset + element_count; j++) {
+          const int64_t length = string_batch->length[j];
           const char *data = string_batch->data[j];
           if (string_batch->hasNulls && string_batch->notNull.data()[j] == 0) {
             nulls[j] = 1;
+          } else if (OB_UNLIKELY(length < 0 || length > max_data_length - row_str_length)) {
+            ret = OB_SIZE_OVERFLOW;
+            LOG_WARN("array string data exceeds size limit", K(ret), K(length), K(row_str_length));
           } else if (OB_UNLIKELY(!share::is_iceberg_lake_table(lake_format_)
-                          && length > max_accuracy_len
-                          && ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN, data, length)
-                               > max_accuracy_len)) {
+                                 && length > max_accuracy_len
+                                 && ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN, data, length)
+                                        > max_accuracy_len)) {
             ret = OB_ERR_DATA_TOO_LONG;
             LOG_WARN("data too long", K(ret), K(length), K(max_accuracy_len));
           } else {
@@ -3815,9 +3833,10 @@ int ObOrcTableRowIterator::DataLoader::set_values_for_varchar_array(
           }
           offsets[j] = row_str_length;
         }
-        char *res_data = attrs[attr_idx + 2]->get_str_res_mem(eval_ctx, row_str_length, i);
+        char *res_data = nullptr;
         if (OB_FAIL(ret)) {
-        } else if (OB_ISNULL(res_data)) {
+        } else if (OB_ISNULL(res_data
+                             = attrs[attr_idx + 2]->get_str_res_mem(eval_ctx, row_str_length, i))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to allocate memory", K(ret), K(row_str_length));
         } else {

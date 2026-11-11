@@ -246,7 +246,7 @@ int ObParquetDictFilterPushdown::save_dict_column_data(int32_t col_idx,
               dict_data->dict_len_ = dict_len;
               dict_data->parquet_type_ = parquet_type;
               dict_data->dict_values_ = str_disc_vec;
-              dict_data->has_null_ = has_null;
+              dict_data->has_null_ = (0 != max_def_level) || has_null;
               if (OB_FAIL(dict_data->indices_.prepare_allocate(max_batch_size))) {
                 LOG_WARN("fail to prepare allocate indices array", K(ret), K(max_batch_size));
               }
@@ -265,7 +265,14 @@ int ObParquetDictFilterPushdown::save_dict_column_data(int32_t col_idx,
       }
 
       const int64_t row_offset = dict_data->indices_count_;
-      if (has_null) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < indices_count; ++i) {
+        if (OB_UNLIKELY(indices[i] < 0 || indices[i] >= dict_data->dict_len_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid dictionary index", K(ret), K(indices[i]), K(dict_data->dict_len_));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (has_null) {
         int j = 0;
         for (int64_t i = 0; i < row_count && OB_SUCC(ret); ++i) {
           if (0 != max_def_level && def_levels[i] < max_def_level) {
@@ -1254,7 +1261,12 @@ int ObParquetDictFilterPushdown::decode_dict_column_to_expr(
             if (OB_LIKELY(is_fast_path)) {
               for (int64_t row = 0; OB_SUCC(ret) && row < dict_data->indices_count_; ++row) {
                 int32_t dict_idx = dict_data->indices_.at(row);
-                text_vec->set_string(row, ptrs[dict_idx], lens[dict_idx]);
+                if (OB_UNLIKELY(dict_idx < 0 || dict_idx >= dict_data->dict_len_)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected dict index", K(ret), K(dict_idx));
+                } else {
+                  text_vec->set_string(row, ptrs[dict_idx], lens[dict_idx]);
+                }
               }
             } else {
               for (int64_t row = 0; OB_SUCC(ret) && row < dict_data->indices_count_; ++row) {

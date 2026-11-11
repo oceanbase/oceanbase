@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_parquet_table_row_iter.h"
 
+#include "common/ob_common_utility.h"
 #include "lib/udt/ob_array_type.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "sql/engine/basic/ob_arrow_basic.h"
@@ -794,8 +795,13 @@ int ObParquetTableRowIterator::next_row_group()
 int ObParquetTableRowIterator::collect_dict_filter_executors(ObPushdownFilterExecutor *filter)
 {
   int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(filter)) {
+  bool is_stack_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("failed to check stack overflow", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
+  } else if (OB_ISNULL(filter)) {
     // do nothing
   } else if (filter->is_filter_node()) {
     // 检查当前filter是否可以使用字典优化
@@ -4086,7 +4092,13 @@ int ObParquetTableRowIterator::init_filter_evaluated_datums(ObPushdownFilterExec
 {
   int ret = OB_SUCCESS;
   bool filter_valid = true;
-  if (OB_ISNULL(curr_filter)) {
+  bool is_stack_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("failed to check stack overflow", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
+  } else if (OB_ISNULL(curr_filter)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null filter", K(ret));
   } else if (curr_filter->is_filter_node()) {
@@ -4183,8 +4195,13 @@ int ObParquetTableRowIterator::calc_filters(const int64_t count,
                                             ObPushdownFilterExecutor *parent_filter)
 {
   int ret = OB_SUCCESS;
-
-  if (OB_SUCC(ret) && OB_NOT_NULL(curr_filter)) {
+  bool is_stack_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("failed to check stack overflow", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
+  } else if (OB_NOT_NULL(curr_filter)) {
     common::ObBitmap *result = nullptr;
     if (curr_filter->is_filter_node()) {
       // 检查filter是否已被字典优化处理
