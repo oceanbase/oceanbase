@@ -140,6 +140,14 @@ public:
 private:// 定向暴露给友元类
   void handle_message_base_(const ElectionMsgBase &message_base);
   void refresh_priority_();
+  int64_t get_local_lease_ballot_number_() const
+  {
+    return acceptor_.lease_.get_ballot_number();
+  }
+  void get_local_lease_owner_and_ballot_(common::ObAddr &owner, int64_t &ballot) const
+  {
+    acceptor_.lease_.get_owner_and_ballot(owner, ballot);
+  }
   /**
    * @description: 比较两个消息的优先级哪个更高
    * @param {MSG} &lhs 第一个消息

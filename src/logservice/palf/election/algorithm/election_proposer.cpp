@@ -43,7 +43,7 @@ struct ResponseChecker
         LOG_PHASE(WARN, phase, "leader message is rejected cause ballot number", K(msg.get_ballot_number()), K(proposer->prepare_success_ballot_));
         proposer->advance_ballot_number_and_reset_related_states_(proposer->ballot_number_ + 1,
                                                                   "retry leader prepare");
-        proposer->prepare(ObRole::LEADER);
+        proposer->prepare(ObRole::LEADER, PrepareReason::DIRECT_TRIGGER);
       }
     // 4. 检查消息是否因为其他原因被拒绝
     } else if (!msg.is_accepted()) {
@@ -120,7 +120,7 @@ int ElectionProposer::set_member_list(const MemberList &new_member_list)
       LOG_SET_MEMBER(WARN, "set new member list failed");
     } else {
       if (old_list.get_addr_list().empty() && new_member_list.get_addr_list().count() == 1) {// 单副本第一次设置成员列表
-        prepare(ObRole::FOLLOWER);
+        prepare(ObRole::FOLLOWER, PrepareReason::DIRECT_TRIGGER);
       }
       if (old_list.only_membership_version_different(new_member_list)) {
         LOG_SET_MEMBER(INFO, "advance membership version");
@@ -154,8 +154,9 @@ int ElectionProposer::change_leader_to(const ObAddr &dest_addr)
   if (OB_UNLIKELY(!check_leader())) {
     ret = OB_NOT_MASTER;
     LOG_CHANGE_LEADER(WARN, "follower cannot do change leader");
+  } else if (OB_FAIL(inner_change_leader_to(redirect_addr))) {
+    LOG_CHANGE_LEADER(WARN, "inner change leader failed");
   } else {
-    inner_change_leader_to(redirect_addr);
     LOG_CHANGE_LEADER(INFO, "direct change leader", K(lbt()));
   }
   return ret;
@@ -191,7 +192,7 @@ bool ElectionProposer::leader_takeover_if_lease_valid_(RoleChangeReason reason)
     if (prepare_success_ballot_ == last_leader_epoch_) {
       LOG_PHASE(WARN, phase, "lease is expired, leader re-takeover at the same prepare_success_ballot, need do leader prepare");
       advance_ballot_number_and_reset_related_states_(ballot_number_ + 1, "re-takover, do leader prepare");
-      prepare(ObRole::LEADER);
+      prepare(ObRole::LEADER, PrepareReason::DIRECT_TRIGGER);
     } else {
       propose();
     }
@@ -289,13 +290,13 @@ int ElectionProposer::reschedule_or_register_prepare_task_after_(const int64_t d
         LOG_RENEW_LEASE(INFO, "leader not allow do prepare in timer task before lease expired, this log may printed when message delay too large", K(*this));
       } else {// 需要进行leader prepare推大用于续约的ballot number
         LOG_RENEW_LEASE(INFO, "prepare_success_ballot_ not same as ballot_number_, do leader prepare to advance it");
-        this->prepare(role_);
+        this->prepare(role_, PrepareReason::DIRECT_TRIGGER);
       }
     } else {
       if (role_ == ObRole::LEADER) {
         role_ = ObRole::FOLLOWER;
       }
-      this->prepare(role_);
+      this->prepare(role_, PrepareReason::DIRECT_TRIGGER);
     }
     return false;
   }))) {
@@ -334,10 +335,10 @@ void ElectionProposer::stop()
   #undef PRINT_WRAPPER
 }
 
-void ElectionProposer::prepare(const ObRole role)
+void ElectionProposer::prepare(const ObRole role, const PrepareReason reason)
 {
   ELECT_TIME_GUARD(500_ms);
-  #define PRINT_WRAPPER KR(ret), K(role), K(*this)
+  #define PRINT_WRAPPER KR(ret), K(role), K(reason), K(*this)
   int ret = OB_SUCCESS;
   int64_t cur_ts = ObClockGenerator::getClock();
   LogPhase phase = role == ObRole::LEADER ? LogPhase::RENEW_LEASE : LogPhase::ELECT_LEADER;
@@ -345,7 +346,8 @@ void ElectionProposer::prepare(const ObRole role)
     LOG_PHASE(INFO, phase, "memberlist is empty, give up do prepare this time");
   } else if (!is_self_in_memberlist_()) {
     LOG_PHASE(INFO, phase, "self is not in memberlist, give up do prepare");
-  } else if (role == ObRole::FOLLOWER && cur_ts - last_do_prepare_ts_ < CALCULATE_MAX_ELECT_COST_TIME() / 2) {// 若这是一个一乎动作，且距离上一次一呼百应的时间点过近，该次一乎调度无效
+  } else if (role == ObRole::FOLLOWER && reason != PrepareReason::CHANGE_LEADER_REJECT &&
+             cur_ts - last_do_prepare_ts_ < CALCULATE_MAX_ELECT_COST_TIME() / 2) {// 若这是一个一乎动作，且距离上一次一呼百应的时间点过近，该次一乎调度无效
     LOG_PHASE(INFO, phase, "the prepare action just happened, need wait next time");
   } else {
     last_do_prepare_ts_ = cur_ts;
@@ -458,8 +460,21 @@ void ElectionProposer::on_prepare_response(const ElectionPrepareResponseMsg &pre
   LogPhase phase = role_ == ObRole::LEADER ? LogPhase::RENEW_LEASE : LogPhase::ELECT_LEADER;
   LOG_PHASE(INFO, phase, "handle prepare response");
   const Lease &res_lease = prepare_res.get_lease();
+  // A higher ballot response will clear the ChangeLeader context in ResponseChecker.
+  // Remember this failure first, so the target can recover without waiting for the fallback task.
+  const bool change_leader_prepare_rejected =
+      switch_source_leader_ballot_ != INVALID_VALUE &&
+      switch_source_leader_addr_.is_valid() &&
+      role_ == ObRole::FOLLOWER &&
+      prepare_res.get_restart_counter() == restart_counter_ &&
+      !prepare_res.is_accepted() &&
+      prepare_res.get_ballot_number() > ballot_number_;
   // 1. 检查消息的有效性
   if (!ResponseChecker::check_ballot_and_restart_counter_valid_and_accepted(prepare_res, this, phase)) {
+    if (change_leader_prepare_rejected) {
+      prepare(ObRole::FOLLOWER, PrepareReason::CHANGE_LEADER_REJECT);
+      LOG_CHANGE_LEADER(WARN, "leader prepare is rejected, do follower prepare immediately");
+    }
     LOG_PHASE(WARN, phase, "receive invalid or rejected response");
   // 2. 检查是否具备进入accept阶段的条件
   } else if (!(res_lease.is_empty() ||// 1. 对方目前没有lease
@@ -637,46 +652,72 @@ int ElectionProposer::prepare_change_leader_to_(const ObAddr &dest_addr, const O
   #undef PRINT_WRAPPER
 }
 
-void ElectionProposer::inner_change_leader_to(const ObAddr &dst)
+ERRSIM_POINT_DEF(ERRSIM_ELECTION_ADVANCE_BALLOT_BEFORE_CHANGE_LEADER);
+int ElectionProposer::inner_change_leader_to(const ObAddr &dst)
 {
   ELECT_TIME_GUARD(500_ms);
-  #define PRINT_WRAPPER KR(ret), K(change_leader_msg), K(dst), K(*this)
+  #define PRINT_WRAPPER KR(ret), K(dst), K(*this)
   int ret = OB_SUCCESS;
+  // Deterministically model a stale Prepare arriving immediately before a remote switch.
+  if (OB_UNLIKELY(ERRSIM_ELECTION_ADVANCE_BALLOT_BEFORE_CHANGE_LEADER) &&
+      dst != p_election_->get_self_addr()) {
+    advance_ballot_number_and_reset_related_states_(ballot_number_ + 1,
+                                                    "errsim before change leader");
+  }
   // 发出切主消息要带上旧主的ballot number
   int64_t switch_source_leader_ballot = ballot_number_;
-  // 旧主要推高自己的ballot number，把飘在空中的accept_res都挡住，否则有正确性问题
-  advance_ballot_number_and_reset_related_states_(ballot_number_ + 1,
-                                                  "change leader");
-  leader_lease_and_epoch_.reset();
-  ElectionChangeLeaderMsg change_leader_msg(p_election_->id_,
-                                            p_election_->get_self_addr(),
-                                            restart_counter_,
-                                            ballot_number_,
-                                            p_election_->get_ls_biggest_min_cluster_version_ever_seen_(),
-                                            switch_source_leader_ballot,
-                                            p_election_->get_membership_version_());
-  if (OB_LIKELY(leader_revoke_if_lease_expired_(RoleChangeReason::ChangeLeaderToRevoke))) {
-    LOG_CHANGE_LEADER(INFO, "change leader, old leader revoke");
-    p_election_->event_recorder_.report_change_leader_to_revoke_event(dst);
+  const int64_t local_lease_ballot = p_election_->get_local_lease_ballot_number_();
+  if (OB_UNLIKELY(dst != p_election_->get_self_addr() &&
+                  switch_source_leader_ballot != local_lease_ballot)) {
+    ret = OB_EAGAIN;
+    LOG_CHANGE_LEADER(WARN, "local lease ballot is not aligned, retry change leader later",
+                      K(switch_source_leader_ballot), K(local_lease_ballot));
   } else {
-    LOG_CHANGE_LEADER(ERROR, "change leader, old leader revoke failed, which should not happen");
+    // 旧主要推高自己的ballot number，把飘在空中的accept_res都挡住，否则有正确性问题
+    advance_ballot_number_and_reset_related_states_(ballot_number_ + 1,
+                                                    "change leader");
+    leader_lease_and_epoch_.reset();
+    ElectionChangeLeaderMsg change_leader_msg(p_election_->id_,
+                                              p_election_->get_self_addr(),
+                                              restart_counter_,
+                                              ballot_number_,
+                                              p_election_->get_ls_biggest_min_cluster_version_ever_seen_(),
+                                              switch_source_leader_ballot,
+                                              p_election_->get_membership_version_());
+    if (OB_LIKELY(leader_revoke_if_lease_expired_(RoleChangeReason::ChangeLeaderToRevoke))) {
+      LOG_CHANGE_LEADER(INFO, "change leader, old leader revoke", K(change_leader_msg));
+      p_election_->event_recorder_.report_change_leader_to_revoke_event(dst);
+    } else {
+      LOG_CHANGE_LEADER(ERROR, "change leader, old leader revoke failed, which should not happen",
+                        K(change_leader_msg));
+    }
+    change_leader_msg.set_receiver(dst);
+    if (CLICK_FAIL(p_election_->send_(change_leader_msg))) {
+      LOG_CHANGE_LEADER(ERROR, "send change leader msg failed", K(change_leader_msg));
+    } else {
+      LOG_CHANGE_LEADER(INFO, "change leader, old leader revoke", K(change_leader_msg));
+    }
   }
-  change_leader_msg.set_receiver(dst);
-  if (CLICK_FAIL(p_election_->send_(change_leader_msg))) {
-    LOG_CHANGE_LEADER(ERROR, "send change leader msg failed");
-  } else {
-    LOG_CHANGE_LEADER(INFO, "change leader, old leader revoke");
-  }
+  return ret;
   #undef PRINT_WRAPPER
 }
 
+ERRSIM_POINT_DEF(ERRSIM_ELECTION_ADVANCE_BALLOT_BEFORE_HANDLE_CHANGE_LEADER);
 void ElectionProposer::on_change_leader(const ElectionChangeLeaderMsg &change_leader_msg)
 {
   ELECT_TIME_GUARD(500_ms);
   // 新主收到切主消息后，进行一次Leader Prepare
   #define PRINT_WRAPPER K(change_leader_msg), K(*this)
+  int ret = OB_SUCCESS;
   LOG_CHANGE_LEADER(INFO, "handle change leader message");
   bool accept = false;
+  // Deterministically model a stale Prepare overtaking an in-flight ChangeLeader message.
+  if (OB_UNLIKELY(ERRSIM_ELECTION_ADVANCE_BALLOT_BEFORE_HANDLE_CHANGE_LEADER) &&
+      change_leader_msg.get_sender() != p_election_->get_self_addr()) {
+    advance_ballot_number_and_reset_related_states_(
+        max(ballot_number_, change_leader_msg.get_ballot_number()) + 1,
+        "errsim before handle change leader");
+  }
   if (change_leader_msg.get_sender() == p_election_->get_self_addr()) {// 自己切给自己的
     if (change_leader_msg.get_ballot_number() == ballot_number_) {
       accept = true;
@@ -692,6 +733,23 @@ void ElectionProposer::on_change_leader(const ElectionChangeLeaderMsg &change_le
   }
   if (!accept) {
     LOG_CHANGE_LEADER_RET(WARN, OB_ERR_UNEXPECTED, "change leader msg not accepted");
+    if (change_leader_msg.get_ballot_number() <= ballot_number_) {
+      ObAddr lease_owner;
+      int64_t lease_ballot = INVALID_VALUE;
+      p_election_->get_local_lease_owner_and_ballot_(lease_owner, lease_ballot);
+      const bool source_matches_last_lease =
+          change_leader_msg.get_old_ballot_number() == lease_ballot &&
+          (!lease_owner.is_valid() || lease_owner == change_leader_msg.get_sender());
+      if (role_ != ObRole::FOLLOWER || check_leader()) {
+        LOG_CHANGE_LEADER(WARN, "ignore rejected change leader after leadership recovered");
+      } else if (!source_matches_last_lease) {
+        LOG_CHANGE_LEADER(WARN, "ignore rejected change leader not matching the last lease",
+                          K(lease_owner), K(lease_ballot));
+      } else {
+        prepare(ObRole::FOLLOWER, PrepareReason::CHANGE_LEADER_REJECT);
+        LOG_CHANGE_LEADER(INFO, "change leader rejected, do follower prepare immediately");
+      }
+    }
   } else if (change_leader_msg.get_membership_version() > memberlist_with_states_.
                                                      get_member_list().
                                                      get_membership_version()) {
@@ -701,7 +759,7 @@ void ElectionProposer::on_change_leader(const ElectionChangeLeaderMsg &change_le
                                                     "receive change leader message");
     switch_source_leader_ballot_ = change_leader_msg.get_old_ballot_number();
     switch_source_leader_addr_ = change_leader_msg.get_sender();
-    prepare(ObRole::LEADER);
+    prepare(ObRole::LEADER, PrepareReason::DIRECT_TRIGGER);
     LOG_CHANGE_LEADER(INFO, "receive change leader msg, do leader prepare");
   }
   #undef PRINT_WRAPPER

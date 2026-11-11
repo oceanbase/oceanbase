@@ -31,6 +31,12 @@ class ElectionChangeLeaderMsg;
 class ElectionImpl;
 class DefaultRoleChangeCallBack;
 
+enum class PrepareReason
+{
+  DIRECT_TRIGGER = 0,
+  CHANGE_LEADER_REJECT = 1,
+};
+
 class ElectionProposer
 {
   friend class ResponseChecker;
@@ -86,7 +92,7 @@ public:
   }
 public:
   // 发prepare请求
-  void prepare(const common::ObRole role);
+  void prepare(const common::ObRole role, const PrepareReason reason);
   // 收到其他proposer发出的prepare请求，一呼百应
   void on_prepare_request(const ElectionPrepareRequestMsg &prepare_req,
                           bool *need_register_devote_task);
@@ -96,7 +102,7 @@ public:
   void propose();
   // 收到来自acceptor接收accept请求后的响应
   void on_accept_response(const ElectionAcceptResponseMsg &accept_res);
-  void inner_change_leader_to(const common::ObAddr &dst);
+  int inner_change_leader_to(const common::ObAddr &dst);
   void on_change_leader(const ElectionChangeLeaderMsg &change_leader_msg);
   int64_t to_string(char *buf, const int64_t buf_len) const;
 private:

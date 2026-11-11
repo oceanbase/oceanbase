@@ -238,6 +238,74 @@ vector<ElectionImpl *> create_election_group(const int election_num, const vecto
   return v;
 }
 
+template <typename PRED>
+bool wait_until(PRED &&pred, const int64_t timeout_us)
+{
+  const auto deadline = chrono::steady_clock::now() + chrono::microseconds(timeout_us);
+  while (chrono::steady_clock::now() < deadline) {
+    if (pred()) {
+      return true;
+    }
+    this_thread::sleep_for(chrono::milliseconds(10));
+  }
+  return pred();
+}
+
+void stop_and_destroy_election_group(vector<ElectionImpl *> &election_list)
+{
+  for (auto iter = election_list.rbegin(); iter != election_list.rend(); ++iter) {
+    (*iter)->stop();
+  }
+  this_thread::sleep_for(chrono::seconds(2));
+  for (auto &election : election_list) {
+    delete election;
+  }
+}
+
+ElectionPrepareRequestMsg build_follower_prepare(ElectionImpl *sender,
+                                                 ElectionImpl *receiver,
+                                                 const int64_t ballot_number)
+{
+  ElectionPrepareRequestMsg prepare_req(sender->id_,
+                                        sender->get_self_addr(),
+                                        sender->proposer_.restart_counter_,
+                                        ballot_number,
+                                        sender->get_ls_biggest_min_cluster_version_ever_seen_(),
+                                        sender->generate_inner_priority_seed_(),
+                                        sender->get_membership_version_());
+  EXPECT_EQ(OB_SUCCESS, prepare_req.set(sender->get_priority_(), ObRole::FOLLOWER));
+  prepare_req.set_receiver(receiver->get_self_addr());
+  return prepare_req;
+}
+
+ElectionChangeLeaderMsg build_change_leader_msg(ElectionImpl *sender,
+                                                 ElectionImpl *receiver,
+                                                 const int64_t ballot_number,
+                                                 const int64_t old_ballot_number)
+{
+  ElectionChangeLeaderMsg change_leader_msg(sender->id_,
+                                             sender->get_self_addr(),
+                                             sender->proposer_.restart_counter_,
+                                             ballot_number,
+                                             sender->get_ls_biggest_min_cluster_version_ever_seen_(),
+                                             old_ballot_number,
+                                             sender->get_membership_version_());
+  change_leader_msg.set_receiver(receiver->get_self_addr());
+  return change_leader_msg;
+}
+
+int64_t get_leader_count(const vector<ElectionImpl *> &election_list)
+{
+  int64_t leader_count = 0;
+  for (auto &election : election_list) {
+    ObRole role;
+    int64_t epoch;
+    election->get_role(role, epoch);
+    leader_count += (role == ObRole::LEADER ? 1 : 0);
+  }
+  return leader_count;
+}
+
 TEST_F(TestElection, 3replica_disconnect_leader) {
   auto election_list = create_election_group(3, {0, 0, 0}, [](){});
   this_thread::sleep_for(chrono::seconds(7));
@@ -462,6 +530,483 @@ TEST_F(TestElection, change_leader) {
   ASSERT_EQ(change_leader_to_be_leader_count, 1);
   ASSERT_EQ(change_leader_to_be_follower_count, 1);
   ASSERT_EQ(stop_to_be_follower_count, 1);
+}
+
+TEST_F(TestElection, change_leader_retry_when_source_lease_ballot_is_stale) {
+  auto election_list = create_election_group(3, {0, 0, 0}, [](){});
+  ElectionImpl *source = election_list[0];
+  ElectionImpl *target = election_list[1];
+  ElectionImpl *stale_follower = election_list[2];
+
+  const bool source_is_leader = wait_until([source]() {
+    ObRole role;
+    int64_t epoch;
+    source->get_role(role, epoch);
+    return role == ObRole::LEADER;
+  }, 7_s);
+  if (!source_is_leader) {
+    stop_and_destroy_election_group(election_list);
+    FAIL() << "source did not become leader";
+    return;
+  }
+
+  int64_t stale_prepare_ballot = INVALID_VALUE;
+  {
+    palf::election::LockGuard lock_guard(source->lock_);
+    stale_prepare_ballot = source->proposer_.ballot_number_ + 1;
+  }
+
+  // An in-flight Prepare from the isolated stale follower reaches A and B while A and B
+  // cannot communicate. Their followed Prepare cannot reach a majority, but both fallback
+  // Prepare tasks are postponed. A's proposer ballot advances while its Lease remains old.
+  GlobalNetService.disconnect_two_side(source, target);
+  GlobalNetService.disconnect_two_side(source, stale_follower);
+  GlobalNetService.disconnect_two_side(target, stale_follower);
+  ElectionPrepareRequestMsg source_stale_prepare = build_follower_prepare(stale_follower,
+                                                                         source,
+                                                                         stale_prepare_ballot);
+  ElectionPrepareRequestMsg target_stale_prepare = build_follower_prepare(stale_follower,
+                                                                         target,
+                                                                         stale_prepare_ballot);
+  EXPECT_EQ(OB_SUCCESS, source->handle_message(source_stale_prepare));
+  EXPECT_EQ(OB_SUCCESS, target->handle_message(target_stale_prepare));
+
+  int64_t proposer_ballot_before_change_leader = INVALID_VALUE;
+  {
+    palf::election::LockGuard lock_guard(source->lock_);
+    EXPECT_EQ(stale_prepare_ballot, source->proposer_.ballot_number_);
+    EXPECT_GT(source->proposer_.ballot_number_, source->acceptor_.lease_.get_ballot_number());
+    proposer_ballot_before_change_leader = source->proposer_.ballot_number_;
+  }
+  GlobalNetService.connect_two_side(source, target);
+  const int change_leader_ret = source->change_leader_to(target->get_self_addr());
+
+  EXPECT_EQ(OB_EAGAIN, change_leader_ret);
+  {
+    palf::election::LockGuard lock_guard(source->lock_);
+    EXPECT_TRUE(source->proposer_.check_leader());
+    EXPECT_EQ(proposer_ballot_before_change_leader, source->proposer_.ballot_number_);
+  }
+  EXPECT_EQ(0, change_leader_to_be_follower_count.load());
+  EXPECT_EQ(1, get_leader_count(election_list));
+
+  // Model the existing failure fallback: change leader to self to align the source Lease.
+  // A later coordinator retry of the original transfer can then complete normally.
+  EXPECT_EQ(OB_SUCCESS, source->change_leader_to(source->get_self_addr()));
+  EXPECT_TRUE(wait_until([source]() {
+    palf::election::LockGuard lock_guard(source->lock_);
+    return source->proposer_.check_leader() &&
+           source->acceptor_.lease_.get_ballot_number() == source->proposer_.ballot_number_;
+  }, 3_s));
+  EXPECT_EQ(OB_SUCCESS, source->change_leader_to(target->get_self_addr()));
+  EXPECT_TRUE(wait_until([target]() {
+    ObRole role;
+    int64_t epoch;
+    target->get_role(role, epoch);
+    return role == ObRole::LEADER;
+  }, 3_s));
+  EXPECT_EQ(1, get_leader_count(election_list));
+
+  stop_and_destroy_election_group(election_list);
+}
+
+TEST_F(TestElection, rejected_change_leader_triggers_target_prepare) {
+  auto election_list = create_election_group(3, {0, 0, 0}, [](){});
+  ElectionImpl *source = election_list[0];
+  ElectionImpl *target = election_list[1];
+  ElectionImpl *stale_follower = election_list[2];
+
+  const bool source_is_leader = wait_until([source]() {
+    ObRole role;
+    int64_t epoch;
+    source->get_role(role, epoch);
+    return role == ObRole::LEADER;
+  }, 7_s);
+  if (!source_is_leader) {
+    stop_and_destroy_election_group(election_list);
+    FAIL() << "source did not become leader";
+    return;
+  }
+
+  int64_t old_leader_ballot = INVALID_VALUE;
+  {
+    palf::election::LockGuard lock_guard(source->lock_);
+    old_leader_ballot = source->proposer_.ballot_number_;
+  }
+  // Drop A -> B temporarily. The test delivers the same ChangeLeader manually after B's
+  // ballot is advanced, which models an in-flight message without changing MockNetService.
+  GlobalNetService.disconnect(source, target);
+  EXPECT_EQ(OB_SUCCESS, source->change_leader_to(target->get_self_addr()));
+  int64_t change_leader_ballot = INVALID_VALUE;
+  {
+    palf::election::LockGuard lock_guard(source->lock_);
+    change_leader_ballot = source->proposer_.ballot_number_;
+  }
+  EXPECT_EQ(old_leader_ballot + 1, change_leader_ballot);
+
+  // Before the in-flight ChangeLeader reaches B, an isolated stale follower advances both
+  // A and B beyond the message ballot. Their followed Prepare cannot reach a majority, but
+  // both fallback Prepare tasks are postponed.
+  GlobalNetService.disconnect_two_side(source, target);
+  GlobalNetService.disconnect_two_side(source, stale_follower);
+  GlobalNetService.disconnect_two_side(target, stale_follower);
+  const int64_t stale_prepare_ballot = change_leader_ballot + 1;
+  ElectionPrepareRequestMsg source_stale_prepare = build_follower_prepare(stale_follower,
+                                                                         source,
+                                                                         stale_prepare_ballot);
+  ElectionPrepareRequestMsg target_stale_prepare = build_follower_prepare(stale_follower,
+                                                                         target,
+                                                                         stale_prepare_ballot);
+  EXPECT_EQ(OB_SUCCESS, source->handle_message(source_stale_prepare));
+  EXPECT_EQ(OB_SUCCESS, target->handle_message(target_stale_prepare));
+  {
+    palf::election::LockGuard lock_guard(source->lock_);
+    EXPECT_EQ(stale_prepare_ballot, source->proposer_.ballot_number_);
+  }
+  {
+    palf::election::LockGuard lock_guard(target->lock_);
+    EXPECT_EQ(stale_prepare_ballot, target->proposer_.ballot_number_);
+  }
+
+  GlobalNetService.connect_two_side(source, target);
+  ElectionChangeLeaderMsg change_leader_msg = build_change_leader_msg(source,
+                                                                      target,
+                                                                      change_leader_ballot,
+                                                                      old_leader_ballot);
+  EXPECT_EQ(OB_SUCCESS, target->handle_message(change_leader_msg));
+  {
+    palf::election::LockGuard lock_guard(target->lock_);
+    EXPECT_EQ(stale_prepare_ballot + 1, target->proposer_.ballot_number_);
+  }
+
+  // B rejects the stale ChangeLeader and directly reuses the existing Follower Prepare
+  // broadcast, so the cluster need not wait for the postponed fallback task.
+  EXPECT_TRUE(wait_until([&election_list]() {
+    return get_leader_count(election_list) == 1;
+  }, CALCULATE_MAX_ELECT_COST_TIME() - 2_s));
+  EXPECT_EQ(1, get_leader_count(election_list));
+
+  stop_and_destroy_election_group(election_list);
+}
+
+TEST_F(TestElection, rejected_change_leader_to_self_triggers_prepare) {
+  auto election_list = create_election_group(3, {0, 0, 0}, [](){});
+  ElectionImpl *source = election_list[0];
+  ElectionImpl *target = election_list[1];
+  ElectionImpl *stale_follower = election_list[2];
+
+  const bool source_is_leader = wait_until([source]() {
+    ObRole role;
+    int64_t epoch;
+    source->get_role(role, epoch);
+    return role == ObRole::LEADER;
+  }, 7_s);
+  if (!source_is_leader) {
+    stop_and_destroy_election_group(election_list);
+    FAIL() << "source did not become leader";
+    return;
+  }
+
+  int64_t old_leader_ballot = INVALID_VALUE;
+  {
+    palf::election::LockGuard lock_guard(source->lock_);
+    old_leader_ballot = source->proposer_.ballot_number_;
+  }
+  // Keep the self ChangeLeader in flight, then let a failed Follower Prepare advance the
+  // local ballot beyond it.
+  GlobalNetService.disconnect(source, source);
+  EXPECT_EQ(OB_SUCCESS, source->change_leader_to(source->get_self_addr()));
+  int64_t change_leader_ballot = INVALID_VALUE;
+  {
+    palf::election::LockGuard lock_guard(source->lock_);
+    change_leader_ballot = source->proposer_.ballot_number_;
+  }
+  EXPECT_EQ(old_leader_ballot + 1, change_leader_ballot);
+
+  GlobalNetService.disconnect_two_side(source, target);
+  GlobalNetService.disconnect_two_side(source, stale_follower);
+  GlobalNetService.disconnect_two_side(target, stale_follower);
+  const int64_t stale_prepare_ballot = change_leader_ballot + 1;
+  ElectionPrepareRequestMsg stale_prepare = build_follower_prepare(stale_follower,
+                                                                   source,
+                                                                   stale_prepare_ballot);
+  EXPECT_EQ(OB_SUCCESS, source->handle_message(stale_prepare));
+  {
+    palf::election::LockGuard lock_guard(source->lock_);
+    EXPECT_EQ(stale_prepare_ballot, source->proposer_.ballot_number_);
+  }
+
+  GlobalNetService.connect(source, source);
+  GlobalNetService.connect_two_side(source, target);
+  ElectionChangeLeaderMsg change_leader_msg = build_change_leader_msg(source,
+                                                                      source,
+                                                                      change_leader_ballot,
+                                                                      old_leader_ballot);
+  EXPECT_EQ(OB_SUCCESS, source->handle_message(change_leader_msg));
+  {
+    palf::election::LockGuard lock_guard(source->lock_);
+    EXPECT_EQ(stale_prepare_ballot + 1, source->proposer_.ballot_number_);
+  }
+
+  EXPECT_TRUE(wait_until([&election_list]() {
+    return get_leader_count(election_list) == 1;
+  }, CALCULATE_MAX_ELECT_COST_TIME() - 2_s));
+  EXPECT_EQ(1, get_leader_count(election_list));
+
+  stop_and_destroy_election_group(election_list);
+}
+
+TEST_F(TestElection, rejected_leader_prepare_during_change_leader_triggers_follower_prepare) {
+  auto election_list = create_election_group(3, {0, 0, 0}, [](){});
+  ElectionImpl *source = election_list[0];
+  ElectionImpl *target = election_list[1];
+  ElectionImpl *other_follower = election_list[2];
+
+  const bool source_is_leader = wait_until([source]() {
+    ObRole role;
+    int64_t epoch;
+    source->get_role(role, epoch);
+    return role == ObRole::LEADER;
+  }, 7_s);
+  if (!source_is_leader) {
+    stop_and_destroy_election_group(election_list);
+    FAIL() << "source did not become leader";
+    return;
+  }
+
+  const bool target_follows_source = wait_until([source, target]() {
+    palf::election::LockGuard lock_guard(target->lock_);
+    return target->acceptor_.lease_.get_owner() == source->get_self_addr();
+  }, 2_s);
+  if (!target_follows_source) {
+    stop_and_destroy_election_group(election_list);
+    FAIL() << "target did not record source Lease";
+    return;
+  }
+
+  int64_t old_leader_ballot = INVALID_VALUE;
+  {
+    palf::election::LockGuard lock_guard(source->lock_);
+    old_leader_ballot = source->proposer_.ballot_number_;
+  }
+  GlobalNetService.disconnect(source, target);
+  EXPECT_EQ(OB_SUCCESS, source->change_leader_to(target->get_self_addr()));
+  int64_t change_leader_ballot = INVALID_VALUE;
+  {
+    palf::election::LockGuard lock_guard(source->lock_);
+    change_leader_ballot = source->proposer_.ballot_number_;
+  }
+  EXPECT_EQ(old_leader_ballot + 1, change_leader_ballot);
+
+  GlobalNetService.disconnect_two_side(source, target);
+  GlobalNetService.disconnect_two_side(source, other_follower);
+  GlobalNetService.disconnect_two_side(target, other_follower);
+  GlobalNetService.disconnect(target, target);
+  ElectionChangeLeaderMsg change_leader_msg = build_change_leader_msg(source,
+                                                                      target,
+                                                                      change_leader_ballot,
+                                                                      old_leader_ballot);
+  EXPECT_EQ(OB_SUCCESS, target->handle_message(change_leader_msg));
+  {
+    palf::election::LockGuard lock_guard(target->lock_);
+    EXPECT_EQ(change_leader_ballot, target->proposer_.ballot_number_);
+    EXPECT_EQ(old_leader_ballot, target->proposer_.switch_source_leader_ballot_);
+    EXPECT_EQ(source->get_self_addr(), target->proposer_.switch_source_leader_addr_);
+  }
+
+  ElectionPrepareRequestMsg leader_prepare(target->id_,
+                                            target->get_self_addr(),
+                                            target->proposer_.restart_counter_,
+                                            change_leader_ballot,
+                                            target->get_ls_biggest_min_cluster_version_ever_seen_(),
+                                            target->generate_inner_priority_seed_(),
+                                            target->get_membership_version_());
+  EXPECT_EQ(OB_SUCCESS, leader_prepare.set(target->get_priority_(), ObRole::LEADER));
+  leader_prepare.set_receiver(other_follower->get_self_addr());
+  const int64_t rejected_ballot = change_leader_ballot + 1;
+  ElectionPrepareResponseMsg reject_res(other_follower->get_self_addr(),
+                                        other_follower->get_ls_biggest_min_cluster_version_ever_seen_(),
+                                        leader_prepare);
+  reject_res.set_rejected(rejected_ballot);
+  EXPECT_EQ(OB_SUCCESS, target->handle_message(reject_res));
+  {
+    palf::election::LockGuard lock_guard(target->lock_);
+    EXPECT_EQ(rejected_ballot + 1, target->proposer_.ballot_number_);
+    EXPECT_EQ(INVALID_VALUE, target->proposer_.switch_source_leader_ballot_);
+    EXPECT_FALSE(target->proposer_.switch_source_leader_addr_.is_valid());
+  }
+
+  ElectionPrepareResponseMsg delayed_success_res(other_follower->get_self_addr(),
+                                                 other_follower->get_ls_biggest_min_cluster_version_ever_seen_(),
+                                                 leader_prepare);
+  Lease empty_lease;
+  delayed_success_res.set_accepted(change_leader_ballot, empty_lease);
+  EXPECT_EQ(OB_SUCCESS, target->handle_message(delayed_success_res));
+  {
+    palf::election::LockGuard lock_guard(target->lock_);
+    EXPECT_EQ(rejected_ballot + 1, target->proposer_.ballot_number_);
+    EXPECT_EQ(INVALID_VALUE, target->proposer_.switch_source_leader_ballot_);
+  }
+
+  stop_and_destroy_election_group(election_list);
+}
+
+TEST_F(TestElection, rejected_change_leader_must_match_last_lease) {
+  auto election_list = create_election_group(3, {0, 0, 0}, [](){});
+  ElectionImpl *source = election_list[0];
+  ElectionImpl *target = election_list[1];
+  ElectionImpl *other_follower = election_list[2];
+
+  const bool source_is_leader = wait_until([source]() {
+    ObRole role;
+    int64_t epoch;
+    source->get_role(role, epoch);
+    return role == ObRole::LEADER;
+  }, 7_s);
+  if (!source_is_leader) {
+    stop_and_destroy_election_group(election_list);
+    FAIL() << "source did not become leader";
+    return;
+  }
+
+  const bool target_follows_source = wait_until([source, target]() {
+    palf::election::LockGuard lock_guard(target->lock_);
+    return target->acceptor_.lease_.get_owner() == source->get_self_addr();
+  }, 2_s);
+  if (!target_follows_source) {
+    stop_and_destroy_election_group(election_list);
+    FAIL() << "target did not record source Lease";
+    return;
+  }
+
+  int64_t target_ballot = INVALID_VALUE;
+  int64_t lease_ballot = INVALID_VALUE;
+  ObAddr lease_owner;
+  {
+    palf::election::LockGuard lock_guard(target->lock_);
+    target_ballot = target->proposer_.ballot_number_;
+    target->acceptor_.lease_.get_owner_and_ballot(lease_owner, lease_ballot);
+    EXPECT_EQ(source->get_self_addr(), lease_owner);
+  }
+
+  // The old ballot identifies a different historical Lease: do not start an election.
+  ElectionChangeLeaderMsg wrong_ballot_msg = build_change_leader_msg(source,
+                                                                     target,
+                                                                     target_ballot,
+                                                                     lease_ballot + 1);
+  EXPECT_EQ(OB_SUCCESS, target->handle_message(wrong_ballot_msg));
+  {
+    palf::election::LockGuard lock_guard(target->lock_);
+    EXPECT_EQ(target_ballot, target->proposer_.ballot_number_);
+  }
+
+  // The ballot matches but the sender is not the last Lease owner: do not let an unrelated
+  // stale follower use ChangeLeader to force a new election.
+  ElectionChangeLeaderMsg wrong_owner_msg = build_change_leader_msg(other_follower,
+                                                                    target,
+                                                                    target_ballot,
+                                                                    lease_ballot);
+  EXPECT_EQ(OB_SUCCESS, target->handle_message(wrong_owner_msg));
+  {
+    palf::election::LockGuard lock_guard(target->lock_);
+    EXPECT_EQ(target_ballot, target->proposer_.ballot_number_);
+  }
+
+  stop_and_destroy_election_group(election_list);
+}
+
+TEST_F(TestElection, rejected_change_leader_is_ignored_after_target_becomes_leader) {
+  auto election_list = create_election_group(3, {0, 0, 0}, [](){});
+  ElectionImpl *leader = election_list[0];
+  ElectionImpl *follower = election_list[1];
+
+  const bool leader_elected = wait_until([leader]() {
+    ObRole role;
+    int64_t epoch;
+    leader->get_role(role, epoch);
+    return role == ObRole::LEADER;
+  }, 7_s);
+  if (!leader_elected) {
+    stop_and_destroy_election_group(election_list);
+    FAIL() << "leader was not elected";
+    return;
+  }
+
+  int64_t leader_ballot = INVALID_VALUE;
+  int64_t lease_ballot = INVALID_VALUE;
+  {
+    palf::election::LockGuard lock_guard(leader->lock_);
+    leader_ballot = leader->proposer_.ballot_number_;
+    lease_ballot = leader->acceptor_.lease_.get_ballot_number();
+  }
+  ElectionChangeLeaderMsg stale_msg = build_change_leader_msg(follower,
+                                                               leader,
+                                                               leader_ballot,
+                                                               lease_ballot);
+  EXPECT_EQ(OB_SUCCESS, leader->handle_message(stale_msg));
+  {
+    palf::election::LockGuard lock_guard(leader->lock_);
+    EXPECT_TRUE(leader->proposer_.check_leader());
+    EXPECT_EQ(leader_ballot, leader->proposer_.ballot_number_);
+  }
+  EXPECT_EQ(1, get_leader_count(election_list));
+
+  stop_and_destroy_election_group(election_list);
+}
+
+TEST_F(TestElection, rejected_change_leader_matches_expired_lease_without_owner) {
+  auto election_list = create_election_group(3, {0, 0, 0}, [](){});
+  ElectionImpl *source = election_list[0];
+  ElectionImpl *target = election_list[1];
+
+  const bool source_is_leader = wait_until([source]() {
+    ObRole role;
+    int64_t epoch;
+    source->get_role(role, epoch);
+    return role == ObRole::LEADER;
+  }, 7_s);
+  if (!source_is_leader) {
+    stop_and_destroy_election_group(election_list);
+    FAIL() << "source did not become leader";
+    return;
+  }
+
+  const bool target_follows_source = wait_until([source, target]() {
+    palf::election::LockGuard lock_guard(target->lock_);
+    return target->acceptor_.lease_.get_owner() == source->get_self_addr();
+  }, 2_s);
+  if (!target_follows_source) {
+    stop_and_destroy_election_group(election_list);
+    FAIL() << "target did not record source Lease";
+    return;
+  }
+
+  // Stop new Lease messages before clearing the owner. Lease::reset() intentionally keeps
+  // the ballot, allowing a delayed ChangeLeader from that Lease to be authenticated.
+  GlobalNetService.disconnect(source, target);
+  this_thread::sleep_for(chrono::milliseconds(10));
+  int64_t target_ballot = INVALID_VALUE;
+  int64_t expired_lease_ballot = INVALID_VALUE;
+  {
+    palf::election::LockGuard lock_guard(target->lock_);
+    target_ballot = target->proposer_.ballot_number_;
+    expired_lease_ballot = target->acceptor_.lease_.get_ballot_number();
+    target->acceptor_.lease_.reset();
+    EXPECT_FALSE(target->acceptor_.lease_.get_owner().is_valid());
+    EXPECT_EQ(expired_lease_ballot, target->acceptor_.lease_.get_ballot_number());
+  }
+
+  ElectionChangeLeaderMsg delayed_msg = build_change_leader_msg(source,
+                                                                 target,
+                                                                 target_ballot,
+                                                                 expired_lease_ballot);
+  EXPECT_EQ(OB_SUCCESS, target->handle_message(delayed_msg));
+  {
+    palf::election::LockGuard lock_guard(target->lock_);
+    EXPECT_EQ(target_ballot + 1, target->proposer_.ballot_number_);
+  }
+
+  stop_and_destroy_election_group(election_list);
 }
 
 TEST_F(TestElection, config_vresion_not_same_and_wont_split_vote) {
