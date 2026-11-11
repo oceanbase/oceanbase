@@ -2543,6 +2543,8 @@ int ObExprRangeConverter::get_nvl_cmp_node(const ObRawExpr &l_expr,
   ObRangeNode *null_and_node = NULL;
   ObSEArray<ObRangeNode*, 2> range_nodes;
   bool use_implicit_cast_feature = ctx_.optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_5;
+  bool is_nvl_second_valid = true;
+  bool is_const_expr_valid = true;
   if (OB_LIKELY(l_expr.get_expr_type() == T_FUN_SYS_NVL &&
                 r_expr.is_const_expr())) {
     nvl_expr = static_cast<const ObOpRawExpr*>(&l_expr);
@@ -2568,6 +2570,15 @@ int ObExprRangeConverter::get_nvl_cmp_node(const ObRawExpr &l_expr,
                                                                      use_implicit_cast_feature))) {
     LOG_WARN("failed to get expr without lossless cast", K(ret));
   } else if (!nvl_first_expr->is_column_ref_expr()) {
+    // do nothing
+  } else if (nvl_second_expr->is_const_expr() &&
+             OB_FAIL(check_calculable_expr_valid(nvl_second_expr, is_nvl_second_valid))) {
+    LOG_WARN("failed to check calculable expr valid", K(ret));
+  } else if (!is_nvl_second_valid) {
+    // do nothing
+  } else if (OB_FAIL(check_calculable_expr_valid(const_expr, is_const_expr_valid))) {
+    LOG_WARN("failed to check calculable expr valid", K(ret));
+  } else if (!is_const_expr_valid) {
     // do nothing
   } else if (OB_FAIL(gen_column_cmp_node(*nvl_first_expr,
                                          *const_expr,
@@ -3756,6 +3767,9 @@ int ObExprRangeConverter::ignore_inner_generate_expr(const ObRawExpr *const_expr
   can_ignore = false;
   if (const_expr->get_expr_type() == T_FUN_SYS_INNER_DOUBLE_TO_INT ||
       const_expr->get_expr_type() == T_FUN_SYS_INNER_DECIMAL_TO_YEAR) {
+    can_ignore = true;
+  } else if (OB_NOT_NULL(ctx_.expr_factory_) &&
+             const_expr->get_expr_factory() == ctx_.expr_factory_) {
     can_ignore = true;
   }
   return ret;

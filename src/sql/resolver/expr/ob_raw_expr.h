@@ -1823,6 +1823,7 @@ public:
   void set_allocator(common::ObIAllocator &alloc);
   void set_expr_factory(ObRawExprFactory &factory) { expr_factory_ = &factory; }
   ObRawExprFactory *get_expr_factory() { return expr_factory_; }
+  const ObRawExprFactory *get_expr_factory() const { return expr_factory_; }
 
   void set_expr_info(const ObExprInfo &info);
   int add_flag(int32_t flag);
