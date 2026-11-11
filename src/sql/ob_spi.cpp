@@ -17,6 +17,7 @@
 #include "observer/mysql/ob_sync_cmd_driver.h"
 #include "observer/mysql/ob_async_cmd_driver.h"
 #include "observer/mysql/obmp_stmt_execute.h"
+#include "observer/mysql/obmp_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/ob_stmt_resolver.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
@@ -11201,6 +11202,17 @@ int ObSPIService::ps_cursor_open(ObPLExecCtx *ctx,
         LOG_WARN("close mysql result failed", K(ret), K(close_ret));
       }
       ret = (OB_SUCCESS == ret ? close_ret : ret);
+      // PL UDFs run while materializing a synchronous PS cursor. Collect their
+      // package changes from the SPI execution context before it is destroyed,
+      // including changes made before execution failed.
+      if (OB_NOT_NULL(session)) {
+        int sync_ret = ObMPUtils::try_add_changed_package_info(
+            *session, spi_result->get_result_set()->get_exec_context());
+        if (OB_SUCCESS != sync_ret) {
+          LOG_WARN("failed to add PS cursor changed package info", K(ret), K(sync_ret));
+          ret = (OB_SUCCESS == ret ? sync_ret : ret);
+        }
+      }
     }
     spi_result->~ObSPIResultSet();
     ps_cursor.set_spi_cursor(NULL);
