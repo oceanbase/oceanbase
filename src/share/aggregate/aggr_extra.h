@@ -879,7 +879,9 @@ public:
     struct {
       bool is_top_fre_hist_ :  1;
       bool is_hybrid_hist_  :  1;
-      int64_t reserved_     : 62;
+      bool is_top_n_        :  1;
+      bool is_count_by_enum_ : 1;
+      int64_t reserved_     : 60;
     };
   };
 };
