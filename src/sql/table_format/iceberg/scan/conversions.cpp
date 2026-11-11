@@ -125,7 +125,10 @@ int Conversions::convert_statistics_binary_to_ob_obj(
           int32_t buffer_size
               = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(ob_type_precision.value());
           char *buf = NULL;
-          if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buffer_size)))) {
+          if (OB_UNLIKELY(binary.length() <= 0 || binary.length() > buffer_size)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid decimal statistics bound", K(ret), K(binary), K(buffer_size));
+          } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buffer_size)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("failed to allocate memory", K(ret));
           } else {
