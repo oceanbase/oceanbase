@@ -4,6 +4,7 @@
  */
 
 #include <gtest/gtest.h>
+#include "lib/utility/ob_defer.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -132,7 +133,9 @@ int CalculateSize::operator()(common::hash::HashMapPair<ObTabletMapKey, ObTablet
 
 TEST_F(TestMetaPointerMap, test_meta_pointer_handle)
 {
+  ObLSMap ls_map;
   ObLS fake_ls;
+  DEFER(tablet_map_.destroy());
   FakeLs(fake_ls);
 
   ObLSTabletService *tablet_svr = fake_ls.get_tablet_svr();
@@ -143,14 +146,16 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_handle)
 
   ObTabletMemtableMgr *ptr = MTL(ObTabletMemtableMgrPool*)->acquire();
   OB_ASSERT(NULL != ptr);
-  ObMemtableMgrHandle memtable_mgr_hdl(ptr, MTL(ObTabletMemtableMgrPool*));
+  ObMemtableMgrHandle memtable_mgr_hdl;
+  ASSERT_EQ(OB_SUCCESS, memtable_mgr_hdl.set_memtable_mgr(ptr, MTL(ObTabletMemtableMgrPool*)));
 
   ret = MTL(ObTenantMetaMemMgr*)->acquire_tablet_ddl_kv_mgr(ddl_kv_mgr_hdl);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObLSHandle ls_handle;
-  ls_handle.ls_ = &fake_ls;
+  ASSERT_EQ(OB_SUCCESS, ls_handle.set_ls(ls_map, fake_ls, ObLSGetMod::STORAGE_MOD));
   ObTabletPointer tablet_ptr(ls_handle, memtable_mgr_hdl);
+  ASSERT_NE(nullptr, tablet_ptr.get_ls());
   ObMetaDiskAddr phy_addr;
   phy_addr.set_none_addr();
   tablet_ptr.set_addr_with_reset_obj(phy_addr);
@@ -198,6 +203,7 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_map)
 {
   ObLSMap ls_map;
   ObLS fake_ls;
+  DEFER(tablet_map_.destroy());
   FakeLs(fake_ls);
   ObLSTabletService *tablet_svr = fake_ls.get_tablet_svr();
   int ret = tablet_svr->init(&fake_ls);
@@ -207,16 +213,16 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_map)
 
   ObTabletMemtableMgr *ptr = MTL(ObTabletMemtableMgrPool*)->acquire();
   OB_ASSERT(NULL != ptr);
-  ObMemtableMgrHandle memtable_mgr_hdl(ptr, MTL(ObTabletMemtableMgrPool*));
+  ObMemtableMgrHandle memtable_mgr_hdl;
+  ASSERT_EQ(OB_SUCCESS, memtable_mgr_hdl.set_memtable_mgr(ptr, MTL(ObTabletMemtableMgrPool*)));
 
   ret = MTL(ObTenantMetaMemMgr*)->acquire_tablet_ddl_kv_mgr(ddl_kv_mgr_hdl);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObLSHandle ls_handle;
-  ls_handle.ls_ = &fake_ls;
-  ls_handle.ls_map_ = &ls_map;
-  ls_handle.mod_ = ObLSGetMod::STORAGE_MOD;
+  ASSERT_EQ(OB_SUCCESS, ls_handle.set_ls(ls_map, fake_ls, ObLSGetMod::STORAGE_MOD));
   ObTabletPointer tablet_ptr(ls_handle, memtable_mgr_hdl);
+  ASSERT_NE(nullptr, tablet_ptr.get_ls());
   ObMetaDiskAddr phy_addr;
   phy_addr.set_none_addr();
   tablet_ptr.set_addr_with_reset_obj(phy_addr);
@@ -305,6 +311,7 @@ TEST_F(TestMetaPointerMap, test_erase_and_load_concurrency)
 {
   ObLSMap ls_map;
   ObLS fake_ls;
+  DEFER(tablet_map_.destroy());
   FakeLs(fake_ls);
 
   ObLSTabletService *tablet_svr = fake_ls.get_tablet_svr();
@@ -315,16 +322,16 @@ TEST_F(TestMetaPointerMap, test_erase_and_load_concurrency)
 
   ObTabletMemtableMgr *ptr = MTL(ObTabletMemtableMgrPool*)->acquire();
   OB_ASSERT(NULL != ptr);
-  ObMemtableMgrHandle memtable_mgr_hdl(ptr, MTL(ObTabletMemtableMgrPool*));
+  ObMemtableMgrHandle memtable_mgr_hdl;
+  ASSERT_EQ(OB_SUCCESS, memtable_mgr_hdl.set_memtable_mgr(ptr, MTL(ObTabletMemtableMgrPool*)));
 
   ret = MTL(ObTenantMetaMemMgr*)->acquire_tablet_ddl_kv_mgr(ddl_kv_mgr_hdl);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObLSHandle ls_handle;
-  ls_handle.ls_ = &fake_ls;
-  ls_handle.ls_map_ = &ls_map;
-  ls_handle.mod_ = ObLSGetMod::STORAGE_MOD;
+  ASSERT_EQ(OB_SUCCESS, ls_handle.set_ls(ls_map, fake_ls, ObLSGetMod::STORAGE_MOD));
   ObTabletPointer tablet_ptr(ls_handle, memtable_mgr_hdl);
+  ASSERT_NE(nullptr, tablet_ptr.get_ls());
   ObMetaDiskAddr phy_addr;
   phy_addr.set_none_addr();
   tablet_ptr.set_addr_with_reset_obj(phy_addr);

@@ -13,6 +13,9 @@
 #define protected public
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/test_tablet_helper.h"
+#include "storage/memtable/ob_memtable.h"
+#include "storage/meta_mem/ob_tablet_pointer.h"
+#include "storage/tablet/ob_tablet_memtable_mgr.h"
 #include "storage/tx/ob_id_service.h"
 #include "storage/tx/ob_timestamp_service.h"
 #include "storage/tx_storage/ob_ls_map.h"
@@ -93,6 +96,18 @@ protected:
     return !service.cached_ls_handle_.is_valid();
   }
 
+  int64_t get_ls_handle_ref_count(ObLSHandle &handle)
+  {
+    auto &ref_mgr = handle.get_ls()->get_ref_mgr();
+    const int mod = static_cast<int>(handle.mod_);
+    int64_t ref_count = 0;
+    // Other LS modules can release references asynchronously during GC.
+    for (int idx = 0; idx < ref_mgr.MAX_CPU_NUM; ++idx) {
+      ref_count += ref_mgr.ref_mgr_[idx].ref_info_[mod].get_ref_cnt();
+    }
+    return ref_count;
+  }
+
   bool wait_for_gc(const ObLSID &ls_id)
   {
     const int64_t deadline = ObTimeUtility::current_time() + 30 * 1000 * 1000;
@@ -151,6 +166,116 @@ TEST_F(TestIDServiceLSLifetime, handle_copy_and_swap)
   empty.reset();
   copy.reset();
   EXPECT_TRUE(wait_for_gc(ObLSID(301)));
+}
+
+TEST_F(TestIDServiceLSLifetime, create_tablet_rejects_deleted_ls)
+{
+  const ObLSID ls_id(312);
+  ObLSHandle owner;
+  ASSERT_EQ(OB_SUCCESS, create_ls(ls_id, owner));
+  ObMemtableMgrHandle memtable_mgr_handle;
+  const int64_t ref_count = get_ls_handle_ref_count(owner);
+  {
+    ObTabletPointer pointer(owner, memtable_mgr_handle);
+    ASSERT_NE(nullptr, pointer.get_ls());
+    EXPECT_EQ(owner.get_ls(), pointer.get_ls());
+    EXPECT_EQ(ref_count + 1, get_ls_handle_ref_count(owner));
+  }
+  EXPECT_EQ(ref_count, get_ls_handle_ref_count(owner));
+
+  ASSERT_EQ(OB_SUCCESS, ls_service_->remove_ls(ls_id));
+  EXPECT_TRUE(owner.is_valid());
+  const int64_t deleted_ref_count = get_ls_handle_ref_count(owner);
+  ObTabletPointer pointer(owner, memtable_mgr_handle);
+  EXPECT_EQ(nullptr, pointer.get_ls());
+  EXPECT_EQ(deleted_ref_count, get_ls_handle_ref_count(owner));
+  const ObTabletMapKey key(ls_id, ObTabletID(100004));
+  ObTabletHandle tablet;
+  auto *t3m = MTL(ObTenantMetaMemMgr *);
+  EXPECT_EQ(OB_NOT_RUNNING, t3m->create_msd_tablet(WashTabletPriority::WTP_HIGH, key, owner, tablet));
+  EXPECT_FALSE(tablet.is_valid());
+  bool exists = true;
+  ASSERT_EQ(OB_SUCCESS, t3m->tablet_map_.exist(key, exists));
+  EXPECT_FALSE(exists);
+  owner.reset();
+  EXPECT_TRUE(wait_for_gc(ls_id));
+}
+
+TEST_F(TestIDServiceLSLifetime, tablet_pointer_deep_copy_rejects_deleted_ls)
+{
+  const ObLSID ls_id(313);
+  ObLSHandle owner;
+  ASSERT_EQ(OB_SUCCESS, create_ls(ls_id, owner));
+  ObMemtableMgrHandle memtable_mgr_handle;
+  ObTabletPointer pointer(owner, memtable_mgr_handle);
+  ASSERT_NE(nullptr, pointer.get_ls());
+  ObArenaAllocator allocator;
+  const int64_t size = pointer.get_deep_copy_size();
+  char *buf = static_cast<char *>(allocator.alloc(size));
+  ASSERT_NE(nullptr, buf);
+  ObTabletPointer *copy = nullptr;
+  const int64_t ref_count = get_ls_handle_ref_count(owner);
+  ASSERT_EQ(OB_SUCCESS, pointer.deep_copy(buf, size, copy));
+  ASSERT_NE(nullptr, copy);
+  EXPECT_EQ(pointer.get_ls(), copy->get_ls());
+  EXPECT_EQ(ref_count + 1, get_ls_handle_ref_count(owner));
+  copy->~ObTabletPointer();
+  EXPECT_EQ(ref_count, get_ls_handle_ref_count(owner));
+
+  ASSERT_EQ(OB_SUCCESS, ls_service_->remove_ls(ls_id));
+  const int64_t deleted_ref_count = get_ls_handle_ref_count(owner);
+  copy = nullptr;
+  EXPECT_EQ(OB_NOT_RUNNING, pointer.deep_copy(buf, size, copy));
+  EXPECT_EQ(nullptr, copy);
+  EXPECT_EQ(deleted_ref_count, get_ls_handle_ref_count(owner));
+  // Failed deep_copy must also prevent ResourceMap from publishing the value.
+  const ObTabletMapKey key(ls_id, ObTabletID(100001));
+  auto &tablet_map = MTL(ObTenantMetaMemMgr *)->tablet_map_;
+  EXPECT_EQ(OB_NOT_RUNNING, tablet_map.set(key, pointer));
+  bool exists = true;
+  ASSERT_EQ(OB_SUCCESS, tablet_map.exist(key, exists));
+  EXPECT_FALSE(exists);
+  pointer.reset();
+  owner.reset();
+  EXPECT_TRUE(wait_for_gc(ls_id));
+}
+
+TEST_F(TestIDServiceLSLifetime, memtable_init_rejects_deleted_ls)
+{
+  const ObLSID ls_id(314);
+  ObLSHandle owner;
+  ASSERT_EQ(OB_SUCCESS, create_ls(ls_id, owner));
+  ObFreezer *freezer = owner.get_ls()->get_freezer();
+  auto *pool = MTL(ObTabletMemtableMgrPool *);
+  ObTabletMemtableMgr *mgr = pool->acquire();
+  ASSERT_NE(nullptr, mgr);
+  ObMemtableMgrHandle mgr_handle;
+  ASSERT_EQ(OB_SUCCESS, mgr_handle.set_memtable_mgr(mgr, pool));
+  ObITable::TableKey key;
+  key.table_type_ = ObITable::DATA_MEMTABLE;
+  key.tablet_id_ = ObTabletID(100002);
+  key.scn_range_.start_scn_ = SCN::base_scn();
+  key.scn_range_.end_scn_ = SCN::max_scn();
+  for (bool use_hash_index : {false, true}) {
+    memtable::ObMemtable memtable;
+    ASSERT_EQ(OB_SUCCESS, memtable.init(key, owner, freezer, mgr, 1, 0, use_hash_index));
+    EXPECT_EQ(owner.get_ls(), memtable.ls_handle_.get_ls());
+  }
+
+  ASSERT_EQ(OB_SUCCESS, ls_service_->remove_ls(ls_id));
+  const int64_t ref_count = get_ls_handle_ref_count(owner);
+  const int64_t mgr_ref_count = mgr->get_ref();
+  for (bool use_hash_index : {false, true}) {
+    memtable::ObMemtable memtable;
+    EXPECT_EQ(OB_NOT_RUNNING, memtable.init(key, owner, freezer, mgr, 1, 0, use_hash_index));
+    EXPECT_FALSE(memtable.is_inited_);
+    EXPECT_FALSE(memtable.ls_handle_.is_valid());
+    EXPECT_EQ(nullptr, memtable.mvcc_engine_);
+    EXPECT_EQ(ref_count, get_ls_handle_ref_count(owner));
+    EXPECT_EQ(mgr_ref_count, mgr->get_ref());
+  }
+  owner.reset();
+  EXPECT_TRUE(wait_for_gc(ls_id));
 }
 
 TEST_F(TestIDServiceLSLifetime, request_handle_survives_gc_invalidation)

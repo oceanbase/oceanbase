@@ -5,6 +5,7 @@
 
 #include "ob_tablet_pointer.h"
 #include "src/storage/tx_storage/ob_ls_map.h"
+#include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #include "storage/tablet/ob_tablet_persister.h"
 
 #define USING_LOG_PREFIX STORAGE
@@ -402,22 +403,25 @@ int ObTabletPointer::deep_copy(char *buf, const int64_t buf_len, ObTabletPointer
     LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len), K(deep_copy_size));
   } else {
     ObTabletPointer *pvalue = new (buf) ObTabletPointer();
-    pvalue->phy_addr_ = phy_addr_;
-    pvalue->obj_.pool_ = obj_.pool_;
-    pvalue->obj_.ptr_  = obj_.ptr_;
-    pvalue->obj_.allocator_ = obj_.allocator_;
-    if (nullptr != obj_.ptr_) {
-      if (OB_UNLIKELY(nullptr == obj_.pool_ && nullptr == obj_.allocator_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("object pool is nullptr", K(ret), K_(obj));
-        ob_abort();
-      } else {
-        obj_.ptr_->inc_ref();
+    if (OB_FAIL(pvalue->ls_handle_.copy_from(ls_handle_))) {
+      LOG_WARN("failed to copy ls handle", K(ret), K_(ls_handle));
+    } else {
+      pvalue->phy_addr_ = phy_addr_;
+      pvalue->obj_.pool_ = obj_.pool_;
+      pvalue->obj_.ptr_  = obj_.ptr_;
+      pvalue->obj_.allocator_ = obj_.allocator_;
+      if (nullptr != obj_.ptr_) {
+        if (OB_UNLIKELY(nullptr == obj_.pool_ && nullptr == obj_.allocator_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("object pool is nullptr", K(ret), K_(obj));
+          ob_abort();
+        } else {
+          obj_.ptr_->inc_ref();
+        }
       }
     }
 
     if (OB_SUCC(ret)) {
-      pvalue->ls_handle_ = ls_handle_;
       pvalue->ddl_kv_mgr_handle_ = ddl_kv_mgr_handle_;
       pvalue->protected_memtable_mgr_handle_ = protected_memtable_mgr_handle_;
       pvalue->ddl_info_ = ddl_info_;

@@ -170,9 +170,10 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
     TRANS_LOG(WARN, "query engine init fail", "ret", ret);
   } else if (OB_FAIL(ObITable::init(table_key))) {
     TRANS_LOG(WARN, "failed to set_table_key", K(ret), K(table_key));
+  } else if (OB_FAIL(ls_handle_.copy_from(ls_handle))) {
+    TRANS_LOG(WARN, "failed to copy ls handle", K(ret), K(ls_handle));
   } else {
     use_hash_index_ = use_hash_index;
-    ls_handle_ = ls_handle;
     ls_id_ = ls_handle_.get_ls()->get_ls_id();
     if (table_key.get_tablet_id().is_sys_tablet()) {
       mode_ = lib::Worker::CompatMode::MYSQL;
