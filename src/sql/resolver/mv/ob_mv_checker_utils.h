@@ -29,6 +29,12 @@ public:
   static bool is_count_star(const ObRawExpr &aggr);
   static bool is_basic_aggr(const ObRawExpr &aggr);
 
+  // Prepare SUM's parameter for multiplication by a possibly negative refresh factor.
+  static int build_sum_contribution_param(ObRawExprFactory &expr_factory,
+                                          ObSQLSessionInfo &session_info,
+                                          ObRawExpr *param,
+                                          ObRawExpr *&result);
+
   // Aggregate dependent-column collection.
   static int collect_aggr_dep_cols(const ObSelectStmt &stmt,
                                    ObRawExprFactory &expr_factory,

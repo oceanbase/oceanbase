@@ -877,6 +877,7 @@ int ObSimpleMAVPrinter::gen_basic_aggr_expr(ObRawExprCopier &copier,
   int ret = OB_SUCCESS;
   aggr_print_expr = NULL;
   ObAggFunRawExpr *new_aggr_expr = NULL;
+  ObRawExpr *source_param = NULL;
   ObRawExpr *param = NULL;
   ObRawExpr *print_param = NULL;
   if (!ObMVCheckerUtils::is_basic_aggr(aggr_expr)) {
@@ -885,10 +886,16 @@ int ObSimpleMAVPrinter::gen_basic_aggr_expr(ObRawExprCopier &copier,
   } else if (T_FUN_COUNT == aggr_expr.get_expr_type() && 0 == aggr_expr.get_real_param_count()) {
     print_param = dml_factor;
   } else if (OB_UNLIKELY(1 != aggr_expr.get_real_param_count())
-             || OB_ISNULL(param = aggr_expr.get_param_expr(0))) {
+             || OB_ISNULL(source_param = aggr_expr.get_param_expr(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected aggr", K(ret), K(aggr_expr));
-  } else if (OB_FAIL(copier.copy_on_replace(param, param))) {
+  } else if (T_FUN_SUM == aggr_expr.get_expr_type()
+             && OB_FAIL(ObMVCheckerUtils::build_sum_contribution_param(ctx_.expr_factory_,
+                                                                       ctx_.session_info_,
+                                                                       source_param,
+                                                                       source_param))) {
+    LOG_WARN("failed to prepare sum contribution parameter", K(ret));
+  } else if (OB_FAIL(copier.copy_on_replace(source_param, param))) {
     LOG_WARN("failed to generate group by exprs", K(ret));
   } else if (T_FUN_COUNT == aggr_expr.get_expr_type()) {
     ObRawExpr *is_null = NULL;

@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/mv/ob_mv_checker_utils.h"
 
+#include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/resolver/mv/ob_mv_checker.h"
 #include "sql/rewrite/ob_transform_utils.h"
@@ -41,20 +42,65 @@ bool ObMVCheckerUtils::is_basic_aggr(const ObRawExpr &aggr)
   if (!aggr.is_aggr_expr()
       || static_cast<const ObAggFunRawExpr &>(aggr).is_param_distinct()) {
     is_basic = false;
-  } else if (T_FUN_COUNT == aggr.get_expr_type()) {
+  } else if (T_FUN_COUNT == aggr.get_expr_type() || T_FUN_SUM == aggr.get_expr_type()) {
     is_basic = true;
-  } else if (T_FUN_SUM == aggr.get_expr_type()) {
-    // for SUM, if the parameter is unsigned type, it needs recalculation
-    // otherwise the contribution `factor * param` would be invalid if the factor is negative
-    const ObAggFunRawExpr &sum_expr = static_cast<const ObAggFunRawExpr &>(aggr);
-    const ObRawExpr *param = 1 == sum_expr.get_real_param_count()
-                               ? ObRawExprUtils::skip_implicit_cast(sum_expr.get_param_expr(0))
-                               : NULL;
-    is_basic = NULL != param && !ob_is_unsigned_type(param->get_data_type());
   } else {
     is_basic = false;
   }
   return is_basic;
+}
+
+int ObMVCheckerUtils::build_sum_contribution_param(ObRawExprFactory &expr_factory,
+                                                   ObSQLSessionInfo &session_info,
+                                                   ObRawExpr *param,
+                                                   ObRawExpr *&result)
+{
+  // For parameters of unsigned integer types, we need to cast them to signed type,
+  // otherwise the contribution of SUM of the deleted rows: `-1 * unsigned`
+  // would raise an 'value is out-of-range' error
+  int ret = OB_SUCCESS;
+  const ObRawExpr *orig_param = NULL;
+  result = NULL;
+  if (OB_ISNULL(param) || OB_ISNULL(orig_param = ObRawExprUtils::skip_implicit_cast(param))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null sum parameter", K(ret), KP(param));
+  } else if (!ob_is_unsigned_type(orig_param->get_data_type())) {
+    // for signed type, no additional processing is needed
+    result = param;
+  } else if (ObUNumberType == orig_param->get_data_type()) {
+    // `-1 * UNUMBER` would be promoted to `NUMBER` so no additional cast is needed
+    result = param;
+  } else {
+    const ObObjType type = orig_param->get_data_type();
+    ObObjType sum_type = ObMaxType;
+    ObRawExprResType cast_type;
+    if (OB_FAIL(ObExprResultTypeUtil::get_sum_result_type(sum_type, type))) {
+      LOG_WARN("failed to get sum result type", K(ret), K(type));
+    } else if (FALSE_IT(cast_type.set_type(sum_type))) {
+    } else if (ObNumberType == sum_type) {
+      // BIT's ObAccuracy is measured in bits; its numeric range is equivalent to UINT64.
+      const ObObjType accuracy_type = ObBitType == type ? ObUInt64Type : type;
+      cast_type.set_accuracy(ObAccuracy::MAX_ACCURACY2[lib::is_oracle_mode()][accuracy_type]);
+    }
+    if (OB_SUCC(ret)) {
+      ObSysFunRawExpr *cast_expr = NULL;
+      if (OB_FAIL(ObRawExprUtils::create_cast_expr(expr_factory,
+                                                   param,
+                                                   cast_type,
+                                                   cast_expr,
+                                                   &session_info,
+                                                   false,
+                                                   CM_EXPLICIT_CAST))) {
+        LOG_WARN("failed to cast unsigned sum parameter", K(ret));
+      // clear the inner-added flag to preserve the explicit cast expr in printing
+      } else if (OB_FAIL(cast_expr->clear_flag(IS_INNER_ADDED_EXPR))) {
+        LOG_WARN("failed to preserve explicit cast", K(ret));
+      } else {
+        result = cast_expr;
+      }
+    }
+  }
+  return ret;
 }
 
 const char *ObMVCheckerUtils::get_table_type_str(const TableItem::TableType type)
