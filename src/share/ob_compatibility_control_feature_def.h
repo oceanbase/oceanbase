@@ -88,4 +88,7 @@ DEF_COMPAT_CONTROL_FEATURE(MYSQL_USERNAME_LENGTH_32,
 DEF_COMPAT_CONTROL_FEATURE(MYSQL_USER_HOST_MATCH_PRIORITY,
     "Select the most specific matching host for MySQL accounts",
     CLUSTER_VERSION_4_4_2_4)
+DEF_COMPAT_CONTROL_FEATURE(MYSQL_ROUTINE_DATABASE_COLLATION,
+    "Use database character defaults for MySQL routines and trigger local variables",
+    CLUSTER_VERSION_4_4_2_4)
 #endif

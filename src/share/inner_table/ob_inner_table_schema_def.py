@@ -19640,30 +19640,8 @@ def_table_schema(
                       ELSE CAST(NULL AS UNSIGNED)
                     END
                       AS DATETIME_PRECISION,
-                      CAST(
-                        CASE rp.param_charset
-                        WHEN 1 THEN 'binary'
-                        WHEN 2 THEN 'utf8mb4'
-                        WHEN 3 THEN 'gbk'
-                        WHEN 4 THEN 'utf16'
-                        WHEN 5 THEN 'gb18030'
-                        WHEN 6 THEN 'latin1'
-                        WHEN 7 THEN 'gb18030_2022'
-                        WHEN 8 THEN 'ascii'
-                        WHEN 9 THEN 'tis620'
-                        ELSE NULL
-                        END
-                          AS CHAR(64)
-                      ) AS CHARACTER_SET_NAME,
-                      CAST(
-                        CASE rp.param_coll_type
-                        WHEN 45 THEN 'utf8mb4_general_ci'
-                        WHEN 46 THEN 'utf8mb4_bin'
-                        WHEN 63 THEN 'binary'
-                        ELSE NULL
-                        END
-                          AS CHAR(64)
-                      ) AS COLLATION_NAME,
+                      CAST(c.charset AS CHAR(64)) AS CHARACTER_SET_NAME,
+                      CAST(c.collation AS CHAR(64)) AS COLLATION_NAME,
                       CAST(
                         CASE
                         WHEN rp.param_type IN (1, 2, 3, 4, 5) THEN CONCAT(
@@ -19740,6 +19718,7 @@ def_table_schema(
                       and rp.routine_id = r.routine_id
                       and rp.param_position = 0
                       left join oceanbase.__all_virtual_data_type v on rp.param_type = v.data_type
+                      left join oceanbase.__tenant_virtual_collation c on rp.param_coll_type = c.collation_type
                     where (0 = sys_privilege_check('routine_acc', effective_tenant_id())
                            or 0 = sys_privilege_check('routine_acc', effective_tenant_id(), mp.DB, r.routine_name, r.routine_type))
                     """.replace("\n", " ")
@@ -34450,49 +34429,8 @@ def_table_schema(
                         CASE WHEN rp.param_type IN (17, 18, 20, 53) THEN CAST(rp.param_scale AS UNSIGNED)
                           ELSE CAST(NULL AS UNSIGNED)
                         END AS DATETIME_PRECISION,
-                        CAST(CASE rp.param_charset
-                          WHEN 1 THEN 'binary'
-                          WHEN 2 THEN 'utf8mb4'
-                          WHEN 3 THEN 'gbk'
-                          WHEN 4 THEN 'utf16'
-                          WHEN 5 THEN 'gb18030'
-                          WHEN 6 THEN 'latin1'
-                          WHEN 7 THEN 'gb18030_2022'
-                          WHEN 8 THEN 'ascii'
-                          WHEN 9 THEN 'tis620'
-                          ELSE NULL
-                        END AS CHAR(64)) AS CHARACTER_SET_NAME,
-                        CAST(CASE rp.param_coll_type
-                        WHEN 8 THEN 'latin1_swedish_ci'
-                        WHEN 11 THEN 'ascii_general_ci'
-                        WHEN 18 THEN 'tis620_thai_ci'
-                        WHEN 28 THEN 'gbk_chinese_ci'
-                        WHEN 45 THEN 'utf8mb4_general_ci'
-                        WHEN 46 THEN 'utf8mb4_bin'
-                        WHEN 47 THEN 'latin1_bin'
-                        WHEN 54 THEN 'utf16_general_ci'
-                        WHEN 55 THEN 'utf16_bin'
-                        WHEN 63 THEN 'binary'
-                        WHEN 65 THEN 'ascii_bin'
-                        WHEN 87 THEN 'gbk_bin'
-                        WHEN 89 THEN 'tis620_bin'
-                        WHEN 101 THEN 'utf16_unicode_ci'
-                        WHEN 216 THEN 'gb18030_2022_bin'
-                        WHEN 217 THEN 'gb18030_2022_chinese_ci'
-                        WHEN 218 THEN 'gb18030_2022_chinese_cs'
-                        WHEN 219 THEN 'gb18030_2022_radical_ci'
-                        WHEN 220 THEN 'gb18030_2022_radical_cs'
-                        WHEN 221 THEN 'gb18030_2022_stroke_ci'
-                        WHEN 222 THEN 'gb18030_2022_stroke_cs'
-                        WHEN 224 THEN 'utf8mb4_unicode_ci'
-                        WHEN 234 THEN 'utf8mb4_czech_ci'
-                        WHEN 245 THEN 'utf8mb4_croatian_ci'
-                        WHEN 246 THEN 'utf8mb4_unicode_520_ci'
-                        WHEN 248 THEN 'gb18030_chinese_ci'
-                        WHEN 249 THEN 'gb18030_bin'
-                        WHEN 255 THEN 'utf8mb4_0900_ai_ci'
-                          ELSE NULL
-                        END AS CHAR(64)) AS COLLATION_NAME,
+                        CAST(c.charset AS CHAR(64)) AS CHARACTER_SET_NAME,
+                        CAST(c.collation AS CHAR(64)) AS COLLATION_NAME,
                         CAST(CASE WHEN rp.param_type IN (1, 2, 3, 4, 5, 31)
                           THEN CONCAT(lower(v.data_type_str),'(',rp.param_precision,')')
                           WHEN (rp.param_type in (6, 7, 8, 9, 10) AND rp.param_zero_fill)
@@ -34525,6 +34463,7 @@ def_table_schema(
                         and rp.routine_id = r.routine_id
                         join oceanbase.__all_database as d on r.database_id = d.database_id
                         left join oceanbase.__all_virtual_data_type v on rp.param_type = v.data_type
+                        left join oceanbase.__tenant_virtual_collation c on rp.param_coll_type = c.collation_type
                       WHERE
                         rp.tenant_id = 0
                         and in_recyclebin = 0

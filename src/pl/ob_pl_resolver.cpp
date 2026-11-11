@@ -2350,8 +2350,19 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
       } else if (CHARSET_INVALID == charset_type
                  && CS_TYPE_INVALID == collation_type) {
         if (lib::is_mysql_mode()) {
-          OZ (session_info.get_character_set_connection(charset_type));
-          OZ (session_info.get_collation_connection(collation_type));
+          bool use_database_collation = false;
+          OZ (session_info.check_feature_enable(
+              ObCompatFeatureType::MYSQL_ROUTINE_DATABASE_COLLATION, use_database_collation));
+          if (OB_SUCC(ret)) {
+            if (use_database_collation) {
+              // The creation environment persists the database collation for recompilation.
+              OZ (session_info.get_collation_database(collation_type));
+              OX (charset_type = ObCharset::charset_type_by_coll(collation_type));
+            } else {
+              OZ (session_info.get_character_set_connection(charset_type));
+              OZ (session_info.get_collation_connection(collation_type));
+            }
+          }
         } else { // oracle mode
           if (OB_FAIL(ret)) {
             // do nothing

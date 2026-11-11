@@ -35,7 +35,13 @@ public:
   static const int64_t ROUTINE_STANDALONE_SUBPROGRAM_ID = 0;
   static const int64_t ROUTINE_RET_TYPE_POSITION = 0;
   static const int64_t ROUTINE_RET_TYPE_SEQUENCE = 1;
-  explicit ObCreateRoutineResolver(ObResolverParams &params) : ObDDLResolver(params) {}
+  explicit ObCreateRoutineResolver(ObResolverParams &params)
+    : ObDDLResolver(params), routine_info_to_reuse_(NULL) {}
+
+  void set_routine_info_to_reuse(const share::schema::ObRoutineInfo &routine_info)
+  {
+    routine_info_to_reuse_ = &routine_info;
+  }
 
   int resolve(const ParseNode &parse_tree,
                      const ParseNode *sp_definer_node,
@@ -70,6 +76,7 @@ private:
   int set_routine_info(const share::schema::ObRoutineType &type,
                        share::schema::ObRoutineInfo &routine_info,
                        bool is_udt_udf = false);
+  int set_routine_exec_env(share::schema::ObRoutineInfo &routine_info);
   int analyze_router_sql(obrpc::ObCreateRoutineArg *crt_routine_arg);
   int resolve_sp_definer(const ParseNode *parse_node, share::schema::ObRoutineInfo &routine_info);
   int resolve_sp_name(const ParseNode *parse_node, obrpc::ObCreateRoutineArg *crt_routine_arg);
@@ -88,6 +95,9 @@ private:
   int resolve_aggregate_body(const ParseNode *parse_node, share::schema::ObRoutineInfo &routine_info);
 
   int resolve_external_routine_type(const ObString &udf_type, const ObString &file, share::schema::ObRoutineInfo &routine_info);
+
+  // Borrowed from the caller's schema guard for this resolve call.
+  const share::schema::ObRoutineInfo *routine_info_to_reuse_;
 };
 
 class ObCreateProcedureResolver: public ObCreateRoutineResolver

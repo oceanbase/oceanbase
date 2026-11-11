@@ -1148,19 +1148,55 @@ int ObTriggerResolver::resolve_alter_clause(const ParseNode &alter_clause,
 }
 
 int ObTriggerResolver::fill_package_info(ObTriggerInfo &trigger_info)
-
 {
   int ret = OB_SUCCESS;
   char buf[OB_MAX_PROC_ENV_LENGTH];
   int64_t pos = 0;
   ObString pl_exec_env;
+  bool use_database_collation = false;
+  bool need_restore_database_collation = false;
+  ObObj old_character_set_database;
+  ObObj old_collation_database;
   OV (OB_NOT_NULL(session_info_));
+  if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+    OZ (session_info_->check_feature_enable(
+        share::ObCompatFeatureType::MYSQL_ROUTINE_DATABASE_COLLATION, use_database_collation));
+  }
+  if (OB_SUCC(ret) && use_database_collation) {
+    const ObDatabaseSchema *database_schema = NULL;
+    CK (OB_NOT_NULL(schema_checker_), OB_NOT_NULL(schema_checker_->get_schema_guard()));
+    OZ (schema_checker_->get_schema_guard()->get_database_schema(
+        trigger_info.get_tenant_id(), trigger_info.get_database_id(), database_schema));
+    CK (OB_NOT_NULL(database_schema));
+    OZ (session_info_->get_sys_variable(share::SYS_VAR_CHARACTER_SET_DATABASE, old_character_set_database));
+    OZ (session_info_->get_sys_variable(share::SYS_VAR_COLLATION_DATABASE, old_collation_database));
+    OX (need_restore_database_collation = true);
+    if (OB_SUCC(ret)) {
+      // A qualified trigger can belong to a database other than the caller's current database.
+      const int64_t db_collation = static_cast<int64_t>(database_schema->get_collation_type());
+      OZ (session_info_->update_sys_variable(share::SYS_VAR_CHARACTER_SET_DATABASE, db_collation));
+      OZ (session_info_->update_sys_variable(share::SYS_VAR_COLLATION_DATABASE, db_collation));
+    }
+  }
   OZ (ObExecEnv::gen_exec_env(*session_info_, buf, OB_MAX_PROC_ENV_LENGTH, pos));
   OX (pl_exec_env.assign_ptr(buf, static_cast<int32_t>(pos)));
   OX (trigger_info.set_package_flag(0));
   OX (trigger_info.set_package_comp_flag(0));
   OZ (trigger_info.set_package_exec_env(pl_exec_env));
   OX (trigger_info.set_sql_mode(session_info_->get_sql_mode()));
+  if (need_restore_database_collation) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = session_info_->update_sys_variable(
+            share::SYS_VAR_CHARACTER_SET_DATABASE, old_character_set_database))) {
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      LOG_WARN("failed to restore database character set", K(ret), K(tmp_ret));
+    }
+    if (OB_SUCCESS != (tmp_ret = session_info_->update_sys_variable(
+            share::SYS_VAR_COLLATION_DATABASE, old_collation_database))) {
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      LOG_WARN("failed to restore database collation", K(ret), K(tmp_ret));
+    }
+  }
   return ret;
 }
 
@@ -1371,6 +1407,20 @@ int ObTriggerResolver::analyze_trigger(ObSchemaGetterGuard &schema_guard,
   int ret = OB_SUCCESS;
   CK (OB_LIKELY(OB_NOT_NULL(session_info)));
   CK (OB_LIKELY(OB_NOT_NULL(sql_proxy)));
+  ObExecEnv old_env;
+  bool need_restore_exec_env = false;
+  if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+    bool use_database_collation = false;
+    OZ (session_info->check_feature_enable(
+        share::ObCompatFeatureType::MYSQL_ROUTINE_DATABASE_COLLATION, use_database_collation));
+    if (OB_SUCC(ret) && use_database_collation) {
+      ObExecEnv trigger_env;
+      OZ (old_env.load(*session_info, &allocator));
+      OZ (trigger_env.init(trigger_info.get_package_exec_env()));
+      OX (need_restore_exec_env = true);
+      OZ (trigger_env.store(*session_info));
+    }
+  }
   if (OB_SUCC(ret)) {
     bool is_wrap = false;
     HEAP_VARS_2((ObPLPackageAST, package_spec_ast, allocator),
@@ -1464,6 +1514,13 @@ int ObTriggerResolver::analyze_trigger(ObSchemaGetterGuard &schema_guard,
                                                   0, dep_attr, dep_attr));
         }
       }
+    }
+  }
+  if (need_restore_exec_env) {
+    const int tmp_ret = old_env.store(*session_info);
+    if (OB_SUCCESS != tmp_ret) {
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      LOG_WARN("failed to restore trigger analysis environment", K(ret), K(tmp_ret));
     }
   }
   return ret;

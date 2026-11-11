@@ -77,14 +77,19 @@ int ObCreateRoutineResolver::set_routine_info(const ObRoutineType &type,
     routine_info.set_overload(ROUTINE_STANDALONE_OVERLOAD);
     routine_info.set_subprogram_id(ROUTINE_STANDALONE_SUBPROGRAM_ID);
     routine_info.set_tg_timing_event(static_cast<TgTimingEvent>(params_.tg_timing_event_));
-    char buf[OB_MAX_PROC_ENV_LENGTH];
-    int64_t pos = 0;
-    if (OB_FAIL(ObExecEnv::gen_exec_env(*session_info_, buf, OB_MAX_PROC_ENV_LENGTH, pos))) {
-      LOG_WARN("failed to generate exec env", K(ret));
-    } else {
-      routine_info.set_exec_env(ObString(pos, buf));
-    }
   }
+  OZ (set_routine_exec_env(routine_info));
+  return ret;
+}
+
+int ObCreateRoutineResolver::set_routine_exec_env(ObRoutineInfo &routine_info)
+{
+  int ret = OB_SUCCESS;
+  char buf[OB_MAX_PROC_ENV_LENGTH];
+  int64_t pos = 0;
+  CK (OB_NOT_NULL(session_info_));
+  OZ (ObExecEnv::gen_exec_env(*session_info_, buf, OB_MAX_PROC_ENV_LENGTH, pos));
+  OZ (routine_info.set_exec_env(ObString(pos, buf)));
   return ret;
 }
 
@@ -1046,13 +1051,21 @@ int ObCreateRoutineResolver::resolve_impl(ObRoutineType routine_type,
   bool need_reset_default_database = false;
   uint64_t old_database_id = OB_INVALID_ID;
   ObSqlString old_database_name;
+  ObObj old_character_set_database;
+  ObObj old_collation_database;
+  ObCollationType routine_database_collation = CS_TYPE_INVALID;
+  bool use_database_collation = false;
   CK(OB_NOT_NULL(session_info_), OB_NOT_NULL(allocator_), OB_NOT_NULL(schema_checker_));
   CHECK_COMPATIBILITY_MODE(session_info_);
   CK (INVALID_ROUTINE_TYPE != routine_type);
+  if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+    OZ (session_info_->check_feature_enable(
+        share::ObCompatFeatureType::MYSQL_ROUTINE_DATABASE_COLLATION, use_database_collation));
+  }
 
+  const bool reuse_routine_info = use_database_collation && OB_NOT_NULL(routine_info_to_reuse_);
   OZ(resolve_sp_definer(sp_definer_node, crt_routine_arg->routine_info_));
   OZ (resolve_sp_name(name_node, crt_routine_arg));
-  OZ (set_routine_info(routine_type, crt_routine_arg->routine_info_, is_udt_udf));
 
   if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
     OZ (schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
@@ -1075,22 +1088,49 @@ int ObCreateRoutineResolver::resolve_impl(ObRoutineType routine_type,
       LOG_USER_ERROR(OB_ERR_BAD_DATABASE, crt_routine_arg->db_name_.length(), crt_routine_arg->db_name_.ptr());
     }
     if (OB_FAIL(ret)) {
-    }else if (database_schema->get_database_name_str() != session_info_->get_database_name()) {
+    } else if (database_schema->get_database_name_str() != session_info_->get_database_name()) {
+      routine_database_collation = database_schema->get_collation_type();
       OZ (old_database_name.append(session_info_->get_database_name()));
       OX (old_database_id = session_info_->get_database_id());
+      if (use_database_collation && !reuse_routine_info) {
+        OZ (session_info_->get_sys_variable(share::SYS_VAR_CHARACTER_SET_DATABASE, old_character_set_database));
+        OZ (session_info_->get_sys_variable(share::SYS_VAR_COLLATION_DATABASE, old_collation_database));
+      }
+      // Resolve signature types with the caller database's charset defaults.
+      OX (need_reset_default_database = true);
       OZ (session_info_->set_default_database(database_schema->get_database_name_str()));
       OX (session_info_->set_database_id(database_id));
       OX (crt_routine_arg->routine_info_.set_database_id(database_id));
-      OX (need_reset_default_database = true);
     } else {
       OX (crt_routine_arg->routine_info_.set_database_id(database_id));
     }
   }
+  OZ (set_routine_info(routine_type, crt_routine_arg->routine_info_, is_udt_udf));
   OZ (resolve_sp_body(body_node, crt_routine_arg->routine_info_));
-  if (OB_SUCC(ret) && ROUTINE_FUNCTION_TYPE == routine_type) {
-    OZ (resolve_ret_type(ret_node, crt_routine_arg->routine_info_));
+  if (reuse_routine_info) {
+    ObRoutineInfo &routine_info = crt_routine_arg->routine_info_;
+    // Keep resolved signature types when recompiling with the stored execution environment.
+    for (int64_t i = 0; OB_SUCC(ret) && i < routine_info_to_reuse_->get_routine_params().count(); ++i) {
+      const ObRoutineParam *param = routine_info_to_reuse_->get_routine_params().at(i);
+      CK (OB_NOT_NULL(param));
+      OZ (routine_info.add_routine_param(*param));
+      if (OB_SUCC(ret) && (param->is_out_sp_param() || param->is_inout_sp_param())) {
+        routine_info.set_has_out_param();
+      }
+    }
+  } else {
+    if (OB_SUCC(ret) && ROUTINE_FUNCTION_TYPE == routine_type) {
+      OZ (resolve_ret_type(ret_node, crt_routine_arg->routine_info_));
+    }
+    OZ (resolve_param_list(param_node, *crt_routine_arg));
   }
-  OZ (resolve_param_list(param_node, *crt_routine_arg));
+  if (OB_SUCC(ret) && need_reset_default_database && use_database_collation && !reuse_routine_info) {
+    // Local variables use the owning database's creation-time defaults.
+    const int64_t db_collation = static_cast<int64_t>(routine_database_collation);
+    OZ (session_info_->update_sys_variable(share::SYS_VAR_CHARACTER_SET_DATABASE, db_collation));
+    OZ (session_info_->update_sys_variable(share::SYS_VAR_COLLATION_DATABASE, db_collation));
+    OZ (set_routine_exec_env(crt_routine_arg->routine_info_));
+  }
   OZ (resolve_clause_list(clause_list, crt_routine_arg->routine_info_));
   CK (OB_NOT_NULL(body_node));
   if (OB_FAIL(ret)) {
@@ -1114,6 +1154,18 @@ int ObCreateRoutineResolver::resolve_impl(ObRoutineType routine_type,
       LOG_ERROR("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
     } else {
       session_info_->set_database_id(old_database_id);
+    }
+    if (use_database_collation && !reuse_routine_info) {
+      if (OB_SUCCESS != (tmp_ret = session_info_->update_sys_variable(
+              share::SYS_VAR_CHARACTER_SET_DATABASE, old_character_set_database))) {
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+        LOG_WARN("failed to restore database character set", K(ret), K(tmp_ret));
+      }
+      if (OB_SUCCESS != (tmp_ret = session_info_->update_sys_variable(
+              share::SYS_VAR_COLLATION_DATABASE, old_collation_database))) {
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+        LOG_WARN("failed to restore database collation", K(ret), K(tmp_ret));
+      }
     }
   }
 
@@ -1306,11 +1358,18 @@ int ObCreateRoutineResolver::resolve_external_udf(const ParseNode &parse_tree,
   uint64_t old_database_id = OB_INVALID_ID;
   ObSqlString old_database_name;
   bool need_reset_default_database = false;
+  ObObj old_character_set_database;
+  ObObj old_collation_database;
+  bool use_database_collation = false;
 
   CK (OB_NOT_NULL(schema_checker_));
   CK (OB_NOT_NULL(schema_checker_->get_schema_guard()));
   CK (OB_NOT_NULL(session_info_));
   CK (7 == parse_tree.num_child_);
+  if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+    OZ (session_info_->check_feature_enable(
+        share::ObCompatFeatureType::MYSQL_ROUTINE_DATABASE_COLLATION, use_database_collation));
+  }
 
   if (OB_FAIL(ret)) {
     // do nothing
@@ -1320,10 +1379,6 @@ int ObCreateRoutineResolver::resolve_external_udf(const ParseNode &parse_tree,
   } else if (OB_FAIL(resolve_sp_name(parse_tree.children_[NAME_IDX],
                                      &crt_routine_arg))) {
     LOG_WARN("failed to resolve sp name", K(ret), K(crt_routine_arg));
-  } else if (OB_FAIL(set_routine_info(ROUTINE_FUNCTION_TYPE,
-                                      crt_routine_arg.routine_info_,
-                                      false))) {
-    LOG_WARN("failed to set routine info",K(ret), K(crt_routine_arg));
   } else if (OB_FAIL(schema_checker_->get_schema_guard()->get_database_id(session_info_->get_effective_tenant_id(),
                                                                           crt_routine_arg.db_name_,
                                                                           database_id))) {
@@ -1337,20 +1392,21 @@ int ObCreateRoutineResolver::resolve_external_udf(const ParseNode &parse_tree,
     LOG_WARN("fail to get database schema", K(ret));
     LOG_USER_ERROR(OB_ERR_BAD_DATABASE, crt_routine_arg.db_name_.length(), crt_routine_arg.db_name_.ptr());
   } else if (database_schema->get_database_name_str() != session_info_->get_database_name()) {
-    if (OB_FAIL(old_database_name.append(session_info_->get_database_name()))) {
-      LOG_WARN("failed to append old database name", K(ret), K(session_info_), K(old_database_name));
-    } else if (OB_FAIL(session_info_->set_default_database(database_schema->get_database_name_str()))) {
-      LOG_WARN("failed to set_default_database", K(ret), K(session_info_), KPC(database_schema));
-    } else {
-      old_database_id = session_info_->get_database_id();
-      session_info_->set_database_id(database_id);
-      crt_routine_arg.routine_info_.set_database_id(database_id);
-      need_reset_default_database = true;
+    OZ (old_database_name.append(session_info_->get_database_name()));
+    OX (old_database_id = session_info_->get_database_id());
+    if (use_database_collation) {
+      OZ (session_info_->get_sys_variable(share::SYS_VAR_CHARACTER_SET_DATABASE, old_character_set_database));
+      OZ (session_info_->get_sys_variable(share::SYS_VAR_COLLATION_DATABASE, old_collation_database));
     }
+    OX (need_reset_default_database = true);
+    OZ (session_info_->set_default_database(database_schema->get_database_name_str()));
+    OX (session_info_->set_database_id(database_id));
+    OX (crt_routine_arg.routine_info_.set_database_id(database_id));
   } else {
     crt_routine_arg.routine_info_.set_database_id(database_id);
   }
 
+  OZ (set_routine_info(ROUTINE_FUNCTION_TYPE, crt_routine_arg.routine_info_, false));
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(resolve_sp_body(parse_tree.children_[BODY_IDX],
@@ -1363,6 +1419,13 @@ int ObCreateRoutineResolver::resolve_external_udf(const ParseNode &parse_tree,
   } else if (OB_FAIL(resolve_param_list(parse_tree.children_[PARAM_IDX],
                                         crt_routine_arg))) {
     LOG_WARN("failed to resolve param list", K(ret), K(crt_routine_arg));
+  }
+
+  if (OB_SUCC(ret) && need_reset_default_database && use_database_collation) {
+    const int64_t db_collation = static_cast<int64_t>(database_schema->get_collation_type());
+    OZ (session_info_->update_sys_variable(share::SYS_VAR_CHARACTER_SET_DATABASE, db_collation));
+    OZ (session_info_->update_sys_variable(share::SYS_VAR_COLLATION_DATABASE, db_collation));
+    OZ (set_routine_exec_env(crt_routine_arg.routine_info_));
   }
 
   if (OB_SUCC(ret)) {
@@ -1436,6 +1499,18 @@ int ObCreateRoutineResolver::resolve_external_udf(const ParseNode &parse_tree,
       LOG_ERROR("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
     } else {
       session_info_->set_database_id(old_database_id);
+    }
+    if (use_database_collation) {
+      if (OB_SUCCESS != (tmp_ret = session_info_->update_sys_variable(
+              share::SYS_VAR_CHARACTER_SET_DATABASE, old_character_set_database))) {
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+        LOG_WARN("failed to restore database character set", K(ret), K(tmp_ret));
+      }
+      if (OB_SUCCESS != (tmp_ret = session_info_->update_sys_variable(
+              share::SYS_VAR_COLLATION_DATABASE, old_collation_database))) {
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+        LOG_WARN("failed to restore database collation", K(ret), K(tmp_ret));
+      }
     }
   }
 

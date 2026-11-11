@@ -92,12 +92,13 @@ int ObAlterRoutineResolver::resolve(const ParseNode &parse_tree)
     //Step4: do real alter resolve
     if (OB_FAIL(ret)) {
     } else if (lib::is_mysql_mode()) {
+      // The stored source is unqualified; recompilation must keep the owning database.
+      OX (alter_routine_stmt->get_routine_arg().db_name_ = db_name);
       if (OB_NOT_NULL(parse_tree.children_[1])) {
         OZ (resolve_impl(alter_routine_stmt->get_routine_arg(), *routine_info, *(parse_tree.children_[1])));
       } else {
         OX (alter_routine_stmt->get_routine_arg().routine_info_ = *routine_info);
       }
-      OX (alter_routine_stmt->get_routine_arg().db_name_ = db_name);
       OX (alter_routine_stmt->get_routine_arg().routine_info_.set_tenant_id(routine_info->get_tenant_id()));
       OX (alter_routine_stmt->get_routine_arg().routine_info_.set_routine_id(routine_info->get_routine_id()));
       OX (alter_routine_stmt->get_routine_arg().is_need_alter_ = true);
@@ -241,7 +242,11 @@ int ObAlterRoutineResolver::resolve_compile_clause(
           && OB_INVALID_ID != session_info_->get_pl_attached_id()) {
       OZ (register_debug_info(routine_info));
     }
-    OZ (old_env.store(*session_info_));
+    int tmp_ret = old_env.store(*session_info_);
+    if (OB_SUCCESS != tmp_ret) {
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      LOG_WARN("failed to restore routine compilation environment", K(ret), K(tmp_ret));
+    }
   }
   return ret;
 }
@@ -407,6 +412,9 @@ int ObAlterRoutineResolver::resolve_routine(
       case T_SP_CREATE: {
         HEAP_VAR(ObCreateProcedureResolver, resolver, params_) {
           OX (resolver.set_basic_stmt(get_basic_stmt()));
+          if (!need_recreate) {
+            OX (resolver.set_routine_info_to_reuse(routine_info));
+          }
           OZ (resolver.resolve_impl(*source_tree, &crt_routine_arg));
         }
         break;
@@ -414,6 +422,9 @@ int ObAlterRoutineResolver::resolve_routine(
       case T_SF_CREATE: {
         HEAP_VAR(ObCreateFunctionResolver, resolver, params_) {
           OX (resolver.set_basic_stmt(get_basic_stmt()));
+          if (!need_recreate) {
+            OX (resolver.set_routine_info_to_reuse(routine_info));
+          }
           OZ (resolver.resolve_impl(*source_tree, &crt_routine_arg));
         }
         break;
