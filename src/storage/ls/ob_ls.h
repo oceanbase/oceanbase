@@ -644,7 +644,6 @@ public:
   //     const share::ObLSID &ls_id,
   //     const common::ObTabletID &tablet_id);
   DELEGATE_WITH_RET(ls_tablet_svr_, remove_ls_inner_tablet, int);
-  DELEGATE_WITH_RET(ls_tablet_svr_, rebuild_create_tablet, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, batch_create_or_update_migration_tablets, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, update_tablet_ha_data_status, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, ha_get_tablet, int);

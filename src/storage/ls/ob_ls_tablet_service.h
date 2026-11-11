@@ -509,8 +509,6 @@ public:
   int ha_scan_all_tablets(
       const HandleTabletMetaFunc &handle_tablet_meta_f,
       const bool need_sorted_tablet_id);
-  int rebuild_create_tablet(
-      const ObMigrationTabletParam &mig_tablet_param);
   int create_or_update_migration_tablet(
       const ObMigrationTabletParam &mig_tablet_param,
       const bool is_transfer);

@@ -690,7 +690,7 @@ int ObStorageHATabletsBuilder::create_or_update_tablet_(
                                                create_tablet_param.storage_schema_,
                                                allocator))) {
     LOG_WARN("failed to hold local reuse sstable", K(ret), K(tablet_info));
-  } else if (OB_FAIL(ls->rebuild_create_tablet(tablet_info.param_))) {
+  } else if (OB_FAIL(ls->create_or_update_migration_tablet(tablet_info.param_, false/*is_transfer*/))) {
     LOG_WARN("failed to create or update tablet", K(ret), K(tablet_info));
   } else if (tablet_info.param_.is_empty_shell() || tablet_info.param_.ha_status_.is_restore_status_undefined()) {
     // empty shell or UNDEFINED tablet does not need to reuse any sstable.
