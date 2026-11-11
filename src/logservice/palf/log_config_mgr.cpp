@@ -5,6 +5,8 @@
 
 #define USING_LOG_PREFIX PALF
 #include "log_config_mgr.h"
+#include "lib/utility/ob_tracepoint.h"
+#include "share/rc/ob_tenant_base.h"
 #include "log_engine.h"
 #include "log_io_task_cb_utils.h"                // FlushMetaCbCtx
 #include "log_sliding_window.h"
@@ -2102,6 +2104,30 @@ bool LogConfigMgr::can_receive_config_log(const common::ObAddr &leader, const Lo
   return bool_ret;
 }
 
+ERRSIM_POINT_DEF(EN_LOG_CONFIG_MGR_RECEIVE_CONFIG_LOG_FAIL);
+ERRSIM_POINT_DEF(EN_LOG_CONFIG_MGR_RECEIVE_CONFIG_LOG_TENANT_ID);
+ERRSIM_POINT_DEF(EN_LOG_CONFIG_MGR_RECEIVE_CONFIG_LOG_LS_ID);
+
+#ifdef ERRSIM
+static int check_receive_config_log_errsim(const int64_t palf_id)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  const int64_t target_tenant_id = std::abs(static_cast<int64_t>(
+      EN_LOG_CONFIG_MGR_RECEIVE_CONFIG_LOG_TENANT_ID.item_.error_code_));
+  const int64_t target_ls_id = std::abs(static_cast<int64_t>(
+      EN_LOG_CONFIG_MGR_RECEIVE_CONFIG_LOG_LS_ID.item_.error_code_));
+  const bool tenant_match = (0 == target_tenant_id)
+      ? !is_sys_tenant(tenant_id)
+      : (tenant_id == static_cast<uint64_t>(target_tenant_id));
+  const bool ls_match = (0 == target_ls_id) || (palf_id == target_ls_id);
+  if (tenant_match && ls_match) {
+    ret = OB_E(EN_LOG_CONFIG_MGR_RECEIVE_CONFIG_LOG_FAIL, palf_id) OB_SUCCESS;
+  }
+  return ret;
+}
+#endif
+
 int LogConfigMgr::receive_config_log(const common::ObAddr &leader, const LogConfigMeta &meta)
 {
   int ret = OB_SUCCESS;
@@ -2120,6 +2146,11 @@ int LogConfigMgr::receive_config_log(const common::ObAddr &leader, const LogConf
     // Note: order is vital, submit flush task may fail
     if (OB_FAIL(log_engine_->submit_flush_change_config_meta_task(cb_ctx, meta))) {
       PALF_LOG(WARN, "LogEngine submit_flush_change_config_meta_task failed", KR(ret), K_(palf_id), K_(self), K(meta));
+#ifdef ERRSIM
+    } else if (OB_FAIL(check_receive_config_log_errsim(palf_id_))) {
+      PALF_LOG(WARN, "errsim inject error before update_election_meta_ in receive_config_log",
+          KR(ret), "tenant_id", MTL_ID(), K_(palf_id), K_(self), K(leader), K(meta));
+#endif
     } else if (OB_FAIL(update_election_meta_(meta.curr_))) {
       PALF_LOG(ERROR, "update_election_meta_ failed", KR(ret), K_(palf_id), K_(self), K(meta));
     } else if (OB_FAIL(append_config_info_(meta.curr_))) {
