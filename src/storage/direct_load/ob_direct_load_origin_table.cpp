@@ -7,6 +7,7 @@
 #include "storage/direct_load/ob_direct_load_origin_table.h"
 #include "observer/table_load/ob_table_load_utils.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "share/ls/ob_ls_operator.h"
 
 namespace oceanbase
 {
@@ -388,7 +389,7 @@ int ObDirectLoadOriginTableAccessor::init_table_access_ctx(bool skip_read_lob)
   const ObTabletID &tablet_id = origin_table_->get_meta().tablet_id_;
   const ObTransID &tx_id = origin_table_->get_meta().tx_id_;
   const ObTxSEQ &tx_seq = origin_table_->get_meta().tx_seq_;
-  const share::SCN snapshot_version = share::SCN::max_scn();
+  share::SCN snapshot_version;
   ObQueryFlag query_flag(ObQueryFlag::Forward,
                          false /*daily_merge*/,
                          true /*optimize*/,
@@ -403,23 +404,28 @@ int ObDirectLoadOriginTableAccessor::init_table_access_ctx(bool skip_read_lob)
   }
   trans_version_range.multi_version_start_ = 0;
   trans_version_range.base_version_ = 0;
-  trans_version_range.snapshot_version_ = snapshot_version.get_val_for_tx();
-  if (OB_FAIL(store_ctx_.init_for_read(origin_table_->get_meta().ls_id_,
-                                       tablet_id,
-                                       INT64_MAX,
-                                       -1,
-                                       snapshot_version))) {
-    LOG_WARN("fail to init for read", KR(ret));
-  } else if (OB_FAIL(table_access_ctx_.init(query_flag,
-                                            store_ctx_,
-                                            allocator_,
-                                            stmt_allocator_,
-                                            trans_version_range))) {
-    LOG_WARN("fail to init table access context", KR(ret));
+  // LOB reads register this snapshot as a maximum read version, so it must not be MAX.
+  if (OB_FAIL(ObLSAttrOperator::get_tenant_gts(MTL_ID(), snapshot_version))) {
+    LOG_WARN("fail to get tenant gts", KR(ret));
   } else {
-    store_ctx_.mvcc_acc_ctx_.snapshot_.tx_id_ = tx_id;
-    store_ctx_.mvcc_acc_ctx_.snapshot_.scn_ = tx_seq;
-    table_access_ctx_.lob_locator_helper_->update_lob_locator_ctx(table_id, tablet_id.id(), 0);
+    trans_version_range.snapshot_version_ = snapshot_version.get_val_for_tx();
+    if (OB_FAIL(store_ctx_.init_for_read(origin_table_->get_meta().ls_id_,
+                                         tablet_id,
+                                         INT64_MAX,
+                                         -1,
+                                         snapshot_version))) {
+      LOG_WARN("fail to init for read", KR(ret));
+    } else if (OB_FAIL(table_access_ctx_.init(query_flag,
+                                              store_ctx_,
+                                              allocator_,
+                                              stmt_allocator_,
+                                              trans_version_range))) {
+      LOG_WARN("fail to init table access context", KR(ret));
+    } else {
+      store_ctx_.mvcc_acc_ctx_.snapshot_.tx_id_ = tx_id;
+      store_ctx_.mvcc_acc_ctx_.snapshot_.scn_ = tx_seq;
+      table_access_ctx_.lob_locator_helper_->update_lob_locator_ctx(table_id, tablet_id.id(), 0);
+    }
   }
   return ret;
 }
