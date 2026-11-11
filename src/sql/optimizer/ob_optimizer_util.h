@@ -1111,11 +1111,21 @@ public:
                                const EqualSets &equal_sets,
                                const ObIArray<ObRawExpr *> &const_exprs,
                                bool &is_match);
-  static int is_lossless_column_cast(const ObRawExpr *expr, bool &is_lossless, bool is_query_range = false, bool allow_imprecise_column_cast = false);
+  // Ordering checks must retain casts that do not preserve the input order.
+  static int is_lossless_column_cast(const ObRawExpr *expr, bool &is_lossless,
+                                     bool is_query_range = false,
+                                     bool allow_imprecise_column_cast = false,
+                                     bool need_order_preserving = false);
   static bool is_lossless_type_conv(const ObRawExprResType &child_type, const ObRawExprResType &dst_type);
   static int is_lossless_column_conv(const ObRawExpr *expr, bool &is_lossless);
-  static int get_expr_without_lossless_cast(const ObRawExpr* ori_expr, const ObRawExpr*& expr, bool is_query_range = false, bool allow_imprecise_column_cast = false);
-  static int get_expr_without_lossless_cast(ObRawExpr* ori_expr, ObRawExpr*& expr, bool is_query_range = false, bool allow_imprecise_column_cast = false);
+  static int get_expr_without_lossless_cast(const ObRawExpr* ori_expr, const ObRawExpr*& expr,
+                                            bool is_query_range = false,
+                                            bool allow_imprecise_column_cast = false,
+                                            bool need_order_preserving = false);
+  static int get_expr_without_lossless_cast(ObRawExpr* ori_expr, ObRawExpr*& expr,
+                                            bool is_query_range = false,
+                                            bool allow_imprecise_column_cast = false,
+                                            bool need_order_preserving = false);
   static int extract_real_dep_expr(ObRawExpr *ori_depend_expr,
                                    ObRawExpr *&real_depend_expr);
   static int check_and_extract_matched_gen_col_exprs(ObRawExpr *&depend_expr,
