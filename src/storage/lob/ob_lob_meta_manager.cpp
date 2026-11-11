@@ -197,8 +197,11 @@ int ObLobMetaManager::getlength_local(ObLobAccessParam &param, uint64_t &char_le
   int ret = OB_SUCCESS;
   ObLobMetaScanIter meta_iter;
   ObLobMetaScanResult result;
+  uint64_t length = 0;
   if (OB_FAIL(local_scan(param, meta_iter))) {
     LOG_WARN("open local lob scan iter failed.", K(ret), K(param));
+  } else {
+    meta_iter.set_verify_read_size();
   }
   while (OB_SUCC(ret)) {
     if (OB_FAIL(meta_iter.get_next_row(result))) {
@@ -208,11 +211,14 @@ int ObLobMetaManager::getlength_local(ObLobAccessParam &param, uint64_t &char_le
     } else if (OB_FAIL(param.is_timeout())) {
       LOG_WARN("access timeout", K(ret), K(param));
     } else {
-      char_len += result.info_.char_len_;
+      length += result.info_.char_len_;
     }
   }
   if (ret == OB_ITER_END) {
     ret = OB_SUCCESS;
+  }
+  if (OB_SUCC(ret)) {
+    char_len = length;
   }
   return ret;
 }
@@ -221,7 +227,10 @@ int ObLobMetaManager::getlength_remote(ObLobAccessParam &param, uint64_t &char_l
 {
   int ret = OB_SUCCESS;
   ObLobRemoteQueryCtx *remote_ctx = nullptr;
-  if (OB_FAIL(ObLobRemoteUtil::query(param, ObLobQueryArg::QueryType::GET_LENGTH, param.addr_, remote_ctx))) {
+  if (param.byte_size_ < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("negative LOB byte length", K(ret), K(param.byte_size_));
+  } else if (OB_FAIL(ObLobRemoteUtil::query(param, ObLobQueryArg::QueryType::GET_LENGTH, param.addr_, remote_ctx))) {
     LOG_WARN("fail to init remote query ctx", K(ret));
   } else {
     ObLobQueryBlock header;
@@ -229,6 +238,7 @@ int ObLobMetaManager::getlength_remote(ObLobAccessParam &param, uint64_t &char_l
     while (OB_SUCC(ret) && remote_ctx->handle_.has_more()) {
       cur_position = remote_ctx->rpc_buffer_.get_position();
       if (OB_FAIL(remote_ctx->handle_.get_more(remote_ctx->rpc_buffer_))) {
+        LOG_WARN("get more LOB length response failed", K(ret));
         ret = OB_DATA_SOURCE_TIMEOUT;
       } else if (remote_ctx->rpc_buffer_.get_position() < 0) {
         ret = OB_ERR_SYS;
@@ -253,9 +263,10 @@ int ObLobMetaManager::getlength_remote(ObLobAccessParam &param, uint64_t &char_l
       if (OB_FAIL(serialization::decode(remote_ctx->rpc_buffer_.get_data(),
         remote_ctx->rpc_buffer_.get_position(), rpc_buffer_pos, header))) {
         LOG_WARN("failed to decode lob query block", K(ret), K(remote_ctx->rpc_buffer_));
-      } else if (!header.is_valid()) {
+      } else if (!header.is_valid() && !(0 == header.size_ && 0 == param.byte_size_)) {
+        // An old server may return zero after rollback, but zero alone does not prove rollback.
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid header", K(ret), K(header));
+        LOG_WARN("invalid header", K(ret), K(header), K(param.byte_size_));
       } else {
         char_len = static_cast<uint64_t>(header.size_);
       }

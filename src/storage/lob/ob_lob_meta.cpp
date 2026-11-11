@@ -24,7 +24,10 @@ int ObLobMetaScanIter::open_local(ObLobAccessParam &param, ObPersistentLobApator
   allocator_ = param.allocator_;
   cur_pos_ = 0;
   cur_byte_pos_ = 0;
-  if (OB_FAIL(lob_adatper->scan_lob_meta(param, meta_iter_))) {
+  if (param.byte_size_ < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("negative LOB byte length", K(ret), K(param.byte_size_));
+  } else if (OB_FAIL(lob_adatper->scan_lob_meta(param, meta_iter_))) {
     LOG_WARN("failed to open iter", K(ret));
   }
   return ret;
@@ -43,7 +46,10 @@ int ObLobMetaScanIter::open_remote(ObLobAccessParam &param)
   cur_pos_ = 0;
   cur_byte_pos_ = 0;
   is_remote_ = true;
-  if (OB_FAIL(ObLobRemoteUtil::query(param, ObLobQueryArg::QueryType::READ, param.addr_, remote_ctx_))) {
+  if (param.byte_size_ < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("negative LOB byte length", K(ret), K(param.byte_size_));
+  } else if (OB_FAIL(ObLobRemoteUtil::query(param, ObLobQueryArg::QueryType::READ, param.addr_, remote_ctx_))) {
     LOG_WARN("fail to init remote query ctx", K(ret));
   }
   return ret;
@@ -53,7 +59,7 @@ ObLobMetaScanIter::ObLobMetaScanIter()
   : lob_adatper_(nullptr), meta_iter_(nullptr),
     byte_size_(0), offset_(0), len_(0), coll_type_(ObCollationType::CS_TYPE_INVALID), scan_backward_(false),
     allocator_(nullptr), cur_pos_(0), cur_byte_pos_(0), not_calc_char_len_(false),
-    not_need_last_info_(false), is_remote_(false), remote_ctx_(nullptr){}
+    not_need_last_info_(false), is_remote_(false), verify_read_size_(false), remote_ctx_(nullptr){}
 
 int ObLobMetaScanIter::get_next_row_local(ObLobMetaInfo &row)
 {
@@ -61,6 +67,9 @@ int ObLobMetaScanIter::get_next_row_local(ObLobMetaInfo &row)
   if (OB_ISNULL(meta_iter_)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("meta_iter is null.", K(ret));
+  } else if (byte_size_ < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("negative LOB byte length", K(ret), K_(byte_size));
   } else if (cur_byte_pos_ > byte_size_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("scan get lob meta byte len is bigger than byte size", K(ret), K(*this), K(byte_size_));
@@ -72,6 +81,10 @@ int ObLobMetaScanIter::get_next_row_local(ObLobMetaInfo &row)
     while (OB_SUCC(ret) && !has_found) {
       if (OB_FAIL(meta_iter_->get_next_row(row))) {
         if (ret == OB_ITER_END) {
+          if (verify_read_size_ && cur_byte_pos_ < byte_size_) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("LOB meta scan ended before the locator byte length", K(ret), K_(cur_byte_pos), K_(byte_size));
+          }
           // TODO aozeliu.azl make sure why need this
           row.byte_len_ = 0;
           row.char_len_ = 0;
@@ -79,6 +92,11 @@ int ObLobMetaScanIter::get_next_row_local(ObLobMetaInfo &row)
         } else {
           LOG_WARN("failed to get next row.", K(ret));
         }
+      } else if (verify_read_size_ && row.byte_len_ > byte_size_ - cur_byte_pos_) {
+        // Validate before a range read or a full output buffer can expose this row.
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("LOB meta row exceeds the locator byte length", K(ret), K_(cur_byte_pos),
+                 K_(byte_size), K(row.byte_len_));
       } else {
         cur_info_ = row;
         if (is_char && row.char_len_ == UINT32_MAX) {
@@ -575,6 +593,7 @@ void ObLobMetaScanIter::reset()
   lob_adatper_ = nullptr;
   cur_pos_ = 0;
   cur_byte_pos_ = 0;
+  verify_read_size_ = false;
 }
 
 // called after 

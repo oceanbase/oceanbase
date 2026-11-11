@@ -894,7 +894,7 @@ int ObTextStringIter::get_char_len(int64_t &char_length)
     storage::ObLobManager* lob_mngr = MTL(storage::ObLobManager*);
     if (OB_ISNULL(ctx_)) {
       ret = OB_INVALID_ARGUMENT;
-      COMMON_LOG(WARN, "Lob: error condition", K(ret), K(is_outrow_), KP(ctx_->session_), KP(ctx_));
+      COMMON_LOG(WARN, "Lob: error condition", K(ret), K(is_outrow_), KP(ctx_));
     } else if (OB_ISNULL(lob_mngr)) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(WARN, "Lob: get lob manager failed.", K(ret));
@@ -906,7 +906,7 @@ int ObTextStringIter::get_char_len(int64_t &char_length)
           ret = OB_INVALID_ARGUMENT;
           COMMON_LOG(WARN, "Lob: invalid param.", K(ret), K(param));
         } else if (OB_FAIL(lob_mngr->getlength(param, length))) {
-          COMMON_LOG(WARN,"Lob: falied to get outrow lob char len.", K(ret), K(param));
+          COMMON_LOG(WARN, "Lob: failed to get outrow lob char len.", K(ret), K(param));
         } else {
           char_length = static_cast<int64_t>(length);
         }

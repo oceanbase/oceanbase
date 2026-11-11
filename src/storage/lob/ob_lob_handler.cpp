@@ -125,6 +125,7 @@ int ObLobQueryDataHandler::do_execute()
   }
 
   if (OB_SUCC(ret)) {
+    meta_iter.set_verify_read_size();
     ObString block_data;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(meta_iter.get_next_row(block_data))) {

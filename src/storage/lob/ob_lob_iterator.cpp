@@ -135,6 +135,7 @@ int ObLobOutRowQueryIter::open(ObLobAccessParam &param, ObLobMetaManager *lob_me
   } else if (OB_FAIL(param_.assign(param))) {
     LOG_WARN("assign fail", K(ret), K(param));
   } else {
+    meta_iter_.set_verify_read_size();
     is_reverse_ = param.scan_backward_;
     cs_type_ = param.coll_type_;
     is_inited_ = true;

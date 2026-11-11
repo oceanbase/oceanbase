@@ -215,6 +215,34 @@ int ObLobMetaIterator::rescan(ObLobAccessParam &param)
   return ret;
 }
 
+int ObLobMetaIterator::check_read_txn_status()
+{
+  int ret = OB_SUCCESS;
+  ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(row_iter_);
+  if (OB_ISNULL(table_scan_iter)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    memtable::ObMvccAccessCtx &access_ctx = table_scan_iter->get_ctx_guard().get_store_ctx().mvcc_acc_ctx_;
+    if (access_ctx.snapshot_.tx_id_.is_valid()) {
+      int64_t state = ObTxData::RUNNING;
+      share::SCN version;
+      int tmp_ret = access_ctx.tx_table_guards_.get_tx_state_with_scn(
+          access_ctx.snapshot_.tx_id_, share::SCN::max_scn(), state, version);
+      if (OB_SUCCESS != tmp_ret) {
+        // A failed state lookup does not prove rollback; keep reading.
+        LOG_WARN("LOB read transaction state lookup failed, ignore", K(tmp_ret),
+                 K(scan_param_.snapshot_), KPC(this));
+      } else if (ObTxData::ABORT == state) {
+        ret = OB_TRANS_KILLED;
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("LOB read transaction is not valid", K(ret), K(scan_param_.snapshot_), KPC(this));
+  }
+  return ret;
+}
+
 int ObLobMetaIterator::get_next_row(ObLobMetaInfo &row)
 {
   int ret = OB_SUCCESS;
@@ -232,6 +260,15 @@ int ObLobMetaIterator::get_next_row(ObLobMetaInfo &row)
     LOG_WARN("lob meta row is null", K(ret), KPC(this));
   } else if (OB_FAIL(ObLobMetaUtil::transform_from_row_to_info(datum_row, row, false, has_ttl_column_))) {
     LOG_WARN("get meta info from row fail", K(ret), K(datum_row), KPC(this));
+  }
+  // The table scan already checks bound memtable contexts after each row.
+  // Only scans without a memtable context need the transaction-table fallback here.
+  if ((OB_SUCC(ret) || OB_ITER_END == ret)
+      && OB_ISNULL(table_scan_iter->get_ctx_guard().get_store_ctx().mvcc_acc_ctx_.mem_ctx_)) {
+    const int check_ret = check_read_txn_status();
+    if (OB_SUCCESS != check_ret) {
+      ret = check_ret;
+    }
   }
   return ret;
 }

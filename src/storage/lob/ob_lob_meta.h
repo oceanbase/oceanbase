@@ -120,6 +120,7 @@ public:
   void set_not_need_last_info(bool not_need_last_info) { not_need_last_info_ = not_need_last_info;}
   bool not_need_last_info() const { return not_need_last_info_; }
   bool is_remote() const { return is_remote_; }
+  void set_verify_read_size() { verify_read_size_ = true; }
 
   // the memory of cur_info may be relased by storage
   // so can not print cur_info directly
@@ -149,6 +150,7 @@ private:
   bool not_calc_char_len_;
   bool not_need_last_info_;
   bool is_remote_;
+  bool verify_read_size_;
   ObLobRemoteQueryCtx *remote_ctx_;
 };
 

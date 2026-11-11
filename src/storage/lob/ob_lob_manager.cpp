@@ -1611,6 +1611,8 @@ int ObLobManager::getlength(ObLobAccessParam& param, uint64_t &len)
       LOG_WARN("get lob data null.", K(ret));
     } else if (OB_FAIL(param.check_handle_size())) {
       LOG_WARN("check handle size failed.", K(ret));
+    } else if (0 == lob_common->get_byte_size(param.handle_size_)) {
+      len = 0;
     } else if (!is_char) { // return byte len
       len = lob_common->get_byte_size(param.handle_size_);
     } else if (param.lob_handle_has_char_len()) {
