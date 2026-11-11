@@ -583,6 +583,9 @@ int ObSSTableCopyFinishTask::fill_logic_macro_info_for_range(
     if (!range_id_info.macro_block_ids_.empty()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("macro block ids should be empty", K(ret), K(range_id_info));
+    } else if (range_info.macro_block_count_ <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("macro block count should be positive", K(ret), K(range_info));
     } else {
       for (int64_t idx = 0;
            OB_SUCC(ret) && idx < range_info.macro_block_count_;

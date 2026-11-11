@@ -1832,7 +1832,7 @@ void ObIDagNet::gene_dag_info(ObDagInfo &info, const char *list_info)
   }
   ADD_TASK_INFO_PARAM(info.comment_, OB_DAG_COMMET_LENGTH,
       " list_info", list_info);
-  if (!dag_record_map_.empty() && strlen(info.comment_) < OB_DAG_COMMET_LENGTH) {
+  if (!dag_record_map_.empty() && strlen(info.comment_) < OB_DAG_COMMET_LENGTH - 1) {
     int64_t str_len = strlen(info.comment_);
     info.comment_[str_len] = '|';
     info.comment_[str_len + 1] = '\0';
