@@ -92,11 +92,10 @@ public:
   }
   OB_INLINE bool is_valid() const
   {
-    bool is_valid_bound = (OB_INVALID_CS_ROW_ID == bound_row_id_
-                           || (is_reverse_ && bound_row_id_ <= begin_)
-                           || (!is_reverse_ && bound_row_id_ >= end_));
-    return (nullptr != row_ids_ && row_cap_ > 0)
-        || (nullptr == row_ids_ && begin_ >= 0 && end_ >= begin_ && is_valid_bound);
+    // The progress boundary may be an SSTable row id, while begin_/end_ are micro block offsets.
+    return OB_INVALID_CS_ROW_ID <= bound_row_id_
+        && ((nullptr != row_ids_ && row_cap_ > 0)
+            || (nullptr == row_ids_ && begin_ >= 0 && end_ >= begin_));
   }
   OB_INLINE int64_t get_row_count() const
   {
@@ -121,7 +120,8 @@ public:
   int64_t row_cap_;
   int64_t begin_;
   int64_t end_;
-  int64_t bound_row_id_; // row_id boundary reached in one pushdown decoder scan.
+  // Progress boundary: SSTable row id in column store, micro block offset in row store.
+  int64_t bound_row_id_;
   bool is_reverse_;
 };
 

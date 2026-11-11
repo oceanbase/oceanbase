@@ -160,10 +160,15 @@ int ObAggGroupVec::agg_pushdown_decoder(
         LOG_WARN("Unexpected null agg cell", K(ret), K(i), KP(agg_cell));
       } else if (OB_FAIL(agg_cell->agg_pushdown_decoder(reader, col_offset, pd_row_id_ctx))) {
         LOG_WARN("Failed to pushdown aggregate to decoder", K(ret), K(i), K(col_offset), KP(reader), K(pd_row_id_ctx));
-      } else if (!pd_row_id_ctx.is_reverse_) {
-        agg_row_id_ = i == 0 ? agg_cell->get_agg_row_id() : MIN(agg_row_id_, agg_cell->get_agg_row_id());
       } else {
-        agg_row_id_ = i == 0 ? agg_cell->get_agg_row_id() : MAX(agg_row_id_, agg_cell->get_agg_row_id());
+        const int64_t cell_row_id = agg_cell->get_agg_row_id();
+        if (0 == i) {
+          agg_row_id_ = cell_row_id;
+        } else if (OB_INVALID_CS_ROW_ID == agg_row_id_ || OB_INVALID_CS_ROW_ID == cell_row_id) {
+          agg_row_id_ = OB_INVALID_CS_ROW_ID;
+        } else {
+          agg_row_id_ = pd_row_id_ctx.is_reverse_ ? MAX(agg_row_id_, cell_row_id) : MIN(agg_row_id_, cell_row_id);
+        }
       }
     }
   }
@@ -539,6 +544,7 @@ int ObAggregatedStoreVec::fill_rows(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null reader", K(ret), KP(reader));
   } else {
+    const bool is_reverse = begin_index > end_index;
     bool all_agg_pd_decoder = false;
     if (OB_FAIL(agg_pushdown_decoder(reader, begin_index, end_index, res, all_agg_pd_decoder))) {
       LOG_WARN("Failed to push aggregate to decoder", K(ret), KP(reader));
@@ -550,9 +556,8 @@ int ObAggregatedStoreVec::fill_rows(
     } else if (OB_FAIL(fill_output_rows(scanner, begin_index, end_index, res))) {
       LOG_WARN("Failed to project rows in aggregate pushdown", K(ret), K(begin_index), K(end_index), K(res));
     } else {
-      const bool is_reverse = begin_index > end_index;
       const int64_t bound_row_id = is_reverse ? begin_index + 1 : begin_index - 1;
-      if (OB_FAIL(do_aggregate(reader, bound_row_id))) {
+      if (OB_FAIL(do_aggregate(reader, bound_row_id, is_reverse))) {
         LOG_WARN("Failed to aggregate rows", K(ret), KP(reader));
       }
     }
@@ -731,12 +736,14 @@ int ObAggregatedStoreVec::fill_output_rows(
 
 int ObAggregatedStoreVec::do_aggregate(
     blocksstable::ObIMicroBlockReader *reader/*nullptr*/,
-    const int64_t bound_row_id/*OB_INVALID_CS_ROW_ID*/)
+    const int64_t bound_row_id/*OB_INVALID_CS_ROW_ID*/,
+    const bool is_reverse/*false*/)
 {
   int ret = OB_SUCCESS;
   if (count_ > 0) {
     ObPushdownRowIdCtx pd_row_id_ctx(row_ids_, count_);
     pd_row_id_ctx.bound_row_id_ = bound_row_id;
+    pd_row_id_ctx.is_reverse_ = is_reverse;
     for (int64_t i = 0; OB_SUCC(ret) && i < agg_groups_.count(); ++i) {
       ObAggGroupVec *agg_group = agg_groups_.at(i);
       if (OB_ISNULL(agg_group)) {
