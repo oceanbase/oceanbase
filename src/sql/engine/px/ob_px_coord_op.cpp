@@ -389,7 +389,10 @@ int ObPxCoordOp::init_dfo_mgr(const ObDfoInterruptIdGen &dfo_id_gen, ObDfoMgr &d
 
 void ObPxCoordOp::warn_on_virtual_table_error(int error_code) const
 {
-  if (OB_UNLIKELY(OB_SUCCESS != error_code)
+  const ObSQLSessionInfo *session = ctx_.get_my_session();
+  if (OB_UNLIKELY(nullptr != session)
+      && OB_UNLIKELY(!session->is_inner())
+      && OB_UNLIKELY(OB_SUCCESS != error_code)
       && OB_UNLIKELY(OB_ITER_END != error_code)
       && OB_UNLIKELY(!coord_info_.ignore_vtable_error_)
       && OB_UNLIKELY(TableAccessType::PURE_VIRTUAL_TABLE == coord_info_.table_access_type_)) {

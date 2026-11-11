@@ -513,7 +513,9 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
     auto tsc_op = static_cast<const ObTableScanSpec *>(phy_op);
     if (TableAccessType::HAS_USER_TABLE == px_coord_info.table_access_type_){
       // nop
-    } else if (!is_virtual_table(tsc_op->get_ref_table_id())) {
+    } else if (!is_virtual_table(tsc_op->get_ref_table_id())
+               || is_only_rs_virtual_table(tsc_op->get_ref_table_id())) {
+      // Rootservice-only virtual tables require complete results and normal retries.
       px_coord_info.table_access_type_ = TableAccessType::HAS_USER_TABLE;
     } else {
       px_coord_info.table_access_type_ = TableAccessType::PURE_VIRTUAL_TABLE;
