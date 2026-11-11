@@ -454,8 +454,39 @@ int set_updatable_view_write_privs(
                         K(ret), K(view_col_name), K(select_item_idx),
                         K(base_col_expr->get_table_id()), K(base_col_expr->get_column_id()),
                         "base_table_id", base_table_item->table_id_);
-            } else if (OB_FAIL(mapped_need_priv.columns_.push_back(base_col_expr->get_column_name()))) {
-              LOG_WARN("failed to push mapped column", K(ret), K(view_col_name), KPC(base_col_expr));
+            } else {
+              // Keep column aliases aligned with the target table without crossing a nested view boundary.
+              const TableItem *column_table_item = base_table_item;
+              while (OB_SUCC(ret) && column_table_item != write_target_table_item) {
+                const ObSelectStmt *column_stmt = column_table_item->ref_query_;
+                const TableItem *next_table_item = column_table_item->view_base_item_;
+                const int64_t column_idx = static_cast<int64_t>(base_col_expr->get_column_id() - OB_APP_MIN_COLUMN_ID);
+                const ObRawExpr *column_expr = NULL;
+                if (OB_ISNULL(column_stmt) || OB_ISNULL(next_table_item)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("write column mapping path is incomplete", K(ret), KPC(column_table_item));
+                } else if (OB_UNLIKELY(column_idx < 0 || column_idx >= column_stmt->get_select_item_size())) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("invalid write column index in table ref query", K(ret), K(column_idx),
+                           K(column_stmt->get_select_item_size()), KPC(column_table_item));
+                } else if (OB_ISNULL(column_expr = column_stmt->get_select_item(column_idx).expr_)
+                           || !column_expr->is_column_ref_expr()) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("write column is not mapped to a column reference", K(ret), K(column_idx), KPC(column_expr));
+                } else {
+                  base_col_expr = static_cast<const ObColumnRefRawExpr *>(column_expr);
+                  column_table_item = next_table_item;
+                  if (OB_UNLIKELY(base_col_expr->get_table_id() != column_table_item->table_id_
+                                  || base_col_expr->get_column_id() < OB_APP_MIN_COLUMN_ID)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("write column does not match the target table path", K(ret),
+                             KPC(base_col_expr), KPC(column_table_item));
+                  }
+                }
+              }
+              if (OB_SUCC(ret) && OB_FAIL(mapped_need_priv.columns_.push_back(base_col_expr->get_column_name()))) {
+                LOG_WARN("failed to push mapped column", K(ret), K(view_col_name), KPC(base_col_expr));
+              }
             }
           }
         }
@@ -2013,10 +2044,11 @@ int get_dml_stmt_need_privs(
             }
             if (OB_SUCC(ret)) {
               if (lib::is_mysql_mode()) {
+                // Invoker privileges use the current executor and its active roles.
                 if (OB_FAIL(add_col_priv_to_need_priv(basic_stmt,
                                                       *table_item,
                                                       session_priv.tenant_id_,
-                                                      session_priv.user_id_,
+                                                      OB_INVALID_ID,
                                                       need_privs))) {
                   LOG_WARN("add col id array to need priv failed", K(ret));
                 }
@@ -2095,6 +2127,26 @@ int get_dml_stmt_need_privs_by_stmt(
                                                                grantee_id)))) {
           LOG_WARN("failed to extract priv info of table ref query in view", K(i), KPC(table_item), K(ret));
         }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_set_query().count(); ++i) {
+      if (OB_FAIL(SMART_CALL(get_dml_stmt_need_privs_by_stmt(select_stmt->get_set_query(i),
+                                                             need_privs,
+                                                             sql_ctx,
+                                                             grantee_id)))) {
+        LOG_WARN("failed to extract priv info of set query in view", K(ret), K(i));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_subquery_expr_size(); ++i) {
+      const ObQueryRefRawExpr *query_ref = select_stmt->get_subquery_exprs().at(i);
+      if (OB_ISNULL(query_ref) || OB_ISNULL(query_ref->get_ref_stmt())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("subquery reference in view is null", K(ret), K(i), K(query_ref));
+      } else if (OB_FAIL(SMART_CALL(get_dml_stmt_need_privs_by_stmt(query_ref->get_ref_stmt(),
+                                                                    need_privs,
+                                                                    sql_ctx,
+                                                                    grantee_id)))) {
+        LOG_WARN("failed to extract priv info of expression subquery in view", K(ret), K(i));
       }
     }
   }
@@ -4845,7 +4897,7 @@ int ObPrivilegeCheck::get_stmt_need_privs(const ObSessionPrivInfo &session_priv,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table item is null", K(ret));
         } else if (table_item->is_temp_table() && OB_NOT_NULL(table_item->ref_query_)) {
-          if (OB_FAIL(SMART_CALL(get_stmt_need_privs(session_priv, table_item->ref_query_, need_privs)))) {
+          if (OB_FAIL(SMART_CALL(get_stmt_need_privs(session_priv, table_item->ref_query_, need_privs, sql_ctx)))) {
             LOG_WARN("Failed to extract priv info of CTE definition", K(i), K(dml_stmt), K(ret));
           }
         }

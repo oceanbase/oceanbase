@@ -374,8 +374,7 @@ int prepare_grantee_priv_check_ctx(ObSchemaGetterGuard &schema_guard,
   // OB_INVALID_ID means using the current executor at runtime. Any concrete grantee_id_
   // is an explicit switched subject and should use schema-side user privileges plus default roles,
   // even if it happens to be numerically equal to session_priv.user_id_.
-  if (OB_INVALID_ID != need_priv.grantee_id_
-      && need_priv.grantee_id_ != session_priv.user_id_) {
+  if (OB_INVALID_ID != need_priv.grantee_id_) {
     const ObUserInfo *grantee_user_info = NULL;
     if (OB_ISNULL(grantee_user_info = schema_guard.get_user_info(tenant_id, need_priv.grantee_id_))) {
       ret = OB_ERR_VIEW_INVALID;
