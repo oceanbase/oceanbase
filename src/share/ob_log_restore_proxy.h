@@ -206,9 +206,11 @@ public:
   // check if the source cluster has the same cluster id as current cluster, but they are actually
   // two different clusters, if so, out param `res` will be true, otherwise false
   int check_different_cluster_with_same_cluster_id(const int64_t source_cluster_id, bool &res);
-  // get tenant committed info
+  // Get access mode and committed position from the same LS leader stat snapshot.
+  // Callers must validate the access mode before using the position.
   int get_tenant_committed_info(const uint64_t &tenant_id,
                                 const ObLSID &ls_id,
+                                palf::AccessMode &access_mode,
                                 palf::LSN &standby_committed_end_lsn,
                                 share::SCN &standby_committed_end_scn);
 private:

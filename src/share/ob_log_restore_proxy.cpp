@@ -1176,10 +1176,12 @@ int ObLogRestoreProxyUtil::get_max_log_info_by_rpc(const ObRestoreSourceServiceA
 
 int ObLogRestoreProxyUtil::get_tenant_committed_info(const uint64_t &tenant_id,
                                                      const ObLSID &ls_id,
+                                                     palf::AccessMode &access_mode,
                                                      palf::LSN &standby_committed_end_lsn,
                                                      share::SCN &standby_committed_end_scn)
 {
   int ret = OB_SUCCESS;
+  access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
   standby_committed_end_lsn.reset();
   standby_committed_end_scn.reset();
   common::ObMySQLProxy *proxy = &sql_proxy_;
@@ -1195,7 +1197,9 @@ int ObLogRestoreProxyUtil::get_tenant_committed_info(const uint64_t &tenant_id,
       SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
         common::sqlclient::ObMySQLResult *result = NULL;
         common::ObSqlString sql;
-        const char *GET_LEADER_COMMITTED_INFO_SQL = "SELECT END_LSN, END_SCN FROM %s WHERE TENANT_ID=%lu AND LS_ID=%ld AND ROLE='LEADER'";
+        // Return access mode and position from the same PALF stat snapshot.
+        // The caller decides whether this mode is valid for its use of the position.
+        const char *GET_LEADER_COMMITTED_INFO_SQL = "SELECT ACCESS_MODE, END_LSN, END_SCN FROM %s WHERE TENANT_ID=%lu AND LS_ID=%ld AND ROLE='LEADER'";
 
         if (OB_FAIL(sql.append_fmt(GET_LEADER_COMMITTED_INFO_SQL, OB_GV_OB_LOG_STAT_TNAME, tenant_id, ls_id.id()))) {
           LOG_WARN("append_fmt failed", KR(ret), K(tenant_id), K(ls_id));
@@ -1214,16 +1218,24 @@ int ObLogRestoreProxyUtil::get_tenant_committed_info(const uint64_t &tenant_id,
         } else {
           uint64_t end_lsn = 0;
           uint64_t end_scn = 0;
+          ObString access_mode_str;
+          palf::AccessMode queried_access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
+          share::SCN committed_end_scn;
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, "ACCESS_MODE", access_mode_str);
           EXTRACT_UINT_FIELD_MYSQL(*result, "END_LSN", end_lsn, uint64_t);
           EXTRACT_UINT_FIELD_MYSQL(*result, "END_SCN", end_scn, uint64_t);
 
           if (OB_FAIL(ret)) {
             LOG_WARN("extract field failed", KR(ret), K(tenant_id_), K(ls_id), K(standby_committed_end_lsn), K(standby_committed_end_scn));
-          } else if (OB_FAIL(standby_committed_end_scn.convert_for_logservice(end_scn))) {
+          } else if (OB_FAIL(palf::get_access_mode(access_mode_str, queried_access_mode))) {
+            LOG_WARN("get access mode failed", KR(ret), K(tenant_id), K(ls_id), K(access_mode_str));
+          } else if (OB_FAIL(committed_end_scn.convert_for_logservice(end_scn))) {
             LOG_WARN("convert_for_logservice failed", KR(ret), K(tenant_id_), K(ls_id), K(end_scn));
           } else {
+            access_mode = queried_access_mode;
+            standby_committed_end_scn = committed_end_scn;
             standby_committed_end_lsn = palf::LSN(end_lsn);
-            LOG_INFO("get standby ls committed info success", K(tenant_id_), K(ls_id), K(standby_committed_end_lsn), K(standby_committed_end_scn));
+            LOG_INFO("get tenant ls committed info success", K(tenant_id_), K(ls_id), K(access_mode), K(standby_committed_end_lsn), K(standby_committed_end_scn));
           }
         }
       }

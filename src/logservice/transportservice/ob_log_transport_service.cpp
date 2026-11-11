@@ -1261,11 +1261,14 @@ int LogTransportStatus::get_standby_committed_info(palf::LSN &standby_committed_
       CLOG_LOG(WARN, "sync_standby_dest is invalid", K(ret), K(ls_id_), K(sync_standby_dest));
     } else {
       share::ObLogRestoreProxyUtil restore_proxy;
+      palf::AccessMode access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
+      palf::LSN queried_end_lsn;
+      share::SCN queried_end_scn;
       if (OB_FAIL(restore_proxy.init_with_service_attr(MTL_ID(), &sync_standby_dest.restore_source_service_attr_))) {
         CLOG_LOG(WARN, "restore_proxy init failed", K(ret), K(ls_id_));
       } else if (OB_FAIL(restore_proxy.get_tenant_committed_info(
                           sync_standby_dest.restore_source_service_attr_.user_.tenant_id_,
-                          ls_id_, standby_committed_end_lsn, standby_committed_end_scn))) {
+                          ls_id_, access_mode, queried_end_lsn, queried_end_scn))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           // 备库中该日志流不存在或没有 leader，返回空位点
           CLOG_LOG(INFO, "no leader found for log stream in standby cluster or ls not exist", K(ret), K(ls_id_));
@@ -1273,7 +1276,15 @@ int LogTransportStatus::get_standby_committed_info(palf::LSN &standby_committed_
         } else {
           CLOG_LOG(WARN, "get standby committed info failed", K(ret), K(ls_id_));
         }
+      } else if (palf::AccessMode::RAW_WRITE != access_mode) {
+        // A promoted target's APPEND position cannot confirm this primary's logs.
+        // Keep the output positions invalid until the mode check passes.
+        ret = OB_STATE_NOT_MATCH;
+        CLOG_LOG(WARN, "standby access mode is not RAW_WRITE, reject committed info", K(ret),
+                 K(ls_id_), K(access_mode), K(queried_end_lsn), K(queried_end_scn));
       } else {
+        standby_committed_end_lsn = queried_end_lsn;
+        standby_committed_end_scn = queried_end_scn;
         CLOG_LOG(INFO, "get standby committed info from restore_proxy", K(ls_id_), K(standby_committed_end_lsn), K(standby_committed_end_scn));
       }
     }

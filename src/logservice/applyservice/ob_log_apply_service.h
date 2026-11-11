@@ -176,7 +176,7 @@ public:
   //int can_switch_to_follower(bool &can_revoke); //非最大保护模式不需要
   int switch_to_leader(const int64_t new_proposal_id, const palf::SyncMode &sync_mode);
   int switch_to_follower();
-  void mark_ls_gc_state();
+  int mark_ls_gc_state();
   bool is_ls_gc_state() const { return true == ATOMIC_LOAD(&is_ls_gc_state_); }
   int switch_sync_mode(const int64_t new_proposal_id, const palf::SyncMode &sync_mode);
   int disable_sync();
@@ -261,7 +261,7 @@ private:
 private:
   bool is_inited_;
   bool is_in_stop_state_; //stop后不能上任, 残留的cb会继续处理
-  bool is_ls_gc_state_;  // LS已写过offline日志的标记，为true时强同步不再等待备库位点
+  bool is_ls_gc_state_;  // LS已写过offline日志或进入永久删除清理，为true时强同步不再等待备库位点
   int64_t ref_cnt_; // guarantee the effectiveness of self memory
   share::ObLSID ls_id_;
   common::ObRole role_;

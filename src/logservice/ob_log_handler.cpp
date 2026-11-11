@@ -2394,8 +2394,9 @@ int ObLogHandler::mark_ls_gc_state()
     CLOG_LOG(WARN, "transport service is not init", K(ret), KPC(this));
   } else if (OB_FAIL(transport_service_->mark_ls_gc_state(ls_id))) {
     CLOG_LOG(WARN, "failed to mark transport service ls_gc_state", K(ret), KPC(this));
+  } else if (OB_FAIL(apply_status_->mark_ls_gc_state())) {
+    CLOG_LOG(WARN, "failed to mark apply status ls_gc_state", K(ret), KPC(this));
   } else {
-    apply_status_->mark_ls_gc_state();
     CLOG_LOG(INFO, "mark ls_gc_state status success", K(ret), KPC(this));
   }
 

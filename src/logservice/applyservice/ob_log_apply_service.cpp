@@ -415,9 +415,9 @@ int ObApplyStatus::push_append_cb(AppendCb *cb)
                K(cb_queues_[thread_index]), KPC(this));
     } else {
       CLOG_LOG(TRACE, "push_append_cb", K(thread_index), K(cb_lsn), K(cb_sign), K(cb_queues_[thread_index]), KPC(this));
-      // Double check: 先无锁检查 is_sync_mode_，如果是 sync_mode 再加锁检查
-      if (!ATOMIC_LOAD(&is_sync_mode_)) {
-        // 非 sync_mode 场景，不需要加锁
+      // Double check whether this LS still needs standby confirmation.
+      if (!ATOMIC_LOAD(&is_sync_mode_) || ATOMIC_LOAD(&is_ls_gc_state_)) {
+        // Async and GC callbacks only depend on the local committed end.
         palf_committed_end_lsn.val_ = ATOMIC_LOAD(&palf_committed_end_lsn_.val_);
         if (cb_lsn < palf_committed_end_lsn) {
           // 需要调用on_success的cb进入队列时需要主动触发推入线程池
@@ -428,9 +428,9 @@ int ObApplyStatus::push_append_cb(AppendCb *cb)
           }
         }
       } else {
-        // sync_mode 场景，加锁再次检查
+        // Recheck after taking the lock, including a concurrent GC mark.
         RLockGuard guard(lock_);
-        if (ATOMIC_LOAD(&is_sync_mode_)) {
+        if (ATOMIC_LOAD(&is_sync_mode_) && !ATOMIC_LOAD(&is_ls_gc_state_)) {
           min_committed_end_lsn.val_ = ATOMIC_LOAD(&min_committed_end_lsn_.val_);
           if (cb_lsn < min_committed_end_lsn) {
             // 需要调用on_success的cb进入队列时需要主动触发推入线程池
@@ -441,7 +441,7 @@ int ObApplyStatus::push_append_cb(AppendCb *cb)
             }
           }
         } else {
-          // 在加锁期间 is_sync_mode_ 变为 false，使用非 sync_mode 逻辑
+          // Standby confirmation is no longer required.
           palf_committed_end_lsn.val_ = ATOMIC_LOAD(&palf_committed_end_lsn_.val_);
           if (cb_lsn < palf_committed_end_lsn) {
             // 需要调用on_success的cb进入队列时需要主动触发推入线程池
@@ -1006,10 +1006,27 @@ void ObApplyStatus::reset_proposal_id()
   CLOG_LOG(INFO, "reset_proposal_id success");
 }
 
-void ObApplyStatus::mark_ls_gc_state()
+int ObApplyStatus::mark_ls_gc_state()
 {
-  ATOMIC_STORE(&is_ls_gc_state_, true);
-  CLOG_LOG(INFO, "apply status mark_ls_gc_state", KPC(this));
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "apply status not init", K(ret), KPC(this));
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(WARN, "apply status has been stopped", K(ret), KPC(this));
+  } else {
+    ATOMIC_STORE(&is_ls_gc_state_, true);
+    // No further standby/PALF update is guaranteed during removal. Retry the
+    // submission even if the flag was published by an earlier failed attempt.
+    if (OB_FAIL(submit_task_to_apply_service_(submit_task_))) {
+      CLOG_LOG(WARN, "failed to schedule callbacks for ls gc", K(ret), KPC(this));
+    } else {
+      CLOG_LOG(INFO, "apply status mark_ls_gc_state", KPC(this));
+    }
+  }
+  return ret;
 }
 
 void ObApplyStatus::reset_meta()
@@ -1036,6 +1053,9 @@ int ObApplyStatus::submit_task_to_apply_service_(ObApplyServiceTask &task)
     if (OB_FAIL(ap_sv_->push_task(&task))) {
       CLOG_LOG(ERROR, "failed to submit task to apply service", KPC(this),
                K(task), K(ret));
+      // No worker owns this failed submission. Release the lease so a later
+      // notification can retry, including notifications that set it to READY.
+      while (!task.revoke_lease()) {}
       dec_ref();
     } else {
       CLOG_LOG(TRACE, "push task to apply service", KPC(this),

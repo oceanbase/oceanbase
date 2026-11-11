@@ -14,6 +14,7 @@
 
 #include "ob_ls_tx_service.h"
 #include "share/throttle/ob_throttle_unit.h"
+#include "storage/ls/ob_ls.h"
 #include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx/ob_tx_replay_executor.h"
@@ -873,7 +874,27 @@ int ObLSTxService::prepare_offline(const int64_t start_ts)
   return ret;
 }
 
-int ObLSTxService::offline()
+int ObLSTxService::offline(const bool remove_from_disk)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(block_kill_tx_for_offline(remove_from_disk))) {
+    TRANS_LOG(WARN, "block and kill tx for offline failed", KR(ret), K_(ls_id));
+  } else if (remove_from_disk && OB_ISNULL(parent_)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "ls is null for permanent removal", KR(ret), K_(ls_id));
+  // ObLS has already fenced log appends. Permanent removal may have no
+  // OFFLINE_LS log, so callbacks can skip the standby wait only after active
+  // transactions exit, but before waiting for callback-held context references.
+  } else if (remove_from_disk && parent_->get_log_handler()->is_valid()
+             && OB_FAIL(parent_->get_log_handler()->mark_ls_gc_state())) {
+    TRANS_LOG(WARN, "failed to mark log handler gc for permanent removal", KR(ret), K_(ls_id));
+  } else if (OB_FAIL(wait_tx_ctx_clean())) {
+    TRANS_LOG(WARN, "wait tx ctx clean failed", KR(ret), K_(ls_id));
+  }
+  return ret;
+}
+
+int ObLSTxService::block_kill_tx_for_offline(const bool need_active_tx_clean)
 {
   int ret = OB_SUCCESS;
   const int64_t PRINT_LOG_INTERVAL = 1000 * 1000; // 1s
@@ -889,6 +910,26 @@ int ObLSTxService::offline()
   } else if (OB_FAIL(MTL(ObTransService *)->get_ts_mgr()->interrupt_gts_callback_for_ls_offline(MTL_ID(),
         ls_id_))) {
     TRANS_LOG(WARN, "interrupt gts callback failed", KR(ret), K_(ls_id));
+  } else if (need_active_tx_clean && mgr_->get_active_tx_count() > 0) {
+    // Permanent removal may have no OFFLINE_LS log. Active transactions must
+    // exit before GC callbacks are allowed to skip standby ACKs, otherwise an
+    // in-flight commit could return success without standby confirmation.
+    ret = OB_EAGAIN;
+    if (REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
+      TRANS_LOG(WARN, "active transactions remain before ls gc", K(ret), K_(ls_id),
+                K(mgr_->get_active_tx_count()));
+    }
+  }
+  return ret;
+}
+
+int ObLSTxService::wait_tx_ctx_clean()
+{
+  int ret = OB_SUCCESS;
+  const int64_t PRINT_LOG_INTERVAL = 1000 * 1000; // 1s
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
   } else if (mgr_->get_tx_ctx_count() > 0) {
     ret = OB_EAGAIN;
     if (REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {

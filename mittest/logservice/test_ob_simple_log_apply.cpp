@@ -251,6 +251,169 @@ TEST_F(TestObSimpleLogApplyFunc, apply)
   CLOG_LOG(INFO, "test apply finish", K(id));
 }
 
+TEST_F(TestObSimpleLogApplyFunc, gc_drains_sync_callbacks)
+{
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  const ObLSID ls_id(id);
+  int64_t leader_idx = 0;
+  PalfHandleImplGuard leader;
+  ASSERT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+  ObTenantEnv::set_tenant(get_cluster()[leader_idx]->get_tenant_base());
+  PalfEnv *palf_env = nullptr;
+  ASSERT_EQ(OB_SUCCESS, get_palf_env(leader_idx, palf_env));
+  MockLSAdapter ls_adapter;
+  ASSERT_EQ(OB_SUCCESS, ls_adapter.init((ObLSService *)(0x1)));
+  ObLogApplyService ap_sv;
+  ASSERT_EQ(OB_SUCCESS, ap_sv.init(palf_env, &ls_adapter));
+  ASSERT_EQ(OB_SUCCESS, ap_sv.start());
+  ASSERT_EQ(OB_SUCCESS, ap_sv.add_ls(ls_id));
+  ASSERT_EQ(OB_SUCCESS, ap_sv.switch_to_leader(ls_id, 1, palf::SyncMode::SYNC));
+
+  MockAppendCb callbacks[2];
+  LSN positions[2];
+  SCN scns[2];
+  for (int i = 0; i < 2; ++i) {
+    SCN ref_scn;
+    ASSERT_EQ(OB_SUCCESS, ref_scn.convert_for_logservice(i + 1));
+    ASSERT_EQ(OB_SUCCESS, submit_log(leader, ref_scn, positions[i], scns[i]));
+    callbacks[i].init(i, &ls_adapter);
+    callbacks[i].__set_lsn(positions[i]);
+    callbacks[i].__set_scn(scns[i]);
+  }
+  const LSN max_lsn = leader.palf_handle_impl_->get_max_lsn();
+  wait_lsn_until_slide(max_lsn, leader);
+
+  {
+    ObApplyStatusGuard guard;
+    ASSERT_EQ(OB_SUCCESS, ap_sv.get_apply_status(ls_id, guard));
+    ObApplyStatus *apply_status = guard.get_apply_status();
+    ASSERT_NE(nullptr, apply_status);
+    // Make GC the only source of new work after the initial committed update.
+    ASSERT_EQ(OB_SUCCESS, apply_status->unregister_file_size_cb());
+    ASSERT_EQ(OB_SUCCESS, apply_status->update_palf_committed_end_lsn(
+        leader.palf_handle_impl_->get_end_lsn(), leader.palf_handle_impl_->get_end_scn(), 1));
+    const auto wait_idle = [apply_status]() {
+      const int64_t deadline = ObTimeUtility::current_time() + 5 * 1000 * 1000;
+      // The map and this guard own the two references when no task is running.
+      while (ATOMIC_LOAD(&apply_status->ref_cnt_) != 2
+          && ObTimeUtility::current_time() < deadline) {
+        ob_usleep(1000);
+      }
+      return ATOMIC_LOAD(&apply_status->ref_cnt_) == 2;
+    };
+    ASSERT_TRUE(wait_idle());
+    ASSERT_EQ(OB_SUCCESS, apply_status->push_append_cb(&callbacks[0]));
+    const int64_t queue_idx = scns[0].get_val_for_logservice() & (APPLY_TASK_QUEUE_SIZE - 1);
+    bool timeslice_out = false;
+    ASSERT_EQ(OB_SUCCESS, apply_status->try_handle_cb_queue(
+        &apply_status->cb_queues_[queue_idx], timeslice_out));
+    EXPECT_NE(nullptr, apply_status->cb_queues_[queue_idx].top());
+    EXPECT_EQ(0, ATOMIC_LOAD(&ls_adapter.success_count_));
+    EXPECT_EQ(0, ATOMIC_LOAD(&ls_adapter.failure_count_));
+
+    const auto wait_success_count = [&ls_adapter](const int64_t count) {
+      const int64_t deadline = ObTimeUtility::current_time() + 5 * 1000 * 1000;
+      while (ATOMIC_LOAD(&ls_adapter.success_count_) < count
+          && ObTimeUtility::current_time() < deadline) {
+        ob_usleep(1000);
+      }
+      return ATOMIC_LOAD(&ls_adapter.success_count_) == count;
+    };
+
+    // Marking GC must wake a callback that is waiting for standby confirmation.
+    EXPECT_EQ(OB_SUCCESS, apply_status->mark_ls_gc_state());
+    EXPECT_TRUE(wait_success_count(1));
+    // A callback may reach Apply after GC's submit task has already finished.
+    EXPECT_TRUE(wait_idle());
+    ASSERT_EQ(OB_SUCCESS, apply_status->push_append_cb(&callbacks[1]));
+    EXPECT_TRUE(wait_success_count(2));
+    EXPECT_EQ(0, ATOMIC_LOAD(&ls_adapter.failure_count_));
+
+    // Also make the baseline failure safe: release stack callbacks before teardown.
+    EXPECT_EQ(OB_SUCCESS, ap_sv.switch_to_follower(ls_id));
+    EXPECT_TRUE(wait_success_count(2));
+  }
+  EXPECT_EQ(OB_SUCCESS, ap_sv.remove_ls(ls_id));
+  ap_sv.stop();
+  ap_sv.wait();
+  ap_sv.destroy();
+}
+
+TEST_F(TestObSimpleLogApplyFunc, failed_gc_submission_releases_lease_for_retry)
+{
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  const ObLSID ls_id(id);
+  int64_t leader_idx = 0;
+  PalfHandleImplGuard leader;
+  ASSERT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+  ObTenantEnv::set_tenant(get_cluster()[leader_idx]->get_tenant_base());
+  PalfEnv *palf_env = nullptr;
+  ASSERT_EQ(OB_SUCCESS, get_palf_env(leader_idx, palf_env));
+  MockLSAdapter ls_adapter;
+  ASSERT_EQ(OB_SUCCESS, ls_adapter.init((ObLSService *)(0x1)));
+  ObLogApplyService ap_sv;
+  ASSERT_EQ(OB_SUCCESS, ap_sv.init(palf_env, &ls_adapter));
+  ASSERT_EQ(OB_SUCCESS, ap_sv.start());
+  ASSERT_EQ(OB_SUCCESS, ap_sv.add_ls(ls_id));
+  ASSERT_EQ(OB_SUCCESS, ap_sv.switch_to_leader(ls_id, 1, palf::SyncMode::SYNC));
+
+  MockAppendCb cb;
+  LSN lsn;
+  SCN scn;
+  SCN ref_scn;
+  ASSERT_EQ(OB_SUCCESS, ref_scn.convert_for_logservice(1));
+  ASSERT_EQ(OB_SUCCESS, submit_log(leader, ref_scn, lsn, scn));
+  cb.init(1, &ls_adapter);
+  cb.__set_lsn(lsn);
+  cb.__set_scn(scn);
+  wait_lsn_until_slide(leader.palf_handle_impl_->get_max_lsn(), leader);
+
+  {
+    ObApplyStatusGuard guard;
+    ASSERT_EQ(OB_SUCCESS, ap_sv.get_apply_status(ls_id, guard));
+    ObApplyStatus *apply_status = guard.get_apply_status();
+    ASSERT_NE(nullptr, apply_status);
+    ASSERT_EQ(OB_SUCCESS, apply_status->unregister_file_size_cb());
+    ASSERT_EQ(OB_SUCCESS, apply_status->update_palf_committed_end_lsn(
+        leader.palf_handle_impl_->get_end_lsn(), leader.palf_handle_impl_->get_end_scn(), 1));
+    const int64_t deadline = ObTimeUtility::current_time() + 5 * 1000 * 1000;
+    while (ATOMIC_LOAD(&apply_status->ref_cnt_) != 2
+        && ObTimeUtility::current_time() < deadline) {
+      ob_usleep(1000);
+    }
+    ASSERT_EQ(2, ATOMIC_LOAD(&apply_status->ref_cnt_));
+    ASSERT_EQ(OB_SUCCESS, apply_status->push_append_cb(&cb));
+    const int64_t queue_idx = scn.get_val_for_logservice() & (APPLY_TASK_QUEUE_SIZE - 1);
+    bool timeslice_out = false;
+    ASSERT_EQ(OB_SUCCESS, apply_status->try_handle_cb_queue(
+        &apply_status->cb_queues_[queue_idx], timeslice_out));
+    EXPECT_NE(nullptr, apply_status->cb_queues_[queue_idx].top());
+    EXPECT_EQ(0, ATOMIC_LOAD(&ls_adapter.success_count_));
+
+    // Simulate the first GC notification failing after it acquires the task
+    // lease. The retry must acquire that lease again and wake the callback
+    // without any later PALF or standby position update.
+    ap_sv.is_inited_ = false;
+    EXPECT_EQ(OB_NOT_INIT, apply_status->mark_ls_gc_state());
+    ap_sv.is_inited_ = true;
+    EXPECT_TRUE(apply_status->is_ls_gc_state());
+    EXPECT_EQ(0, ATOMIC_LOAD(&ls_adapter.success_count_));
+    EXPECT_EQ(OB_SUCCESS, apply_status->mark_ls_gc_state());
+    const int64_t callback_deadline = ObTimeUtility::current_time() + 5 * 1000 * 1000;
+    while (ATOMIC_LOAD(&ls_adapter.success_count_) != 1
+        && ObTimeUtility::current_time() < callback_deadline) {
+      ob_usleep(1000);
+    }
+    EXPECT_EQ(1, ATOMIC_LOAD(&ls_adapter.success_count_));
+    EXPECT_EQ(0, ATOMIC_LOAD(&ls_adapter.failure_count_));
+    EXPECT_EQ(nullptr, apply_status->cb_queues_[queue_idx].top());
+  }
+  EXPECT_EQ(OB_SUCCESS, ap_sv.remove_ls(ls_id));
+  ap_sv.stop();
+  ap_sv.wait();
+  ap_sv.destroy();
+}
+
 TEST_F(TestObSimpleLogApplyFunc, get_max_decided_scn)
 {
   const int64_t task_count = 10;

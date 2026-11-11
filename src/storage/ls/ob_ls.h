@@ -452,7 +452,7 @@ private:
   int offline_(const int64_t start_ts, const bool remove_from_disk=false);
   int offline_compaction_();
   int online_compaction_();
-  int offline_tx_(const int64_t start_ts);
+  int offline_tx_(const int64_t start_ts, const bool remove_from_disk);
   int online_tx_();
   int update_tablet_table_store_without_lock_(
       const ObTabletID &tablet_id,

@@ -491,7 +491,7 @@ private:
 private:
   bool is_inited_;
   bool is_in_stop_state_; // stop后不能上任, 残留的任务会继续处理
-  bool is_ls_gc_state_;  // LS已写过offline日志的标记，为true时强同步不再等待备库位点
+  bool is_ls_gc_state_;  // OFFLINE_LS or permanent removal; GC no longer waits for standby confirmation.
   bool is_enabled_; // 传输是否启用
   share::ObLSID ls_id_;
   common::ObRole role_;

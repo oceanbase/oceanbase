@@ -23,6 +23,7 @@
 #include "storage/test_tablet_helper.h"
 #include "deps/oblib/src/lib/ob_define.h"
 #include "deps/oblib/src/lib/ob_replica_define.h"
+#include "lib/utility/ob_defer.h"
 
 namespace oceanbase
 {
@@ -156,6 +157,337 @@ TEST_F(TestLSService, basic)
   iter.reset();
   EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls_iter(iter, ObLSGetMod::STORAGE_MOD));
   EXPECT_EQ(OB_ITER_END, iter->get_next(ls));
+}
+
+TEST_F(TestLSService, permanent_remove_marks_log_gc_without_offline_scn)
+{
+  ObLSService *ls_svr = MTL(ObLSService*);
+  const ObLSID ls_id(120);
+  ObCreateLSArg arg;
+  ObLSHandle handle;
+  ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(MTL_ID(), ls_id, arg));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->create_ls(arg));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  ObLS *ls = handle.get_ls();
+  ASSERT_NE(nullptr, ls);
+  auto *apply_status = ls->get_log_handler()->apply_status_;
+  ASSERT_NE(nullptr, apply_status);
+  SCN offline_scn;
+  ASSERT_EQ(OB_SUCCESS, ls->get_offline_scn(offline_scn));
+  ASSERT_FALSE(offline_scn.is_valid());
+  ASSERT_FALSE(apply_status->is_ls_gc_state());
+
+  // A temporary offline must retain the strong-sync durability contract.
+  ASSERT_EQ(OB_SUCCESS, ls->ls_tx_svr_.offline());
+  EXPECT_FALSE(apply_status->is_ls_gc_state());
+  ASSERT_EQ(OB_SUCCESS, ls->offline(false /*remove_from_disk*/));
+  EXPECT_FALSE(apply_status->is_ls_gc_state());
+
+  // A permanent removal must not depend on having replayed OFFLINE_LS first.
+  ASSERT_EQ(OB_SUCCESS, ls->offline(true /*remove_from_disk*/));
+  EXPECT_TRUE(apply_status->is_ls_gc_state());
+  ASSERT_EQ(OB_SUCCESS, ls->get_offline_scn(offline_scn));
+  EXPECT_FALSE(offline_scn.is_valid());
+  handle.reset();
+  ASSERT_EQ(OB_SUCCESS, ls_svr->remove_ls(ls_id));
+}
+
+TEST_F(TestLSService, permanent_remove_waits_for_active_tx_before_gc)
+{
+  using namespace transaction;
+  using namespace logservice;
+  ObLSService *ls_svr = MTL(ObLSService*);
+  const ObLSID ls_id(121);
+  ObCreateLSArg arg;
+  ObLSHandle handle;
+  ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(MTL_ID(), ls_id, arg));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->create_ls(arg));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  ObLS *ls = handle.get_ls();
+  ObLSTxService &tx_service = ls->ls_tx_svr_;
+  ObLSTxCtxMgr *mgr = tx_service.mgr_;
+  ASSERT_NE(nullptr, mgr);
+  ObPartTransCtx *ctx = nullptr;
+  bool existed = false;
+  const ObTxCreateArg tx_arg(true /*for_replay*/, PartCtxSource::REPLAY,
+      MTL_ID(), ObTransID(121), ls_id, 1, GET_MIN_CLUSTER_VERSION(), 0, 0, 0,
+      MockTenantModuleEnv::get_instance().self_addr_,
+      ObTimeUtility::current_time() + 60 * 1000 * 1000, MTL(ObTransService*));
+  ASSERT_EQ(OB_SUCCESS, tx_service.create_tx_ctx(tx_arg, existed, ctx));
+  ASSERT_NE(nullptr, ctx);
+  ASSERT_EQ(1, mgr->get_active_tx_count());
+
+  class ExitCheckingCb : public AppendCb
+  {
+  public:
+    explicit ExitCheckingCb(ObPartTransCtx *ctx) : ctx_(ctx), result_(0) {}
+    int on_success() override
+    {
+      bool exited = false;
+      {
+        CtxLockGuard guard(ctx_->lock_);
+        exited = ctx_->is_exiting() && ctx_->sub_state_.is_force_abort();
+      }
+      ATOMIC_STORE(&result_, exited ? 1 : -1);
+      return OB_SUCCESS;
+    }
+    int on_failure() override { ATOMIC_STORE(&result_, -2); return OB_SUCCESS; }
+    const char *get_cb_name() const override { return "ExitCheckingCb"; }
+    ObPartTransCtx *ctx_;
+    int64_t result_;
+  } cb(ctx);
+  ObApplyStatus *apply = ls->get_log_handler()->apply_status_;
+  ASSERT_NE(nullptr, apply);
+  ASSERT_EQ(OB_SUCCESS, apply->unregister_file_size_cb());
+  ASSERT_EQ(OB_SUCCESS, apply->switch_to_leader(1, palf::SyncMode::SYNC));
+  SCN scn;
+  ASSERT_EQ(OB_SUCCESS, scn.convert_for_logservice(1));
+  ASSERT_EQ(OB_SUCCESS, apply->update_palf_committed_end_lsn(palf::LSN(10), scn, 1));
+  cb.__set_lsn(palf::LSN(0));
+  cb.__set_scn(scn);
+  ASSERT_EQ(OB_SUCCESS, apply->push_append_cb(&cb));
+  const auto transport_gc = [ls, &ls_id]() {
+    ObTpStatusGuard guard;
+    const int ret = ls->get_log_handler()->transport_service_->get_transport_status(ls_id, guard);
+    EXPECT_EQ(OB_SUCCESS, ret);
+    return OB_SUCCESS == ret && ATOMIC_LOAD(&guard.get_transport_status()->is_ls_gc_state_);
+  };
+  // Run one offline attempt so its retry boundary can be inspected. A readonly
+  // request delays transaction termination while the SYNC callback is parked.
+  mgr->inc_total_active_readonly_request_count();
+  const int64_t start_ts = ObTimeUtility::current_time();
+  const auto offline_once = [ls, start_ts](const bool remove_from_disk) {
+    ObLSLockGuard guard(ls, ls->lock_, 0, LSLOCKALL);
+    return ls->offline_(start_ts, remove_from_disk);
+  };
+  EXPECT_EQ(OB_EAGAIN, offline_once(true));
+  EXPECT_FALSE(apply->is_ls_gc_state());
+  EXPECT_FALSE(transport_gc());
+  EXPECT_EQ(1, mgr->get_active_tx_count());
+  EXPECT_EQ(0, ATOMIC_LOAD(&cb.result_));
+  mgr->dec_total_active_readonly_request_count();
+
+  // kill_all_tx's traversal can report success even if a context could not be
+  // killed. Model that failure with an uninitialized context and require retry.
+  ctx->is_inited_ = false;
+  EXPECT_EQ(OB_EAGAIN, offline_once(true));
+  EXPECT_FALSE(apply->is_ls_gc_state());
+  EXPECT_FALSE(transport_gc());
+  EXPECT_EQ(1, mgr->get_active_tx_count());
+  EXPECT_EQ(0, ATOMIC_LOAD(&cb.result_));
+  ctx->is_inited_ = true;
+
+  // A temporary offline kills transactions but must not bypass standby ACKs.
+  EXPECT_EQ(OB_EAGAIN, offline_once(false));
+  EXPECT_EQ(0, mgr->get_active_tx_count());
+  EXPECT_FALSE(apply->is_ls_gc_state());
+  EXPECT_FALSE(transport_gc());
+  EXPECT_EQ(0, ATOMIC_LOAD(&cb.result_));
+
+  // Our retained context reference must not prevent GC publication once the
+  // transaction has exited; it must still prevent offline from finishing.
+  EXPECT_EQ(OB_EAGAIN, offline_once(true));
+  EXPECT_EQ(0, mgr->get_active_tx_count());
+  EXPECT_EQ(1, mgr->get_tx_ctx_count());
+  EXPECT_TRUE(apply->is_ls_gc_state());
+  EXPECT_TRUE(transport_gc());
+  const int64_t deadline = ObTimeUtility::current_time() + 5 * 1000 * 1000;
+  while (0 == ATOMIC_LOAD(&cb.result_) && ObTimeUtility::current_time() < deadline) {
+    ob_usleep(1000);
+  }
+  EXPECT_EQ(1, ATOMIC_LOAD(&cb.result_));
+  EXPECT_EQ(OB_SUCCESS, apply->switch_to_follower());
+  {
+    // On timeout, drain the pending callback before releasing either its
+    // context or its stack storage. Exclude the apply worker during cleanup.
+    ObApplyStatus::WLockGuard guard(apply->lock_);
+    if (0 == ATOMIC_LOAD(&cb.result_)) {
+      EXPECT_EQ(OB_SUCCESS, apply->handle_drop_cb());
+    }
+  }
+  EXPECT_EQ(OB_SUCCESS, tx_service.revert_tx_ctx(ctx));
+  ctx = nullptr;
+  EXPECT_EQ(OB_SUCCESS, ls->offline(true /*remove_from_disk*/));
+  handle.reset();
+  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(ls_id));
+}
+
+TEST_F(TestLSService, permanent_remove_drains_real_commit_callback)
+{
+  using namespace transaction;
+  using namespace logservice;
+  ObLSService *ls_svr = MTL(ObLSService*);
+  const ObLSID ls_id(123);
+  ObCreateLSArg arg;
+  ObLSHandle handle;
+  ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(MTL_ID(), ls_id, arg));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->create_ls(arg));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  ObLS *ls = handle.get_ls();
+  ObLSTxService &tx_service = ls->ls_tx_svr_;
+  ObLSTxCtxMgr *mgr = tx_service.mgr_;
+  ObApplyStatus *apply = ls->get_log_handler()->apply_status_;
+  ObPartTransCtx *ctx = nullptr;
+  ObApplyServiceQueueTask *queue = nullptr;
+  bool owns_queue_lease = false;
+  bool removed = false;
+  const auto release_queue = [&]() {
+    if (owns_queue_lease) {
+      while (!queue->revoke_lease()) {}
+      owns_queue_lease = false;
+    }
+  };
+  DEFER(
+    release_queue();
+    if (nullptr != ctx) {
+      EXPECT_EQ(OB_SUCCESS, tx_service.revert_tx_ctx(ctx));
+      ctx = nullptr;
+    }
+    if (!removed) {
+      // Release test-owned resources before teardown, including on assertion failure.
+      EXPECT_EQ(OB_SUCCESS, ls->offline(true));
+      handle.reset();
+      EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(ls_id));
+    }
+  );
+  const auto wait_until = [](auto predicate) {
+    const int64_t deadline = ObTimeUtility::current_time() + 10 * 1000 * 1000;
+    while (ObTimeUtility::current_time() < deadline) {
+      if (predicate()) {
+        return true;
+      }
+      ob_usleep(1000);
+    }
+    return false;
+  };
+  ObMemberList members;
+  ASSERT_EQ(OB_SUCCESS, members.add_server(MockTenantModuleEnv::get_instance().self_addr_));
+  ASSERT_EQ(OB_SUCCESS, ls->set_initial_member_list(members, 1, GlobalLearnerList()));
+  int64_t proposal_id = 0;
+  ASSERT_TRUE(wait_until([&]() {
+    ObRole role = INVALID_ROLE;
+    return OB_SUCCESS == ls->get_log_handler()->get_role(role, proposal_id)
+        && LEADER == role && mgr->is_master_();
+  }));
+
+  // Use the real transaction log producer, PALF append and ObTxLogCb. Only the
+  // standby confirmation is withheld; no mock on_success replaces the tx code.
+  ASSERT_EQ(OB_SUCCESS, apply->switch_sync_mode(proposal_id, palf::SyncMode::SYNC));
+  const ObTxCreateArg tx_arg(false /*for_replay*/, PartCtxSource::MVCC_WRITE,
+      MTL_ID(), ObTransID(123), ls_id, 1, GET_MIN_CLUSTER_VERSION(), 0, 0, 0,
+      MockTenantModuleEnv::get_instance().self_addr_,
+      ObTimeUtility::current_time() + 60 * 1000 * 1000, MTL(ObTransService*));
+  bool existed = false;
+  ASSERT_EQ(OB_SUCCESS, tx_service.create_tx_ctx(tx_arg, existed, ctx));
+  ASSERT_NE(nullptr, ctx);
+  ObTxLogCb *cb = nullptr;
+  {
+    CtxLockGuard guard(ctx->lock_);
+    ctx->part_trans_action_ = ObPartTransAction::COMMIT;
+    ASSERT_EQ(OB_SUCCESS, ctx->submit_log_impl_(ObTxLogType::TX_COMMIT_LOG));
+    ASSERT_EQ(1, ctx->busy_cbs_.get_size());
+    cb = ctx->busy_cbs_.get_first();
+    ASSERT_TRUE(is_contain(cb->get_cb_arg_array(), ObTxLogType::TX_COMMIT_LOG));
+  }
+  const palf::LSN cb_lsn = cb->__get_lsn();
+  const SCN cb_scn = cb->__get_scn();
+  const int64_t queue_idx = cb_scn.get_val_for_logservice() & (APPLY_TASK_QUEUE_SIZE - 1);
+  queue = &apply->cb_queues_[queue_idx];
+  ASSERT_TRUE(wait_until([&]() {
+    return ATOMIC_LOAD(&apply->palf_committed_end_lsn_.val_) > cb_lsn.val_
+        && queue->get_total_submit_cb_cnt() > queue->get_total_apply_cb_cnt();
+  }));
+  ASSERT_TRUE(wait_until([&]() { return owns_queue_lease = queue->acquire_lease(); }));
+  const int64_t applied_before = queue->get_total_apply_cb_cnt();
+  const int64_t standby_before = ATOMIC_LOAD(&apply->standby_committed_end_lsn_.val_);
+  bool timeslice_out = false;
+  ASSERT_EQ(OB_SUCCESS, apply->try_handle_cb_queue(queue, timeslice_out));
+  EXPECT_EQ(applied_before, queue->get_total_apply_cb_cnt());
+  EXPECT_EQ(AppendCb::__get_member_address(cb), queue->top());
+  EXPECT_EQ(1, mgr->get_active_tx_count());
+  EXPECT_FALSE(ctx->is_exiting());
+  EXPECT_FALSE(apply->is_ls_gc_state());
+  EXPECT_LE(standby_before, cb_lsn.val_);
+
+  const auto transport_gc = [&]() {
+    ObTpStatusGuard guard;
+    const int ret = ls->get_log_handler()->transport_service_->get_transport_status(ls_id, guard);
+    EXPECT_EQ(OB_SUCCESS, ret);
+    return OB_SUCCESS == ret && ATOMIC_LOAD(&guard.get_transport_status()->is_ls_gc_state_);
+  };
+  const int64_t start_ts = ObTimeUtility::current_time();
+  const auto offline_once = [&]() {
+    ObLSLockGuard guard(ls, ls->lock_, 0, LSLOCKALL);
+    return ls->offline_(start_ts, true /*remove_from_disk*/);
+  };
+  mgr->inc_total_active_readonly_request_count();
+  EXPECT_EQ(OB_EAGAIN, offline_once());
+  EXPECT_EQ(1, mgr->get_active_tx_count());
+  EXPECT_FALSE(apply->is_ls_gc_state());
+  EXPECT_FALSE(transport_gc());
+  mgr->dec_total_active_readonly_request_count();
+
+  // DROP TENANT's LS removal calls offline(true). Hold the queue lease, not a
+  // ctx/Apply lock, so force-kill and GC publication can finish independently.
+  EXPECT_EQ(OB_EAGAIN, offline_once());
+  EXPECT_EQ(0, mgr->get_active_tx_count());
+  EXPECT_EQ(1, mgr->get_tx_ctx_count());
+  EXPECT_TRUE(apply->is_ls_gc_state());
+  EXPECT_TRUE(transport_gc());
+  {
+    CtxLockGuard guard(ctx->lock_);
+    EXPECT_TRUE(ctx->is_exiting());
+    EXPECT_TRUE(ctx->sub_state_.is_force_abort());
+    EXPECT_EQ(2, ctx->get_ref()); // the test's handle plus the real pending log cb
+    EXPECT_EQ(1, ctx->busy_cbs_.get_size());
+    EXPECT_FALSE(cb->is_callbacked());
+    EXPECT_EQ(ObTxData::ABORT, ctx->ctx_tx_data_.get_state());
+  }
+  EXPECT_EQ(applied_before, queue->get_total_apply_cb_cnt());
+  EXPECT_EQ(OB_SUCCESS, tx_service.revert_tx_ctx(ctx));
+  ctx = nullptr;
+  // Only the actual log callback now owns the context. This excludes the
+  // retained test reference that masked callback lifetime in ExitCheckingCb.
+  EXPECT_EQ(1, mgr->get_tx_ctx_count());
+  EXPECT_EQ(OB_EAGAIN, offline_once());
+
+  release_queue();
+  EXPECT_EQ(OB_SUCCESS, ls->get_log_handler()->mark_ls_gc_state());
+  ASSERT_TRUE(wait_until([&]() {
+    return queue->get_total_apply_cb_cnt() == applied_before + 1
+        && mgr->get_tx_ctx_count() == 0;
+  }));
+  EXPECT_EQ(standby_before, ATOMIC_LOAD(&apply->standby_committed_end_lsn_.val_));
+  EXPECT_EQ(OB_SUCCESS, ls->offline(true));
+  handle.reset();
+  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(ls_id));
+  removed = true;
+  ObLSHandle removed_handle;
+  EXPECT_EQ(OB_LS_NOT_EXIST, ls_svr->get_ls(ls_id, removed_handle, ObLSGetMod::STORAGE_MOD));
+}
+
+int gen_create_logonly_ls_arg(const int64_t tenant_id, const share::ObLSID &ls_id,
+                             obrpc::ObCreateLSArg &arg);
+
+TEST_F(TestLSService, permanent_remove_marks_logonly_gc)
+{
+  ObLSService *ls_svr = MTL(ObLSService*);
+  const ObLSID ls_id(122);
+  ObCreateLSArg arg;
+  ObLSHandle handle;
+  ASSERT_EQ(OB_SUCCESS, gen_create_logonly_ls_arg(MTL_ID(), ls_id, arg));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->create_ls(arg));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  ObLS *ls = handle.get_ls();
+  ASSERT_TRUE(ls->is_logonly_replica());
+  auto *apply = ls->get_log_handler()->apply_status_;
+  ASSERT_NE(nullptr, apply);
+  EXPECT_EQ(OB_SUCCESS, ls->offline(false /*remove_from_disk*/));
+  EXPECT_FALSE(apply->is_ls_gc_state());
+  EXPECT_EQ(OB_SUCCESS, ls->offline(true /*remove_from_disk*/));
+  EXPECT_TRUE(apply->is_ls_gc_state());
+  handle.reset();
+  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(ls_id));
 }
 
 TEST_F(TestLSService, tablet_test)

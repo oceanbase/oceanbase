@@ -962,14 +962,14 @@ void ObLS::destroy()
   }
 }
 
-int ObLS::offline_tx_(const int64_t start_ts)
+int ObLS::offline_tx_(const int64_t start_ts, const bool remove_from_disk)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ls_tx_svr_.prepare_offline(start_ts))) {
     LOG_WARN("prepare offline ls tx service failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(tx_table_.prepare_offline())) {
     LOG_WARN("tx table prepare offline failed", K(ret), K(ls_meta_));
-  } else if (OB_FAIL(ls_tx_svr_.offline())) {
+  } else if (OB_FAIL(ls_tx_svr_.offline(remove_from_disk))) {
     LOG_WARN("offline ls tx service failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(tx_table_.offline())) {
     LOG_WARN("tx table offline failed", K(ret), K(ls_meta_));
@@ -1007,6 +1007,10 @@ int ObLS::offline_(const int64_t start_ts, const bool remove_from_disk)
       LOG_WARN("failed to offline ls restore handler", K(ret));
     } else if (OB_FAIL(log_handler_.offline())) {
       LOG_WARN("failed to offline log", K(ret));
+    // Log-only replicas do not serve transaction writes or run offline_tx_.
+    } else if (remove_from_disk && log_handler_.is_valid()
+               && OB_FAIL(log_handler_.mark_ls_gc_state())) {
+      LOG_WARN("failed to mark log handler gc for permanent remove", K(ret), K(ls_meta_));
     } else {
       update_state_seq_();
     }
@@ -1048,7 +1052,7 @@ int ObLS::offline_(const int64_t start_ts, const bool remove_from_disk)
     LOG_WARN("weak read handler offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_ddl_log_handler_.offline())) {
     LOG_WARN("ddl log handler offline failed", K(ret), K(ls_meta_));
-  } else if (OB_FAIL(offline_tx_(start_ts))) {
+  } else if (OB_FAIL(offline_tx_(start_ts, remove_from_disk))) {
     LOG_WARN("offline tx service failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(dup_table_ls_handler_.offline())) {
     LOG_WARN("offline dup table ls handler failed", K(ret), K(ls_meta_));

@@ -75,7 +75,7 @@ public:
     reset_();
   }
   int prepare_offline(const int64_t start_ts);
-  int offline();
+  int offline(const bool remove_from_disk = false);
   int online();
 
   // NB: block_normal and unblcok should pair used !!!
@@ -221,6 +221,10 @@ public:
   int check_tx_blocked(bool &tx_blocked) const;
 private:
   void reset_();
+  // Block requests, force transactions to exit and interrupt GTS callbacks.
+  int block_kill_tx_for_offline(const bool need_active_tx_clean);
+  // Non-blocking: return OB_EAGAIN while callback/context references remain.
+  int wait_tx_ctx_clean();
 
   storage::ObLS *parent_;
   int64_t tenant_id_;
