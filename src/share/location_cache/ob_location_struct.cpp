@@ -695,7 +695,8 @@ ObTabletLSCache::ObTabletLSCache()
     : cache_key_(),
       ls_id_(),
       renew_time_(0),
-      transfer_seq_(OB_INVALID_TRANSFER_SEQ)
+      transfer_seq_(OB_INVALID_TRANSFER_SEQ),
+      touched_(false)
 {
 }
 
@@ -710,6 +711,7 @@ void ObTabletLSCache::reset()
   ls_id_.reset();
   renew_time_ = 0;
   transfer_seq_ = OB_INVALID_TRANSFER_SEQ;
+  touched_ = false;
 }
 
 int ObTabletLSCache::assign(const ObTabletLSCache &other)
@@ -720,6 +722,7 @@ int ObTabletLSCache::assign(const ObTabletLSCache &other)
     ls_id_ = other.ls_id_;
     renew_time_ = other.renew_time_;
     transfer_seq_ = other.transfer_seq_;
+    touched_ = other.touched_;
   }
   return ret;
 }
@@ -759,6 +762,7 @@ int ObTabletLSCache::init(
     ls_id_ = ls_id;
     renew_time_ = renew_time;
     transfer_seq_ = transfer_seq;
+    touched_ = false;
     ObLink::reset();
   }
   return ret;
