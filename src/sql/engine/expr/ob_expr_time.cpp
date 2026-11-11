@@ -36,6 +36,9 @@ int ObExprTime::deduce_time_scale(const ObExprResType &type,
 {
   int ret = OB_SUCCESS;
   scale = static_cast<ObScale>(MIN(type.get_scale(), MAX_SCALE_FOR_TEMPORAL));
+  if (scale < MIN_SCALE_FOR_TEMPORAL) {
+    scale = type.is_temporal_type() ? 0 : MAX_SCALE_FOR_TEMPORAL;
+  }
   ObString time_str;
   bool has_time_str = false;
   ObArenaAllocator tmp_allocator(ObModIds::OB_SQL_RES_TYPE);
@@ -44,9 +47,6 @@ int ObExprTime::deduce_time_scale(const ObExprResType &type,
     time_str = type.get_param().get_string();
     has_time_str = true;
   } else {
-    if (SCALE_UNKNOWN_YET == scale) {
-      scale = type.is_temporal_type() ? 0 : MAX_SCALE_FOR_TEMPORAL;
-    }
     if (!type.is_literal() && type.is_string_type()) {
       ObRawExpr *parent_expr = type_ctx.get_raw_expr();
       const ObRawExpr *arg_expr = NULL;

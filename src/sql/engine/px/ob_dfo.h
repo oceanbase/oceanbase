@@ -1005,7 +1005,7 @@ public:
     allocator_.set_label("PxTaskArena");
   }
   ~ObPxTask() = default;
-  ObPxTask (const ObPxTask &other) {
+  ObPxTask (const ObPxTask &other) : ObPxTask() {
     *this = other;
   }
   ObPxTask &operator=(const ObPxTask &other)
@@ -1022,6 +1022,7 @@ public:
     exec_addr_ = other.exec_addr_;
     qc_addr_ = other.qc_addr_;
     rc_ = other.rc_;
+    das_retry_rc_ = other.das_retry_rc_;
     state_ = other.state_;
     task_co_id_ = other.task_co_id_;
     px_int_id_ = other.px_int_id_;
@@ -1034,6 +1035,7 @@ public:
     tx_result_.assign(other.tx_result_);
     is_use_local_thread_ = other.is_use_local_thread_;
     fb_info_.assign(other.fb_info_);
+    err_msg_ = other.err_msg_;
     memstore_read_row_count_ = other.memstore_read_row_count_;
     ssstore_read_row_count_ = other.ssstore_read_row_count_;
     px_worker_execute_start_schema_version_ = other.px_worker_execute_start_schema_version_;

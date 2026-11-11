@@ -246,8 +246,15 @@ int ObPxTreeSerializer::deserialize_frame_info(const char *buf,
   int64_t expr_datum_size = 0;
   int64_t des_mem_size = 0;
   char *expr_datum_buf = nullptr;
-  if (0 < need_extra_mem_size
-      && nullptr == (expr_datum_buf = static_cast<char*>(allocator.alloc(need_extra_mem_size)))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(need_extra_mem_size < 0)
+             || OB_UNLIKELY(pos < 0)
+             || OB_UNLIKELY(pos > data_len)
+             || OB_UNLIKELY(need_extra_mem_size > data_len - pos)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("invalid extra datum memory size", K(ret), K(need_extra_mem_size), K(pos), K(data_len));
+  } else if (OB_UNLIKELY(0 < need_extra_mem_size)
+             && OB_ISNULL(expr_datum_buf = static_cast<char*>(allocator.alloc(need_extra_mem_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret));
   }
@@ -264,12 +271,23 @@ int ObPxTreeSerializer::deserialize_frame_info(const char *buf,
       ObDatum *expr_datum = reinterpret_cast<ObDatum *>
                                 (frame_buf + j * item_size);
       OB_UNIS_DECODE(expr_datum_size);
-      if (pos + expr_datum_size > data_len) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(expr_datum_size < 0)
+                 || OB_UNLIKELY(pos < 0)
+                 || OB_UNLIKELY(pos > data_len)
+                 || OB_UNLIKELY(expr_datum_size > data_len - pos)) {
         ret = OB_SIZE_OVERFLOW;
         LOG_WARN("ser frame info size overflow", K(ret), K(pos),
           K(expr_datum_size), K(data_len));
+      } else if (OB_UNLIKELY(expr_datum_size > need_extra_mem_size - des_mem_size)) {
+        ret = OB_SIZE_OVERFLOW;
+        LOG_WARN("extra datum memory size overflow", K(ret), K(expr_datum_size),
+          K(des_mem_size), K(need_extra_mem_size));
       } else if (0 == expr_datum_size) {
         // 对于该序列化数据，datum的len_为0， 前面已将ObDatum反序列化, 不需要再做其他处理
+      } else if (OB_ISNULL(buf) || OB_ISNULL(expr_datum_buf)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null datum buffer", K(ret), KP(buf), KP(expr_datum_buf));
       } else {
         // TODO: longzhong.wlz 之前说这里有兼容性问题，后续一并处理，暂时先这样
         MEMCPY(expr_datum_buf, buf + pos, expr_datum_size);

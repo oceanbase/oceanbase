@@ -2951,6 +2951,11 @@ int vectorize_fill_decimal(arrow::ArrayBuilder *builder, const ObBatchRows &brs,
   } else {
     int ob_precision = static_cast<int>(datum_meta.precision_);
     int ob_int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(datum_meta.precision_);
+    const int64_t int_bytes = ArrowBuilderType::ValueType::kByteWidth;
+    if (OB_UNLIKELY(ob_int_bytes <= 0) || OB_UNLIKELY(ob_int_bytes > int_bytes)) {
+      ret = OB_ERR_TYPE_MISMATCH;
+      LOG_WARN("failed to convert value to decimal", K(ret), K(ob_int_bytes), K(int_bytes));
+    }
 
     for (int64_t i = 0; OB_SUCC(ret) && i < brs.size_; ++i) {
       if (brs.skip_->contain(i)) {
@@ -2976,14 +2981,15 @@ int vectorize_fill_decimal(arrow::ArrayBuilder *builder, const ObBatchRows &brs,
           } else {
             value = expr_vector.get_decimal_int(i);
           }
-          int64_t int_bytes = ArrowBuilderType::ValueType::kByteWidth;
           uint8_t buf[ArrowBuilderType::ValueType::kByteWidth];
-          uint8_t* buffer = (uint8_t *)value;
+          const uint8_t *buffer = reinterpret_cast<const uint8_t *>(value);
           if (OB_FAIL(ret)) {
-          } else if (ob_int_bytes > int_bytes) {
-            ret = OB_ERR_TYPE_MISMATCH;
-            LOG_WARN("failed to convert value to decimal", K(ob_int_bytes), K(int_bytes));
+          } else if (OB_ISNULL(buffer)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("decimal value is unexpected null", K(ret));
           } else {
+            // Sign-extend the little-endian source before converting it to big-endian.
+            MEMSET(buf, 0 != (buffer[ob_int_bytes - 1] & 0x80) ? 0xFF : 0, int_bytes);
             for (int i = 0; i < ob_int_bytes; ++i) {
               buf[ArrowBuilderType::ValueType::kByteWidth - i - 1] = buffer[i];
             }
