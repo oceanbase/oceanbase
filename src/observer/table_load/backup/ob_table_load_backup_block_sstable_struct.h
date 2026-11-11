@@ -142,6 +142,11 @@ public:
   ObBackupLogicMacroBlockId();
   ObBackupLogicMacroBlockId(const int64_t data_seq, const uint64_t data_version);
   int64_t hash() const;
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return common::OB_SUCCESS;
+  }
   bool operator ==(const ObBackupLogicMacroBlockId &other) const;
   bool operator !=(const ObBackupLogicMacroBlockId &other) const;
   OB_INLINE bool is_valid() const

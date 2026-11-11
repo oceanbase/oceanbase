@@ -179,7 +179,8 @@ int ObTableLoadPhysicalBackupPartScannerV1::init_macro_block_index(
             } else if (macro_index.table_id_ == backup_table_id_ && macro_index.index_table_id_ == backup_table_id_) {
               macro_block_index_is_initing = true;
               if (is_lob_block(macro_index.data_seq_)) {
-                if (OB_FAIL(lob_macro_block_idx_map_.set_refactored(macro_index.data_seq_, lob_macro_block_index_.size(), 1))) {
+                const ObBackupLogicMacroBlockId macro_block_id(macro_index.data_seq_, macro_index.data_version_);
+                if (OB_FAIL(lob_macro_block_idx_map_.set_refactored(macro_block_id, lob_macro_block_index_.size(), 1))) {
                   LOG_WARN("fail to set refactored", KR(ret));
                 } else if (OB_FAIL(lob_macro_block_index_.push_back(macro_index))) {
                   LOG_WARN("fail to push back", KR(ret));

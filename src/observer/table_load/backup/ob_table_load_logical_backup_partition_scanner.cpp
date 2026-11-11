@@ -133,7 +133,14 @@ int ObTableLoadLogicalBackupPartScanner::init_macro_block_index(
             ObString block_id_str(block_file_name.length() - (block_id_ptr - block_file_name.ptr()), block_id_ptr);
             int64_t block_id = std::stoll(block_id_str.ptr());
             if (is_lob_block(block_id)) {
-              if (OB_FAIL(lob_macro_block_idx_map_.set_refactored(block_id, lob_macro_block_index_.size(), 1))) {
+              uint64_t data_version = 0;
+              char *version_end = nullptr;
+              if (OB_FAIL(ob_strtoull(block_file_name.ptr(), version_end, data_version))) {
+                LOG_WARN("fail to parse macro block data version", KR(ret), K(block_file_name));
+              } else if (OB_UNLIKELY(version_end == block_file_name.ptr() || version_end != block_id_ptr - 1)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected macro block data version", KR(ret), K(block_file_name));
+              } else if (OB_FAIL(lob_macro_block_idx_map_.set_refactored(ObBackupLogicMacroBlockId(block_id, data_version), lob_macro_block_index_.size(), 1))) {
                 LOG_WARN("fail to set refactored", KR(ret));
               } else if (OB_FAIL(lob_macro_block_index_.push_back(block_file_name))) {
                 LOG_WARN("fail to push back", KR(ret));

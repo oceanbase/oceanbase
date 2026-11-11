@@ -331,7 +331,7 @@ int ObTableLoadBackupPartScanner::fill_lob_buf(
   int64_t block_idx;
   int64_t read_size = 0;
   ObTableLoadBackupSSTableBlockReader lob_reader;
-  if (OB_FAIL(lob_macro_block_idx_map_.get_refactored(macro_block_id.data_seq_, block_idx))) {
+  if (OB_FAIL(lob_macro_block_idx_map_.get_refactored(macro_block_id, block_idx))) {
     LOG_WARN("fail to get refactored", KR(ret), K(macro_block_id));
   } else if (OB_FAIL(read_macro_block_data(block_idx, true/*is_lob_block*/, lob_buf_, read_size))) {
     LOG_WARN("fail to read macro block data", KR(ret), K(block_idx));
