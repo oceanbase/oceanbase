@@ -71,13 +71,15 @@ int ObExplainLogPlan::generate_normal_raw_plan()
       sql_plan.set_session_info(get_optimizer_context().get_session_info());
       ObExplainLogPlan *explain_plan = static_cast<ObExplainLogPlan*>(child_plan);
       ObSEArray<common::ObString, 64> plan_strs;
-      const ObString& into_table = explain_stmt->get_into_table();
-      const ObString& statement_id = explain_stmt->get_statement_id();
-      if (OB_FAIL(sql_plan.store_sql_plan_for_explain(get_optimizer_context().get_exec_ctx(),
+      ObString into_table = explain_stmt->get_into_table();
+      const ObString statement_id = check_statement_id(explain_stmt->get_statement_id());
+      if (OB_FAIL(check_plan_table(into_table))) {
+        LOG_WARN("failed to check plan table", K(ret));
+      } else if (OB_FAIL(sql_plan.store_sql_plan_for_explain(get_optimizer_context().get_exec_ctx(),
                                                       child_plan,
                                                       explain_stmt->get_explain_type(),
-                                                      0 == into_table.length() ? "PLAN_TABLE" : into_table,
-                                                      0 == statement_id.length() ? "" : statement_id,
+                                                      into_table,
+                                                      statement_id,
                                                       explain_stmt->get_display_opt(),
                                                       plan_strs))) {
         LOG_WARN("failed to store sql plan", K(ret));
@@ -114,6 +116,45 @@ int ObExplainLogPlan::generate_normal_raw_plan()
     }
   }
   return ret;
+}
+
+int ObExplainLogPlan::check_plan_table(ObString &plan_table)
+{
+  int ret = OB_SUCCESS;
+  if (plan_table.empty()) {
+    share::schema::ObSchemaGetterGuard *schema_guard = get_optimizer_context().get_schema_guard();
+    ObSQLSessionInfo *session = get_optimizer_context().get_session_info();
+    bool table_exists = false;
+    if (OB_ISNULL(schema_guard) || OB_ISNULL(session)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), KP(schema_guard), KP(session));
+    } else if (OB_INVALID_ID == session->get_database_id()) {
+      // No current database: only display the explain plan.
+    } else if (OB_FAIL(schema_guard->check_table_exist(session->get_effective_tenant_id(),
+                                                     session->get_database_id(),
+                                                     ObString::make_string("PLAN_TABLE"),
+                                                     false,
+                                                     share::schema::ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES,
+                                                     table_exists))) {
+      LOG_WARN("failed to check default plan table", K(ret));
+    } else if (table_exists) {
+      plan_table = ObString::make_string("PLAN_TABLE");
+    }
+  }
+  return ret;
+}
+
+ObString ObExplainLogPlan::check_statement_id(const ObString &statement_id)
+{
+  ObString valid_statement_id = statement_id.empty() ? ObString::make_string("") : statement_id;
+  for (int64_t i = 0; i < statement_id.length(); ++i) {
+    const char c = statement_id.ptr()[i];
+    if (!(('A' <= c && c <= 'Z') || ('a' <= c && c <= 'z') || ('0' <= c && c <= '9'))) {
+      valid_statement_id = ObString::make_string("");
+      break;
+    }
+  }
+  return valid_statement_id;
 }
 
 int ObExplainLogPlan::check_explain_generate_plan_with_outline(ObLogPlan *real_plan)

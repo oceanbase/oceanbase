@@ -324,6 +324,9 @@ int ObDbmsXplan::display_cursor(ObPLExecCtx &ctx,
   } else {
     if (0 == plan_id && plan_name.empty() && sql_handle.empty()) {
       plan_id = session->get_last_plan_id();
+      if (0 == plan_id) {
+        plan_id = -1;
+      }
     }
     if (0 == tenant_id) {
       tenant_id = session->get_effective_tenant_id();

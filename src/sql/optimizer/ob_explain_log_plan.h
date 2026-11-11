@@ -28,6 +28,8 @@ namespace sql
   protected:
     virtual int generate_normal_raw_plan() override;
   private:
+    int check_plan_table(common::ObString &plan_table);
+    static common::ObString check_statement_id(const common::ObString &statement_id);
     int check_explain_generate_plan_with_outline(ObLogPlan *real_plan);
     DISALLOW_COPY_AND_ASSIGN(ObExplainLogPlan);
   };
