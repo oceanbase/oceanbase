@@ -3843,7 +3843,8 @@ bool ObResolverUtils::is_valid_partition_column_type(const ObObjType type,
 {
   int bret = false;
   if (is_key_part(part_type)) {
-    if (!ob_is_text_tc(type) && !ob_is_json_tc(type) && !ob_is_collection_sql_type(type)) {
+    if (!ob_is_text_tc(type) && !ob_is_json_tc(type)
+        && !ob_is_collection_sql_type(type) && !ob_is_roaringbitmap_tc(type)) {
       bret = true;
     } else if (is_string_lob) {
       bret = true;
