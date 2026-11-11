@@ -189,7 +189,7 @@ static int read_client_magic(int fd, uint64_t &client_magic, uint8_t &index)
   int64_t pos = 0;
   uint16_t msg_body_len = 0;
   char recv_buf[recv_buf_len];
-  memset(recv_buf, 0, sizeof(recv_buf_len));
+  memset(recv_buf, 0, sizeof(recv_buf));
 
   while ((rcv_byte = recv(fd, (char *) recv_buf, sizeof(recv_buf), MSG_PEEK)) < 0 && EINTR == errno);
 
@@ -210,17 +210,17 @@ static int read_client_magic(int fd, uint64_t &client_magic, uint8_t &index)
   if (OB_FAIL(ret)) {
     RPC_LOG(INFO, "read from client failed");
   } else {
-    if (OB_FAIL(decode_i64(recv_buf, recv_buf_len, pos, reinterpret_cast<int64_t *>(&header_magic)))) {
+    if (OB_FAIL(decode_i64(recv_buf, rcv_byte, pos, reinterpret_cast<int64_t *>(&header_magic)))) {
       RPC_LOG(INFO, "decode header magic failed!", K(ret));
     } else if (header_magic != NEGOTIATION_PACKET_HEADER_MAGIC_EASY) {
       ret = OB_NOT_THE_OBJECT;
       RPC_LOG(INFO, "not negotiation msg! header magic does not match!");
-    } else if (OB_FAIL(decode_i16(recv_buf, recv_buf_len, pos, reinterpret_cast<int16_t *>(&msg_body_len)))) {
+    } else if (OB_FAIL(decode_i16(recv_buf, rcv_byte, pos, reinterpret_cast<int16_t *>(&msg_body_len)))) {
       RPC_LOG(INFO, "decode msg body len failed!", K(ret));
-    } else if (OB_FAIL(decode_i64(recv_buf, recv_buf_len, pos, reinterpret_cast<int64_t *>(&client_magic)))) {
+    } else if (OB_FAIL(decode_i64(recv_buf, rcv_byte, pos, reinterpret_cast<int64_t *>(&client_magic)))) {
       RPC_LOG(INFO, "decode eio magic failed!", K(ret));
-    } else {
-      index = recv_buf[pos++];
+    } else if (OB_FAIL(decode_i8(recv_buf, rcv_byte, pos, reinterpret_cast<int8_t *>(&index)))) {
+      RPC_LOG(INFO, "decode io thread index failed!", K(ret));
     }
 
     if (OB_SUCC(ret)) {
