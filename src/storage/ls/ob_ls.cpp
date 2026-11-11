@@ -1989,7 +1989,7 @@ ObLS::RDLockGuard::RDLockGuard(RWLock &lock, const int64_t abs_timeout_us)
   : lock_(lock), ret_(OB_SUCCESS), start_ts_(0)
 {
   ObTimeGuard tg("ObLS::rwlock", LOCK_CONFLICT_WARN_TIME);
-  if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdlock(ObLatchIds::LS_LOCK,
+  if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdlock(ObLatchIds::OB_LS_META_RW_LOCK,
                                                      abs_timeout_us)))) {
     STORAGE_LOG_RET(WARN, ret_, "Fail to read lock, ", K_(ret));
   } else {
@@ -2016,7 +2016,7 @@ ObLS::WRLockGuard::WRLockGuard(RWLock &lock, const int64_t abs_timeout_us)
   : lock_(lock), ret_(OB_SUCCESS), start_ts_(0)
 {
   ObTimeGuard tg("ObLS::rwlock", LOCK_CONFLICT_WARN_TIME);
-  if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock(ObLatchIds::LS_LOCK,
+  if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock(ObLatchIds::OB_LS_META_RW_LOCK,
                                                      abs_timeout_us)))) {
     STORAGE_LOG_RET(WARN, ret_, "Fail to read lock, ", K_(ret));
   } else {

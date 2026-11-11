@@ -1805,6 +1805,29 @@ int ObTenantMetaMemMgr::get_pending_truncate_tablet(
   return ret;
 }
 
+int ObTenantMetaMemMgr::has_pending_truncate_tablet(
+    const ObTabletMapKey &key,
+    bool &exists)
+{
+  int ret = OB_SUCCESS;
+  exists = false;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
+  } else if (OB_UNLIKELY(!key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet key", K(ret), K(key));
+  } else {
+    ObBucketHashRLockGuard guard(bucket_lock_, key.hash());
+    if (OB_FAIL(guard.get_ret())) {
+      LOG_WARN("fail to hold bucket rlock", K(ret), K(key));
+    } else if (OB_FAIL(pending_truncate_tablet_map_.has_exist(key, exists))) {
+      LOG_WARN("fail to check if pending truncate tablet exists", K(ret), K(key));
+    }
+  }
+  return ret;
+}
+
 int ObTenantMetaMemMgr::try_release_pending_truncate_tablet(
     const ObTabletMapKey &key,
     const bool restore_old_tablet_read_flag,
@@ -2667,10 +2690,12 @@ int ObTenantMetaMemMgr::del_tablet(const ObTabletMapKey &key)
 int ObTenantMetaMemMgr::check_if_tablet_cas_is_enabled(
     const ObTabletMapKey &key,
     const ObTabletHandle &old_handle,
-    bool &b_ret)
+    bool &b_ret,
+    bool &pending_truncate_tablet_exist)
 {
   int ret = OB_SUCCESS;
   b_ret = true;
+  pending_truncate_tablet_exist = false;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -2691,6 +2716,7 @@ int ObTenantMetaMemMgr::check_if_tablet_cas_is_enabled(
       LOG_WARN("fail to check if pending truncate tablet exists", K(ret), K(key));
     } else {
       b_ret = !is_exist;
+      pending_truncate_tablet_exist = is_exist;
     }
     if (OB_FAIL(ret)) {
     } else if (!b_ret) {

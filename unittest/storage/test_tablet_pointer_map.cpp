@@ -11,6 +11,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <pthread.h>
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -409,6 +410,146 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_map)
   ASSERT_EQ(0, tablet_map_.map_.size());
 }
 
+TEST_F(TestMetaPointerMap, test_ls_meta_rwlock_fifo)
+{
+  ObLS::RWLock lock;
+  struct WriterParam
+  {
+    ObLS::RWLock *lock_;
+    int64_t abs_timeout_us_;
+    int ret_;
+  };
+  const int64_t writer_deadline = ObTimeUtility::current_time() + 5_s;
+  WriterParam param{&lock, writer_deadline, OB_ERR_UNEXPECTED};
+  pthread_t writer_thread;
+  bool writer_created = false;
+  {
+    ObLS::RDLockGuard first_reader(lock);
+    ASSERT_EQ(OB_SUCCESS, first_reader.get_ret());
+    const int create_ret = pthread_create(&writer_thread, nullptr, [](void *arg) -> void * {
+      WriterParam *param = static_cast<WriterParam *>(arg);
+      ObLS::WRLockGuard writer(*param->lock_, param->abs_timeout_us_);
+      param->ret_ = writer.get_ret();
+      return nullptr;
+    }, &param);
+    EXPECT_EQ(0, create_ret);
+    if (0 == create_ret) {
+      writer_created = true;
+      const int64_t wait_deadline = ObTimeUtility::current_time() + 2_s;
+      while (0 == (ATOMIC_LOAD(&lock.lock_) & ObLatch::WAIT_MASK)
+          && ObTimeUtility::current_time() < wait_deadline) {
+        ob_usleep(1_ms);
+      }
+      const bool writer_queued = 0 != (ATOMIC_LOAD(&lock.lock_) & ObLatch::WAIT_MASK);
+      EXPECT_TRUE(writer_queued);
+      if (writer_queued) {
+        // New meta readers must wait behind an already queued writer.
+        ObLS::RDLockGuard later_reader(lock, ObTimeUtility::current_time() + 20_ms);
+        EXPECT_EQ(OB_TIMEOUT, later_reader.get_ret());
+      }
+    }
+  }
+  if (writer_created) {
+    ASSERT_EQ(0, pthread_join(writer_thread, nullptr));
+    EXPECT_EQ(OB_SUCCESS, param.ret_);
+  }
+  ObLS::RDLockGuard next_reader(lock);
+  EXPECT_EQ(OB_SUCCESS, next_reader.get_ret());
+}
+
+TEST_F(TestMetaPointerMap, test_pending_truncate_tablet_update_retry)
+{
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);
+  ASSERT_NE(nullptr, t3m);
+  const ObTabletMapKey key(ObLSID(1001), ObTabletID(103));
+  ObTabletHandle handles[2];
+  for (int64_t i = 0; i < 2; ++i) {
+    ObTenantMetaMemMgr::ObNormalTabletBuffer *buffer = nullptr;
+    ASSERT_EQ(OB_SUCCESS, t3m->tablet_buffer_pool_.acquire(buffer));
+    ASSERT_NE(nullptr, buffer);
+    ObMetaObj<ObTablet> tablet_obj;
+    ObMetaObjBufferHelper::new_meta_obj(buffer, tablet_obj.ptr_);
+    tablet_obj.pool_ = &t3m->tablet_buffer_pool_;
+    handles[i].set_obj(ObTabletHandle::ObTabletHdlType::FROM_T3M, tablet_obj);
+  }
+  ObPendingTruncateTabletMap::MapValue value;
+  ASSERT_EQ(OB_SUCCESS, value.init(handles[1], handles[0]));
+  auto register_pending = [&]() -> int {
+    ObBucketHashWLockGuard guard(t3m->bucket_lock_, key.hash());
+    int ret = guard.get_ret();
+    if (OB_SUCC(ret)) {
+      ret = t3m->pending_truncate_tablet_map_.set(key, value);
+    }
+    return ret;
+  };
+
+  bool exists = true;
+  ASSERT_EQ(OB_SUCCESS, t3m->has_pending_truncate_tablet(key, exists));
+  EXPECT_FALSE(exists);
+  ASSERT_EQ(OB_SUCCESS, register_pending());
+  ASSERT_EQ(OB_SUCCESS, t3m->has_pending_truncate_tablet(key, exists));
+  EXPECT_TRUE(exists);
+
+  ObLSTabletService tablet_svr;
+  ObArenaAllocator allocator;
+  int64_t attempts = 0;
+  ObLSTabletService::TabletUpdateOp success_op([&](bool &giveup_retry) -> int {
+    ++attempts;
+    return OB_SUCCESS;
+  });
+  // An existing pending truncate must prevent the update/persist operation entirely.
+  EXPECT_EQ(OB_EAGAIN,
+            tablet_svr.retry_tablet_update(key, "pending truncate", allocator, success_op));
+  EXPECT_EQ(0, attempts);
+  ASSERT_EQ(OB_SUCCESS,
+            t3m->try_release_pending_truncate_tablet(key, false, "unit_test_precheck"));
+
+  ObTimeGuard time_guard("PendingTruncateRetry", 1_s);
+  ObMetaDiskAddr addr;
+  ObLSTabletService::TabletUpdateOp late_pending_op([&](bool &giveup_retry) -> int {
+    ++attempts;
+    EXPECT_FALSE(giveup_retry);
+    int ret = register_pending();
+    if (OB_SUCC(ret)) {
+      ret = ObLSTabletService::safe_update_cas_tablet(
+          key, addr, handles[0], handles[1], time_guard, SCN::invalid_scn(), &giveup_retry);
+      EXPECT_TRUE(giveup_retry);
+    }
+    return ret;
+  });
+  // A truncate registered after precheck must stop the inner loop at the CAS check.
+  EXPECT_EQ(OB_EAGAIN,
+            tablet_svr.retry_tablet_update(key, "late pending truncate", allocator, late_pending_op));
+  EXPECT_EQ(1, attempts);
+  ASSERT_EQ(OB_SUCCESS, t3m->has_pending_truncate_tablet(key, exists));
+  EXPECT_TRUE(exists);
+  ASSERT_EQ(OB_SUCCESS,
+            t3m->try_release_pending_truncate_tablet(key, false, "unit_test_late_pending"));
+
+  attempts = 0;
+  ObLSTabletService::TabletUpdateOp conflict_op([&](bool &giveup_retry) -> int {
+    EXPECT_FALSE(giveup_retry);
+    return ++attempts == 1 ? OB_EAGAIN : OB_SUCCESS;
+  });
+  EXPECT_EQ(OB_SUCCESS,
+            tablet_svr.retry_tablet_update(key, "ordinary conflict", allocator, conflict_op));
+  EXPECT_EQ(2, attempts);
+
+  attempts = 0;
+  ObLSTabletService::TabletUpdateOp error_op([&](bool &giveup_retry) -> int {
+    ++attempts;
+    return OB_ERR_UNEXPECTED;
+  });
+  EXPECT_EQ(OB_ERR_UNEXPECTED,
+            tablet_svr.retry_tablet_update(key, "nonretryable error", allocator, error_op));
+  EXPECT_EQ(1, attempts);
+
+  exists = true;
+  EXPECT_EQ(OB_INVALID_ARGUMENT,
+            t3m->has_pending_truncate_tablet(ObTabletMapKey(), exists));
+  EXPECT_FALSE(exists);
+}
+
 TEST_F(TestMetaPointerMap, test_acquire_full_truncate_tablet_gets_current_old_handle)
 {
   ObLS fake_ls;
@@ -512,6 +653,20 @@ TEST_F(TestMetaPointerMap, test_acquire_full_truncate_tablet_gets_current_old_ha
   ObTablet *stale_old_tablet = old_handle.get_obj();
   ASSERT_NE(nullptr, stale_old_tablet);
   ASSERT_NE(current_handle.get_obj(), stale_old_tablet);
+
+  bool can_cas = true;
+  bool pending_truncate_tablet_exist = true;
+  ASSERT_EQ(OB_SUCCESS,
+            t3m->check_if_tablet_cas_is_enabled(key, old_handle, can_cas, pending_truncate_tablet_exist));
+  EXPECT_FALSE(can_cas);
+  EXPECT_FALSE(pending_truncate_tablet_exist);
+  bool giveup_retry = true;
+  ObTimeGuard cas_time_guard("StaleTabletCAS", 1_s);
+  EXPECT_EQ(OB_EAGAIN,
+            ObLSTabletService::safe_update_cas_tablet(
+                key, phy_addr, old_handle, current_handle, cas_time_guard,
+                SCN::invalid_scn(), &giveup_retry));
+  EXPECT_FALSE(giveup_retry);
 
   ret = t3m->acquire_full_truncate_tablet(
       WashTabletPriority::WTP_HIGH, key, old_handle, pending_handle);

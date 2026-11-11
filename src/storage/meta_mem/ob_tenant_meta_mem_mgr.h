@@ -242,6 +242,9 @@ public:
   int get_pending_truncate_tablet(
       const ObTabletMapKey &key,
       ObPendingTruncateTabletMap::MapValue &value);
+  int has_pending_truncate_tablet(
+      const ObTabletMapKey &key,
+      bool &exists);
   int try_release_pending_truncate_tablet(
       const ObTabletMapKey &key,
       const bool restore_old_tablet_read_flag,
@@ -327,7 +330,8 @@ public:
   int check_if_tablet_cas_is_enabled(
       const ObTabletMapKey &key,
       const ObTabletHandle &old_handle,
-      bool &b_ret);
+      bool &b_ret,
+      bool &pending_truncate_tablet_exist);
   int check_if_tablet_cas_is_enabled(
       const ObTabletMapKey &key,
       const ObMetaDiskAddr &old_addr,

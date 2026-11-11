@@ -513,7 +513,7 @@ LATCH_DEF(OB_TRANS_CTX_LOCK, 479, "ob trans ctx lock", LATCH_FIFO, 2000, 0, true
 LATCH_DEF(OB_TRANS_ACCESS_LOCK, 480, "ob trans access lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_TRANS_FLUSH_REDO_LOCK, 481, "ob trans flush redo lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_STORAGE_CLOG_RECORDER_CONCURRENT_LOCK, 482, "ob storage clog recorder concurrent lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(OB_LS_META_RW_LOCK, 483, "ob ls meta rw lock", LATCH_READ_PREFER, 2000, 0, true)
+LATCH_DEF(OB_LS_META_RW_LOCK, 483, "ob ls meta rw lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_LS_META_UPDATE_LOCK, 484, "ob ls meta update lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_BLOCK_MANAGER_BUCKET_LOCK, 485, "ob block manager bucket lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_BLOCK_MANAGER_MARKER_LOCK, 486, "ob block manager marker lock", LATCH_FIFO, 2000, 0, true)

@@ -204,7 +204,7 @@ TEST_F(TestLSTabletService, test_retry_tablet_update)
   const ObTabletMapKey key(ls_id_, ObTabletID(10000013));
   int64_t call_count = 0;
   common::ObArenaAllocator allocator("RetryTabletUpd");
-  ObLSTabletService::TabletUpdateOp op([&]() -> int {
+  ObLSTabletService::TabletUpdateOp op([&](bool &giveup_retry) -> int {
     return ++call_count < 2 ? OB_EAGAIN : OB_SUCCESS;
   });
 

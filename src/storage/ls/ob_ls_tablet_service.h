@@ -659,7 +659,8 @@ private:
       const ObTabletHandle &old_handle,
       ObTabletHandle &new_handle,
       ObTimeGuard &time_guard,
-      const share::SCN &ss_change_version = share::SCN::invalid_scn());
+      const share::SCN &ss_change_version = share::SCN::invalid_scn(),
+      bool *giveup_retry = nullptr);
   int safe_update_cas_empty_shell(
       const uint64_t data_version,
       const ObTabletMapKey &key,
@@ -799,8 +800,9 @@ private:
       const ObTabletHandle &old_tablet_handle,
       ObTabletHandle &new_tablet_handle,
       ObTimeGuard &time_guard,
-      const share::SCN &ss_change_version = share::SCN::invalid_scn());
-  typedef common::ObFunction<int()> TabletUpdateOp;
+      const share::SCN &ss_change_version = share::SCN::invalid_scn(),
+      bool *giveup_retry = nullptr);
+  typedef common::ObFunction<int(bool &giveup_retry)> TabletUpdateOp;
   int retry_tablet_update(
       const ObTabletMapKey &key,
       const char *operation,
