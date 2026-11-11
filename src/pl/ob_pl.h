@@ -664,7 +664,7 @@ private:
 struct ObPLSqlCodeInfo
 {
 public:
-  ObPLSqlCodeInfo(ObIAllocator &alloc) : alloc_(alloc), sqlcode_(OB_SUCCESS), sqlmsg_buf_(NULL), sqlmsg_(), stakced_warning_buff_(nullptr) {}
+  ObPLSqlCodeInfo(ObIAllocator &alloc) : alloc_(alloc), ob_error_code_(OB_SUCCESS), sqlcode_(OB_SUCCESS), sqlmsg_buf_(NULL), sqlmsg_(), stakced_warning_buff_(nullptr) {}
   ~ObPLSqlCodeInfo()
   {
     if (OB_NOT_NULL(stakced_warning_buff_)) {
@@ -672,12 +672,14 @@ public:
       stakced_warning_buff_ = nullptr;
     }
   }
-  inline void set_sqlcode(int sqlcode, const ObString &sqlmsg = ObString(""))
+  inline void set_error_codes(int ob_error_code, int sqlcode)
   {
+    ob_error_code_ = ob_error_code;
     sqlcode_ = sqlcode;
   }
   inline void reset()
   {
+    ob_error_code_ = OB_SUCCESS;
     sqlcode_ = OB_SUCCESS;
     sqlmsg_buf_ = NULL;
     sqlmsg_ = ObString("");
@@ -695,6 +697,7 @@ public:
       sqlmsg_ = ObString("");
     }
   }
+  inline int get_ob_error_code() const { return ob_error_code_; }
   inline int get_sqlcode() const { return sqlcode_; }
   inline const ObString& get_sqlmsg() const { return sqlmsg_; }
   int get_stack_warning_buf(common::ObIArray<ObWarningBuffer> *&stack_warning_buff);
@@ -703,6 +706,7 @@ public:
 
 private:
   ObIAllocator &alloc_;
+  int ob_error_code_;
   int sqlcode_;
   char* sqlmsg_buf_;
   ObString sqlmsg_;
@@ -825,7 +829,8 @@ struct ObPLExecCtx : public ObPLINS
       nocopy_params_(nocopy_params), guard_(guard),
       local_expr_alloc_(pl_level_alloc),
       tmp_alloc_for_copy_param_("PLTmpAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-      save_ret_code_(OB_SUCCESS),
+      saved_ob_error_code_(OB_SUCCESS),
+      saved_sqlcode_(OB_SUCCESS),
       param_store_for_sql_(nullptr),
       mem_context_(nullptr),
       calc_once_results_(nullptr),
@@ -876,8 +881,9 @@ struct ObPLExecCtx : public ObPLINS
       && OB_NOT_NULL(exec_ctx_->get_my_session())
       && OB_NOT_NULL(exec_ctx_->get_my_session()->get_pl_sqlcode_info())) {
       ObPLSqlCodeInfo *cur_sql_code_info = exec_ctx_->get_my_session()->get_pl_sqlcode_info();
-      save_ret_code_ = cur_sql_code_info->get_sqlcode();
-      cur_sql_code_info->set_sqlcode(OB_SUCCESS);
+      saved_ob_error_code_ = cur_sql_code_info->get_ob_error_code();
+      saved_sqlcode_ = cur_sql_code_info->get_sqlcode();
+      cur_sql_code_info->set_error_codes(OB_SUCCESS, OB_SUCCESS);
     }
   }
   void restore_sql_code_info()
@@ -886,8 +892,8 @@ struct ObPLExecCtx : public ObPLINS
       && OB_NOT_NULL(exec_ctx_->get_my_session())
       && OB_NOT_NULL(exec_ctx_->get_my_session()->get_pl_sqlcode_info())) {
       ObPLSqlCodeInfo *cur_sql_code_info = exec_ctx_->get_my_session()->get_pl_sqlcode_info();
-      if (cur_sql_code_info->get_sqlcode() == OB_SUCCESS) {
-        cur_sql_code_info->set_sqlcode(save_ret_code_);
+      if (cur_sql_code_info->get_ob_error_code() == OB_SUCCESS) {
+        cur_sql_code_info->set_error_codes(saved_ob_error_code_, saved_sqlcode_);
       }
     }
   }
@@ -915,7 +921,8 @@ struct ObPLExecCtx : public ObPLINS
   ObPLPackageGuard *guard_; //对应该次执行的package_guard
   ObIAllocator &local_expr_alloc_;
   ObArenaAllocator tmp_alloc_for_copy_param_;
-  int64_t save_ret_code_;
+  int64_t saved_ob_error_code_;
+  int64_t saved_sqlcode_;
   ParamStore *param_store_for_sql_;
   lib::MemoryContext mem_context_;
   // 懒加载: 第一次调用 set_calc_once_result 时才会真正分配并 create

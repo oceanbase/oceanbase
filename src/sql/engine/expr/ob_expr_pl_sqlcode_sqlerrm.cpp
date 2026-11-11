@@ -85,6 +85,25 @@ int ObExprPLSQLCodeSQLErrm::cg_expr(
   return ret;
 }
 
+static int format_current_application_error(const ObExpr &expr, ObEvalCtx &ctx, char *&message)
+{
+  int ret = OB_SUCCESS;
+  ObString error_trace_msg;
+#ifdef OB_BUILD_ORACLE_PL
+  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  CK (OB_NOT_NULL(session));
+  CK (OB_NOT_NULL(session->get_pl_top_context()));
+  CK (OB_NOT_NULL(session->get_pl_top_context()->get_call_stack_trace()));
+  OZ (session->get_pl_top_context()->get_call_stack_trace()->get_last_error_trace_msg(error_trace_msg));
+#endif
+  int64_t pos = 0;
+  const int64_t max_buf_size = error_trace_msg.length() + 1;
+  CK (OB_NOT_NULL(message = expr.get_str_res_mem(ctx, max_buf_size)));
+  OZ (databuff_printf(message, max_buf_size, pos, "%.*s",
+                     error_trace_msg.length(), error_trace_msg.ptr()));
+  return ret;
+}
+
 int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
     const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
@@ -104,14 +123,35 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
   CK (OB_NOT_NULL(sqlcode_info = session->get_pl_sqlcode_info()));
   if (OB_FAIL(ret)) {
   } else if (is_sqlcode) {
+    int64_t code = sqlcode_info->get_sqlcode();
     CK (OB_LIKELY(0 == expr.arg_cnt_));
-    expr_datum.set_int(sqlcode_info->get_sqlcode());
+    OX (expr_datum.set_int(code));
   } else {
     char *sqlerrm_result = NULL;
     int64_t pos = 0, max_buf_size = 200;
     const char *errpfx = g_enable_ob_error_msg_style ? "OBE" : "ORA";
-    if (0 == expr.arg_cnt_) {
-      int64_t sqlcode = sqlcode_info->get_sqlcode();
+    ObDatum *datum = nullptr;
+    int64_t sqlcode = 0;
+    bool use_current_error = (0 == expr.arg_cnt_);
+    if (1 == expr.arg_cnt_) {
+      if (OB_FAIL(expr.args_[0]->eval(ctx, datum))) {
+        LOG_WARN("eval arg failed", K(ret), K(expr));
+      } else if (datum->is_null()) {
+        expr_datum.set_null();
+      } else {
+        sqlcode = datum->get_int();
+        // In compatibility mode, SQLCODE returns the Oracle error code (e.g. -1476),
+        // while error-message lookup uses the OB internal code (e.g. -4333).
+        // When a negative argument equals the current SQLCODE, reuse the no-argument
+        // SQLERRM path and fetch the full diagnostic message via the saved internal code.
+        use_current_error = session->get_plsql_errno_compatible_oracle()
+                            && sqlcode < 0
+                            && sqlcode == sqlcode_info->get_sqlcode();
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (use_current_error) {
+      sqlcode = sqlcode_info->get_ob_error_code();
       if (0 == sqlcode) {
         CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
         OZ (databuff_printf(sqlerrm_result, max_buf_size, pos, "%s-0000: normal, successful completion", errpfx));
@@ -120,18 +160,7 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
         OZ (databuff_printf(sqlerrm_result, max_buf_size, pos, "User-Defined Exception"));
       } else if (sqlcode >= OB_MIN_RAISE_APPLICATION_ERROR
                  && sqlcode <= OB_MAX_RAISE_APPLICATION_ERROR) {
-        ObString error_trace_msg = ObString("");
-#ifdef OB_BUILD_ORACLE_PL
-        CK (OB_NOT_NULL(session->get_pl_top_context()));
-        CK (OB_NOT_NULL(session->get_pl_top_context()->get_call_stack_trace()));
-        OZ (session->get_pl_top_context()->get_call_stack_trace()->get_last_error_trace_msg(error_trace_msg));
-#endif
-        OX (max_buf_size = error_trace_msg.length() + 1);
-        CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
-        OZ (databuff_printf(sqlerrm_result, max_buf_size, pos,
-                           "%.*s",
-                           error_trace_msg.length(),
-                           error_trace_msg.ptr()));
+        OZ (format_current_application_error(expr, ctx, sqlerrm_result));
       } else {
         const ObWarningBuffer *wb = common::ob_get_tsi_warning_buffer();
         if (OB_LIKELY(NULL != wb) && wb->get_err_code() == sqlcode) {
@@ -148,16 +177,8 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
         }
       }
       OX (expr_datum.set_string(sqlerrm_result, strlen(sqlerrm_result)));
-    } else if (1 == expr.arg_cnt_) {
-      ObDatum *datum = NULL;
-      int64_t sqlcode = 0;
-      if (OB_FAIL(expr.args_[0]->eval(ctx, datum))) {
-        LOG_WARN("eval arg failed", K(ret), K(expr));
-      } else if (datum->is_null()) {
-        expr_datum.set_null();
-      } else if (FALSE_IT(sqlcode = datum->get_int())) {
-        // do nothing
-      } else if (sqlcode > 0) {
+    } else if (1 == expr.arg_cnt_ && !datum->is_null()) {
+      if (sqlcode > 0) {
         CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
         OZ (databuff_printf(sqlerrm_result, 200, pos, "-%ld: non-ORACLE exception", sqlcode));
       } else if (sqlcode == 0) {
@@ -165,19 +186,8 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
         OZ (databuff_printf(sqlerrm_result, 200, pos, "%s-0000: normal, successful completion", errpfx));
       } else if (sqlcode >= OB_MIN_RAISE_APPLICATION_ERROR
                  && sqlcode <= OB_MAX_RAISE_APPLICATION_ERROR) {
-        if (sqlcode_info->get_sqlcode() == sqlcode) {
-          ObString error_trace_msg = ObString("");
-#ifdef OB_BUILD_ORACLE_PL
-          CK (OB_NOT_NULL(session->get_pl_top_context()));
-          CK (OB_NOT_NULL(session->get_pl_top_context()->get_call_stack_trace()));
-          OZ (session->get_pl_top_context()->get_call_stack_trace()->get_last_error_trace_msg(error_trace_msg));
-#endif
-          OX (max_buf_size = error_trace_msg.length() + 1);
-          CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
-          OZ (databuff_printf(sqlerrm_result, max_buf_size, pos,
-                            "%.*s",
-                            error_trace_msg.length(),
-                            error_trace_msg.ptr()));
+        if (sqlcode_info->get_ob_error_code() == sqlcode) {
+          OZ (format_current_application_error(expr, ctx, sqlerrm_result));
         } else {
           CK (OB_NOT_NULL(sqlerrm_result
             = expr.get_str_res_mem(ctx, max_buf_size)));

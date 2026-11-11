@@ -457,6 +457,11 @@ int ObPLDIADTService::get_pl_cond_value(ObLLVMDIType &type)
       LOG_WARN("failed to create member type", K(ret));
     } else if (OB_FAIL(member_types.push_back(member_type))) {
       LOG_WARN("failed to push back member type", K(ret));
+    } else if (OB_FAIL(helper_.create_member_type("ob_error_code_", ObPLConditionValue::ob_error_code_offset_bits(),
+                                                  0, int64_type, member_type))) {
+      LOG_WARN("failed to create member type", K(ret));
+    } else if (OB_FAIL(member_types.push_back(member_type))) {
+      LOG_WARN("failed to push back member type", K(ret));
     } else if (OB_FAIL(helper_.create_struct_type("pl_condition_value", 0/*line*/,
                                                   sizeof(ObPLConditionValue) * 8, 32,
                                                   member_types, pl_cond_value_))) {

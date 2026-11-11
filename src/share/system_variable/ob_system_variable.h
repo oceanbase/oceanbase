@@ -263,6 +263,7 @@ public:
       case SYS_VAR_PLSQL_CCFLAGS:
       case SYS_VAR_PLSQL_OPTIMIZE_LEVEL:
       case SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN:
+      case SYS_VAR_PLSQL_ERRNO_COMPATIBLE_ORACLE:
         is_influence = true;
         break;
       default:

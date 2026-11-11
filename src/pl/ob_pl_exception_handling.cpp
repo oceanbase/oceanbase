@@ -60,18 +60,43 @@ void ObPLEH::eh_debug_objparam(const char *name_ptr, int64_t name_len, const ObO
   LOG_DEBUG(">>>>>>>>>>0", K(ObString(name_len, name_ptr)), K(*object));
 }
 
-int ObPLEH::eh_convert_exception(bool oracle_mode, int oberr, ObPLConditionType *type, int64_t *error_code, const char **sql_state, int64_t *str_len)
+int ObPLEH::eh_convert_exception(int64_t pl_context, bool oracle_mode, bool errno_compatible_oracle, int oberr, ObPLConditionType *type, int64_t *ob_error_code, int64_t *error_code, const char **sql_state, int64_t *str_len)
 {
-  UNUSED(oracle_mode);
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(type) || OB_ISNULL(error_code) || OB_ISNULL(sql_state)) {
+#ifndef OB_BUILD_ORACLE_PL
+  UNUSED(pl_context);
+#endif
+  if (OB_ISNULL(type) || OB_ISNULL(ob_error_code) || OB_ISNULL(sql_state)
+      || OB_ISNULL(error_code) || OB_ISNULL(str_len)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Invalid Argument", K(oberr), K(type), K(error_code), K(sql_state), K(ret));
+    LOG_WARN("Invalid Argument", K(oberr), K(type), K(ob_error_code), K(sql_state), K(error_code), K(ret));
   } else {
+    *ob_error_code = oberr;
+    *error_code = oberr;
     *sql_state = ob_sqlstate(oberr);
     *str_len = STRLEN(*sql_state);
     if (oracle_mode) {
-      *error_code = oberr;
+      *error_code = errno_compatible_oracle ? -ob_oracle_errno_with_check(oberr) : oberr;
+#ifdef OB_BUILD_ORACLE_PL
+      ObPLContext *pl_ctx = reinterpret_cast<ObPLContext *>(pl_context);
+      ObPLTopContext *top_ctx = nullptr;
+      ObPLCallStackTrace *trace = nullptr;
+      if (OB_ERR_UDE_ERROR_CODE == oberr
+          && OB_NOT_NULL(pl_ctx)
+          && OB_NOT_NULL(pl_ctx->get_session_info())
+          && OB_NOT_NULL(top_ctx = pl_ctx->get_session_info()->get_pl_top_context())
+          && OB_NOT_NULL(trace = top_ctx->get_call_stack_trace_directly())) {
+        // The unhandled exception stack survives PL-to-SQL returns and is cleared
+        // on handler entry. Its original code cannot be recovered from oberr alone.
+        int exception_ob_error_code = OB_SUCCESS;
+        int64_t exception_error_code = OB_SUCCESS;
+        trace->get_last_error_codes(exception_ob_error_code, exception_error_code,
+                                   true /* from_exception_stack */);
+        if (exception_ob_error_code == oberr) {
+          *error_code = exception_error_code;
+        }
+      }
+#endif
       *type = ERROR_CODE;
     } else {
       if (OB_SP_RAISE_APPLICATION_ERROR == oberr) {
@@ -95,7 +120,6 @@ int ObPLEH::eh_convert_exception(bool oracle_mode, int oberr, ObPLConditionType 
             *type = ERROR_CODE;
           }
         } else {
-          *error_code = oberr;
           *type = SQL_STATE;
         }
       }
@@ -114,7 +138,7 @@ ObPLException::ObPLException(int64_t error_code)
 }
 
 #ifdef OB_BUILD_ORACLE_PL
-int ObPLEH::eh_adjust_call_stack(ObPLContext *pl_ctx, uint64_t location, int err_code)
+int ObPLEH::eh_adjust_call_stack(ObPLContext *pl_ctx, uint64_t location, int err_code, int64_t error_code)
 {
   int ret = OB_SUCCESS;
   int64_t stack_depth = 0;
@@ -128,7 +152,7 @@ int ObPLEH::eh_adjust_call_stack(ObPLContext *pl_ctx, uint64_t location, int err
     CK (OB_NOT_NULL(exec_stack->at(stack_depth - 1)));
     OX (exec_stack->at(stack_depth - 1)->set_loc(location));
     CK (OB_NOT_NULL(call_stack_trace = pl_top_context->get_call_stack_trace()));
-    OZ (call_stack_trace->format_exception_stack(err_code, *exec_stack));
+    OZ (call_stack_trace->format_exception_stack(err_code, error_code, *exec_stack));
   }
   return ret;
 }
@@ -160,7 +184,7 @@ ObUnwindException *ObPLEH::eh_create_exception(int64_t pl_context,
     CK (frame->is_top_call());
     CK (OB_NOT_NULL(pl_allocator = frame->get_exec_ctx().get_top_expr_allocator()));
     if (OB_FAIL(ret)) {
-    } else if (OB_ALLOCATE_MEMORY_FAILED == value->error_code_) {
+    } else if (OB_ALLOCATE_MEMORY_FAILED == value->ob_error_code_) {
       unwind = &pre_reserved_e.body_;
     } else {
       ObPLException *exception
@@ -171,8 +195,8 @@ ObUnwindException *ObPLEH::eh_create_exception(int64_t pl_context,
         unwind->exception_class = ObPLEHService::get_exception_class();
         unwind->exception_cleanup = NULL;
         exception->type_.type_ = value->type_;
-        exception->type_.error_code_ = value->error_code_;
         exception->type_.ob_error_code_ = value->ob_error_code_;
+        exception->type_.error_code_ = value->error_code_;
         if (NULL == value->sql_state_ || 0 == value->str_len_) {
           exception->type_.sql_state_ = value->sql_state_;
         } else {
@@ -197,9 +221,10 @@ ObUnwindException *ObPLEH::eh_create_exception(int64_t pl_context,
 #ifdef OB_BUILD_ORACLE_PL
     CK (OB_NOT_NULL(pl_ctx));
     OZ (eh_adjust_call_stack(pl_ctx, loc,
-      value->error_code_ < 0
-        ? value->error_code_
-        :(value->error_code_ & ~(UINT64_MAX << OB_PACKAGE_ID_SHIFT))));
+      value->ob_error_code_ < 0
+        ? value->ob_error_code_
+        :(value->ob_error_code_ & ~(UINT64_MAX << OB_PACKAGE_ID_SHIFT)),
+      value->error_code_));
 #endif
 
   }

@@ -5727,7 +5727,13 @@ int ObPL::simple_execute(ObPLExecCtx *ctx)
 
  #ifdef OB_BUILD_ORACLE_PL
       if (OB_NOT_NULL(ctx->pl_ctx_)) {
-        ObPLEH::eh_adjust_call_stack(ctx->pl_ctx_, sql_info.loc_, ret);
+        const bool errno_compatible_oracle =
+            ctx->exec_ctx_->get_my_session()->get_plsql_errno_compatible_oracle();
+        const int tmp_ret = ObPLEH::eh_adjust_call_stack(ctx->pl_ctx_, sql_info.loc_, ret,
+            errno_compatible_oracle ? -ob_oracle_errno_with_check(ret) : ret);
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("failed to adjust PL call stack", K(ret), K(tmp_ret), K(sql_info.loc_));
+        }
       }
  #endif
 

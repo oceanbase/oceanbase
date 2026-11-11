@@ -1233,6 +1233,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "pid_file",
   "plsql_can_transform_sql_to_assign",
   "plsql_ccflags",
+  "plsql_errno_compatible_oracle",
   "plsql_optimize_level",
   "plsql_warnings",
   "plugin_dir",
@@ -2090,6 +2091,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_PID_FILE,
   SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN,
   SYS_VAR_PLSQL_CCFLAGS,
+  SYS_VAR_PLSQL_ERRNO_COMPATIBLE_ORACLE,
   SYS_VAR_PLSQL_OPTIMIZE_LEVEL,
   SYS_VAR_PLSQL_WARNINGS,
   SYS_VAR_PLUGIN_DIR,
@@ -3136,7 +3138,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "ob_udf_selectivity",
   "_enable_pl_composite_as_sql_udt",
   "ob_resource_group",
-  "ob_ignore_virtual_table_error"
+  "ob_ignore_virtual_table_error",
+  "plsql_errno_compatible_oracle"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -4195,6 +4198,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarEnablePlCompositeAsSqlUdt)
         + sizeof(ObSysVarObResourceGroup)
         + sizeof(ObSysVarObIgnoreVirtualTableError)
+        + sizeof(ObSysVarPlsqlErrnoCompatibleOracle)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -11887,6 +11891,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_IGNORE_VIRTUAL_TABLE_ERROR))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObIgnoreVirtualTableError));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPlsqlErrnoCompatibleOracle())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPlsqlErrnoCompatibleOracle", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PLSQL_ERRNO_COMPATIBLE_ORACLE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPlsqlErrnoCompatibleOracle));
       }
     }
 
@@ -21290,6 +21303,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObIgnoreVirtualTableError())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObIgnoreVirtualTableError", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PLSQL_ERRNO_COMPATIBLE_ORACLE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPlsqlErrnoCompatibleOracle)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPlsqlErrnoCompatibleOracle)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPlsqlErrnoCompatibleOracle())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPlsqlErrnoCompatibleOracle", K(ret));
       }
       break;
     }

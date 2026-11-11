@@ -1978,6 +1978,7 @@ constexpr int OB_ERR_JAVA_SESSION_STATE_CLEARED = -9847;
 constexpr int OB_ERR_XML_CANNOT_CONVERT_TO_TYPE = -9848;
 constexpr int OB_ERR_PL_XML_STRING_ARG_INVALID = -9849;
 constexpr int OB_ERR_CANNOT_END_TRANS_IN_TRIGGER = -9850;
+constexpr int OB_ERR_UDE_ERROR_CODE = -9851;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -2112,19 +2113,19 @@ constexpr int OB_ERR_UPDATE_TWICE = -30926;
 constexpr int OB_ERR_FLASHBACK_QUERY_WITH_UPDATE = -32491;
 constexpr int OB_ERR_UPDATE_ON_EXPR = -38104;
 constexpr int OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = -38105;
-constexpr int OB_INVALID_DATE_VALUE_V2 = -4219;
-constexpr int OB_ERR_INCORRECT_STRING_VALUE_V2 = -4258;
-constexpr int OB_ERR_NON_NUMERIC_CHARACTER_VALUE_V2 = -5663;
-constexpr int OB_ERR_VALUE_LARGER_THAN_ALLOWED_V2 = -4374;
 constexpr int OB_DATA_OUT_OF_RANGE_V2 = -4224;
-constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
-constexpr int OB_ERR_DATA_TOO_LONG_V2 = -5167;
-constexpr int OB_ERR_TRUNCATED_WRONG_VALUE_V2 = -5222;
-constexpr int OB_INVALID_NUMERIC_V2 = -5114;
-constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
-constexpr int OB_ERR_DATA_TRUNCATED_V2 = -4249;
+constexpr int OB_ERR_INCORRECT_STRING_VALUE_V2 = -4258;
+constexpr int OB_INVALID_DATE_VALUE_V2 = -4219;
+constexpr int OB_ERR_VALUE_LARGER_THAN_ALLOWED_V2 = -4374;
 constexpr int OB_ERR_INVALID_MONTH_V2 = -5641;
+constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
+constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 constexpr int OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2 = -4226;
+constexpr int OB_INVALID_NUMERIC_V2 = -5114;
+constexpr int OB_ERR_DATA_TOO_LONG_V2 = -5167;
+constexpr int OB_ERR_DATA_TRUNCATED_V2 = -4249;
+constexpr int OB_ERR_TRUNCATED_WRONG_VALUE_V2 = -5222;
+constexpr int OB_ERR_NON_NUMERIC_CHARACTER_VALUE_V2 = -5663;
 
 
 #define OB_SUCCESS__USER_ERROR_MSG "Success"
@@ -4509,6 +4510,7 @@ constexpr int OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2 = -4226;
 #define OB_ERR_XML_CANNOT_CONVERT_TO_TYPE__USER_ERROR_MSG "Cannot convert the given XMLType to the required type"
 #define OB_ERR_PL_XML_STRING_ARG_INVALID__USER_ERROR_MSG "NULL or invalid string argument specified"
 #define OB_ERR_CANNOT_END_TRANS_IN_TRIGGER__USER_ERROR_MSG "cannot %s in a trigger"
+#define OB_ERR_UDE_ERROR_CODE__USER_ERROR_MSG "user defined exception error"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -4698,19 +4700,19 @@ constexpr int OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2 = -4226;
 #define OB_ERR_FLASHBACK_QUERY_WITH_UPDATE__USER_ERROR_MSG "snapshot expression not allowed here"
 #define OB_ERR_UPDATE_ON_EXPR__USER_ERROR_MSG "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
-#define OB_INVALID_DATE_VALUE_V2__USER_ERROR_MSG "Incorrect %.*s value: '%.*s' for column '%.*s'"
-#define OB_ERR_INCORRECT_STRING_VALUE_V2__USER_ERROR_MSG "Incorrect string value: '%.*s' for column '%.*s'"
-#define OB_ERR_NON_NUMERIC_CHARACTER_VALUE_V2__USER_ERROR_MSG "a non-numeric character was found where a numeric was expected for column '%.*s' value '%.*s'"
-#define OB_ERR_VALUE_LARGER_THAN_ALLOWED_V2__USER_ERROR_MSG "value '%.*s' larger than specified precision allowed for this column '%.*s'"
 #define OB_DATA_OUT_OF_RANGE_V2__USER_ERROR_MSG "Out of range value for column '%.*s' value '%.*s'"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
-#define OB_ERR_DATA_TOO_LONG_V2__USER_ERROR_MSG "Data too long for column '%.*s' value '%.*s'"
-#define OB_ERR_TRUNCATED_WRONG_VALUE_V2__USER_ERROR_MSG "Incorrect %.*s value: '%.*s' for column '%.*s'"
-#define OB_INVALID_NUMERIC_V2__USER_ERROR_MSG "invalid number value: '%.*s' for column '%.*s'"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
-#define OB_ERR_DATA_TRUNCATED_V2__USER_ERROR_MSG "Data truncated for column '%.*s' value '%.*s'"
+#define OB_ERR_INCORRECT_STRING_VALUE_V2__USER_ERROR_MSG "Incorrect string value: '%.*s' for column '%.*s'"
+#define OB_INVALID_DATE_VALUE_V2__USER_ERROR_MSG "Incorrect %.*s value: '%.*s' for column '%.*s'"
+#define OB_ERR_VALUE_LARGER_THAN_ALLOWED_V2__USER_ERROR_MSG "value '%.*s' larger than specified precision allowed for this column '%.*s'"
 #define OB_ERR_INVALID_MONTH_V2__USER_ERROR_MSG "not a valid month for column '%.*s' value '%.*s'"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
 #define OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2__USER_ERROR_MSG "Incorrect %.*s value: '%.*s' for column '%.*s'"
+#define OB_INVALID_NUMERIC_V2__USER_ERROR_MSG "invalid number value: '%.*s' for column '%.*s'"
+#define OB_ERR_DATA_TOO_LONG_V2__USER_ERROR_MSG "Data too long for column '%.*s' value '%.*s'"
+#define OB_ERR_DATA_TRUNCATED_V2__USER_ERROR_MSG "Data truncated for column '%.*s' value '%.*s'"
+#define OB_ERR_TRUNCATED_WRONG_VALUE_V2__USER_ERROR_MSG "Incorrect %.*s value: '%.*s' for column '%.*s'"
+#define OB_ERR_NON_NUMERIC_CHARACTER_VALUE_V2__USER_ERROR_MSG "a non-numeric character was found where a numeric was expected for column '%.*s' value '%.*s'"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -6945,8 +6947,8 @@ constexpr int OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2 = -4226;
 #define OB_ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5569, %s is not allowed in stored function or trigger"
 #define OB_ER_SP_NO_RECURSION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5570, Recursive stored functions are not allowed."
 #define OB_ER_SP_NO_RECURSION__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5570, Recursive stored functions are not allowed."
-#define OB_ER_SP_CASE_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5571, Case not found for CASE statement"
-#define OB_ER_SP_CASE_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5571, Case not found for CASE statement"
+#define OB_ER_SP_CASE_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-06592: CASE not found while executing CASE statement"
+#define OB_ER_SP_CASE_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-06592: CASE not found while executing CASE statement"
 #define OB_ERR_INVALID_SPLIT_COUNT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5572, a partition may be split into exactly two new partitions"
 #define OB_ERR_INVALID_SPLIT_COUNT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5572, a partition may be split into exactly two new partitions"
 #define OB_ERR_INVALID_SPLIT_GRAMMAR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5573, this physical attribute may not be specified for a table partition"
@@ -6981,8 +6983,8 @@ constexpr int OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2 = -4226;
 #define OB_ER_SP_CURSOR_AFTER_HANDLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5587, Cursor declaration after handler declaration"
 #define OB_ER_SP_WRONG_NAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5588, Incorrect routine name \'%.*s\'"
 #define OB_ER_SP_WRONG_NAME__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5588, Incorrect routine name \'%.*s\'"
-#define OB_ER_SP_CURSOR_ALREADY_OPEN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5589, Cursor is already open"
-#define OB_ER_SP_CURSOR_ALREADY_OPEN__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5589, Cursor is already open"
+#define OB_ER_SP_CURSOR_ALREADY_OPEN__ORA_USER_ERROR_MSG "ORA-06511: PL/SQL: cursor already open"
+#define OB_ER_SP_CURSOR_ALREADY_OPEN__OBE_USER_ERROR_MSG "OBE-06511: PL/SQL: cursor already open"
 #define OB_ER_SP_CURSOR_NOT_OPEN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5590, Cursor is not open"
 #define OB_ER_SP_CURSOR_NOT_OPEN__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5590, Cursor is not open"
 #define OB_ER_SP_CANT_SET_AUTOCOMMIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5591, Not allowed to set autocommit from a stored function or trigger"
@@ -7829,10 +7831,8 @@ constexpr int OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2 = -4226;
 #define OB_PARTITION_IS_FROZEN__OBE_USER_ERROR_MSG "OBE-24761: transaction rolled back: partition is frozen"
 #define OB_PARTITION_IS_NOT_FROZEN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6215, Partition is not frozen"
 #define OB_PARTITION_IS_NOT_FROZEN__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6215, Partition is not frozen"
-#define OB_DAS_CTDEF_REBUILD_MISS__ORA_USER_ERROR_MSG                                                                  \
-  "ORA-00600: internal error code, arguments: -6216, DAS ScanCtDef table param rebuild schema unavailable"
-#define OB_DAS_CTDEF_REBUILD_MISS__OBE_USER_ERROR_MSG                                                                  \
-  "OBE-00600: internal error code, arguments: -6216, DAS ScanCtDef table param rebuild schema unavailable"
+#define OB_DAS_CTDEF_REBUILD_MISS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6216, DAS ScanCtDef table param rebuild schema unavailable"
+#define OB_DAS_CTDEF_REBUILD_MISS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6216, DAS ScanCtDef table param rebuild schema unavailable"
 #define OB_TRANS_INVALID_LOG_TYPE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6219, Transaction invalid log type"
 #define OB_TRANS_INVALID_LOG_TYPE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6219, Transaction invalid log type"
 #define OB_TRANS_SQL_SEQUENCE_ILLEGAL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6220, SQL sequence illegal"
@@ -9479,6 +9479,8 @@ constexpr int OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2 = -4226;
 #define OB_ERR_PL_XML_STRING_ARG_INVALID__OBE_USER_ERROR_MSG "OBE-64505: NULL or invalid string argument specified"
 #define OB_ERR_CANNOT_END_TRANS_IN_TRIGGER__ORA_USER_ERROR_MSG "ORA-04092: cannot %s in a trigger"
 #define OB_ERR_CANNOT_END_TRANS_IN_TRIGGER__OBE_USER_ERROR_MSG "OBE-04092: cannot %s in a trigger"
+#define OB_ERR_UDE_ERROR_CODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9851, user defined exception error"
+#define OB_ERR_UDE_ERROR_CODE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9851, user defined exception error"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -9857,49 +9859,49 @@ constexpr int OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2 = -4226;
 #define OB_ERR_UPDATE_ON_EXPR__OBE_USER_ERROR_MSG "OBE-38104: Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__OBE_USER_ERROR_MSG "OBE-08006: specified row no longer exists"
-#define OB_INVALID_DATE_VALUE_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect %.*s value: '%.*s' for column '%.*s'"
-#define OB_INVALID_DATE_VALUE_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect %.*s value: '%.*s' for column '%.*s'"
-#define OB_ERR_INCORRECT_STRING_VALUE_V2__ORA_USER_ERROR_MSG "ORA-00600: Incorrect string value: '%.*s' for column '%.*s'"
-#define OB_ERR_INCORRECT_STRING_VALUE_V2__OBE_USER_ERROR_MSG "OBE-00600: Incorrect string value: '%.*s' for column '%.*s'"
-#define OB_ERR_NON_NUMERIC_CHARACTER_VALUE_V2__ORA_USER_ERROR_MSG "ORA-01858: a non-numeric character was found where a numeric was expected for column '%.*s' value '%.*s'"
-#define OB_ERR_NON_NUMERIC_CHARACTER_VALUE_V2__OBE_USER_ERROR_MSG "OBE-01858: a non-numeric character was found where a numeric was expected for column '%.*s' value '%.*s'"
-#define OB_ERR_VALUE_LARGER_THAN_ALLOWED_V2__ORA_USER_ERROR_MSG "ORA-01438: value '%.*s' larger than specified precision allowed for this column '%.*s'"
-#define OB_ERR_VALUE_LARGER_THAN_ALLOWED_V2__OBE_USER_ERROR_MSG "OBE-01438: value '%.*s' larger than specified precision allowed for this column '%.*s'"
 #define OB_DATA_OUT_OF_RANGE_V2__ORA_USER_ERROR_MSG "ORA-01438: Out of range value for column '%.*s' value '%.*s'"
 #define OB_DATA_OUT_OF_RANGE_V2__OBE_USER_ERROR_MSG "OBE-01438: Out of range value for column '%.*s' value '%.*s'"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
-#define OB_ERR_DATA_TOO_LONG_V2__ORA_USER_ERROR_MSG "ORA-12899: Data too long for column '%.*s' value '%.*s'"
-#define OB_ERR_DATA_TOO_LONG_V2__OBE_USER_ERROR_MSG "OBE-12899: Data too long for column '%.*s' value '%.*s'"
-#define OB_ERR_TRUNCATED_WRONG_VALUE_V2__ORA_USER_ERROR_MSG "ORA-00600: Incorrect %.*s value: '%.*s' for column '%.*s'"
-#define OB_ERR_TRUNCATED_WRONG_VALUE_V2__OBE_USER_ERROR_MSG "OBE-00600: Incorrect %.*s value: '%.*s' for column '%.*s'"
-#define OB_INVALID_NUMERIC_V2__ORA_USER_ERROR_MSG "ORA-01722: invalid number value: '%.*s' for column '%.*s'"
-#define OB_INVALID_NUMERIC_V2__OBE_USER_ERROR_MSG "OBE-01722: invalid number value: '%.*s' for column '%.*s'"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
-#define OB_ERR_DATA_TRUNCATED_V2__ORA_USER_ERROR_MSG "ORA-00600: Data truncated for column '%.*s' value '%.*s'"
-#define OB_ERR_DATA_TRUNCATED_V2__OBE_USER_ERROR_MSG "OBE-00600: Data truncated for column '%.*s' value '%.*s'"
+#define OB_ERR_INCORRECT_STRING_VALUE_V2__ORA_USER_ERROR_MSG "ORA-00600: Incorrect string value: '%.*s' for column '%.*s'"
+#define OB_ERR_INCORRECT_STRING_VALUE_V2__OBE_USER_ERROR_MSG "OBE-00600: Incorrect string value: '%.*s' for column '%.*s'"
+#define OB_INVALID_DATE_VALUE_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect %.*s value: '%.*s' for column '%.*s'"
+#define OB_INVALID_DATE_VALUE_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect %.*s value: '%.*s' for column '%.*s'"
+#define OB_ERR_VALUE_LARGER_THAN_ALLOWED_V2__ORA_USER_ERROR_MSG "ORA-01438: value '%.*s' larger than specified precision allowed for this column '%.*s'"
+#define OB_ERR_VALUE_LARGER_THAN_ALLOWED_V2__OBE_USER_ERROR_MSG "OBE-01438: value '%.*s' larger than specified precision allowed for this column '%.*s'"
 #define OB_ERR_INVALID_MONTH_V2__ORA_USER_ERROR_MSG "ORA-01843: not a valid month for column '%.*s' value '%.*s'"
 #define OB_ERR_INVALID_MONTH_V2__OBE_USER_ERROR_MSG "OBE-01843: not a valid month for column '%.*s' value '%.*s'"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2__ORA_USER_ERROR_MSG "ORA-00600: Incorrect %.*s value: '%.*s' for column '%.*s'"
 #define OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2__OBE_USER_ERROR_MSG "OBE-00600: Incorrect %.*s value: '%.*s' for column '%.*s'"
+#define OB_INVALID_NUMERIC_V2__ORA_USER_ERROR_MSG "ORA-01722: invalid number value: '%.*s' for column '%.*s'"
+#define OB_INVALID_NUMERIC_V2__OBE_USER_ERROR_MSG "OBE-01722: invalid number value: '%.*s' for column '%.*s'"
+#define OB_ERR_DATA_TOO_LONG_V2__ORA_USER_ERROR_MSG "ORA-12899: Data too long for column '%.*s' value '%.*s'"
+#define OB_ERR_DATA_TOO_LONG_V2__OBE_USER_ERROR_MSG "OBE-12899: Data too long for column '%.*s' value '%.*s'"
+#define OB_ERR_DATA_TRUNCATED_V2__ORA_USER_ERROR_MSG "ORA-00600: Data truncated for column '%.*s' value '%.*s'"
+#define OB_ERR_DATA_TRUNCATED_V2__OBE_USER_ERROR_MSG "OBE-00600: Data truncated for column '%.*s' value '%.*s'"
+#define OB_ERR_TRUNCATED_WRONG_VALUE_V2__ORA_USER_ERROR_MSG "ORA-00600: Incorrect %.*s value: '%.*s' for column '%.*s'"
+#define OB_ERR_TRUNCATED_WRONG_VALUE_V2__OBE_USER_ERROR_MSG "OBE-00600: Incorrect %.*s value: '%.*s' for column '%.*s'"
+#define OB_ERR_NON_NUMERIC_CHARACTER_VALUE_V2__ORA_USER_ERROR_MSG "ORA-01858: a non-numeric character was found where a numeric was expected for column '%.*s' value '%.*s'"
+#define OB_ERR_NON_NUMERIC_CHARACTER_VALUE_V2__OBE_USER_ERROR_MSG "OBE-01858: a non-numeric character was found where a numeric was expected for column '%.*s' value '%.*s'"
 
-extern int g_all_ob_errnos[2571];
+extern int g_all_ob_errnos[2572];
 
-const char *ob_error_name(const int oberr);
-const char *ob_error_cause(const int oberr);
-const char *ob_error_solution(const int oberr);
+  const char *ob_error_name(const int oberr);
+  const char* ob_error_cause(const int oberr);
+  const char* ob_error_solution(const int oberr);
 
-int ob_mysql_errno(const int oberr);
-int ob_mysql_errno_with_check(const int oberr);
-const char *ob_sqlstate(const int oberr);
-const char *ob_strerror(const int oberr);
-const char *ob_str_user_error(const int oberr);
+  int ob_mysql_errno(const int oberr);
+  int ob_mysql_errno_with_check(const int oberr);
+  const char *ob_sqlstate(const int oberr);
+  const char *ob_strerror(const int oberr);
+  const char *ob_str_user_error(const int oberr);
 
-int ob_oracle_errno(const int oberr);
-int ob_oracle_errno_with_check(const int oberr);
-const char *ob_oracle_strerror(const int oberr);
-const char *ob_oracle_str_user_error(const int oberr);
+  int ob_oracle_errno(const int oberr);
+  int ob_oracle_errno_with_check(const int oberr);
+  const char *ob_oracle_strerror(const int oberr);
+  const char *ob_oracle_str_user_error(const int oberr);
 
 #ifndef __ERROR_CODE_PARSER_
   int get_ob_errno_from_oracle_errno(const int error_no, const char *error_msg, int &ob_errno);

@@ -385,7 +385,7 @@ enum ObPLConditionType //按照优先级顺序从高到低
 };
 
 #define IDX_CONDITION_TYPE 0
-#define IDX_CONDITION_CODE 1
+#define IDX_CONDITION_ERROR_CODE 1
 #define IDX_CONDITION_STATE 2
 #define IDX_CONDITION_LEN 3
 #define IDX_CONDITION_STMT 4
@@ -404,14 +404,14 @@ public:
       signal_(false),
       ob_error_code_(0),
       duplicate_(false) {}
-  ObPLConditionValue(ObPLConditionType type, int64_t error_code)
+  ObPLConditionValue(ObPLConditionType type, int64_t ob_error_code)
     : type_(type),
-      error_code_(error_code),
-      sql_state_(ob_sqlstate(static_cast<int>(error_code))),
+      error_code_(ob_error_code),
+      sql_state_(ob_sqlstate(static_cast<int>(ob_error_code))),
       str_len_(STRLEN(sql_state_)),
       stmt_id_(OB_INVALID_INDEX),
       signal_(false),
-      ob_error_code_(error_code),
+      ob_error_code_(ob_error_code),
       duplicate_(false) {}
 
   //不实现析构函数，省得LLVM映射麻烦
@@ -425,16 +425,16 @@ public:
   static uint32_t ob_error_code_offset_bits() { return offsetof(ObPLConditionValue, ob_error_code_) * 8; }
 
   ObPLConditionType type_;
-  int64_t error_code_;
+  int64_t error_code_; // 根据配置项保存实际异常匹配、sqlcode错误码
   const char *sql_state_;
   int64_t str_len_;
   int64_t stmt_id_; //FOR DEBUG，主流程不需要：作为landingpad的clause时，代表level；当作为抛出的异常时，代表stmt id
   bool signal_; //FOR DEBUG，主流程不需要：作为landingpad的clause时，无意义；当作为抛出的异常时，代表是否由signal语句抛出
-  int64_t ob_error_code_;
+  int64_t ob_error_code_; // ob错误码
   bool duplicate_; // 代表是否重复声明
 
   TO_STRING_KV(
-    K_(type), K_(error_code), K_(sql_state), K_(str_len), K_(stmt_id), K_(signal), K_(duplicate));
+    K_(type), K_(error_code), K_(sql_state), K_(str_len), K_(stmt_id), K_(signal), K_(ob_error_code), K_(duplicate));
 };
 
 class ObPLCondition //用于Declare Condition定义
@@ -449,8 +449,8 @@ public:
   inline void set_value(const ObPLConditionValue &value) { value_ = value; }
   inline ObPLConditionType get_type() const { return value_.type_; }
   inline void set_type(ObPLConditionType type) { value_.type_ = type; }
-  inline int64_t get_error_code() const { return value_.error_code_; }
-  inline void set_error_code(int64_t error_code) { value_.error_code_ = error_code; }
+  inline int64_t get_ob_error_code() const { return value_.ob_error_code_; }
+  inline void set_ob_error_code(int64_t ob_error_code) { value_.ob_error_code_ = ob_error_code; }
   inline const char *get_sql_state() const { return value_.sql_state_; }
   inline void set_sql_state(const char *sql_state) { value_.sql_state_ = sql_state; }
   inline bool get_duplicate() const { return value_.duplicate_; }
@@ -3076,10 +3076,12 @@ public:
   inline void set_value(const ObPLConditionValue &value) { value_ = value; }
   inline ObPLConditionType get_cond_type() const { return value_.type_; }
   inline void set_cond_type(ObPLConditionType type) { value_.type_ = type; }
-  inline int get_ob_error_code() const { return ob_error_code_; }
-  inline void set_ob_error_code(int ob_error_code) { ob_error_code_ = ob_error_code; }
+  inline int get_stmt_ob_error_code() const { return ob_error_code_; }
+  inline void set_stmt_ob_error_code(int ob_error_code) { ob_error_code_ = ob_error_code; }
+  inline int64_t get_ob_error_code() const { return value_.ob_error_code_; }
+  inline void set_ob_error_code(int64_t ob_error_code) { value_.ob_error_code_ = ob_error_code; }
   inline int64_t get_error_code() const { return value_.error_code_; }
-  inline void set_error_code(int64_t code) { value_.error_code_ = code; }
+  inline void set_error_code(int64_t error_code) { value_.error_code_ = error_code; }
   inline const char *get_sql_state() const { return value_.sql_state_; }
   inline void set_sql_state(const char *state) { value_.sql_state_ = state; }
   inline int64_t get_str_len() const { return value_.str_len_; }

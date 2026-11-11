@@ -2408,7 +2408,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareHandlerStmt &s)
     // 2.1 collect conditions and precedences
     for (int64_t i = 0; OB_SUCC(ret) && i < s.get_handlers().count(); ++i) {
       ObSqlString const_name;
-      ObSEArray<ObLLVMValue, 8> condition_elements;
+      ObSEArray<ObLLVMValue, 7> condition_elements;
       const ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc *handler_desc =
           s.get_handler(i).get_desc();
 
@@ -2437,7 +2437,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareHandlerStmt &s)
         } else if (OB_FAIL(condition_elements.push_back(int_value))) {
           LOG_WARN("push_back error", K(ret));
         } else if (OB_FAIL(const_name.append_fmt(
-                       "%ld%ld", s.get_handler(i).get_level(), cond_val.error_code_))) {
+                       "_%ld_%ld_%ld", s.get_handler(i).get_level(),
+                       cond_val.ob_error_code_, cond_val.error_code_))) {
           LOG_WARN("append_fmt error", K(ret));
         } else {
           ObLLVMValue elem_value;
@@ -2479,7 +2480,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareHandlerStmt &s)
             LOG_WARN("failed to get_llvm_type", K(ret));
           } else if (OB_FAIL(condition_elements.push_back(elem_value))) {
             LOG_WARN("push_back error", K(ret));
-          }  else if (OB_FAIL(generator_.get_helper().get_int64(s.get_handler(i).get_desc()->get_condition(j).ob_error_code_, elem_value))) {
+          } else if (OB_FAIL(generator_.get_helper().get_int64(cond_val.ob_error_code_, elem_value))) {  // ob_error_code
             LOG_WARN("failed to get int64", K(ret));
           } else if (OB_FAIL(condition_elements.push_back(elem_value))) {
             LOG_WARN("push_back error", K(ret));
@@ -2548,12 +2549,13 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareHandlerStmt &s)
   ObLLVMType int8_type;
 
   ObLLVMValue type;
-  ObLLVMValue code;
+  ObLLVMValue ob_error_code;
   ObLLVMValue name;
   ObLLVMValue stmt_id;
   ObLLVMValue signal;
+  ObLLVMValue error_code;
   ObLLVMType char_type;
-  ObLLVMValue p_cur_sqlcode;
+  ObLLVMValue p_cur_ob_error_code, p_cur_error_code;
   ObPLCGBufferGuard buffer_guard(generator_);
 
   if (OB_FAIL(ret)) {
@@ -2584,12 +2586,12 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareHandlerStmt &s)
   } else if (FALSE_IT(condition.set_t(condition_type))) {
   } else if (OB_FAIL(generator_.extract_type_from_condition_value(condition, type))) {
     LOG_WARN("failed to extract_type_from_condition_value", K(ret));
-  } else if (OB_FAIL(generator_.extract_code_from_condition_value(condition, code))) {
-    LOG_WARN("failed to extract_code_from_condition_value", K(ret));
-  } else if (OB_FAIL(buffer_guard.get_int_buffer(p_cur_sqlcode))) {
+  } else if (OB_FAIL(generator_.extract_ob_error_code_from_condition_value(condition, ob_error_code))) {
+    LOG_WARN("failed to extract_ob_error_code_from_condition_value", K(ret));
+  } else if (OB_FAIL(buffer_guard.get_int_buffer(p_cur_ob_error_code))) {
     LOG_WARN("failed to get_int_buffer", K(ret));
-  } else if (OB_FAIL(generator_.get_helper().create_store(code, p_cur_sqlcode))) {
-    // walk around `code` usage domination issue
+  } else if (OB_FAIL(generator_.get_helper().create_store(ob_error_code, p_cur_ob_error_code))) {
+    // walk around `ob_error_code` usage domination issue
     LOG_WARN("failed to create_store", K(ret));
   } else if (OB_FAIL(generator_.extract_name_from_condition_value(condition, name))) {
     LOG_WARN("failed to extract_name_from_condition_value", K(ret));
@@ -2601,6 +2603,13 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareHandlerStmt &s)
     LOG_WARN("failed to extract_stmt_from_condition_value", K(ret));
   } else if (OB_FAIL(generator_.extract_signal_from_condition_value(condition, signal))) {
     LOG_WARN("failed to extract_signal_from_condition_value", K(ret));
+  } else if (OB_FAIL(generator_.extract_error_code_from_condition_value(condition, error_code))) {
+    LOG_WARN("failed to extract_error_code_from_condition_value", K(ret));
+  } else if (OB_FAIL(buffer_guard.get_int_buffer(p_cur_error_code))) {
+    LOG_WARN("failed to get_int_buffer", K(ret));
+  } else if (OB_FAIL(generator_.get_helper().create_store(error_code, p_cur_error_code))) {
+    // Preserve the error code across handler branches, just like ob_error_code.
+    LOG_WARN("failed to create_store", K(ret));
 #ifndef NDEBUG
   } else if (OB_FAIL(generator_.generate_debug(ObString("debug"), unwindException))) {
     LOG_WARN("failed to create_call", K(ret));
@@ -2608,7 +2617,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareHandlerStmt &s)
     LOG_WARN("failed to create_call", K(ret));
   } else if (OB_FAIL(generator_.generate_debug(ObString("debug"), type))) {
     LOG_WARN("failed to create_call", K(ret));
-  } else if (OB_FAIL(generator_.generate_debug(ObString("debug"), code))) {
+  } else if (OB_FAIL(generator_.generate_debug(ObString("debug"), ob_error_code))) {
     LOG_WARN("failed to create_call", K(ret));
   } else if (OB_FAIL(generator_.generate_debug(ObString("debug"), name))) {
     LOG_WARN("failed to create_call", K(ret));
@@ -2683,7 +2692,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareHandlerStmt &s)
       ObLLVMValue ch_stmt_id_store;  // store stmt_id for continue handler
       ObSEArray<ObLLVMValue, 2> args;
       ObLLVMValue result;
-      ObLLVMValue p_old_sqlcode, is_need_pop_warning_buf;
+      ObLLVMValue p_old_ob_error_code, is_need_pop_warning_buf, p_old_error_code;
       ObLLVMType int_type;
       ObLLVMValue level;
 
@@ -2731,10 +2740,12 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareHandlerStmt &s)
       OX (old_ob_error = generator_.get_saved_ob_error());
       OX (generator_.get_saved_ob_error() = cur_ob_error_store);
 
-      OZ (buffer_guard.get_int_buffer(p_old_sqlcode));
+      OZ (buffer_guard.get_int_buffer(p_old_ob_error_code));
+      OZ (buffer_guard.get_int_buffer(p_old_error_code));
       OX (args.reset());
       OZ (args.push_back(generator_.get_vars().at(generator_.CTX_IDX)));
-      OZ (args.push_back(p_old_sqlcode));
+      OZ (args.push_back(p_old_ob_error_code));
+      OZ (args.push_back(p_old_error_code));
       OZ (generator_.get_helper().create_call(
               ObString("spi_get_pl_exception_code"),
               generator_.get_spi_service().spi_get_pl_exception_code_,
@@ -2749,13 +2760,15 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareHandlerStmt &s)
       OX (args.reset());
       // OZ (generator_.get_helper().get_llvm_type(ObIntType, int_type));
       // OZ (generator_.get_helper().create_alloca(ObString("level"), int_type, p_level));
-      OZ (generator_.get_helper().create_load(ObString(""), p_cur_sqlcode, code));
+      OZ (generator_.get_helper().create_load(ObString(""), p_cur_ob_error_code, ob_error_code));
+      OZ (generator_.get_helper().create_load(ObString(""), p_cur_error_code, error_code));
       OZ (generator_.get_helper().get_int8(false, is_need_pop_warning_buf));
       OZ (generator_.get_helper().get_int32(s.get_level(), level));
       OZ (args.push_back(generator_.get_vars().at(generator_.CTX_IDX)));
-      OZ (args.push_back(code));
+      OZ (args.push_back(ob_error_code));
       OZ (args.push_back(is_need_pop_warning_buf));
       OZ (args.push_back(level));
+      OZ (args.push_back(error_code));
       OZ (generator_.get_helper().create_call(
               ObString("spi_set_pl_exception_code"),
               generator_.get_spi_service().spi_set_pl_exception_code_,
@@ -2792,11 +2805,14 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareHandlerStmt &s)
 
       // 恢复原来的SQLCODE
       if (OB_SUCC(ret) && OB_NOT_NULL(generator_.get_current().get_v())) {
-        ObLLVMValue old_code;  // sqlcode of parent lexical scope
+        ObLLVMValue old_ob_error_code;  // internal error code of parent lexical scope
+        ObLLVMValue old_error_code;
         if (OB_ISNULL(old_exception_store.get_v())) {
           OZ (generator_.generate_debug(ObString("debug"), int_value));
           OZ (generator_.get_helper().create_load(
-                  ObString("old_sqlcode"), p_old_sqlcode, old_code));
+                  ObString("old_ob_error_code"), p_old_ob_error_code, old_ob_error_code));
+          OZ (generator_.get_helper().create_load(
+                  ObString("old_error_code"), p_old_error_code, old_error_code));
         } else {
           ObLLVMValue old_exception;
           ObLLVMValue old_unwindException_header;
@@ -2819,14 +2835,16 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareHandlerStmt &s)
                   old_condition_pointer_type,
                   old_condition));
           OX (old_condition.set_t(old_condition_type));
-          OZ (generator_.extract_code_from_condition_value(old_condition, old_code));
+          OZ (generator_.extract_ob_error_code_from_condition_value(old_condition, old_ob_error_code));
+          OZ (generator_.extract_error_code_from_condition_value(old_condition, old_error_code));
         }
         OX (args.reset());
         OZ (generator_.get_helper().get_int8(true, is_need_pop_warning_buf));
         OZ (args.push_back(generator_.get_vars().at(generator_.CTX_IDX)));
-        OZ (args.push_back(old_code));
+        OZ (args.push_back(old_ob_error_code));
         OZ (args.push_back(is_need_pop_warning_buf));
         OZ (args.push_back(level));
+        OZ (args.push_back(old_error_code));
         OZ (generator_.get_helper().create_call(
                 ObString("spi_set_pl_exception_code"),
                 generator_.get_spi_service().spi_set_pl_exception_code_,
@@ -2927,9 +2945,11 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
     ObLLVMType condition_pointer_type;
     ObLLVMValue exception_store = generator_.get_saved_exception();
     ObLLVMValue unwindException;
+    ObLLVMValue ob_error = generator_.get_saved_ob_error();
     ObLLVMValue unwind_exception_header;
     ObLLVMValue condition;
     ObLLVMValue sql_state;
+    ObLLVMValue ob_error_code;
     ObLLVMValue error_code;
     ObLLVMType int8_type;
     OZ (generator_.get_adt_service().get_unwind_exception(unwind_exception_type));
@@ -2940,16 +2960,15 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
     if (OB_FAIL(ret)) {
     } else if (s.is_signal_null()) {
       ObLLVMValue status;
+      ObLLVMValue saved_ob_error_code;
 #ifdef OB_BUILD_ORACLE_PL
       ObLLVMValue loc;
 #endif
-      ObLLVMValue ob_error_code_store = generator_.get_saved_ob_error();
-      ObLLVMValue ob_error_code;
       CK (OB_NOT_NULL(exception_store.get_v()));
-      CK (OB_NOT_NULL(ob_error_code_store.get_v()));
-      OZ (generator_.get_helper().create_load(ObString(""), ob_error_code_store, ob_error_code));
+      CK (OB_NOT_NULL(ob_error.get_v()));
+      OZ (generator_.get_helper().create_load(ObString(""), ob_error, saved_ob_error_code));
       OZ (generator_.extract_status_from_context(generator_.get_vars().at(generator_.CTX_IDX), status));
-      OZ (generator_.get_helper().create_store(ob_error_code, status));
+      OZ (generator_.get_helper().create_store(saved_ob_error_code, status));
       OZ (generator_.get_helper().create_load(ObString(""), exception_store, unwindException));
       OX (unwindException.set_t(int8_type));
       OZ (generator_.get_helper().create_const_gep1_64(ObString("extract_unwind_exception_header"),
@@ -2962,7 +2981,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
                                                       condition));
       OX (condition.set_t(condition_type));
       OZ (generator_.extract_name_from_condition_value(condition, sql_state));
-      OZ (generator_.extract_code_from_condition_value(condition, error_code));
+      OZ (generator_.extract_ob_error_code_from_condition_value(condition, ob_error_code));
+      OZ (generator_.extract_error_code_from_condition_value(condition, error_code));
       OZ (generator_.get_helper().create_pointer_cast(
           ObString("cast_unwind_exception"), unwindException,
           unwind_exception_pointer_type, unwindException));
@@ -2971,19 +2991,20 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
       OZ (generator_.generate_destruct_out_params());
 #ifdef OB_BUILD_ORACLE_PL
       OZ (generator_.get_helper().get_int64(s.get_stmt_id(), loc));
-      OZ (generator_.generate_eh_adjust_call_stack(loc, error_code));
+      OZ (generator_.generate_eh_adjust_call_stack(loc, ob_error_code, error_code));
 #endif
       OZ (generator_.raise_exception(unwindException,
                                      error_code, sql_state, normal,
                                      s.get_block()->in_notfound(), s.get_block()->in_warning(), true));
       OZ (generator_.set_current(normal));
     } else {
-      ObLLVMValue type, ob_err_code, err_code, sql_state, str_len, is_signal, stmt_id, loc;
+      ObLLVMValue type, err_status, sql_state, str_len, is_signal, stmt_id, loc;
       if (lib::is_mysql_mode() && (s.is_resignal_stmt() || s.get_cond_type() != ERROR_CODE)) {
         ObLLVMValue int_value;
-        ObLLVMType int32_type, int32_type_ptr;
+        ObLLVMType int32_type, int32_type_ptr, int64_type;
         ObSEArray<ObLLVMValue, 5> args;
-        ObLLVMValue err_code_ptr;
+        ObLLVMValue spi_ret, condition_code;
+        ObLLVMValue condition_code_ptr, condition_code_ptr32;
         ObPLCGBufferGuard buffer_guard(generator_);
 
         int64_t *err_idx = const_cast<int64_t *>(s.get_expr_idx(
@@ -2992,6 +3013,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
                               static_cast<int64_t>(SignalCondInfoItem::DIAG_MESSAGE_TEXT)));
         OZ (generator_.get_helper().get_llvm_type(ObInt32Type, int32_type));
         OZ (int32_type.get_pointer_to(int32_type_ptr));
+        OZ (generator_.get_helper().get_llvm_type(ObIntType, int64_type));
         OZ (args.push_back(generator_.get_vars().at(generator_.CTX_IDX)));
         OZ (generator_.get_helper().get_int64(nullptr != err_idx ? *err_idx : OB_INVALID_ID, int_value));
         OZ (args.push_back(int_value));
@@ -2999,11 +3021,11 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
         OZ (args.push_back(int_value));
         OZ (generator_.generate_global_string(ObString(s.get_str_len(), s.get_sql_state()), sql_state, str_len));
         OZ (args.push_back(sql_state));
-        OZ (buffer_guard.get_int_buffer(err_code_ptr));
+        OZ (buffer_guard.get_int_buffer(condition_code_ptr));
         if (s.is_resignal_stmt()) {
-          // ObLLVMValue code_ptr;
           OX (sql_state.reset());
           CK (OB_NOT_NULL(exception_store.get_v()));
+          CK (OB_NOT_NULL(ob_error.get_v()));
           OZ (generator_.get_helper().create_load(ObString(""), exception_store, unwindException));
           OX (unwindException.set_t(int8_type));
           OZ (generator_.get_helper().create_const_gep1_64(ObString("extract_unwind_exception_header"),
@@ -3016,28 +3038,33 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
                                                           condition));
           OX (condition.set_t(condition_type));
           OZ (generator_.extract_name_from_condition_value(condition, sql_state));
-          OZ (generator_.extract_code_from_condition_value(condition, error_code));
-          OZ (generator_.get_helper().create_store(error_code, err_code_ptr));
+          OZ (generator_.extract_ob_error_code_from_condition_value(condition, ob_error_code));
+          OZ (generator_.extract_error_code_from_condition_value(condition, error_code));
+          OZ (generator_.get_helper().create_store(error_code, condition_code_ptr));
         } else {
-          OZ (generator_.get_helper().get_int64(OB_SUCCESS, err_code));
-          OZ (generator_.get_helper().create_store(err_code, err_code_ptr));
+          OZ (generator_.get_helper().get_int64(OB_SUCCESS, ob_error_code));
+          OZ (generator_.get_helper().get_int64(OB_SUCCESS, error_code));
+          OZ (generator_.get_helper().create_store(ob_error_code, condition_code_ptr));
         }
-        OZ (args.push_back(err_code_ptr));
+        OZ (args.push_back(condition_code_ptr));
         OZ (args.push_back(sql_state));
         OZ (generator_.get_helper().get_int8(!s.is_resignal_stmt(), is_signal));
         OZ (args.push_back(is_signal));
         OZ (generator_.get_helper().create_call(ObString("spi_process_resignal"),
                                                 generator_.get_spi_service().spi_process_resignal_error_,
                                                 args,
-                                                ob_err_code));
-        OZ (generator_.check_success(ob_err_code, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()));
-        OZ (generator_.get_helper().create_load(ObString("load_error_code"), err_code_ptr, err_code));
-        OZ (generator_.get_helper().create_bit_cast(ObString("cast_int64_to_int32"), err_code_ptr, int32_type_ptr, err_code_ptr));
-        OX (err_code_ptr.set_t(int32_type));
-        OZ (generator_.get_helper().create_load(ObString("load_error_code"), err_code_ptr, ob_err_code));
+                                                spi_ret));
+        OZ (generator_.check_success(spi_ret, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()));
+        OZ (generator_.get_helper().create_bit_cast(ObString("cast_condition_code_ptr_to_int32"), condition_code_ptr, int32_type_ptr, condition_code_ptr32));
+        OX (condition_code_ptr32.set_t(int32_type));
+        OZ (generator_.get_helper().create_load(ObString("load_condition_code"), condition_code_ptr32, condition_code));
+        OX (err_status = condition_code);
+        OZ (generator_.get_helper().create_sext(ObString("extend_condition_code"), condition_code, int64_type, ob_error_code));
+        OX (error_code = ob_error_code);
       } else {
-        OZ (generator_.get_helper().get_int32(s.get_ob_error_code(), ob_err_code));
-        OZ (generator_.get_helper().get_int64(s.get_error_code(), err_code));
+        OZ (generator_.get_helper().get_int32(s.get_stmt_ob_error_code(), err_status));
+        OZ (generator_.get_helper().get_int64(s.get_ob_error_code(), ob_error_code));
+        OZ (generator_.get_helper().get_int64(s.get_error_code(), error_code));
       }
       OZ (generator_.get_helper().get_int64(s.get_cond_type(), type));
       OZ (generator_.get_helper().create_block(ObString("normal"), generator_.get_func(), normal));
@@ -3047,7 +3074,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
       OZ (generator_.get_helper().get_int64(s.get_stmt_id(), loc));
       OZ (generator_.generate_close_loop_cursor(true, generator_.get_current_exception() != NULL ? generator_.get_current_exception()->level_ : 0));
       OZ (generator_.generate_destruct_out_params());
-      OZ (generator_.generate_exception(type, ob_err_code, err_code, sql_state, str_len, stmt_id,
+      OZ (generator_.generate_exception(type, err_status, ob_error_code, error_code, sql_state, str_len, stmt_id,
                                         normal, loc, s.get_block()->in_notfound(),
                                         s.get_block()->in_warning(), true/*is signal*/));
       OZ (generator_.set_current(normal));
@@ -4969,11 +4996,13 @@ int ObPLCodeGenerator::init_spi_service()
     arg_types.reset();
     if (OB_FAIL(arg_types.push_back(pl_exec_context_pointer_type))) { //函数第一个参数必须是基础环境信息隐藏参数
       LOG_WARN("push_back error", K(ret));
-    } else if (OB_FAIL(arg_types.push_back(int64_type))) { // error code
+    } else if (OB_FAIL(arg_types.push_back(int64_type))) { // ob error code
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(bool_type))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(int32_type))) {
+      LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(int64_type))) { // error code
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
       LOG_WARN("failed to get function type", K(ret));
@@ -4985,6 +5014,8 @@ int ObPLCodeGenerator::init_spi_service()
   if (OB_SUCC(ret)) {
     arg_types.reset();
     if (OB_FAIL(arg_types.push_back(pl_exec_context_pointer_type))) {
+      LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(int_pointer_type))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(int_pointer_type))) {
       LOG_WARN("push_back error", K(ret));
@@ -5311,6 +5342,8 @@ int ObPLCodeGenerator::init_eh_service()
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(int64_type))) {
       LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(int64_type))) { // original exception code
+      LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
       LOG_WARN("failed to get function type", K(ret));
     } else if (OB_FAIL(helper_.create_function(ObString("eh_adjust_call_stack"), ft, eh_service_.eh_adjust_call_stack_))) {
@@ -5362,9 +5395,15 @@ int ObPLCodeGenerator::init_eh_service()
 
   if (OB_SUCC(ret)) {
     arg_types.reset();
-    if (OB_FAIL(arg_types.push_back(int8_type))) {
+    if (OB_FAIL(arg_types.push_back(int64_type))) { // PL context
+      LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(int8_type))) {
+      LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(int8_type))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(int32_type))) {
+      LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(int_pointer_type))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(int_pointer_type))) {
       LOG_WARN("push_back error", K(ret));
@@ -8385,6 +8424,7 @@ int ObPLCodeGenerator::generate_update_package_changed_info(const ObPLStmt &s,
 }
 
 int ObPLCodeGenerator::generate_exception(ObLLVMValue &type,
+                                          ObLLVMValue &err_status,
                                           ObLLVMValue &ob_error_code,
                                           ObLLVMValue &error_code,
                                           ObLLVMValue &sql_state,
@@ -8406,7 +8446,7 @@ int ObPLCodeGenerator::generate_exception(ObLLVMValue &type,
     ObLLVMValue status;
     if (OB_FAIL(extract_status_from_context(get_vars().at(CTX_IDX), status))) {
       LOG_WARN("failed to extract_status_from_context", K(ret));
-    } else if (OB_FAIL(helper_.create_store(ob_error_code, status))) {
+    } else if (OB_FAIL(helper_.create_store(err_status, status))) {
       LOG_WARN("failed to create_store", K(ret));
     } else if (OB_FAIL(extract_pl_ctx_from_context(get_vars().at(CTX_IDX), arg))) { //obplcontext
       LOG_WARN("failed to set pl context", K(ret));
@@ -8426,14 +8466,12 @@ int ObPLCodeGenerator::generate_exception(ObLLVMValue &type,
       ObLLVMValue condition;
       ObLLVMValue type_pointer;
       ObLLVMValue error_code_pointer;
-      ObLLVMValue ob_error_code_pointer;
       ObLLVMValue sql_state_pointer;
       ObLLVMValue str_len_pointer;
       ObLLVMValue stmt_id_pointer;
       ObLLVMValue signal_pointer;
+      ObLLVMValue ob_error_code_pointer;
       ObLLVMValue int_value;
-      ObLLVMValue ob_error_code_int64;
-      ObLLVMType int64_type;
       ObPLCGBufferGuard buffer_guard(*this);
 
       if (OB_FAIL(buffer_guard.get_condition_buffer(condition))) {
@@ -8442,8 +8480,8 @@ int ObPLCodeGenerator::generate_exception(ObLLVMValue &type,
         LOG_WARN("failed to extract_type_ptr_from_condition_value", K(ret));
       } else if (OB_FAIL(helper_.create_store(type, type_pointer))) {
         LOG_WARN("failed to create_store", K(ret));
-      } else if (OB_FAIL(extract_code_ptr_from_condition_value(condition, error_code_pointer))) {
-        LOG_WARN("failed to extract_code_ptr_from_condition_value", K(ret));
+      } else if (OB_FAIL(extract_error_code_ptr_from_condition_value(condition, error_code_pointer))) {
+        LOG_WARN("failed to extract_error_code_ptr_from_condition_value", K(ret));
       } else if (OB_FAIL(helper_.create_store(error_code, error_code_pointer))) {
         LOG_WARN("failed to create_store", K(ret));
       } else if (OB_FAIL(extract_name_ptr_from_condition_value(condition, sql_state_pointer))) {
@@ -8466,11 +8504,7 @@ int ObPLCodeGenerator::generate_exception(ObLLVMValue &type,
         LOG_WARN("failed to create_store", K(ret), K(is_mysql_ob_fail));
       } else if (OB_FAIL(extract_ob_error_code_ptr_from_condition_value(condition, ob_error_code_pointer))) {
         LOG_WARN("failed to extract_ob_error_code_ptr_from_condition_value", K(ret));
-      } else if (OB_FAIL(helper_.get_llvm_type(ObIntType, int64_type))) {
-        LOG_WARN("failed to get int64 type", K(ret));
-      } else if (OB_FAIL(helper_.create_sext(ObString("sext ob_error_code to int64"), ob_error_code, int64_type, ob_error_code_int64))) {
-        LOG_WARN("failed to sext ob_error_code to int64", K(ret));
-      } else if (OB_FAIL(helper_.create_store(ob_error_code_int64, ob_error_code_pointer))) {
+      } else if (OB_FAIL(helper_.create_store(ob_error_code, ob_error_code_pointer))) {
         LOG_WARN("failed to create_store", K(ret));
       } else if (OB_FAIL(args.push_back(condition))) {
         LOG_WARN("push_back error", K(ret));
@@ -8495,15 +8529,17 @@ int ObPLCodeGenerator::generate_exception(ObLLVMValue &type,
   return ret;
 }
 #ifdef OB_BUILD_ORACLE_PL
-int ObPLCodeGenerator::generate_eh_adjust_call_stack(ObLLVMValue &loc, ObLLVMValue &error_code)
+int ObPLCodeGenerator::generate_eh_adjust_call_stack(ObLLVMValue &loc, ObLLVMValue &ob_error_code,
+                                                   ObLLVMValue &error_code)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObLLVMValue, 3> args;
+  ObSEArray<ObLLVMValue, 4> args;
   ObLLVMValue arg;
   ObLLVMValue result;
   OZ (extract_pl_ctx_from_context(get_vars().at(CTX_IDX), arg));
   OZ (args.push_back(arg));
   OZ (args.push_back(loc));
+  OZ (args.push_back(ob_error_code));
   OZ (args.push_back(error_code));
   OZ (helper_.create_call(ObString("eh_adjust_call_stack"), get_eh_service().eh_adjust_call_stack_, args, result));
   return ret;
@@ -8736,29 +8772,40 @@ int ObPLCodeGenerator::generate_ob_fail(ObLLVMBasicBlock &fail_branch,
   }
 
   ObLLVMValue type_ptr;
+  ObLLVMValue ob_error_code_ptr;
   ObLLVMValue error_code_ptr;
   ObLLVMValue sql_state_ptr;
   ObLLVMValue str_len_ptr;
   ObPLCGBufferGuard buffer_guard(*this);
   OZ (buffer_guard.get_int_buffer(type_ptr));
+  OZ (buffer_guard.get_int_buffer(ob_error_code_ptr));
   OZ (buffer_guard.get_int_buffer(error_code_ptr));
   OZ (buffer_guard.get_char_buffer(sql_state_ptr));
   OZ (buffer_guard.get_int_buffer(str_len_ptr));
 
   ObSEArray<ObLLVMValue, 2> args;
+  ObLLVMValue pl_context;
   ObLLVMValue oracle_mode;
+  ObLLVMValue errno_compatible_oracle;
   ObLLVMValue ret_err;
+  bool plsql_errno_compatible_oracle = session_info_.get_plsql_errno_compatible_oracle();
   OZ (helper_.get_int8(oracle_mode_, oracle_mode));
   OZ (helper_.create_load(ObString("load_ret"), vars_.at(RET_IDX), ret_err));
+  OZ (extract_pl_ctx_from_context(get_vars().at(CTX_IDX), pl_context));
+  OZ (args.push_back(pl_context));
   OZ (args.push_back(oracle_mode));
+  OZ (helper_.get_int8(plsql_errno_compatible_oracle, errno_compatible_oracle));
+  OZ (args.push_back(errno_compatible_oracle));
   OZ (args.push_back(ret_err));
   OZ (args.push_back(type_ptr));
+  OZ (args.push_back(ob_error_code_ptr));
   OZ (args.push_back(error_code_ptr));
   OZ (args.push_back(sql_state_ptr));
   OZ (args.push_back(str_len_ptr));
 
   ObLLVMValue result;
   ObLLVMValue type;
+  ObLLVMValue ob_error_code;
   ObLLVMValue error_code;
   ObLLVMValue sql_state;
   ObLLVMValue str_len;
@@ -8769,11 +8816,13 @@ int ObPLCodeGenerator::generate_ob_fail(ObLLVMBasicBlock &fail_branch,
   OZ (helper_.create_load(ObString("stmt_id"), stmt_id_, stmt_id_value));
   OZ (helper_.create_call(ObString("convert_exception"), get_eh_service().eh_convert_exception_, args, result));
   OZ (helper_.create_load(ObString("load_type"), type_ptr, type));
+  OZ (helper_.create_load(ObString("load_ob_error_code"), ob_error_code_ptr, ob_error_code));
   OZ (helper_.create_load(ObString("load_error_code"), error_code_ptr, error_code));
   OZ (helper_.create_load(ObString("load_sql_state"), sql_state_ptr, sql_state));
   OZ (helper_.create_load(ObString("load_str_len"), str_len_ptr, str_len));
   OZ (generate_exception(type,
                          ret_err,
+                         ob_error_code,
                          error_code,
                          sql_state,
                          str_len,
@@ -11388,19 +11437,21 @@ DEFINE_EXTRACT_VALUE_FROM_STRUCT(value, composite_write)
 
 
 DEFINE_EXTRACT_PTR_FROM_STRUCT(type, condition_value, IDX_CONDITION_TYPE)
-DEFINE_EXTRACT_PTR_FROM_STRUCT(code, condition_value, IDX_CONDITION_CODE)
+DEFINE_EXTRACT_PTR_FROM_STRUCT(error_code, condition_value, IDX_CONDITION_ERROR_CODE)
 DEFINE_EXTRACT_PTR_FROM_STRUCT(name, condition_value, IDX_CONDITION_STATE)
 DEFINE_EXTRACT_PTR_FROM_STRUCT(len, condition_value, IDX_CONDITION_LEN)
 DEFINE_EXTRACT_PTR_FROM_STRUCT(stmt, condition_value, IDX_CONDITION_STMT)
 DEFINE_EXTRACT_PTR_FROM_STRUCT(signal, condition_value, IDX_CONDITION_SIGNAL)
 DEFINE_EXTRACT_PTR_FROM_STRUCT(ob_error_code, condition_value, IDX_CONDITION_OB_ERROR_CODE)
+
 DEFINE_EXTRACT_VALUE_FROM_STRUCT(type, condition_value)
-DEFINE_EXTRACT_VALUE_FROM_STRUCT(code, condition_value)
+DEFINE_EXTRACT_VALUE_FROM_STRUCT(error_code, condition_value)
 DEFINE_EXTRACT_VALUE_FROM_STRUCT(name, condition_value)
 DEFINE_EXTRACT_VALUE_FROM_STRUCT(len, condition_value)
 DEFINE_EXTRACT_VALUE_FROM_STRUCT(stmt, condition_value)
 DEFINE_EXTRACT_VALUE_FROM_STRUCT(signal, condition_value)
 DEFINE_EXTRACT_VALUE_FROM_STRUCT(ob_error_code, condition_value)
+
 
 DEFINE_EXTRACT_PTR_FROM_STRUCT(type, collection, IDX_COLLECTION_TYPE)
 DEFINE_EXTRACT_PTR_FROM_STRUCT(id, collection, IDX_COLLECTION_ID)

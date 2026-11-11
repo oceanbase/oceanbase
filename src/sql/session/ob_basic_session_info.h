@@ -182,6 +182,7 @@ public:
     PLSQL_CCFLAGS,
     PLSQL_OPTIMIZE_LEVEL,
     PLSQL_CAN_TRANSFORM_TO_ASSIGN,
+    PLSQL_ERRNO_COMPATIBLE_ORACLE,
     MAX_ENV,
   };
 
@@ -193,6 +194,7 @@ public:
     share::SYS_VAR_PLSQL_CCFLAGS,
     share::SYS_VAR_PLSQL_OPTIMIZE_LEVEL,
     share::SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN,
+    share::SYS_VAR_PLSQL_ERRNO_COMPATIBLE_ORACLE,
     share::SYS_VAR_INVALID
   };
 
@@ -203,7 +205,8 @@ public:
     collation_database_(CS_TYPE_INVALID),
     plsql_ccflags_(),
     plsql_optimize_level_(0),  // default PLSQL_OPTIMIZE_LEVEL = 0
-    plsql_can_transform_to_assign_(1) // just place holder, useless when replace session sys var
+    plsql_can_transform_to_assign_(1), // just place holder, useless when replace session sys var
+    plsql_errno_compatible_oracle_(false)
   { }
 
   virtual ~ObExecEnv() {}
@@ -214,7 +217,8 @@ public:
                K_(collation_database),
                K_(plsql_ccflags),
                K_(plsql_optimize_level),
-               K_(plsql_can_transform_to_assign));
+               K_(plsql_can_transform_to_assign),
+               K_(plsql_errno_compatible_oracle));
 
   void reset();
 
@@ -244,6 +248,8 @@ public:
   void set_plsql_optimize_level(int64_t level) { plsql_optimize_level_ = plsql_optimize_level_; }
   bool get_plsql_can_transform_to_assign() { return plsql_can_transform_to_assign_; }
   void set_plsql_can_transform_to_assign(bool can_transform) { plsql_can_transform_to_assign_ = can_transform; }
+  bool get_plsql_errno_compatible_oracle() const { return plsql_errno_compatible_oracle_; }
+  void set_plsql_errno_compatible_oracle(bool compatible) { plsql_errno_compatible_oracle_ = compatible; }
 
 private:
   ObSQLMode sql_mode_;
@@ -253,6 +259,7 @@ private:
   ObString plsql_ccflags_;
   int64_t plsql_optimize_level_;
   bool plsql_can_transform_to_assign_;
+  bool plsql_errno_compatible_oracle_;
 };
 
 enum ObSessionRetryStatus
@@ -641,6 +648,7 @@ public:
   int get_local_nls_format(const ObObjType type, ObString &format_str) const;
   int set_time_zone(const common::ObString &str_val, const bool is_oralce_mode,
                     const bool need_check_valid /* true */);
+  bool get_plsql_errno_compatible_oracle() const;
   void init_use_rich_format()
   {
     config_use_rich_format_ = true;
@@ -2131,7 +2139,8 @@ public:
         max_execution_time_(MAX_EXECUTION_TIME_MIN),
         ob_enable_pl_async_commit_(false),
         json_float_full_precision_(false),
-        enable_pl_composite_as_sql_udt_(false)
+        enable_pl_composite_as_sql_udt_(false),
+        plsql_errno_compatible_oracle_(false)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -2210,6 +2219,7 @@ public:
       max_execution_time_  = MAX_EXECUTION_TIME_MIN;
       json_float_full_precision_ = false;
       enable_pl_composite_as_sql_udt_ = false;
+      plsql_errno_compatible_oracle_ = false;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -2272,7 +2282,8 @@ public:
             ob_enable_pl_async_commit_ == other.ob_enable_pl_async_commit_ &&
             max_execution_time_ == other.max_execution_time_ &&
             json_float_full_precision_ == other.json_float_full_precision_ &&
-            enable_pl_composite_as_sql_udt_ == other.enable_pl_composite_as_sql_udt_;
+            enable_pl_composite_as_sql_udt_ == other.enable_pl_composite_as_sql_udt_ &&
+            plsql_errno_compatible_oracle_ == other.plsql_errno_compatible_oracle_;
       bool equal2 = true;
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         if (nls_formats_[i] != other.nls_formats_[i]) {
@@ -2469,6 +2480,7 @@ public:
     bool ob_enable_pl_async_commit_;
     bool json_float_full_precision_;
     bool enable_pl_composite_as_sql_udt_;
+    bool plsql_errno_compatible_oracle_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
@@ -2546,6 +2558,7 @@ private:
     DEF_SYS_VAR_BIT_ENUM(max_execution_time, 65)
     DEF_SYS_VAR_BIT_ENUM(enable_pl_composite_as_sql_udt, 66)
     DEF_SYS_VAR_BIT_ENUM(ob_query_memory_limit, 67)
+    DEF_SYS_VAR_BIT_ENUM(plsql_errno_compatible_oracle, 68)
     BIT_MAX_POSITION = 128  // max position is 128 now
   };
 #undef DEF_SYS_VAR_BIT_ENUM
@@ -2693,6 +2706,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, compat_version);
     DEF_SYS_VAR_CACHE_FUNCS(bool, enable_sql_plan_monitor);
     DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_parameter_anonymous_block);
+    DEF_SYS_VAR_CACHE_FUNCS(bool, plsql_errno_compatible_oracle);
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, security_version);
     DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_ps_parameter_anonymous_block);
     DEF_SYS_VAR_CACHE_FUNCS(bool, plsql_can_transform_sql_to_assign);
@@ -2787,7 +2801,8 @@ private:
       bool inc_plsql_optimize_level_:1;
       bool inc_ob_enable_pl_async_commit_:1;
       // total bits has been used out !!!
-      // can not add new inc bit !!!
+      // can not add new inc bit, new sys var please use ext_inc_flags_ (bit >= 64) !!!
+
     };
     union { // FARM COMPAT WHITELIST
       uint64_t inc_flags_;
@@ -3237,6 +3252,11 @@ inline bool ObBasicSessionInfo::get_local_ob_enable_pl_async_commit() const
 {
   return sys_vars_cache_.get_ob_enable_pl_async_commit();
 }
+inline bool ObBasicSessionInfo::get_plsql_errno_compatible_oracle() const
+{
+  return sys_vars_cache_.get_plsql_errno_compatible_oracle();
+}
+
 inline int ObBasicSessionInfo::get_local_nls_format(const ObObjType type, ObString &format_str) const
 {
   int ret = common::OB_SUCCESS;

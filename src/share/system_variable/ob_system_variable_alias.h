@@ -863,6 +863,7 @@ namespace share
   static const char* const OB_SV__ENABLE_PL_COMPOSITE_AS_SQL_UDT = "_enable_pl_composite_as_sql_udt";
   static const char* const OB_SV_RESOURCE_GROUP = "ob_resource_group";
   static const char* const OB_SV_IGNORE_VIRTUAL_TABLE_ERROR = "ob_ignore_virtual_table_error";
+  static const char* const OB_SV_PLSQL_ERRNO_COMPATIBLE_ORACLE = "plsql_errno_compatible_oracle";
 
 }
 }

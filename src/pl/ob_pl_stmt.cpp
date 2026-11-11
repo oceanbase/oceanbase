@@ -314,6 +314,7 @@ int ObPLCondition::deep_copy(const ObPLCondition &condition, ObIAllocator &alloc
     OX (value_.str_len_ = condition.get_value().str_len_);
     OX (value_.stmt_id_ = condition.get_value().stmt_id_);
     OX (value_.signal_ = condition.get_value().signal_);
+    OX (value_.ob_error_code_ = condition.get_value().ob_error_code_);
     OX (value_.duplicate_ = condition.get_value().duplicate_);
   }
   return ret;
@@ -1165,7 +1166,7 @@ int ObPLBlockNS::add_condition(const common::ObString &name,
         // ORACLE模式如果多次EXECPTION_INIT同一个USER EXCEPTION, 后面的覆盖前面的
         if (exception_init) {
           bool duplicate = temp_dup_cond->get_duplicate();
-          CK (ERROR_CODE == value.type_ && value.error_code_ < 0);
+          CK (ERROR_CODE == value.type_ && value.ob_error_code_ < 0);
           OX (temp_dup_cond->set_value(value));
           OX (duplicate ? temp_dup_cond->set_duplicate() : void(NULL));
         } else { // Oracle模式下多次声明, 只要不被引用就不需要报错, 因此声明的时候记录下

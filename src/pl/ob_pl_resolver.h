@@ -960,16 +960,16 @@ private:
   int resolve_handler_condition(const ObStmtNodeTree *parse_tree,
                                 ObPLConditionValue &condition,
                                 ObPLCompileUnitAST &func);
-  int resolve_pre_condition(const ObString &name, const ObPLConditionValue **value);
+  int resolve_pre_condition(const ObString &name, ObPLConditionValue &value, bool &is_found);
   int resolve_condition_value(const ObStmtNodeTree *parse_tree, ObPLConditionValue &value,
                               const bool is_sys_db);
   int resolve_condition(const ObStmtNodeTree *parse_tree,
                         const ObPLBlockNS &ns,
-                        const ObPLConditionValue **value,
+                        ObPLConditionValue &value,
                         ObPLCompileUnitAST &func);
   int resolve_condition(const common::ObString &name,
                         const ObPLBlockNS &ns,
-                        const ObPLConditionValue **value);
+                        ObPLConditionValue &value);
   int resolve_cursor(const ObStmtNodeTree *parse_tree,
                      const ObPLBlockNS &ns,
                      int64_t &index,

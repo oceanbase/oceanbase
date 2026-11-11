@@ -1294,7 +1294,7 @@ DEFINE_ERROR_EXT(OB_ER_SP_RECURSION_LIMIT, -5567, ER_SP_RECURSION_LIMIT, "HY000"
 DEFINE_ERROR(OB_ER_UNSUPPORTED_PS, -5568, ER_UNSUPPORTED_PS, "HY000", "This command is not supported in the prepared statement protocol yet");
 DEFINE_ERROR_EXT(OB_ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG, -5569, ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG, "0A000", "stmt is not allowed in stored function or trigger", "%s is not allowed in stored function or trigger");
 DEFINE_ERROR(OB_ER_SP_NO_RECURSION, -5570, ER_SP_NO_RECURSION, "HY000", "Recursive stored functions are not allowed.");
-DEFINE_ERROR(OB_ER_SP_CASE_NOT_FOUND, -5571, ER_SP_CASE_NOT_FOUND, "20000", "Case not found for CASE statement");
+DEFINE_ORACLE_ERROR(OB_ER_SP_CASE_NOT_FOUND, -5571, ER_SP_CASE_NOT_FOUND, "20000", "Case not found for CASE statement", 6592, "CASE not found while executing CASE statement");
 DEFINE_ERROR(OB_ERR_INVALID_SPLIT_COUNT, -5572, -1, "HY000", "a partition may be split into exactly two new partitions");
 DEFINE_ERROR(OB_ERR_INVALID_SPLIT_GRAMMAR, -5573, -1, "HY000", "this physical attribute may not be specified for a table partition");
 DEFINE_ORACLE_ERROR(OB_ERR_MISS_VALUES, -5574, -1, "HY000", "missing VALUES keyword", 926, "missing VALUES keyword");
@@ -1312,7 +1312,7 @@ DEFINE_ERROR_EXT(OB_ER_SP_BAD_SQLSTATE, -5585, ER_SP_BAD_SQLSTATE, "42000", "Bad
 DEFINE_ERROR(OB_ER_SP_VARCOND_AFTER_CURSHNDLR, -5586, ER_SP_VARCOND_AFTER_CURSHNDLR, "42000", "Variable or condition declaration after cursor or handler declaration");
 DEFINE_ERROR(OB_ER_SP_CURSOR_AFTER_HANDLER, -5587, ER_SP_CURSOR_AFTER_HANDLER, "42000", "Cursor declaration after handler declaration");
 DEFINE_ERROR_EXT(OB_ER_SP_WRONG_NAME, -5588, ER_SP_WRONG_NAME, "42000", "Incorrect routine name", "Incorrect routine name \'%.*s\'");
-DEFINE_ERROR(OB_ER_SP_CURSOR_ALREADY_OPEN, -5589, ER_SP_CURSOR_ALREADY_OPEN, "24000", "Cursor is already open");
+DEFINE_ORACLE_ERROR(OB_ER_SP_CURSOR_ALREADY_OPEN, -5589, ER_SP_CURSOR_ALREADY_OPEN, "24000", "Cursor is already open", 6511, "PL/SQL: cursor already open");
 DEFINE_ERROR(OB_ER_SP_CURSOR_NOT_OPEN, -5590, ER_SP_CURSOR_NOT_OPEN, "24000", "Cursor is not open");
 DEFINE_ERROR(OB_ER_SP_CANT_SET_AUTOCOMMIT, -5591, ER_SP_CANT_SET_AUTOCOMMIT, "HY000", "Not allowed to set autocommit from a stored function or trigger");
 DEFINE_ERROR_EXT(OB_ER_SP_NOT_VAR_ARG, -5592, ER_SP_NOT_VAR_ARG, "42000", "OUT or INOUT argument for routine is not a variable", "OUT or INOUT argument %d for routine %.*s is not a variable");
@@ -2803,7 +2803,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_JAVA_SESSION_STATE_CLEARED, -9847, -1, "HY000", "Java
 DEFINE_ORACLE_ERROR(OB_ERR_XML_CANNOT_CONVERT_TO_TYPE, -9848, -1, "HY000", "Cannot convert the given XMLType to the required type", 19029, "Cannot convert the given XMLType to the required type");
 DEFINE_ORACLE_ERROR(OB_ERR_PL_XML_STRING_ARG_INVALID, -9849, -1, "HY000", "NULL or invalid string argument specified", 64505, "NULL or invalid string argument specified");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_CANNOT_END_TRANS_IN_TRIGGER, -9850, -1, "HY000", "cannot COMMIT or ROLLBACK in a trigger", "cannot %s in a trigger", 4092, "cannot COMMIT or ROLLBACK in a trigger", "cannot %s in a trigger", "A trigger attempted to commit or rollback.", "Rewrite the trigger so it does not commit or rollback.");
-
+DEFINE_ERROR(OB_ERR_UDE_ERROR_CODE, -9851, -1, "HY000", "user defined exception error");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // PL/SQL错误码值域 [-9500, -10000)

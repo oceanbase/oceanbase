@@ -59,10 +59,10 @@ public:
                                                     _Unwind_Exception_Class exceptionClass,
                                                     ObUnwindException *exceptionObject,
                                                     struct _Unwind_Context *context);
-  static int eh_convert_exception(bool oracle_mode, int oberr, ObPLConditionType *type, int64_t *error_code, const char **sql_state, int64_t *str_len);
+  static int eh_convert_exception(int64_t pl_context, bool oracle_mode, bool errno_compatible_oracle, int oberr, ObPLConditionType *type, int64_t *ob_error_code, int64_t *error_code, const char **sql_state, int64_t *str_len);
   static ObPLConditionType eh_classify_exception(const char *sql_state);
 #ifdef OB_BUILD_ORACLE_PL
-  static int eh_adjust_call_stack(ObPLContext *pl_ctx, uint64_t location, int err_code);
+  static int eh_adjust_call_stack(ObPLContext *pl_ctx, uint64_t location, int err_code, int64_t error_code);
 #endif
 
 public:

@@ -3543,6 +3543,12 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_json_float_full_precision(int_val != 0));
       break;
     }
+    case SYS_VAR_PLSQL_ERRNO_COMPATIBLE_ORACLE: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_plsql_errno_compatible_oracle(int_val != 0));
+      break;
+    }
     default: {
       //do nothing
     }
@@ -4120,6 +4126,12 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache.set_base_json_float_full_precision(int_val != 0));
+      break;
+    }
+    case SYS_VAR_PLSQL_ERRNO_COMPATIBLE_ORACLE: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_plsql_errno_compatible_oracle(int_val != 0));
       break;
     }
     default: {
@@ -7798,6 +7810,7 @@ void ObExecEnv::reset()
   // default PLSQL_OPTIMIZE_LEVEL = 0
   plsql_optimize_level_ = 0;
   plsql_can_transform_to_assign_ = 1;
+  plsql_errno_compatible_oracle_ = false;
 }
 
 bool ObExecEnv::operator==(const ObExecEnv &other) const
@@ -7808,7 +7821,8 @@ bool ObExecEnv::operator==(const ObExecEnv &other) const
       && (collation_connection_ == other.collation_connection_)
       && (collation_database_ == other.collation_database_)
       && (is_mysql_mode ? true : (plsql_ccflags_ == other.plsql_ccflags_))
-      && (plsql_optimize_level_ == other.plsql_optimize_level_);
+      && (plsql_optimize_level_ == other.plsql_optimize_level_)
+      && (plsql_errno_compatible_oracle_ == other.plsql_errno_compatible_oracle_);
 }
 
 bool ObExecEnv::operator!=(const ObExecEnv &other) const
@@ -7848,7 +7862,8 @@ int ObExecEnv::gen_exec_env(const ObBasicSessionInfo &session, char* buf, int64_
       case CHARSET_CLIENT:
       case COLLATION_CONNECTION:
       case COLLATION_DATABASE:
-      case PLSQL_OPTIMIZE_LEVEL: {
+      case PLSQL_OPTIMIZE_LEVEL:
+      case PLSQL_ERRNO_COMPATIBLE_ORACLE: {
         int64_t size = 0;
         val.reset();
         OZ (session.get_sys_variable(ExecEnvMap[i], val));
@@ -7919,7 +7934,8 @@ int ObExecEnv::gen_exec_env(const share::schema::ObSysVariableSchema &sys_variab
       case CHARSET_CLIENT:
       case COLLATION_CONNECTION:
       case COLLATION_DATABASE:
-      case PLSQL_OPTIMIZE_LEVEL: {
+      case PLSQL_OPTIMIZE_LEVEL:
+      case PLSQL_ERRNO_COMPATIBLE_ORACLE: {
         int64_t size = 0;
         if (OB_FAIL(sys_variable.get_sysvar_schema(ExecEnvMap[i], sysvar_schema))) {
           LOG_WARN("failed to get sysvar schema", K(ret));
@@ -8036,6 +8052,14 @@ int ObExecEnv::init(const ObString &exec_env)
         plsql_can_transform_to_assign_ = 1;
       }
       break;
+      case PLSQL_ERRNO_COMPATIBLE_ORACLE: {
+        if (value_str.empty()) {
+          // do nothing, old routine object version do not have plsql_errno_compatible_oracle
+        } else {
+          SET_ENV_VALUE(plsql_errno_compatible_oracle_, bool);
+        }
+      }
+      break;
       default: {
         ret = common::OB_ERR_UNEXPECTED;
         LOG_WARN("Invalid env type", K(exec_env), K(i), K(ret));
@@ -8103,6 +8127,12 @@ int ObExecEnv::load(ObBasicSessionInfo &session, ObIAllocator *alloc, ObSysVarCl
       break;
       case PLSQL_CAN_TRANSFORM_TO_ASSIGN: {
         plsql_can_transform_to_assign_ = 1;
+      }
+      break;
+      case PLSQL_ERRNO_COMPATIBLE_ORACLE: {
+        if (sys_var_id == share::SYS_VAR_PLSQL_ERRNO_COMPATIBLE_ORACLE || sys_var_id == share::SYS_VAR_INVALID) {
+          plsql_errno_compatible_oracle_ = session.get_plsql_errno_compatible_oracle();
+        }
       }
       break;
       default: {
@@ -8180,6 +8210,13 @@ int ObExecEnv::store(ObBasicSessionInfo &session)
         val.set_int(1);
       }
       break;
+      case PLSQL_ERRNO_COMPATIBLE_ORACLE: {
+        need_update = get_plsql_errno_compatible_oracle() != session_exec_env->get_plsql_errno_compatible_oracle();
+        if (need_update) {
+          val.set_int(plsql_errno_compatible_oracle_);
+        }
+      }
+      break;
       default: {
         ret = common::OB_ERR_UNEXPECTED;
         LOG_WARN("Invalid env type", K(i), K(ret));
@@ -8214,6 +8251,7 @@ int ObExecEnv::deep_copy(const ObExecEnv &other, ObIAllocator &alloc)
     collation_connection_ = other.collation_connection_;
     collation_database_ = other.collation_database_;
     plsql_optimize_level_ = other.plsql_optimize_level_;
+    plsql_errno_compatible_oracle_ = other.plsql_errno_compatible_oracle_;
   }
   return ret;
 }

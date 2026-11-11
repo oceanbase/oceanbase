@@ -12077,5 +12077,18 @@
     "background_cn": "",
     "ref_url": "",
     "placeholder": true
+  },
+  "plsql_errno_compatible_oracle": {
+    "id": 10772,
+    "name": "plsql_errno_compatible_oracle",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "control whether the plsql errno is compatible with oracle errno.",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE | INFLUENCE_PL | ORACLE_ONLY",
+    "publish_version": "5.0.2.0",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

@@ -11773,13 +11773,26 @@ static struct VarsInit{
     ObSysVars[853].alias_ = "OB_SV_IGNORE_VIRTUAL_TABLE_ERROR" ;
     }();
 
+    [&] (){
+      ObSysVars[854].default_value_ = "0" ;
+      ObSysVars[854].info_ = "control whether the plsql errno is compatible with oracle errno." ;
+      ObSysVars[854].name_ = "plsql_errno_compatible_oracle" ;
+      ObSysVars[854].data_type_ = ObIntType ;
+      ObSysVars[854].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PL | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[854].id_ = SYS_VAR_PLSQL_ERRNO_COMPATIBLE_ORACLE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLSQL_ERRNO_COMPATIBLE_ORACLE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PLSQL_ERRNO_COMPATIBLE_ORACLE] = 854 ;
+      ObSysVars[854].base_value_ = "0" ;
+    ObSysVars[854].alias_ = "OB_SV_PLSQL_ERRNO_COMPATIBLE_ORACLE" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 854;
+static int64_t var_amount = 855;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

@@ -1021,9 +1021,9 @@ public:
 
   static int spi_adjust_error_trace(pl::ObPLExecCtx *ctx, int level);
 
-  static int spi_set_pl_exception_code(pl::ObPLExecCtx *ctx, int64_t code, bool is_pop_warning_buf, int level);
+  static int spi_set_pl_exception_code(pl::ObPLExecCtx *ctx, int64_t ob_error_code, bool is_pop_warning_buf, int level, int64_t error_code);
 
-  static int spi_get_pl_exception_code(pl::ObPLExecCtx *ctx, int64_t *code);
+  static int spi_get_pl_exception_code(pl::ObPLExecCtx *ctx, int64_t *ob_error_code, int64_t *error_code);
 
   static int spi_check_early_exit(pl::ObPLExecCtx *ctx);
   static int spi_check_timeout(sql::ObExecContext &exec_ctx);

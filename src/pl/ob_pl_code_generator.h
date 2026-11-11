@@ -266,7 +266,8 @@ public:
   int generate_into_restore(const ObIArray<int64_t> &into, const common::ObIArray<sql::ObRawExpr*> *exprs, const ObPLSymbolTable *symbol_table);
   int generate_close_loop_cursor(bool is_from_exception, int64_t dest_level);
 #ifdef OB_BUILD_ORACLE_PL
-  int generate_eh_adjust_call_stack(jit::ObLLVMValue &loc, jit::ObLLVMValue &error_code);
+  int generate_eh_adjust_call_stack(jit::ObLLVMValue &loc, jit::ObLLVMValue &ob_error_code,
+                                  jit::ObLLVMValue &error_code);
 #endif
   int generate_declare_cursor(const ObPLStmt &s, const int64_t  &cursor_index);
   int generate_cursor_scope_push_close_only(const ObPLStmt &s,
@@ -354,6 +355,7 @@ public:
   int raise_mysql_ob_fail_exception(jit::ObLLVMValue &error_code,
                                     jit::ObLLVMValue &sql_state);
   int generate_exception(jit::ObLLVMValue &type,
+                         jit::ObLLVMValue &err_status,
                          jit::ObLLVMValue &ob_error_code,
                          jit::ObLLVMValue &error_code,
                          jit::ObLLVMValue &sql_state,
@@ -644,14 +646,14 @@ public:
   int extract_datum_from_argv(jit::ObLLVMValue &p_argv, const int64_t idx, common::ObObjType type, jit::ObLLVMValue &result);
   int extract_value_from_argv(jit::ObLLVMValue &p_argv, const int64_t idx, common::ObObjType type, jit::ObLLVMValue &result);
   int extract_type_ptr_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
-  int extract_code_ptr_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
+  int extract_error_code_ptr_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
   int extract_name_ptr_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
   int extract_len_ptr_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
   int extract_stmt_ptr_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
   int extract_signal_ptr_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
   int extract_ob_error_code_ptr_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
   int extract_type_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
-  int extract_code_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
+  int extract_error_code_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
   int extract_name_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
   int extract_len_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);
   int extract_stmt_from_condition_value(jit::ObLLVMValue &p_condition_value, jit::ObLLVMValue &result);

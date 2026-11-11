@@ -742,8 +742,9 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
           } else {
             signal_stmt->set_cond_type(ERROR_CODE);
           }
-          signal_stmt->set_error_code(ob_errpkt_errno(save_ret, lib::is_oracle_mode()));
           signal_stmt->set_ob_error_code(save_ret);
+          signal_stmt->set_error_code(ob_errpkt_errno(save_ret, lib::is_oracle_mode()));
+          signal_stmt->set_stmt_ob_error_code(save_ret);
           signal_stmt->set_sql_state(ob_sqlstate(save_ret));
           signal_stmt->set_str_len(STRLEN(ob_sqlstate(save_ret)));
           func.set_has_incomplete_rt_dep_error(true);
@@ -4846,11 +4847,14 @@ int ObPLResolver::resolve_case(const ObStmtNodeTree *parse_tree, ObPLCaseStmt *s
             signal_stmt->set_sql_state("20000");
             signal_stmt->set_str_len(5);
             if (lib::is_oracle_mode()) {
-              signal_stmt->set_error_code(OB_ER_SP_CASE_NOT_FOUND); // ORACLE模式使用OB的错误码
+              bool enable_plsql_errno_compatible_oracle = resolve_ctx_.session_info_.get_plsql_errno_compatible_oracle();
+              signal_stmt->set_ob_error_code(OB_ER_SP_CASE_NOT_FOUND);
+              signal_stmt->set_error_code(enable_plsql_errno_compatible_oracle ? -ob_oracle_errno_with_check(OB_ER_SP_CASE_NOT_FOUND) : OB_ER_SP_CASE_NOT_FOUND);
             } else {
-              signal_stmt->set_error_code(ER_SP_CASE_NOT_FOUND); // MySQL模式使用Mysql错误码
+              signal_stmt->set_ob_error_code(OB_ER_SP_CASE_NOT_FOUND);
+              signal_stmt->set_error_code(ER_SP_CASE_NOT_FOUND);
             }
-            signal_stmt->set_ob_error_code(OB_ER_SP_CASE_NOT_FOUND);
+            signal_stmt->set_stmt_ob_error_code(OB_ER_SP_CASE_NOT_FOUND);
             if (OB_FAIL(else_block->add_stmt(signal_stmt))) {
               LOG_WARN("failed to add stmt", K(stmt), K(ret));
             }
@@ -7629,12 +7633,14 @@ int ObPLResolver::resolve_declare_cond(const ObStmtNodeTree *parse_tree,
         if (OB_FAIL(ret)) {
         } else if (func.is_package()) {
           ObPLPackageAST &pack = static_cast<ObPLPackageAST&>(func);
-          OX (value.error_code_
+          OX (value.ob_error_code_
             = (next_user_defined_exception_id_++) | (pack.get_id() << OB_PACKAGE_ID_SHIFT));
+          OX (value.error_code_ = value.ob_error_code_);
         } else {
-          OX (value.error_code_ = next_user_defined_exception_id_++);
+          OX (value.ob_error_code_ = next_user_defined_exception_id_++);
+          OX (value.error_code_ = value.ob_error_code_);
         }
-        OX (value.sql_state_ = ob_sqlstate(static_cast<int>(value.error_code_)));
+        OX (value.sql_state_ = ob_sqlstate(static_cast<int>(value.ob_error_code_)));
         OX (value.str_len_ = STRLEN(value.sql_state_));
         OZ (current_block_->get_namespace().add_condition(name, value));
       }
@@ -7863,34 +7869,29 @@ int ObPLResolver::resolve_signal(const ObStmtNodeTree *parse_tree, ObPLSignalStm
       }
     } else if (T_IDENT == value_node->type_ // for mysql mode
                || T_SP_ACCESS_NAME == value_node->type_) { // for oracle mode
-      const ObPLConditionValue *value = NULL;
+      ObPLConditionValue value;
       CK (OB_NOT_NULL(current_block_));
       OZ (resolve_condition(value_node,
                             current_block_->get_namespace(),
-                            &value,
+                            value,
                             func));
-      if (OB_SUCC(ret) && OB_ISNULL(value)) {
-        ret = OB_ERR_SP_COND_MISMATCH;
-        LOG_USER_ERROR(OB_ERR_SP_COND_MISMATCH, static_cast<int>(value_node->str_len_), value_node->str_value_);
-        LOG_WARN("Undefined CONDITION: condition value is NULL", K(value), K(value_node->str_value_), K(ret));
-      }
       if (OB_SUCC(ret)) {
         /*
          * Mysql不允许signal语句的condition是error code类型，只能是sqlstate类型，所以这里禁止掉。
          * If SIGNAL refers to a named condition that is defined with a MySQL error number rather than an SQLSTATE value,
          * a SIGNAL/RESIGNAL can only use a CONDITION defined with SQLSTATE error occurs.
          * */
-        if (!lib::is_oracle_mode() && SQL_STATE != value->type_) {
+        if (!lib::is_oracle_mode() && SQL_STATE != value.type_) {
           ret = OB_ERR_SP_BAD_CONDITION_TYPE;
-          LOG_WARN("SIGNAL/RESIGNAL can only use a CONDITION defined with SQLSTATE", K(value->type_), K(ret));
-        } else if (!is_sqlstate_valid(value->sql_state_, value->str_len_)
-            || is_sqlstate_completion(value->sql_state_)) {
+          LOG_WARN("SIGNAL/RESIGNAL can only use a CONDITION defined with SQLSTATE", K(value.type_), K(ret));
+        } else if (!is_sqlstate_valid(value.sql_state_, value.str_len_)
+            || is_sqlstate_completion(value.sql_state_)) {
           ret = OB_ER_SP_BAD_SQLSTATE;
-          LOG_USER_ERROR(OB_ER_SP_BAD_SQLSTATE, static_cast<int>(value->str_len_), value->sql_state_);
+          LOG_USER_ERROR(OB_ER_SP_BAD_SQLSTATE, static_cast<int>(value.str_len_), value.sql_state_);
           LOG_WARN("Bad SQLSTATE", K(ret));
         } else {
-          stmt->set_value(*value);
-          stmt->set_ob_error_code(value->error_code_);
+          stmt->set_value(value);
+          stmt->set_stmt_ob_error_code(value.ob_error_code_);
         }
       }
     } else if (T_SQL_STATE == value_node->type_) {
@@ -17369,15 +17370,17 @@ static ObPredefinedException PREDEFINED_EXCEPTIONS[] =
   DEFINED_EXCEPTION("ZERO_DIVIDE", OB_ERR_DIVISOR_IS_ZERO), // OBE-1476
 };
 
-int ObPLResolver::resolve_pre_condition(const ObString &name, const ObPLConditionValue **value)
+int ObPLResolver::resolve_pre_condition(const ObString &name, ObPLConditionValue &value, bool &is_found)
 {
   int ret = OB_SUCCESS;
-  *value = NULL;
   for (int64_t i = 0;
        i < sizeof(PREDEFINED_EXCEPTIONS) / sizeof(PREDEFINED_EXCEPTIONS[0]);
        ++i) {
     if (name.case_compare_equal(PREDEFINED_EXCEPTIONS[i].name_)) {
-      *value = &(PREDEFINED_EXCEPTIONS[i].value_);
+      value = (PREDEFINED_EXCEPTIONS[i].value_);
+      bool plsql_errno_compatible_oracle = resolve_ctx_.session_info_.get_plsql_errno_compatible_oracle();
+      value.error_code_ = plsql_errno_compatible_oracle ? -ob_oracle_errno_with_check(value.ob_error_code_) : value.ob_error_code_;
+      is_found = true;
       break;
     }
   }
@@ -17386,7 +17389,7 @@ int ObPLResolver::resolve_pre_condition(const ObString &name, const ObPLConditio
 
 int ObPLResolver::resolve_condition(const ObStmtNodeTree *parse_tree,
                                     const ObPLBlockNS &ns,
-                                    const ObPLConditionValue **value,
+                                    ObPLConditionValue &value,
                                     ObPLCompileUnitAST &func)
 {
   int ret = OB_SUCCESS;
@@ -17479,7 +17482,7 @@ int ObPLResolver::resolve_condition(const ObStmtNodeTree *parse_tree,
         OZ (ObPLDependencyUtil::add_dependency_object_impl(func.get_dependency_table(), obj_version));
         OX (func.set_rps());
       }
-      OX (*value = &(condition->get_value()));
+      OX (value = (condition->get_value()));
     }
   } else if (T_IDENT == parse_tree->type_) {
     OZ (resolve_condition(ObString(parse_tree->str_len_, parse_tree->str_value_), ns, value));
@@ -17490,53 +17493,50 @@ int ObPLResolver::resolve_condition(const ObStmtNodeTree *parse_tree,
   return ret;
 }
 
-int ObPLResolver::resolve_condition(const ObString &name, const ObPLBlockNS &ns, const ObPLConditionValue **value)
+int ObPLResolver::resolve_condition(const ObString &name, const ObPLBlockNS &ns, ObPLConditionValue &value)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(value)) {
+  bool is_found = false;
+  const ObPLConditionTable *condition_table = NULL;
+  if (OB_ISNULL(condition_table = ns.get_condition_table())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Argument is NULL", K(value), K(ret));
+    LOG_WARN("Symbol table is NULL", K(condition_table), K(ret));
   } else {
-    *value = NULL;
-    const ObPLConditionTable *condition_table = NULL;
-    if (OB_ISNULL(condition_table = ns.get_condition_table())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Symbol table is NULL", K(condition_table), K(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < ns.get_conditions().count(); ++i) {
-        const ObPLCondition *condition = condition_table->get_condition(ns.get_conditions().at(i));
-        if (OB_ISNULL(condition)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Get a invalid var", K(i), K(ns.get_conditions().at(i)), K(ret));
-        } else if (name.case_compare_equal(condition->get_name())) {
-          if (condition->get_duplicate()) {
-            ret = OB_ERR_SP_DUP_CONDITION;
-            LOG_WARN("duplicate condition declare", K(ret), K(name));
-            LOG_USER_ERROR(OB_ERR_SP_DUP_CONDITION, name.length(), name.ptr());
-          } else {
-            *value = &condition->get_value();
-          }
+    for (int64_t i = 0; OB_SUCC(ret) && i < ns.get_conditions().count(); ++i) {
+      const ObPLCondition *condition = condition_table->get_condition(ns.get_conditions().at(i));
+      if (OB_ISNULL(condition)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Get a invalid var", K(i), K(ns.get_conditions().at(i)), K(ret));
+      } else if (name.case_compare_equal(condition->get_name())) {
+        if (condition->get_duplicate()) {
+          ret = OB_ERR_SP_DUP_CONDITION;
+          LOG_WARN("duplicate condition declare", K(ret), K(name));
+          LOG_USER_ERROR(OB_ERR_SP_DUP_CONDITION, name.length(), name.ptr());
+        } else {
+          value = condition->get_value();
+          is_found = true;
         }
       }
+    }
 
-      if (OB_SUCC(ret) && NULL == *value) {
-        if (NULL == ns.get_pre_ns()) {
-          if (lib::is_oracle_mode()) {
-            if (OB_NOT_NULL(ns.get_external_ns())
-                && OB_NOT_NULL(ns.get_external_ns()->get_parent_ns())) {
-              OZ (SMART_CALL(resolve_condition(
-                name, *(ns.get_external_ns()->get_parent_ns()), value)));
-            } else {
-              OZ (resolve_pre_condition(name, value)); // check predefine exception
-            }
+    if (OB_SUCC(ret) && !is_found) {
+      if (NULL == ns.get_pre_ns()) {
+        if (lib::is_oracle_mode()) {
+          if (OB_NOT_NULL(ns.get_external_ns())
+              && OB_NOT_NULL(ns.get_external_ns()->get_parent_ns())) {
+            OZ (SMART_CALL(resolve_condition(
+              name, *(ns.get_external_ns()->get_parent_ns()), value)));
+            OX (is_found = true);
+          } else {
+            OZ (resolve_pre_condition(name, value, is_found)); // check predefine exception
           }
-          if (OB_SUCC(ret) && OB_ISNULL(*value)) {
-            ret = OB_ERR_SP_COND_MISMATCH;
-            LOG_USER_ERROR(OB_ERR_SP_COND_MISMATCH, name.length(), name.ptr());
-          }
-        } else {
-          OZ (SMART_CALL(resolve_condition(name, *ns.get_pre_ns(), value)));
         }
+        if (OB_SUCC(ret) && !is_found) {
+          ret = OB_ERR_SP_COND_MISMATCH;
+          LOG_USER_ERROR(OB_ERR_SP_COND_MISMATCH, name.length(), name.ptr());
+        }
+      } else {
+        OZ (SMART_CALL(resolve_condition(name, *ns.get_pre_ns(), value)));
       }
     }
   }
@@ -17563,11 +17563,10 @@ int ObPLResolver::resolve_handler_condition(const ObStmtNodeTree *parse_tree,
     }
   } else if (T_IDENT == parse_tree->type_ // for mysql mode
             || T_SP_ACCESS_NAME == parse_tree->type_) { // for oracle mode
-    const ObPLConditionValue *value = NULL;
+    ObPLConditionValue value;
     CK (OB_NOT_NULL(current_block_));
-    OZ (resolve_condition(parse_tree, current_block_->get_namespace(), &value, func));
-    CK (OB_NOT_NULL(value));
-    OX (condition = *value);
+    OZ (resolve_condition(parse_tree, current_block_->get_namespace(), value, func));
+    OX (condition = value);
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid condition type", K(parse_tree->type_), K(ret));
@@ -17598,15 +17597,16 @@ int ObPLResolver::resolve_condition_value(const ObStmtNodeTree *parse_tree,
       }
     } else if (T_INT == parse_tree->children_[0]->type_) {
       value.type_ = ERROR_CODE;
+      value.ob_error_code_ = parse_tree->children_[0]->value_;
       value.error_code_ = parse_tree->children_[0]->value_;
       if (lib::is_oracle_mode()) {
-        if (value.error_code_ >= 0) {
+        if (value.ob_error_code_ >= 0) {
           ret = OB_ERR_ILLEGAL_ERROR_NUM;
-          LOG_USER_ERROR(OB_ERR_ILLEGAL_ERROR_NUM, value.error_code_);
-          LOG_WARN("PLS-00701: illegal ORACLE error number string for PRAGMA EXCEPTION_INIT", K(ret), K(value.error_code_));
+          LOG_USER_ERROR(OB_ERR_ILLEGAL_ERROR_NUM, value.ob_error_code_);
+          LOG_WARN("PLS-00701: illegal ORACLE error number string for PRAGMA EXCEPTION_INIT", K(ret), K(value.ob_error_code_));
         }
       }
-      OX (value.sql_state_ = ob_sqlstate(static_cast<int>(value.error_code_)));
+      OX (value.sql_state_ = ob_sqlstate(static_cast<int>(value.ob_error_code_)));
       OX (value.str_len_ = STRLEN(value.sql_state_));
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -17617,18 +17617,28 @@ int ObPLResolver::resolve_condition_value(const ObStmtNodeTree *parse_tree,
     if (T_INT == parse_tree->type_
         || (T_VARCHAR == parse_tree->type_ && is_sys_db)) {
       if (T_INT == parse_tree->type_) {
-        value.error_code_ = parse_tree->value_;
+        value.ob_error_code_ = parse_tree->value_;
       } else if (T_VARCHAR == parse_tree->type_ && is_sys_db) {
         CK (parse_tree->str_value_ != nullptr);
-        OX (value.error_code_ = static_cast<int64_t>(strtoll(parse_tree->str_value_, NULL, 10)));
+        OX (value.ob_error_code_ = static_cast<int64_t>(strtoll(parse_tree->str_value_, NULL, 10)));
       }
-      if (OB_SUCC(ret) && value.error_code_ >= 0) {
+      if (OB_SUCC(ret) && value.ob_error_code_ >= 0) {
         ret = OB_ERR_ILLEGAL_ERROR_NUM;
-        LOG_USER_ERROR(OB_ERR_ILLEGAL_ERROR_NUM, value.error_code_);
+        LOG_USER_ERROR(OB_ERR_ILLEGAL_ERROR_NUM, value.ob_error_code_);
         LOG_WARN("illega error number for PRAGMA EXCEPTION_INIT", K(ret));
       }
+      if (OB_SUCC(ret)) {
+        bool enable_plsql_errno_compatible_oracle = resolve_ctx_.session_info_.get_plsql_errno_compatible_oracle();
+        if (is_inner_pl_object_id(current_block_->get_namespace().get_package_id())) {
+          OX (value.error_code_ = enable_plsql_errno_compatible_oracle ? -ob_oracle_errno_with_check(value.ob_error_code_) : value.ob_error_code_);
+        } else {
+          int64_t ob_error_code = value.ob_error_code_;
+          OX (value.error_code_ = ob_error_code);
+          OX (value.ob_error_code_ = enable_plsql_errno_compatible_oracle ? OB_ERR_UDE_ERROR_CODE : ob_error_code);
+        }
+      }
       OX (value.type_ = ERROR_CODE);
-      OX (value.sql_state_ = ob_sqlstate(static_cast<int>(value.error_code_)));
+      OX (value.sql_state_ = ob_sqlstate(static_cast<int>(value.ob_error_code_)));
       OX (value.str_len_ = STRLEN(value.sql_state_));
     } else {
       ret = OB_ERR_EX_SECOND_ARG;
@@ -17643,9 +17653,11 @@ int ObPLResolver::check_duplicate_condition(const ObPLConditionValue &value,
                                             bool &dup)
 {
   int ret = OB_SUCCESS;
+  bool plsql_errno_compatible_oracle = resolve_ctx_.session_info_.get_plsql_errno_compatible_oracle();
+  bool oracle_errno_compatible = lib::is_oracle_mode() && plsql_errno_compatible_oracle;
   for (int64_t j = 0; !dup && j < cur_desc.get_conditions().count(); ++j) {
     if (value.type_ == cur_desc.get_condition(j).type_ &&
-        value.error_code_ == cur_desc.get_condition(j).error_code_ &&
+        (oracle_errno_compatible ? value.error_code_ == cur_desc.get_condition(j).error_code_ : value.ob_error_code_ == cur_desc.get_condition(j).ob_error_code_) &&
         value.str_len_ == cur_desc.get_condition(j).str_len_ &&
         0 == STRNCMP(value.sql_state_, cur_desc.get_condition(j).sql_state_, value.str_len_)) {
       dup = true;
@@ -17660,6 +17672,8 @@ int ObPLResolver::check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt,
 {
   int ret = OB_SUCCESS;
   dup = false;
+  bool plsql_errno_compatible_oracle = resolve_ctx_.session_info_.get_plsql_errno_compatible_oracle();
+  bool oracle_errno_compatible = lib::is_oracle_mode() && plsql_errno_compatible_oracle;
   for (int64_t i = 0; OB_SUCC(ret) && !dup && i < stmt.get_handlers().count(); ++i) {
     ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc *desc = stmt.get_handler(i).get_desc();
     if (OB_ISNULL(desc)) {
@@ -17668,7 +17682,7 @@ int ObPLResolver::check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt,
     } else {
       for (int64_t j = 0; !dup && j < desc->get_conditions().count(); ++j) {
         if (value.type_ == desc->get_condition(j).type_ &&
-            value.error_code_ == desc->get_condition(j).error_code_ &&
+            (oracle_errno_compatible ? value.error_code_ == desc->get_condition(j).error_code_ : value.ob_error_code_ == desc->get_condition(j).ob_error_code_) &&
             value.str_len_ == desc->get_condition(j).str_len_ &&
             0 == STRNCMP(value.sql_state_, desc->get_condition(j).sql_state_, value.str_len_)) {
           dup = true;
@@ -17688,7 +17702,7 @@ int ObPLResolver::check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt,
       } else if (desc->is_continue()) {
         for (int64_t j = 0; !dup && j < desc->get_conditions().count(); ++j) {
           if (value.type_ == desc->get_condition(j).type_ &&
-              value.error_code_ == desc->get_condition(j).error_code_ &&
+              (oracle_errno_compatible ? value.error_code_ == desc->get_condition(j).error_code_ : value.ob_error_code_ == desc->get_condition(j).ob_error_code_) &&
               value.str_len_ == desc->get_condition(j).str_len_ &&
               0 == STRNCMP(value.sql_state_, desc->get_condition(j).sql_state_, value.str_len_)) {
             dup = true;
@@ -17876,7 +17890,7 @@ int ObPLResolver::analyze_actual_condition_type(const ObPLConditionValue &value,
   type = INVALID_TYPE;
   switch (value.type_) {
   case ERROR_CODE: {
-    const char* state = ob_sqlstate(static_cast<int>(value.error_code_));
+    const char* state = ob_sqlstate(static_cast<int>(value.ob_error_code_));
     if (OB_UNLIKELY(NULL == state || STRLEN(state) < 5)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Invalid condition type", K(value), K(ret));
