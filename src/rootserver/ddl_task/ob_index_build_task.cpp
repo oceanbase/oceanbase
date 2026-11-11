@@ -1058,6 +1058,10 @@ int ObIndexBuildTask::wait_and_send_single_partition_replica_task(bool &state_fi
     }
   } else if (OB_FAIL(send_build_single_replica_request(true, parallelism, execution_id, ls_id, leader_addr, tablets))) {
     LOG_WARN("fail to send build single partition replica request", K(ret), K(parallelism), K(execution_id), K(tablets));
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(tablet_scheduler_.confirm_batch_tablets_status(execution_id, false /* finish_status */, ls_id, tablets))) {
+      LOG_WARN("fail to rollback batch tablets status", K(tmp_ret), K(execution_id), K(ls_id), K(tablets));
+    }
   }
   return ret;
 }
