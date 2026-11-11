@@ -60,6 +60,10 @@ private:
                                  common::ObIAllocator &alloc,
                                  int64_t &value);
 
+  static int get_datetime_from_timestamp(const int64_t timestamp,
+                                         const common::ObTimeZoneInfo *tz_info,
+                                         int64_t &datetime_val, bool &is_null);
+
   // static int eval_two_
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFromUnixTime);

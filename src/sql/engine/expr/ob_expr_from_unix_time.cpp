@@ -184,7 +184,9 @@ int ObExprFromUnixTime::eval_one_param_fromtime(const ObExpr &expr,
   } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
     LOG_WARN("get tz info failed", K(ret));
   } else {
-    int64_t usec_val;
+    int64_t usec_val = 0;
+    int64_t datetime_val = 0;
+    bool is_null = false;
     ObEvalCtx::TempAllocGuard alloc_guard(ctx);
     if (OB_FAIL(get_usec_from_datum(*param_datum, alloc_guard.get_allocator(), usec_val))) {
       LOG_WARN("failed to get_usec_from_datum", K(ret));
@@ -197,28 +199,21 @@ int ObExprFromUnixTime::eval_one_param_fromtime(const ObExpr &expr,
         ret = OB_SUCCESS;
         expr_datum.set_null();
       }
-    } else if (usec_val < 0) {
+    } else if (OB_FAIL(get_datetime_from_timestamp(usec_val, tz_info, datetime_val, is_null))) {
+      LOG_WARN("failed to get datetime from timestamp", K(ret), K(usec_val));
+    } else if (is_null) {
       expr_datum.set_null();
     } else if (ObMySQLDateTimeType == expr.datum_meta_.type_) {
       ObMySQLDateTime res_datetime = 0;
-      if (OB_FAIL(ObTimeConverter::timestamp_to_mdatetime(usec_val, tz_info, res_datetime))) {
-        LOG_WARN("failed to convert timestamp to mdatetime", K(ret));
+      if (OB_FAIL(ObTimeConverter::datetime_to_mdatetime(datetime_val, res_datetime))) {
+        LOG_WARN("failed to convert datetime to mdatetime", K(ret), K(datetime_val));
       } else if (OB_UNLIKELY(ObTimeConverter::is_valid_mdatetime(res_datetime))) {
         expr_datum.set_mysql_datetime(res_datetime);
       } else {
         expr_datum.set_null();
       }
     } else {
-      if (OB_FAIL(ObTimeConverter::timestamp_to_datetime(
-                                            usec_val,
-                                            tz_info,
-                                            usec_val))) {
-        LOG_WARN("failed to convert timestamp to datetime", K(ret));
-      } else if (OB_UNLIKELY(ObTimeConverter::is_valid_datetime(usec_val))) {
-        expr_datum.set_datetime(usec_val);
-      } else {
-        expr_datum.set_null();
-      }
+      expr_datum.set_datetime(datetime_val);
     }
   }
   return ret;
@@ -259,7 +254,8 @@ int ObExprFromUnixTime::eval_fromtime_normal(const ObExpr &expr,
   } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
     LOG_WARN("get tz info failed", K(ret));
   } else {
-    int64_t usec_val;
+    int64_t usec_val = 0;
+    int64_t datetime_val = 0;
     ObEvalCtx::TempAllocGuard alloc_guard(ctx);
     if (OB_FAIL(get_usec_from_datum(
                         *param1,
@@ -277,23 +273,19 @@ int ObExprFromUnixTime::eval_fromtime_normal(const ObExpr &expr,
       expr_datum.set_null();
     } else {
       ObTime ob_time;
-      ObDatum tmp_val;
       char *buf = NULL;
       int64_t pos = 0;
       const int64_t BUF_LEN = 1024;
-      // 这里先用expr_datum，最后输出结果的时候会调用set_string覆盖其结果
-      expr_datum.set_time(usec_val);
-      if (usec_val < 0) {
+      if (OB_FAIL(get_datetime_from_timestamp(usec_val, tz_info, datetime_val, res_null))) {
+        LOG_WARN("failed to get datetime from timestamp", K(ret), K(usec_val));
+      } else if (res_null) {
         expr_datum.set_null();
       } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, BUF_LEN))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("no more memory to alloc for buf", K(ret));
-      } else if (OB_FAIL(ob_datum_to_ob_time_with_date(
-                           expr_datum, ObTimestampType, NUMBER_SCALE_UNKNOWN_YET,
-                           tz_info,
-                           ob_time,
-                           get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), 0, false))) {
-        LOG_WARN("failed to cast datum to obtime with date", K(ret));
+      } else if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(
+                     datetime_val, NULL /* tz_info */, ob_time))) {
+        LOG_WARN("failed to convert datetime to ob time", K(ret), K(datetime_val));
       } else if (OB_FAIL(session->get_locale_name(locale_name))) {
           LOG_WARN("failed to get locale time name", K(expr), K(expr_datum));
       } else if (OB_FAIL(ObTimeConverter::ob_time_to_str_format(ob_time,
@@ -363,6 +355,26 @@ int ObExprFromUnixTime::get_usec_from_datum(const common::ObDatum &param_datum,
     LOG_WARN("extract valid int64 with round failed", K(ret), K(res));
   } else {
     usec_val = tmp;
+  }
+  return ret;
+}
+
+int ObExprFromUnixTime::get_datetime_from_timestamp(
+    const int64_t timestamp, const ObTimeZoneInfo *tz_info, int64_t &datetime_val, bool &is_null)
+{
+  int ret = OB_SUCCESS;
+  // Time zone offsets are int32 seconds. Larger inputs remain out of range even
+  // with the minimum offset. Reject them before the conversion can overflow int64_t.
+  const int64_t MAX_TIMESTAMP = DATETIME_MAX_VAL
+      - SEC_TO_USEC(static_cast<int64_t>(INT32_MIN));
+  datetime_val = 0;
+  is_null = false;
+  if (OB_UNLIKELY(timestamp < 0 || timestamp > MAX_TIMESTAMP)) {
+    is_null = true;
+  } else if (OB_FAIL(ObTimeConverter::timestamp_to_datetime(timestamp, tz_info, datetime_val))) {
+    LOG_WARN("failed to convert timestamp to datetime", K(ret), K(timestamp));
+  } else if (OB_UNLIKELY(!ObTimeConverter::is_valid_datetime(datetime_val))) {
+    is_null = true;
   }
   return ret;
 }
