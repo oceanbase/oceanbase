@@ -22,6 +22,8 @@ namespace sql
     virtual int generate_normal_raw_plan() override;
   private:
     int check_explain_generate_plan_with_outline(ObLogPlan *real_plan);
+    // FOR EXPLAIN DDL
+    int generate_ddl_explain_raw_plan();
     DISALLOW_COPY_AND_ASSIGN(ObExplainLogPlan);
   };
 }

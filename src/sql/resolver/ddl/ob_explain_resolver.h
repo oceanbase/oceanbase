@@ -16,6 +16,18 @@ namespace sql
   class ObExplainResolver : public ObDMLResolver
   {
   public:
+    // T_EXPLAIN parse tree child indices, @see sql_parser_mysql_mode.y
+    static const int64_t EXPLAIN_FORMAT;
+    static const int64_t EXPLAIN_DISPLAY_OPTION;
+    static const int64_t EXPLAIN_INTO_TABLE;
+    static const int64_t EXPLAIN_STMT_ID;
+    static const int64_t EXPLAIN_CHILD_STMT;
+    static const int64_t EXPLAIN_CHILD_COUNT;
+
+    static const ParseNode *get_child_stmt_node(const ParseNode *explain_node);
+    static bool is_ddl_explain(const ParseNode *explain_node);
+    static bool is_supported_ddl_item_type(const ObItemType item_type);
+
     ObExplainResolver(ObResolverParams &params)
       : ObDMLResolver(params)
     {}

@@ -32,6 +32,7 @@
 #include "rootserver/parallel_ddl/ob_tablet_balance_allocator.h"
 #include "pl_ddl/ob_pl_ddl_service.h"
 #include "share/ob_create_hidden_tablev2_rpc_struct.h"
+#include "share/ob_alter_table_ddl_plan.h"
 
 namespace oceanbase
 {
@@ -204,6 +205,9 @@ public:
 
   virtual int alter_table(obrpc::ObAlterTableArg &alter_table_arg,
                           obrpc::ObAlterTableRes &res);
+  int explain_alter_table(obrpc::ObAlterTableArg &alter_table_arg,
+                          obrpc::ObAlterTableRes &res,
+                          share::ObAlterTableDDLPlan &ddl_plan);
   virtual int drop_table(const obrpc::ObDropTableArg &drop_table_arg, const obrpc::ObDDLRes &res);
   int check_table_exists(const uint64_t tenant_id,
                          const obrpc::ObTableItem &table_item,
@@ -1240,6 +1244,9 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
       ObMockFKParentTableSchema *mock_fk_parent_table_ptr,
       const bool delete_priv = true);
 private:
+  int alter_table_impl(obrpc::ObAlterTableArg &alter_table_arg,
+                       obrpc::ObAlterTableRes &res,
+                       share::ObAlterTableDDLPlan *ddl_plan_out);
   enum PartitionBornMethod : int64_t
   {
     PBM_INVALID = 0,
@@ -1434,13 +1441,16 @@ int check_will_be_having_domain_index_operation(
     const ObTableSchema &table_schema,
     const AlterTableSchema &alter_table_schema,
     bool &need_add_progressive_round);
-  bool need_check_constraint_validity(const obrpc::ObAlterTableArg &alter_table_arg) const;
   // offline ddl cannot appear at the same time with other ddl types
   // Offline ddl cannot appear at the same time as offline ddl
   int check_is_offline_ddl(obrpc::ObAlterTableArg &alter_table_arg,
                            const uint64_t data_format_version,
                            share::ObDDLType &ddl_type,
                            bool &ddl_need_retry_at_executor);
+  int classify_alter_table_ddl(obrpc::ObAlterTableArg &alter_table_arg,
+                               const uint64_t tenant_data_version,
+                               const share::schema::ObTableSchema *orig_table_schema,
+                               share::ObAlterTableDDLPlan &plan);
   int check_is_oracle_mode_add_column_not_null_ddl(const obrpc::ObAlterTableArg &alter_table_arg,
                                                    ObSchemaGetterGuard &schema_guard,
                                                    bool &is_oracle_mode_add_column_not_null_ddl,

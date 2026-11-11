@@ -14,7 +14,7 @@ namespace sql
 {
 ObExplainStmt::ObExplainStmt(ObIAllocator &allocator) : ObDMLStmt(stmt::T_EXPLAIN, allocator),
                                  format_(EXPLAIN_UNINITIALIZED),
-                                 explain_query_stmt_(NULL)
+                                 explain_stmt_(NULL)
 {
 }
 
@@ -25,8 +25,9 @@ ObExplainStmt::~ObExplainStmt()
 bool ObExplainStmt::is_select_explain() const
 {
   bool bool_ret = false;
-  if (NULL != explain_query_stmt_) {
-    bool_ret = explain_query_stmt_->is_select_stmt();
+  ObDMLStmt *query_stmt = get_explain_query_stmt();
+  if (NULL != query_stmt) {
+    bool_ret = query_stmt->is_select_stmt();
   }
   return bool_ret;
 }
@@ -34,8 +35,9 @@ bool ObExplainStmt::is_select_explain() const
 bool ObExplainStmt::is_dml_explain() const
 {
   bool bool_ret = false;
-  if (NULL != explain_query_stmt_) {
-    bool_ret = explain_query_stmt_->is_dml_stmt();
+  ObDMLStmt *query_stmt = get_explain_query_stmt();
+  if (NULL != query_stmt) {
+    bool_ret = query_stmt->is_dml_stmt();
   }
   return bool_ret;
 }
@@ -44,10 +46,12 @@ int64_t ObExplainStmt::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   J_OBJ_START();
-  if (OB_ISNULL(explain_query_stmt_)) {
-    databuff_printf(buf, buf_len, pos, "explain query stmt is null");
+  if (OB_ISNULL(explain_stmt_)) {
+    databuff_printf(buf, buf_len, pos, "explain stmt is null");
+  } else if (is_ddl_explain()) {
+    J_KV(N_EXPLAIN_STMT, explain_stmt_);
   } else {
-    J_KV(K_(into_table), K_(statement_id), N_EXPLAIN_STMT, explain_query_stmt_);
+    J_KV(K_(into_table), K_(statement_id), N_EXPLAIN_STMT, explain_stmt_);
   }
   J_OBJ_END();
   return pos;
@@ -66,7 +70,7 @@ int64_t ObExplainStmt::to_string(char *buf, const int64_t buf_len) const
 //  //  fprintf(fp, "VERBOSE\n");
 //  //}
 //  print_indentation(fp, level + 1);
-//  fprintf(fp, "Explain Query ::= <%p>\n", explain_query_stmt_);
+//  fprintf(fp, "Explain Query ::= <%p>\n", explain_stmt_);
 //  print_indentation(fp, level);
 //  fprintf(fp, "ObExplainStmt %d End\n", index);
 //}

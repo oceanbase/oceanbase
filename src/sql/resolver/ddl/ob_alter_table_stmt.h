@@ -60,6 +60,8 @@ public:
   inline void set_alter_table_partition(){alter_table_arg_.is_alter_partitions_ = true;}
   inline void set_alter_mview_attributes(){alter_table_arg_.is_alter_mview_attributes_ = true;}
   inline void set_alter_mlog_attributes(){alter_table_arg_.is_alter_mlog_attributes_ = true;}
+  inline void set_is_explain(const bool v) { alter_table_arg_.is_explain_ = v; }
+  inline bool get_is_explain() const { return alter_table_arg_.is_explain_; }
   /* to do: interval */
   inline void set_interval_expr_for_set_interval(ObRawExpr *expr) {interval_expr_for_set_interval_ = expr;}
   inline void set_transition_expr_for_set_interval(ObRawExpr *expr) {transition_expr_for_set_interval_ = expr;}

@@ -15,6 +15,7 @@ namespace oceanbase
 {
 namespace share
 {
+struct ObAlterTableDDLPlan;
 namespace schema
 {
 struct ObPartition;
@@ -103,6 +104,10 @@ public:
   ObAlterTableExecutor();
   virtual ~ObAlterTableExecutor();
   int execute(ObExecContext &ctx, ObAlterTableStmt &stmt);
+  // Dry-run variant for EXPLAIN DDL: prepares the arg exactly as execute() does,
+  // then calls ObRootService::alter_table directly (is_explain_=true, no actual DDL).
+  // Returns the resolved DDL plan without network round-trip or RS thread consumption.
+  int execute_for_explain(ObExecContext &ctx, ObAlterTableStmt &stmt, share::ObAlterTableDDLPlan &ddl_plan);
 private:
   static const int64_t TIME_INTERVAL_PER_PART_US = 50 * 1000; // 50ms
   static const int64_t MAX_WAIT_CHECK_SCHEMA_VERSION_INTERVAL_US = 120LL * 1000000LL; // 120s
@@ -141,6 +146,7 @@ private:
       ObExecContext &ctx,
       ObAlterTableStmt &stmt,
       const obrpc::ObAlterTableArg &arg);
+  int set_index_arg_list(ObExecContext &ctx, ObAlterTableStmt &stmt);
   int resolve_alter_column_partition_expr(
       const share::schema::ObColumnSchemaV2 &col_schema,
       const share::schema::ObTableSchema &table_schema,
@@ -185,8 +191,6 @@ private:
       const bool is_subpart);
   int check_alter_part_key(ObExecContext &ctx,
                            obrpc::ObAlterTableArg &arg);
-
-  int set_index_arg_list(ObExecContext &ctx, ObAlterTableStmt &stmt);
 
   int refresh_schema_for_table(const uint64_t tenant_id);
   int execute_alter_external_table(ObExecContext &ctx, ObAlterTableStmt &stmt);

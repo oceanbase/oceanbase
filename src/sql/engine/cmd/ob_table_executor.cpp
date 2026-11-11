@@ -31,6 +31,7 @@
 #include "storage/tablet/ob_session_tablet_helper.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "share/ob_get_compat_mode.h"
+#include "observer/ob_server.h"
 
 namespace oceanbase
 {
@@ -1352,6 +1353,82 @@ int ObAlterTableExecutor::execute_alter_external_table(ObExecContext &ctx, ObAlt
   return ret;
 }
 
+int ObAlterTableExecutor::execute_for_explain(ObExecContext &ctx,
+                                              ObAlterTableStmt &stmt,
+                                              share::ObAlterTableDDLPlan &ddl_plan)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *my_session = ctx.get_my_session();
+  if (OB_ISNULL(my_session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_ISNULL(GCTX.root_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root service is null", K(ret));
+  } else {
+    bool is_oracle_mode = false;
+    obrpc::ObAlterTableRes res;
+    obrpc::ObAlterTableArg &alter_table_arg = stmt.get_alter_table_arg();
+    ddl_plan.reset();
+    alter_table_arg.compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode()
+                                   ? lib::Worker::CompatMode::ORACLE
+                                   : lib::Worker::CompatMode::MYSQL;
+    alter_table_arg.sql_mode_ = my_session->get_sql_mode();
+    if (OB_INVALID_ID == alter_table_arg.session_id_ && 0 != my_session->get_sessid_for_table()) {
+      alter_table_arg.session_id_ = my_session->get_sessid_for_table();
+    }
+    alter_table_arg.parallelism_ = stmt.get_parallelism();
+    alter_table_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
+
+    if (OB_FAIL(check_alter_partition(ctx, stmt, alter_table_arg))) {
+      LOG_WARN("check alter partition failed for explain", K(ret));
+    } else if (OB_FAIL(alter_table_arg.alter_table_schema_.check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("fail to check oracle compat mode for explain", K(ret));
+    } else if (!is_oracle_mode && OB_FAIL(check_alter_part_key(ctx, alter_table_arg))) {
+      LOG_WARN("check alter part key failed for explain", K(ret));
+    } else if (OB_FAIL(set_index_arg_list(ctx, stmt))) {
+      LOG_WARN("set index arg list failed for explain", K(ret));
+    } else {
+      // Mirror execute()'s foreign_key_checks_ handling so the explained DDL type/category
+      // stays consistent with the real execution (e.g. when session foreign_key_checks=0).
+      int64_t foreign_key_checks = 0;
+      bool need_check = false;
+      my_session->get_foreign_key_checks(foreign_key_checks);
+      alter_table_arg.foreign_key_checks_ = is_oracle_mode || (!is_oracle_mode && foreign_key_checks);
+      if ((obrpc::ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg.alter_constraint_type_
+           || obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE == alter_table_arg.alter_constraint_type_)
+          && OB_FAIL(need_check_constraint_validity(alter_table_arg, need_check))) {
+        LOG_WARN("check whether need check constraint validity failed for explain", K(ret));
+      } else if (obrpc::ObAlterTableArg::EXCHANGE_PARTITION == alter_table_arg.alter_part_type_
+          || obrpc::ObAlterTableArg::EXCHANGE_SUBPARTITION == alter_table_arg.alter_part_type_) {
+        ObString first_stmt;
+        obrpc::ObExchangePartitionArg &exchange_partition_arg = stmt.get_exchange_partition_arg();
+        const bool old_is_explain = exchange_partition_arg.is_explain_;
+        exchange_partition_arg.is_explain_ = true;
+        if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
+          LOG_WARN("get first statement failed for explain exchange partition", K(ret));
+        } else {
+          exchange_partition_arg.ddl_stmt_str_ = first_stmt;
+          if (OB_FAIL(GCTX.root_service_->exchange_partition(exchange_partition_arg, res))) {
+            LOG_WARN("exchange_partition for EXPLAIN DDL failed", K(ret));
+          } else {
+            ddl_plan.set_explain_ddl_type(res.ddl_type_);
+            ddl_plan.set_execution_path(share::ALTER_TABLE_PATH_EXCHANGE_PARTITION, res.ddl_type_);
+            ddl_plan.analyze_explain_attributes(&alter_table_arg);
+            LOG_INFO("[EXPLAIN DDL] exchange_partition result", K(ddl_plan));
+          }
+        }
+        exchange_partition_arg.is_explain_ = old_is_explain;
+      } else if (OB_FAIL(GCTX.root_service_->explain_alter_table(alter_table_arg, res, ddl_plan))) {
+        LOG_WARN("alter_table direct call for EXPLAIN DDL failed", K(ret));
+      } else {
+        LOG_INFO("[EXPLAIN DDL] alter_table result", K(ddl_plan));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
 {
   int ret = OB_SUCCESS;
@@ -1359,259 +1436,264 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   obrpc::ObAlterTableArg &alter_table_arg = stmt.get_alter_table_arg();
   obrpc::ObExchangePartitionArg &exchange_partition_arg = stmt.get_exchange_partition_arg();
-  LOG_DEBUG("start of alter table execute", K(alter_table_arg));
-  ObString first_stmt;
-  OZ (stmt.get_first_stmt(first_stmt));
-  OV (OB_NOT_NULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx)), OB_NOT_INIT);
-  OZ (task_exec_ctx->get_common_rpc(common_rpc_proxy));
-  OV (OB_NOT_NULL(common_rpc_proxy));
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (stmt.is_alter_triggers()) {
-    if (stmt.get_tg_arg().trigger_infos_.count() > 0) {
-      stmt.get_tg_arg().exec_tenant_id_ = alter_table_arg.exec_tenant_id_;
-      stmt.get_tg_arg().ddl_id_str_ = alter_table_arg.ddl_id_str_;
-      stmt.get_tg_arg().ddl_stmt_str_ = first_stmt;
-      OZ (common_rpc_proxy->alter_trigger(stmt.get_tg_arg()), common_rpc_proxy->get_server());
-    }
-  } else if (T_ALTER_REFRESH_EXTERNAL_TABLE == stmt.get_alter_external_table_type()) {
-    if (alter_table_arg.alter_table_schema_.is_external_table()) {
-      OZ (execute_alter_external_table(ctx, stmt));
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error", K(ret));
-    }
+  if (alter_table_arg.is_explain_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected to execute alter table for explain ddl", K(ret));
   } else {
-    ObSQLSessionInfo *my_session = NULL;
-    obrpc::ObAlterTableRes res;
-    bool is_sync_ddl_user = false;
-    bool need_modify_fk_validate = false;
-    bool need_check = false;
-    bool need_modify_notnull_validate = false;
-    bool is_oracle_mode = false;
-    const int64_t tenant_id = alter_table_arg.alter_table_schema_.get_tenant_id();
-    ObArenaAllocator allocator(ObModIds::OB_SQL_EXECUTOR);
-    if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
-      LOG_WARN("get first statement failed", K(ret));
-    } else if (OB_FAIL(storage::ObSessionTabletGCHelper::is_table_has_active_session(tenant_id,
-        alter_table_arg.alter_table_schema_.get_origin_database_name(), alter_table_arg.alter_table_schema_.get_origin_table_name(), &alter_table_arg))) {
-      LOG_WARN("table has active session or error checking", KR(ret), K(alter_table_arg.alter_table_schema_));
-    } else {
-      alter_table_arg.ddl_stmt_str_ = first_stmt;
-      exchange_partition_arg.ddl_stmt_str_ = first_stmt;
-      my_session = ctx.get_my_session();
-      if (NULL == my_session) {
+    LOG_DEBUG("start of alter table execute", K(alter_table_arg));
+    ObString first_stmt;
+    OZ (stmt.get_first_stmt(first_stmt));
+    OV (OB_NOT_NULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx)), OB_NOT_INIT);
+    OZ (task_exec_ctx->get_common_rpc(common_rpc_proxy));
+    OV (OB_NOT_NULL(common_rpc_proxy));
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (stmt.is_alter_triggers()) {
+      if (stmt.get_tg_arg().trigger_infos_.count() > 0) {
+        stmt.get_tg_arg().exec_tenant_id_ = alter_table_arg.exec_tenant_id_;
+        stmt.get_tg_arg().ddl_id_str_ = alter_table_arg.ddl_id_str_;
+        stmt.get_tg_arg().ddl_stmt_str_ = first_stmt;
+        OZ (common_rpc_proxy->alter_trigger(stmt.get_tg_arg()), common_rpc_proxy->get_server());
+      }
+    } else if (T_ALTER_REFRESH_EXTERNAL_TABLE == stmt.get_alter_external_table_type()) {
+      if (alter_table_arg.alter_table_schema_.is_external_table()) {
+        OZ (execute_alter_external_table(ctx, stmt));
+      } else {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get my session", K(ret), K(ctx));
-      // need to set seesion_id_ before check_alter_part_key since it get a new guard and get session_id_
-      } else if (OB_INVALID_ID == alter_table_arg.session_id_
-                 && 0 != my_session->get_sessid_for_table()
-                 && FALSE_IT(alter_table_arg.session_id_ = my_session->get_sessid_for_table())) {
-                 //impossible
-      } else if (FALSE_IT(alter_table_arg.sql_mode_ = my_session->get_sql_mode())) {
-        // do nothing
-      } else if (FALSE_IT(alter_table_arg.parallelism_ = stmt.get_parallelism())) {
-      } else if (FALSE_IT(alter_table_arg.consumer_group_id_ = THIS_WORKER.get_group_id())) {
-      } else if (OB_FAIL(check_alter_partition(ctx, stmt, alter_table_arg))) {
-        LOG_WARN("check alter partition failed", K(ret));
-      } else if (OB_FAIL(alter_table_arg.alter_table_schema_.check_if_oracle_compat_mode(is_oracle_mode))) {
-        LOG_WARN("fail to check if tenant mode is oracle mode", K(ret));
-      } else if (!is_oracle_mode && OB_FAIL(check_alter_part_key(ctx, alter_table_arg))) {
-        LOG_WARN("check alter part key failed", K(ret));
-      } else if (OB_FAIL(set_index_arg_list(ctx, stmt))) {
-        LOG_WARN("fail to set index_arg_list", K(ret));
-      } else if (OB_FAIL(ObResolverUtils::check_sync_ddl_user(my_session, is_sync_ddl_user))) {
-        LOG_WARN("Failed to check sync_dll_user", K(ret));
+        LOG_WARN("unexpected error", K(ret));
+      }
+    } else {
+      ObSQLSessionInfo *my_session = NULL;
+      obrpc::ObAlterTableRes res;
+      bool is_sync_ddl_user = false;
+      bool need_modify_fk_validate = false;
+      bool need_check = false;
+      bool need_modify_notnull_validate = false;
+      bool is_oracle_mode = false;
+      const int64_t tenant_id = alter_table_arg.alter_table_schema_.get_tenant_id();
+      ObArenaAllocator allocator(ObModIds::OB_SQL_EXECUTOR);
+      if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
+        LOG_WARN("get first statement failed", K(ret));
+      } else if (OB_FAIL(storage::ObSessionTabletGCHelper::is_table_has_active_session(tenant_id,
+          alter_table_arg.alter_table_schema_.get_origin_database_name(), alter_table_arg.alter_table_schema_.get_origin_table_name(), &alter_table_arg))) {
+        LOG_WARN("table has active session or error checking", KR(ret), K(alter_table_arg.alter_table_schema_));
       } else {
-        int64_t foreign_key_checks = 0;
-        my_session->get_foreign_key_checks(foreign_key_checks);
-        alter_table_arg.foreign_key_checks_ = is_oracle_mode || (!is_oracle_mode && foreign_key_checks);
-        if ((obrpc::ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg.alter_constraint_type_
-            || (obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE == alter_table_arg.alter_constraint_type_))) {
-          if (OB_FAIL(need_check_constraint_validity(alter_table_arg, need_check))) {
-            LOG_WARN("check whether need check failed", K(ret));
+        alter_table_arg.ddl_stmt_str_ = first_stmt;
+        exchange_partition_arg.ddl_stmt_str_ = first_stmt;
+        my_session = ctx.get_my_session();
+        if (NULL == my_session) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get my session", K(ret), K(ctx));
+        // need to set seesion_id_ before check_alter_part_key since it get a new guard and get session_id_
+        } else if (OB_INVALID_ID == alter_table_arg.session_id_
+                  && 0 != my_session->get_sessid_for_table()
+                  && FALSE_IT(alter_table_arg.session_id_ = my_session->get_sessid_for_table())) {
+                  //impossible
+        } else if (FALSE_IT(alter_table_arg.sql_mode_ = my_session->get_sql_mode())) {
+          // do nothing
+        } else if (FALSE_IT(alter_table_arg.parallelism_ = stmt.get_parallelism())) {
+        } else if (FALSE_IT(alter_table_arg.consumer_group_id_ = THIS_WORKER.get_group_id())) {
+        } else if (OB_FAIL(check_alter_partition(ctx, stmt, alter_table_arg))) {
+          LOG_WARN("check alter partition failed", K(ret));
+        } else if (OB_FAIL(alter_table_arg.alter_table_schema_.check_if_oracle_compat_mode(is_oracle_mode))) {
+          LOG_WARN("fail to check if tenant mode is oracle mode", K(ret));
+        } else if (!is_oracle_mode && OB_FAIL(check_alter_part_key(ctx, alter_table_arg))) {
+          LOG_WARN("check alter part key failed", K(ret));
+        } else if (OB_FAIL(set_index_arg_list(ctx, stmt))) {
+          LOG_WARN("fail to set index_arg_list", K(ret));
+        } else if (OB_FAIL(ObResolverUtils::check_sync_ddl_user(my_session, is_sync_ddl_user))) {
+          LOG_WARN("Failed to check sync_dll_user", K(ret));
+        } else {
+          int64_t foreign_key_checks = 0;
+          my_session->get_foreign_key_checks(foreign_key_checks);
+          alter_table_arg.foreign_key_checks_ = is_oracle_mode || (!is_oracle_mode && foreign_key_checks);
+          if ((obrpc::ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg.alter_constraint_type_
+              || (obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE == alter_table_arg.alter_constraint_type_))) {
+            if (OB_FAIL(need_check_constraint_validity(alter_table_arg, need_check))) {
+              LOG_WARN("check whether need check failed", K(ret));
+            }
           }
-        }
-        // 如果追加 validate 属性的外键或者 modify 外键为 validate 属性时，不立即生效
-        // 校验已有数据满足外键的 validate 属性要求之后再生效，确保优化器可以正确地根据外键的 validate 属性进行优化
-        if (OB_SUCC(ret) && alter_table_arg.foreign_key_checks_ && 1 == alter_table_arg.foreign_key_arg_list_.count()) {
-          if ((!alter_table_arg.foreign_key_arg_list_.at(0).is_modify_fk_state_
-              && alter_table_arg.foreign_key_arg_list_.at(0).validate_flag_)
-              || (alter_table_arg.foreign_key_arg_list_.at(0).is_modify_validate_flag_
-                  && alter_table_arg.foreign_key_arg_list_.at(0).validate_flag_)) {
-            need_modify_fk_validate = true;
+          // 如果追加 validate 属性的外键或者 modify 外键为 validate 属性时，不立即生效
+          // 校验已有数据满足外键的 validate 属性要求之后再生效，确保优化器可以正确地根据外键的 validate 属性进行优化
+          if (OB_SUCC(ret) && alter_table_arg.foreign_key_checks_ && 1 == alter_table_arg.foreign_key_arg_list_.count()) {
+            if ((!alter_table_arg.foreign_key_arg_list_.at(0).is_modify_fk_state_
+                && alter_table_arg.foreign_key_arg_list_.at(0).validate_flag_)
+                || (alter_table_arg.foreign_key_arg_list_.at(0).is_modify_validate_flag_
+                    && alter_table_arg.foreign_key_arg_list_.at(0).validate_flag_)) {
+              need_modify_fk_validate = true;
+            }
           }
-        }
-        ObArray<share::ObExternalTableBasicFileInfo> basic_file_infos;
-        // 此处的ctx.get_sql_ctx()->schema_guard_没初始化
-        ObSchemaGetterGuard schema_guard;
-        if (OB_FAIL(ret)) {
-        } else if ((alter_table_arg.alter_part_type_ == ObAlterTableArg::ADD_PARTITION
-                    || alter_table_arg.alter_part_type_ == ObAlterTableArg::DROP_PARTITION)
-                   && alter_table_arg.alter_table_schema_.is_external_table()) {
-          ObExprRegexpSessionVariables regexp_vars;
-          ObSqlString full_path;
-          CK (alter_table_arg.alter_table_schema_.get_part_array());
-          CK (alter_table_arg.alter_table_schema_.get_partition_num() > 0);
-          OZ (full_path.append(alter_table_arg.alter_table_schema_.get_part_array()[0]->get_external_location()));
-          ObString file_location;
-          ObString access_info;
+          ObArray<share::ObExternalTableBasicFileInfo> basic_file_infos;
+          // 此处的ctx.get_sql_ctx()->schema_guard_没初始化
+          ObSchemaGetterGuard schema_guard;
+          if (OB_FAIL(ret)) {
+          } else if ((alter_table_arg.alter_part_type_ == ObAlterTableArg::ADD_PARTITION
+                      || alter_table_arg.alter_part_type_ == ObAlterTableArg::DROP_PARTITION)
+                    && alter_table_arg.alter_table_schema_.is_external_table()) {
+            ObExprRegexpSessionVariables regexp_vars;
+            ObSqlString full_path;
+            CK (alter_table_arg.alter_table_schema_.get_part_array());
+            CK (alter_table_arg.alter_table_schema_.get_partition_num() > 0);
+            OZ (full_path.append(alter_table_arg.alter_table_schema_.get_part_array()[0]->get_external_location()));
+            ObString file_location;
+            ObString access_info;
 
-          if (OB_ISNULL(GCTX.schema_service_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("pointer is null", K(ret), KP(GCTX.schema_service_));
-          } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(alter_table_arg.alter_table_schema_.get_tenant_id(), schema_guard))) {
-            LOG_WARN("get schema guard failed", K(ret));
+            if (OB_ISNULL(GCTX.schema_service_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("pointer is null", K(ret), KP(GCTX.schema_service_));
+            } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(alter_table_arg.alter_table_schema_.get_tenant_id(), schema_guard))) {
+              LOG_WARN("get schema guard failed", K(ret));
+            }
+            OZ (ObExternalTableUtils::get_external_file_location(alter_table_arg.alter_table_schema_, schema_guard, ctx.get_allocator(), file_location));
+            ObSqlString full_file_location;
+            full_file_location.append(file_location);
+            if (OB_SUCC(ret)) {
+              if (full_file_location.length() == 0) {
+                ret = OB_INVALID_ARGUMENT;
+                LOG_WARN("full path length should not be zero", K(ret));
+              } else if (*(full_file_location.ptr() + full_file_location.length() - 1) != '/') {
+                OZ (full_file_location.append("/"));
+              }
+            }
+            OZ (full_file_location.append(full_path.string()));
+
+            OZ (ObExternalTableUtils::get_external_file_location_access_info(alter_table_arg.alter_table_schema_, schema_guard, access_info));
+            if (ObSQLUtils::is_external_files_on_local_disk(file_location)) {
+              OZ (ObSQLUtils::check_location_access_priv(file_location, ctx.get_my_session()));
+            }
+            OZ (my_session->get_regexp_session_vars(regexp_vars));
+            OZ (ObExternalTableUtils::collect_external_file_list(
+                      ctx.get_my_session(),
+                      alter_table_arg.alter_table_schema_.get_tenant_id(), alter_table_arg.alter_table_schema_.get_table_id(),
+                      full_file_location.string(),
+                      access_info,
+                      alter_table_arg.alter_table_schema_.get_external_file_pattern(),
+                      alter_table_arg.alter_table_schema_.get_external_file_pattern_type(),
+                      alter_table_arg.alter_table_schema_.get_external_properties(),
+                      alter_table_arg.alter_table_schema_.is_partitioned_table(),
+                      regexp_vars,
+                      ctx.get_allocator(),
+                      full_path,
+                      basic_file_infos));
+
           }
-          OZ (ObExternalTableUtils::get_external_file_location(alter_table_arg.alter_table_schema_, schema_guard, ctx.get_allocator(), file_location));
-          ObSqlString full_file_location;
-          full_file_location.append(file_location);
           if (OB_SUCC(ret)) {
-            if (full_file_location.length() == 0) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("full path length should not be zero", K(ret));
-            } else if (*(full_file_location.ptr() + full_file_location.length() - 1) != '/') {
-              OZ (full_file_location.append("/"));
-            }
-          }
-          OZ (full_file_location.append(full_path.string()));
-
-          OZ (ObExternalTableUtils::get_external_file_location_access_info(alter_table_arg.alter_table_schema_, schema_guard, access_info));
-          if (ObSQLUtils::is_external_files_on_local_disk(file_location)) {
-            OZ (ObSQLUtils::check_location_access_priv(file_location, ctx.get_my_session()));
-          }
-          OZ (my_session->get_regexp_session_vars(regexp_vars));
-          OZ (ObExternalTableUtils::collect_external_file_list(
-                    ctx.get_my_session(),
-                    alter_table_arg.alter_table_schema_.get_tenant_id(), alter_table_arg.alter_table_schema_.get_table_id(),
-                    full_file_location.string(),
-                    access_info,
-                    alter_table_arg.alter_table_schema_.get_external_file_pattern(),
-                    alter_table_arg.alter_table_schema_.get_external_file_pattern_type(),
-                    alter_table_arg.alter_table_schema_.get_external_properties(),
-                    alter_table_arg.alter_table_schema_.is_partitioned_table(),
-                    regexp_vars,
-                    ctx.get_allocator(),
-                    full_path,
-                    basic_file_infos));
-
-        }
-        if (OB_SUCC(ret)) {
-          if ((obrpc::ObAlterTableArg::EXCHANGE_PARTITION == alter_table_arg.alter_part_type_)
-              || (obrpc::ObAlterTableArg::EXCHANGE_SUBPARTITION == alter_table_arg.alter_part_type_)) {
-            if (OB_FAIL(alter_table_exchange_partition_rpc(exchange_partition_arg,
-                                                           res,
-                                                           common_rpc_proxy,
-                                                           my_session))) {
-              LOG_WARN("Failed to alter table exchange partition rpc", K(ret), K(exchange_partition_arg));
-            }
-          } else if (OB_FAIL(alter_table_rpc_v2(alter_table_arg,
-                                                res,
-                                                allocator,
-                                                common_rpc_proxy,
-                                                my_session,
-                                                is_sync_ddl_user))) {
-            LOG_WARN("Failed to alter table rpc v2", K(ret));
-          } else if (alter_table_arg.alter_table_schema_.is_external_table()) {
-            ObSEArray<uint64_t, 1> updated_part_ids;
-            bool has_partition_changed = false;
-            if (alter_table_arg.alter_part_type_ == ObAlterTableArg::ADD_PARTITION) {
-              if (res.res_arg_array_.size() > 0) {
-                int64_t part_id = res.res_arg_array_.at(0).part_object_id_;
-                OZ(ObExternalTableFileManager::get_instance().update_inner_table_file_list(
-                    ctx,
-                    schema_guard,
-                    tenant_id,
-                    alter_table_arg.alter_table_schema_.get_table_id(),
-                    basic_file_infos,
-                    updated_part_ids,
-                    has_partition_changed,
-                    part_id));
-              } else {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected error", K(ret));
+            if ((obrpc::ObAlterTableArg::EXCHANGE_PARTITION == alter_table_arg.alter_part_type_)
+                || (obrpc::ObAlterTableArg::EXCHANGE_SUBPARTITION == alter_table_arg.alter_part_type_)) {
+              if (OB_FAIL(alter_table_exchange_partition_rpc(exchange_partition_arg,
+                                                            res,
+                                                            common_rpc_proxy,
+                                                            my_session))) {
+                LOG_WARN("Failed to alter table exchange partition rpc", K(ret), K(exchange_partition_arg));
               }
-            } else if (alter_table_arg.alter_part_type_ == ObAlterTableArg::DROP_PARTITION) {
-              if (res.res_arg_array_.size() > 0) {
-                int64_t part_id = res.res_arg_array_.at(0).part_object_id_;
-                ObSEArray<ObAddr, 8> all_servers;
-                OZ(ObExternalTableFileManager::get_instance().update_inner_table_file_list(
-                    ctx,
-                    schema_guard,
-                    tenant_id,
-                    alter_table_arg.alter_table_schema_.get_table_id(),
-                    basic_file_infos,
-                    updated_part_ids,
-                    has_partition_changed,
-                    part_id));
-                OZ (GCTX.location_service_->external_table_get(tenant_id, all_servers));
-                OZ (ObExternalTableFileManager::get_instance().flush_external_file_cache(tenant_id, alter_table_arg.alter_table_schema_.get_table_id(), part_id, all_servers));
+            } else if (OB_FAIL(alter_table_rpc_v2(alter_table_arg,
+                                                  res,
+                                                  allocator,
+                                                  common_rpc_proxy,
+                                                  my_session,
+                                                  is_sync_ddl_user))) {
+              LOG_WARN("Failed to alter table rpc v2", K(ret));
+            } else if (alter_table_arg.alter_table_schema_.is_external_table()) {
+              ObSEArray<uint64_t, 1> updated_part_ids;
+              bool has_partition_changed = false;
+              if (alter_table_arg.alter_part_type_ == ObAlterTableArg::ADD_PARTITION) {
+                if (res.res_arg_array_.size() > 0) {
+                  int64_t part_id = res.res_arg_array_.at(0).part_object_id_;
+                  OZ(ObExternalTableFileManager::get_instance().update_inner_table_file_list(
+                      ctx,
+                      schema_guard,
+                      tenant_id,
+                      alter_table_arg.alter_table_schema_.get_table_id(),
+                      basic_file_infos,
+                      updated_part_ids,
+                      has_partition_changed,
+                      part_id));
+                } else {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected error", K(ret));
+                }
+              } else if (alter_table_arg.alter_part_type_ == ObAlterTableArg::DROP_PARTITION) {
+                if (res.res_arg_array_.size() > 0) {
+                  int64_t part_id = res.res_arg_array_.at(0).part_object_id_;
+                  ObSEArray<ObAddr, 8> all_servers;
+                  OZ(ObExternalTableFileManager::get_instance().update_inner_table_file_list(
+                      ctx,
+                      schema_guard,
+                      tenant_id,
+                      alter_table_arg.alter_table_schema_.get_table_id(),
+                      basic_file_infos,
+                      updated_part_ids,
+                      has_partition_changed,
+                      part_id));
+                  OZ (GCTX.location_service_->external_table_get(tenant_id, all_servers));
+                  OZ (ObExternalTableFileManager::get_instance().flush_external_file_cache(tenant_id, alter_table_arg.alter_table_schema_.get_table_id(), part_id, all_servers));
+                } else {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected error", K(ret));
+                }
               } else {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected error", K(ret));
+                // ret = OB_ERR_UNEXPECTED;
+                // LOG_WARN("unknown alter external table type", K(ret), K(alter_table_arg.alter_part_type_), K(stmt.get_alter_external_table_type()));
               }
-            } else {
-              // ret = OB_ERR_UNEXPECTED;
-              // LOG_WARN("unknown alter external table type", K(ret), K(alter_table_arg.alter_part_type_), K(stmt.get_alter_external_table_type()));
             }
           }
         }
       }
-    }
-    if (OB_SUCC(ret)) {
-      if (!need_check) {
-        // do nothing, don't check if data is valid
-      } else if (OB_FAIL(refresh_schema_for_table(tenant_id))) {
-        LOG_WARN("refresh_schema_for_table failed", K(ret));
-      } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_, res.ddl_need_retry_at_executor_, my_session, common_rpc_proxy))) {
-        LOG_WARN("wait check constraint finish", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)
-        && 1 == alter_table_arg.foreign_key_arg_list_.count()) {
-      if (!need_modify_fk_validate) {
-        // do nothing, don't check if data is valid
-      } else {
-        if (OB_FAIL(refresh_schema_for_table(tenant_id))) {
+      if (OB_SUCC(ret)) {
+        if (!need_check) {
+          // do nothing, don't check if data is valid
+        } else if (OB_FAIL(refresh_schema_for_table(tenant_id))) {
           LOG_WARN("refresh_schema_for_table failed", K(ret));
         } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_, res.ddl_need_retry_at_executor_, my_session, common_rpc_proxy))) {
-          LOG_WARN("wait fk constraint finish", K(ret));
+          LOG_WARN("wait check constraint finish", K(ret));
         }
       }
-    }
-
-    if (OB_SUCC(ret)) {
-      bool is_support_cancel = true;
-      if (obrpc::ObAlterTableArg::REORGANIZE_PARTITION == alter_table_arg.alter_part_type_ ||
-                  obrpc::ObAlterTableArg::SPLIT_PARTITION == alter_table_arg.alter_part_type_ ||
-                  obrpc::ObAlterTableArg::AUTO_SPLIT_PARTITION == alter_table_arg.alter_part_type_) {
-        is_support_cancel = false;
-      }
-      const bool need_wait_ddl_finish = is_double_table_long_running_ddl(res.ddl_type_)
-                                     || is_simple_table_long_running_ddl(res.ddl_type_)
-                                     || (ObDDLType::DDL_DROP_COLUMN_INSTANT == res.ddl_type_ && res.task_id_ > 0 /* with drop lob*/);
-      if (OB_SUCC(ret) && need_wait_ddl_finish) {
-        int64_t affected_rows = 0;
-        if (OB_FAIL(refresh_schema_for_table(alter_table_arg.exec_tenant_id_))) {
-          LOG_WARN("refresh_schema_for_table failed", K(ret));
-        } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_, res.ddl_need_retry_at_executor_, my_session, common_rpc_proxy, is_support_cancel))) {
-          LOG_WARN("fail to wait ddl finish", K(ret), K(tenant_id), K(res));
+      if (OB_SUCC(ret)
+          && 1 == alter_table_arg.foreign_key_arg_list_.count()) {
+        if (!need_modify_fk_validate) {
+          // do nothing, don't check if data is valid
+        } else {
+          if (OB_FAIL(refresh_schema_for_table(tenant_id))) {
+            LOG_WARN("refresh_schema_for_table failed", K(ret));
+          } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_, res.ddl_need_retry_at_executor_, my_session, common_rpc_proxy))) {
+            LOG_WARN("wait fk constraint finish", K(ret));
+          }
         }
       }
-    }
-    char table_info_buffer[256];
-    snprintf(table_info_buffer, sizeof(table_info_buffer), "table_id:%ld, hidden_table_id:%ld",
-              alter_table_arg.table_id_, alter_table_arg.hidden_table_id_);
 
-    SERVER_EVENT_ADD("ddl", "alter table execute finish",
-      "tenant_id", MTL_ID(),
-      "ret", ret,
-      "trace_id", *ObCurTraceId::get_trace_id(),
-      "task_id", res.task_id_,
-      "table_info", table_info_buffer,
-      "schema_version", res.schema_version_,
-      alter_table_arg.inner_sql_exec_addr_);
-    SQL_ENG_LOG(INFO, "finish alter table execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(first_stmt));
+      if (OB_SUCC(ret)) {
+        bool is_support_cancel = true;
+        if (obrpc::ObAlterTableArg::REORGANIZE_PARTITION == alter_table_arg.alter_part_type_ ||
+                    obrpc::ObAlterTableArg::SPLIT_PARTITION == alter_table_arg.alter_part_type_ ||
+                    obrpc::ObAlterTableArg::AUTO_SPLIT_PARTITION == alter_table_arg.alter_part_type_) {
+          is_support_cancel = false;
+        }
+        const bool need_wait_ddl_finish = is_double_table_long_running_ddl(res.ddl_type_)
+                                      || is_simple_table_long_running_ddl(res.ddl_type_)
+                                      || (ObDDLType::DDL_DROP_COLUMN_INSTANT == res.ddl_type_ && res.task_id_ > 0 /* with drop lob*/);
+        if (OB_SUCC(ret) && need_wait_ddl_finish) {
+          int64_t affected_rows = 0;
+          if (OB_FAIL(refresh_schema_for_table(alter_table_arg.exec_tenant_id_))) {
+            LOG_WARN("refresh_schema_for_table failed", K(ret));
+          } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_, res.ddl_need_retry_at_executor_, my_session, common_rpc_proxy, is_support_cancel))) {
+            LOG_WARN("fail to wait ddl finish", K(ret), K(tenant_id), K(res));
+          }
+        }
+      }
+      char table_info_buffer[256];
+      snprintf(table_info_buffer, sizeof(table_info_buffer), "table_id:%ld, hidden_table_id:%ld",
+                alter_table_arg.table_id_, alter_table_arg.hidden_table_id_);
+
+      SERVER_EVENT_ADD("ddl", "alter table execute finish",
+        "tenant_id", MTL_ID(),
+        "ret", ret,
+        "trace_id", *ObCurTraceId::get_trace_id(),
+        "task_id", res.task_id_,
+        "table_info", table_info_buffer,
+        "schema_version", res.schema_version_,
+        alter_table_arg.inner_sql_exec_addr_);
+      SQL_ENG_LOG(INFO, "finish alter table execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(first_stmt));
+    }
   }
   return ret;
 }

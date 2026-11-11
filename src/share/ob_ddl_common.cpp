@@ -129,6 +129,7 @@ const char *oceanbase::share::get_ddl_type(ObDDLType ddl_type)
       break;
     case ObDDLType::DDL_DROP_TABLE:
       ret_name = "DDL_DROP_TABLE";
+      break;
     case ObDDLType::DDL_TRUNCATE_TABLE:
       ret_name = "DDL_TRUNCATE_TABLE";
       break;
@@ -149,6 +150,18 @@ const char *oceanbase::share::get_ddl_type(ObDDLType ddl_type)
       break;
     case ObDDLType::DDL_RENAME_SUB_PARTITION:
       ret_name = "DDL_RENAME_SUB_PARTITION";
+      break;
+    case ObDDLType::DDL_ALTER_PARTITION_POLICY:
+      ret_name = "DDL_ALTER_PARTITION_POLICY";
+      break;
+    case ObDDLType::DDL_ALTER_SUBPARTITION_POLICY:
+      ret_name = "DDL_ALTER_SUBPARTITION_POLICY";
+      break;
+    case ObDDLType::DDL_EXCHANGE_PARTITION:
+      ret_name = "DDL_EXCHANGE_PARTITION";
+      break;
+    case ObDDLType::DDL_EXCHANGE_SUBPARTITION:
+      ret_name = "DDL_EXCHANGE_SUBPARTITION";
       break;
     case ObDDLType::DDL_DOUBLE_TABLE_OFFLINE:
       ret_name = "DDL_DOUBLE_TABLE_OFFLINE";

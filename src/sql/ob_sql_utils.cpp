@@ -2714,7 +2714,17 @@ int ObSQLUtils::print_sql(char *buf,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
   } else if (stmt->is_explain_stmt()) {
-    if (OB_ISNULL(reconstruct_stmt = static_cast<const ObExplainStmt*>(stmt)->get_explain_query_stmt())) {
+    const ObExplainStmt *explain_stmt = static_cast<const ObExplainStmt *>(stmt);
+    if (explain_stmt->is_ddl_explain()) {
+      const ObString &original_sql = stmt->get_query_ctx()->get_sql_stmt();
+      if (OB_UNLIKELY(original_sql.empty())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("original SQL is empty for DDL EXPLAIN", K(ret));
+      } else {
+        // DDL statements have no generic AST printer. The original SQL has already passed DDL resolution.
+        BUF_PRINTF("%.*s", LEN_AND_PTR(original_sql));
+      }
+    } else if (OB_ISNULL(reconstruct_stmt = explain_stmt->get_explain_query_stmt())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("Explain query stmt is NULL", K(ret));
     } else {
@@ -2727,7 +2737,7 @@ int ObSQLUtils::print_sql(char *buf,
     LOG_WARN("Invalid stmt type", K(stmt->get_stmt_type()), K(stmt->get_query_ctx()->get_sql_stmt()), K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "stmt type");
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && OB_NOT_NULL(reconstruct_stmt)) {
     switch (reconstruct_stmt->get_stmt_type()) {
     case stmt::T_SELECT: {
       ObSelectStmtPrinter printer(buf,

@@ -5,14 +5,54 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_explain_log_plan.h"
+#include "sql/optimizer/ob_ddl_explain_plan.h"
 #include "sql/optimizer/ob_log_values.h"
 #include "sql/code_generator/ob_code_generator.h"
+#include "sql/resolver/ddl/ob_explain_stmt.h"
 
 using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::common;
 using namespace oceanbase::json;
 using namespace oceanbase::sql::log_op_def;
+
+// EXPLAIN DDL bypasses normal query optimization and asks RootService to classify
+// the ALTER TABLE operation without executing it. The result is emitted as one row
+// with fixed DDL attributes, so generic EXPLAIN display/format options do not apply.
+int ObExplainLogPlan::generate_ddl_explain_raw_plan()
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *top = nullptr;
+  ObLogValues *values_op = nullptr;
+
+  if (OB_FAIL(allocate_values_as_top(top))) {
+    LOG_WARN("failed to allocate values_op for DDL explain", K(ret));
+  } else if (OB_ISNULL(top) || OB_UNLIKELY(LOG_VALUES != top->get_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("top is not values op", K(ret), KP(top));
+  } else {
+    set_plan_root(top);
+    top->mark_is_plan_root();
+    values_op = static_cast<ObLogValues *>(top);
+    const ObExplainStmt *explain_stmt = static_cast<const ObExplainStmt *>(get_stmt());
+    ObExecContext *exec_ctx = get_optimizer_context().get_exec_ctx();
+    if (OB_UNLIKELY(nullptr == explain_stmt || nullptr == exec_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), KP(explain_stmt), KP(exec_ctx));
+    } else if (OB_FAIL(ObDDLExplainHelper::generate_plan(explain_stmt, exec_ctx, values_op))) {
+      LOG_WARN("failed to generate DDL explain plan", K(ret));
+    } else if (OB_FAIL(ObDDLExplainHelper::build_output_exprs(*this, values_op))) {
+      LOG_WARN("failed to build output exprs for DDL explain", K(ret));
+    } else {
+      values_op->set_op_id(0);
+      set_max_op_id(1);
+      get_optimizer_context().set_plan_type(ObPhyPlanType::OB_PHY_PLAN_LOCAL,
+                                            ObPhyPlanType::OB_PHY_PLAN_LOCAL,
+                                            false);
+    }
+  }
+  return ret;
+}
 
 /**
  *  This function does two things:
@@ -27,6 +67,10 @@ int ObExplainLogPlan::generate_normal_raw_plan()
   if (OB_ISNULL(get_stmt()) || OB_UNLIKELY(!get_stmt()->is_explain_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(get_stmt()), K(ret));
+  } else if (static_cast<const ObExplainStmt*>(get_stmt())->is_ddl_explain()) {
+    if (OB_FAIL(generate_ddl_explain_raw_plan())) {
+      LOG_WARN("failed to generate DDL explain raw plan", K(ret));
+    }
   } else {
     ObLogPlan *child_plan = NULL;
     const ObDMLStmt *child_stmt = NULL;

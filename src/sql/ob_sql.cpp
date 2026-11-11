@@ -12,6 +12,9 @@
 #include "sql/plan_cache/ob_pcv_set.h"
 #include "sql/ob_sql_init.h"
 #include "sql/resolver/cmd/ob_help_stmt.h"
+#include "sql/resolver/ddl/ob_explain_stmt.h"
+#include "sql/resolver/ddl/ob_explain_resolver.h"
+#include "sql/optimizer/ob_ddl_explain_plan.h"
 #include "sql/resolver/ob_resolver.h"
 #include "sql/resolver/cmd/ob_variable_set_stmt.h"
 #include "sql/resolver/cmd/ob_call_procedure_stmt.h"
@@ -483,21 +486,31 @@ int ObSql::fill_result_set(ObResultSet &result_set,
       break;
     }
     case stmt::T_EXPLAIN: {
-      ObString tname = ObString::make_string("explain_table");
-      ObString cname = ObString::make_string("Query Plan");
-      field.tname_ = tname;
-      field.org_tname_ = tname;
-      field.cname_ = cname;
-      field.org_cname_ = cname;
-      field.type_.set_type(ObVarcharType);
-      field.charsetnr_ = CS_TYPE_UTF8MB4_GENERAL_CI;
-      field.type_.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-      field.type_.set_collation_level(CS_LEVEL_IMPLICIT);
-      field.type_.set_varchar(type_name);
-      if (OB_FAIL(result_set.reserve_field_columns(1))) {
-        LOG_WARN("reserve field columns failed", K(ret));
-      } else if (OB_FAIL(result_set.add_field_column(field))) {
-        LOG_WARN("fail to add field column to result_set", K(ret));
+      const ObExplainStmt *explain_stmt_ptr = static_cast<const ObExplainStmt *>(stmt);
+      if (OB_ISNULL(explain_stmt_ptr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), KP(explain_stmt_ptr));
+      } else if (explain_stmt_ptr->is_ddl_explain()) {
+        if (OB_FAIL(ObDDLExplainHelper::fill_result_set(result_set))) {
+          LOG_WARN("failed to setup result fields for DDL EXPLAIN", K(ret));
+        }
+      } else {
+        ObString tname = ObString::make_string("explain_table");
+        ObString cname = ObString::make_string("Query Plan");
+        field.tname_ = tname;
+        field.org_tname_ = tname;
+        field.cname_ = cname;
+        field.org_cname_ = cname;
+        field.type_.set_type(ObVarcharType);
+        field.charsetnr_ = CS_TYPE_UTF8MB4_GENERAL_CI;
+        field.type_.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+        field.type_.set_collation_level(CS_LEVEL_IMPLICIT);
+        field.type_.set_varchar(type_name);
+        if (OB_FAIL(result_set.reserve_field_columns(1))) {
+          LOG_WARN("reserve field columns failed", K(ret));
+        } else if (OB_FAIL(result_set.add_field_column(field))) {
+          LOG_WARN("fail to add field column to result_set", K(ret));
+        }
       }
       break;
     }
@@ -3569,6 +3582,13 @@ int ObSql::generate_stmt(ParseResult &parse_result,
               is_returning_into = true;
             }
           }
+          if (need_rebuild
+              && stmt->is_explain_stmt()
+              && static_cast<ObExplainStmt *>(stmt)->is_ddl_explain()
+              && resolver_ctx.query_ctx_->get_sql_stmt().empty()) {
+            // DDL EXPLAIN reconstruction preserves the original SQL, so make it available before PL rebuild.
+            resolver_ctx.query_ctx_->set_sql_stmt(parse_result.input_sql_, parse_result.input_sql_len_);
+          }
           if (need_rebuild) {
             if (OB_FAIL(result.get_external_retrieve_info().build(*stmt,
                 result.get_session(),
@@ -4160,12 +4180,17 @@ int ObSql::calc_pre_calculable_exprs(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL pointer", K(ret), KP(session_info), KP(expr_factory));
   } else if (stmt.is_explain_stmt()) {
-    ObDMLStmt *real_stmt = static_cast<ObExplainStmt&>(stmt).get_explain_query_stmt();
-    if (OB_ISNULL(real_stmt)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("real_stmt is null", K(ret));
+    const ObExplainStmt &explain = static_cast<const ObExplainStmt&>(stmt);
+    if (explain.is_ddl_explain()) {
+      stmt_type = stmt::T_EXPLAIN;
     } else {
-      stmt_type = real_stmt->get_stmt_type();
+      ObDMLStmt *real_stmt = explain.get_explain_query_stmt();
+      if (OB_ISNULL(real_stmt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("real_stmt is null", K(ret));
+      } else {
+        stmt_type = real_stmt->get_stmt_type();
+      }
     }
   } else {
     stmt_type = stmt.get_stmt_type();
@@ -4211,6 +4236,7 @@ int ObSql::transform_stmt(ObSqlSchemaGuard *sql_schema_guard,
   ObDMLStmt *transform_stmt = stmt;
   int64_t last_mem_usage = exec_ctx.get_allocator().total();
   int64_t transformer_mem_usage = 0;
+  bool is_ddl_explain = false;
   //get transform stmt
   if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx()) || OB_ISNULL(sql_schema_guard) ||
       OB_ISNULL(sql_schema_guard->get_schema_guard()) ||
@@ -4222,7 +4248,10 @@ int ObSql::transform_stmt(ObSqlSchemaGuard *sql_schema_guard,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("session_info and schema manager in sql_ctx should not be NULL", K(ret));
   } else if (stmt->is_explain_stmt()) {
-    if (OB_ISNULL(transform_stmt = static_cast<ObExplainStmt*>(stmt)->get_explain_query_stmt())) {
+    ObExplainStmt *explain_ptr = static_cast<ObExplainStmt*>(stmt);
+    if (explain_ptr->is_ddl_explain()) {
+      is_ddl_explain = true;
+    } else if (OB_ISNULL(transform_stmt = explain_ptr->get_explain_query_stmt())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("Explain query stmt is NULL", K(ret));
     }
@@ -4251,7 +4280,7 @@ int ObSql::transform_stmt(ObSqlSchemaGuard *sql_schema_guard,
 
   NG_TRACE(transform_begin);
   OPT_TRACE_TITLE("START TRANSFORM");
-  bool need_transform = transform_stmt->is_valid_transform_stmt();
+  bool need_transform = !is_ddl_explain && transform_stmt->is_valid_transform_stmt();
   if (ignore_trace_event) {
     //do nothing
   } else if ((OB_E(EventTable::EN_GENERATE_PLAN_WITH_RECONSTRUCT_SQL)OB_SUCCESS) != OB_SUCCESS) {
@@ -5048,7 +5077,7 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
               }
             }
           }
-          if (OB_SUCC(ret) && stmt::T_EXPLAIN == stmt_type) {
+          if (OB_SUCC(ret) && stmt::T_EXPLAIN == stmt_type && !ObExplainResolver::is_ddl_explain(children_node)) {
 #ifndef OB_BUILD_SPM
             if (OB_SQL_PC_NOT_EXIST == get_plan_err) {
 #else
@@ -5108,7 +5137,8 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
         }
       }
     } else if (pc_ctx.sql_ctx_.multi_stmt_item_.is_batched_multi_stmt()) {
-      if (T_EXPLAIN == parse_result.result_tree_->children_[0]->type_) {
+      const ParseNode *explain_node = parse_result.result_tree_->children_[0];
+      if (T_EXPLAIN == explain_node->type_ && !ObExplainResolver::is_ddl_explain(explain_node)) {
         flag = true;
       }
     }
@@ -6157,6 +6187,8 @@ int ObSql::check_batched_multi_stmt_after_resolver(ObPlanCacheCtx &pc_ctx,
       || OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (stmt.is_explain_stmt() && static_cast<const ObExplainStmt &>(stmt).is_ddl_explain()) {
+    is_valid = false;
   } else if (!(stmt.is_support_batch_exec_stmt() || stmt.is_explain_stmt())) {
     is_valid = false;
   } else {

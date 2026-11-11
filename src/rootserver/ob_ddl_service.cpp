@@ -9,6 +9,7 @@
 #include "rootserver/ob_column_group_ddl_helper.h"
 #include "share/schema/ob_schema_utils.h"
 #include "share/ob_ddl_common.h"
+#include "share/ob_alter_table_ddl_plan.h"
 #include "share/schema/ob_schema_printer.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
 #include "share/ob_tablet_autoincrement_service.h"
@@ -12806,7 +12807,8 @@ int ObDDLService::alter_table_sess_active_time_in_trans(obrpc::ObAlterTableArg &
               alter_table_schema.set_origin_database_name(database_schema->get_database_name());
               alter_table_schema.set_origin_table_name(table_schema->get_table_name());
               alter_table_schema.set_tenant_id(tenant_id);
-              if (OB_FAIL(check_is_offline_ddl(alter_table_arg, tenant_data_version, res.ddl_type_, res.ddl_need_retry_at_executor_))) {
+              if (OB_FAIL(check_is_offline_ddl(alter_table_arg, tenant_data_version, res.ddl_type_,
+                                               res.ddl_need_retry_at_executor_))) {
                 LOG_WARN("failed to to check is offline ddl", K(ret));
               } else {
                 // offline ddl cannot appear at the same time with other ddl types
@@ -13027,7 +13029,10 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
   int ret = OB_SUCCESS;
   ObDDLType &ddl_type = res.ddl_type_;
 
-  if (OB_FAIL(check_inner_stat())) {
+  if (alter_table_arg.is_explain_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected to alter table in trans for explain ddl", K(ret));
+  } else if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
   } else {
     uint64_t tenant_data_version = 0;
@@ -13060,12 +13065,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                                             alter_table_arg,
                                                                             const_alter_table_arg))) {
       LOG_WARN("deep copy table arg failed", K(ret));
-    } else if (alter_table_arg.foreign_key_checks_ && 1 == alter_table_arg.foreign_key_arg_list_.count()
-              && alter_table_arg.foreign_key_arg_list_.at(0).need_validate_data_) {
-      if ((!alter_table_arg.foreign_key_arg_list_.at(0).is_modify_fk_state_
-            && alter_table_arg.foreign_key_arg_list_.at(0).validate_flag_)
-          || (alter_table_arg.foreign_key_arg_list_.at(0).is_modify_validate_flag_
-            && alter_table_arg.foreign_key_arg_list_.at(0).validate_flag_)) {
+    } else if (share::ObAlterTableDDLHelper::has_single_validate_data_fk(alter_table_arg)) {
+      if (share::ObAlterTableDDLHelper::is_fk_validate_required(alter_table_arg)) {
         alter_table_arg.ddl_stmt_str_ = empty_stmt;
         alter_table_arg.foreign_key_arg_list_.at(0).validate_flag_ = CST_FK_NO_VALIDATE;
       }
@@ -13189,18 +13190,14 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
       ObDDLSQLTransaction trans(schema_service_);
       ObTableLockOwnerID owner_id;
       int64_t timeout_us = 0;
-      bool is_alter_merge_engine = alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::MERGE_ENGINE_TYPE) &&
-                                   tenant_data_version >= DATA_VERSION_5_0_1_0 &&
-                                   alter_table_schema.get_merge_engine_type() != orig_table_schema->get_merge_engine_type();
-      bool is_rename_and_need_table_lock =
-          alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_NAME) && // is rename table;
-          orig_table_schema->is_user_table() && // only user table
-          ((MOCK_DATA_VERSION_4_2_3_0 <= tenant_data_version && tenant_data_version < DATA_VERSION_4_3_0_0) /* ([4.2.3, 4.3.0)) */
-            || DATA_VERSION_4_3_2_0 <= tenant_data_version  /* [4.3.2, ~) */ );  // need table lock and rw defense;
-
-      bool is_change_to_compaction_ttl_table = ObCompactionTTLUtil::check_change_to_compaction_ttl_table(alter_table_schema, *orig_table_schema);
-
-      bool need_table_lock = is_rename_and_need_table_lock || is_alter_merge_engine || is_change_to_compaction_ttl_table;
+      bool is_alter_merge_engine = share::ObAlterTableDDLHelper::is_alter_merge_engine(
+          alter_table_schema, *orig_table_schema, tenant_data_version);
+      bool is_rename_and_need_table_lock = share::ObAlterTableDDLHelper::is_rename_and_need_table_lock(
+          alter_table_schema, *orig_table_schema, tenant_data_version);
+      bool is_change_to_compaction_ttl_table = share::ObAlterTableDDLHelper::is_change_to_compaction_ttl_table(
+          alter_table_schema, *orig_table_schema);
+      bool need_table_lock = share::ObAlterTableDDLHelper::need_exclusive_table_lock_for_alter_table(
+          alter_table_arg, *orig_table_schema, tenant_data_version);
       if (OB_FAIL(ret)) {
         //do nothing
       } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
@@ -13707,7 +13704,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             * check constraint need return constriant_id_ and schema_version_. other constraint return schema_version_.
             * the schema version is data table after finish alter table.
           */
-          const bool need_check = need_check_constraint_validity(const_alter_table_arg);
+          const bool need_check = share::ObAlterTableDDLHelper::need_check_constraint_validity(alter_table_arg);
           res.constriant_id_ = (*iter)->get_constraint_id();
           res.schema_version_ = new_table_schema.get_schema_version();
           if (need_check) {
@@ -13828,6 +13825,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         const bool is_commit = OB_SUCC(ret);
         if (trans.is_started()) {
           int temp_ret = OB_SUCCESS;
+          DEBUG_SYNC(BEFORE_DDL_SERVICE_TRANS_END);
           if (OB_SUCCESS != (temp_ret = trans.end(is_commit))) {
             LOG_WARN("trans end failed", K(is_commit), K(temp_ret));
             ret = is_commit ? temp_ret : ret;
@@ -14146,6 +14144,35 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Dropping and adding indexes at the same time is a high-risk operation, which is");
       }
     }
+  }
+  return ret;
+}
+
+int ObDDLService::classify_alter_table_ddl(
+    obrpc::ObAlterTableArg &alter_table_arg,
+    const uint64_t tenant_data_version,
+    const ObTableSchema *orig_table_schema,
+    share::ObAlterTableDDLPlan &plan)
+{
+  int ret = OB_SUCCESS;
+  ObDDLType execution_ddl_type = ObDDLType::DDL_INVALID;
+  bool ddl_need_retry_at_executor = false;
+  plan.reset();
+  if (OB_UNLIKELY(tenant_data_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), K(tenant_data_version));
+  } else if (OB_FAIL(check_is_offline_ddl(alter_table_arg,
+                                          tenant_data_version,
+                                          execution_ddl_type,
+                                          ddl_need_retry_at_executor))) {
+    LOG_WARN("failed to check offline ddl", KR(ret));
+  } else if (OB_FAIL(share::ObAlterTableDDLHelper::build_plan(alter_table_arg,
+                                                              tenant_data_version,
+                                                              orig_table_schema,
+                                                              execution_ddl_type,
+                                                              ddl_need_retry_at_executor,
+                                                              plan))) {
+    LOG_WARN("failed to build alter table ddl plan", KR(ret));
   }
   return ret;
 }
@@ -14481,7 +14508,10 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
   uint64_t tenant_id = alter_table_schema.get_tenant_id();
   const ObDDLType ddl_type = res.ddl_type_;
   bool need_redistribute_column_id = false;
-  if (OB_UNLIKELY(DDL_INVALID == ddl_type || tenant_data_version <= 0)) {
+  if (alter_table_arg.is_explain_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected to do offline ddl in trans for explain ddl", K(ret));
+  } else if (OB_UNLIKELY(DDL_INVALID == ddl_type || tenant_data_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected ddl type", K(ret), K(ddl_type), K(alter_table_arg), K(tenant_data_version));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
@@ -14830,6 +14860,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
       }
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
+        DEBUG_SYNC(BEFORE_DDL_SERVICE_TRANS_END);
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
           LOG_WARN_RET(temp_ret, "trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
@@ -15885,6 +15916,28 @@ int ObDDLService::check_split_global_index_partition_(ObSchemaGetterGuard &schem
 int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
                               obrpc::ObAlterTableRes &res)
 {
+  return alter_table_impl(alter_table_arg, res, nullptr);
+}
+
+int ObDDLService::explain_alter_table(obrpc::ObAlterTableArg &alter_table_arg,
+                                      obrpc::ObAlterTableRes &res,
+                                      share::ObAlterTableDDLPlan &ddl_plan)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!alter_table_arg.is_explain_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("explain alter table requires explain argument", KR(ret), K(alter_table_arg));
+  } else {
+    ddl_plan.reset();
+    ret = alter_table_impl(alter_table_arg, res, &ddl_plan);
+  }
+  return ret;
+}
+
+int ObDDLService::alter_table_impl(obrpc::ObAlterTableArg &alter_table_arg,
+                                   obrpc::ObAlterTableRes &res,
+                                   share::ObAlterTableDDLPlan *ddl_plan_out)
+{
   int ret = OB_SUCCESS;
   int64_t start_usec = 0;
   int64_t end_usec = 0;
@@ -15993,18 +16046,36 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
       uint64_t data_version = 0;
       bool is_oracle_mode_add_column_not_null_ddl = false;
       bool is_default_value_null = false;
+      share::ObAlterTableDDLPlan ddl_plan;
       if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
         LOG_WARN("failed to get tenant data version", K(ret), K(tenant_id), K(data_version));
       } else if (is_alter_sess_active_time) {
-        if (OB_FAIL(alter_table_sess_active_time_in_trans(alter_table_arg,
+        if (OB_UNLIKELY(alter_table_arg.is_explain_))  {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("session active time is not supported for explain ddl", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "session active time is not supported for explain ddl");
+        } else if (OB_FAIL(alter_table_sess_active_time_in_trans(alter_table_arg,
                                                           res,
                                                           data_version))) {
           LOG_WARN("alter_table_in_trans failed", K(ret));
         } else {
           LOG_INFO("refresh session active time of temp tables succeed!", K(ret));
         }
-      } else if (OB_FAIL(check_is_offline_ddl(alter_table_arg, data_version, ddl_type, ddl_need_retry_at_executor))) {
-        LOG_WARN("failed to check is offline ddl", K(ret), K(alter_table_arg));
+      } else if (OB_FAIL(classify_alter_table_ddl(alter_table_arg,
+                                                  data_version,
+                                                  orig_table_schema,
+                                                  ddl_plan))) {
+        LOG_WARN("failed to classify alter table ddl", K(ret), K(alter_table_arg));
+      } else if (alter_table_arg.is_explain_) {
+        if (nullptr != ddl_plan_out) {
+          *ddl_plan_out = ddl_plan;
+        }
+        LOG_INFO("[EXPLAIN DDL] explain ddl early return", K(ddl_plan), K(alter_table_arg.ddl_stmt_str_));
+      } else {
+        ddl_type = ddl_plan.get_execution_ddl_type();
+        ddl_need_retry_at_executor = ddl_plan.get_ddl_need_retry_at_executor();
+      }
+      if (OB_FAIL(ret) || alter_table_arg.is_explain_) {
       } else if (((MOCK_DATA_VERSION_4_2_1_3 <= data_version && DATA_VERSION_4_3_0_0 > data_version)
                || (DATA_VERSION_4_3_2_0 <= data_version)) // [4213, 430) & [4320, )
                  && OB_FAIL(check_is_oracle_mode_add_column_not_null_ddl(alter_table_arg,
@@ -16046,7 +16117,7 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
   }
 
   // just for debug
-  if (OB_SUCC(ret) && false == is_alter_sess_active_time) {
+  if (OB_SUCC(ret) && !alter_table_arg.is_explain_ && false == is_alter_sess_active_time) {
     int tmp_ret = OB_SUCCESS;
     const uint64_t table_id = (OB_INVALID_ID == orig_table.get_table_id()) ?
         alter_table_arg.alter_table_schema_.get_table_id() :
@@ -34983,21 +35054,6 @@ int ObDDLService::check_has_multi_autoinc(ObTableSchema &table_schema)
     }
   }
   return ret;
-}
-
-bool ObDDLService::need_check_constraint_validity(const obrpc::ObAlterTableArg &alter_table_arg) const
-{
-  bool need_check_validity = false;
-  ObTableSchema::const_constraint_iterator iter =
-      alter_table_arg.alter_table_schema_.constraint_begin();
-  // a ddl query add at most one constraint before.
-  // after support not null constraint, in order to support alter table add multiple
-  // not null columns, we have to support a ddl query add multiple constraint.
-  for (; !need_check_validity
-          && iter != alter_table_arg.alter_table_schema_.constraint_end(); iter++) {
-    need_check_validity = (*iter)->get_need_validate_data();
-  }
-  return need_check_validity;
 }
 
 int ObDDLService::handle_rls_policy_ddl(const obrpc::ObRlsPolicyDDLArg &arg)

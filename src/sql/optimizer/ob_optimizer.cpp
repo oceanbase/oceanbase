@@ -28,7 +28,7 @@ int ObOptimizer::optimize(ObDMLStmt &stmt, ObLogPlan *&logical_plan)
   int64_t last_mem_usage = ctx_.get_allocator().total();
   int64_t optimizer_mem_usage = 0;
   ObDMLStmt *target_stmt = &stmt;
-  if (stmt.is_explain_stmt()) {
+  if (stmt.is_explain_stmt() && !static_cast<const ObExplainStmt*>(&stmt)->is_ddl_explain()) {
     target_stmt = static_cast<ObExplainStmt*>(&stmt)->get_explain_query_stmt();
   }
   if (OB_ISNULL(query_ctx) || OB_ISNULL(session) || OB_ISNULL(target_stmt)) {

@@ -26,7 +26,8 @@ public:
       parallelism_(0),
       task_id_(0),
       consumer_group_id_(0),
-      is_parallel_(false)
+      is_parallel_(false),
+      is_explain_(false)
    { }
   virtual ~ObDDLArg() = default;
   bool is_need_check_based_schema_objects() const
@@ -55,6 +56,7 @@ public:
     task_id_ = 0;
     consumer_group_id_ = 0;
     is_parallel_ = false;
+    is_explain_ = false;
   }
   DECLARE_TO_STRING;
 
@@ -68,6 +70,9 @@ public:
   int64_t consumer_group_id_;
   //some parallel ddl is effect before 4220, this member is valid after 4220
   bool is_parallel_;
+  // Local-only marker for EXPLAIN DDL. It is intentionally not serialized and must not be
+  // used with the regular DDL RPC path.
+  bool is_explain_;
 };
 
 } // namespace obrpc

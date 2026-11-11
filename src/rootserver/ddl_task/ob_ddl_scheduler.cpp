@@ -1268,6 +1268,9 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
   } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(param));
+  } else if (OB_NOT_NULL(param.ddl_arg_) && param.ddl_arg_->is_explain_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected to create ddl task for explain ddl", K(ret), K(param));
   } else if (ObDDLUtil::is_verifying_checksum_error_needed(param.type_)
       && OB_FAIL(ObDDLUtil::check_table_compaction_checksum_error(param.tenant_id_,param.src_table_schema_->get_table_id()))) {
     if (OB_NOT_SUPPORTED != ret) {

@@ -36,8 +36,12 @@ public:
   ExplainType get_explain_type() const { return format_; }
   void set_display_opt(const ObExplainDisplayOpt &opt) { display_opt_ = opt; }
   const ObExplainDisplayOpt &get_display_opt() const { return display_opt_; }
-  ObDMLStmt* get_explain_query_stmt() const { return explain_query_stmt_; }
-  void set_explain_query_stmt(ObDMLStmt *stmt) { explain_query_stmt_ = stmt; }
+  ObStmt *get_explain_stmt() const { return explain_stmt_; }
+  ObDMLStmt *get_explain_query_stmt() const
+  {
+    return is_ddl_explain() ? NULL : static_cast<ObDMLStmt *>(explain_stmt_);
+  }
+  void set_explain_query_stmt(ObDMLStmt *stmt) { explain_stmt_ = stmt; }
   bool is_select_explain() const;
   bool is_dml_explain() const;
   const common::ObString& get_into_table() const { return into_table_; }
@@ -48,12 +52,23 @@ public:
   bool is_explain_extended() const { return EXPLAIN_EXTENDED == format_
                                             || EXPLAIN_EXTENDED_NOADDR == format_; }
 
+  // FOR EXPLAIN DDL
+  bool is_ddl_explain() const
+  {
+    return OB_NOT_NULL(explain_stmt_) && ObStmt::is_ddl_stmt(explain_stmt_->get_stmt_type(), true);
+  }
+  ObStmt *get_explain_ddl_stmt() const
+  {
+    return is_ddl_explain() ? explain_stmt_ : NULL;
+  }
+  void set_explain_ddl_stmt(ObStmt *stmt) { explain_stmt_ = stmt; }
+
   DECLARE_VIRTUAL_TO_STRING;
 private:
   //bool  verbose_;
   ExplainType format_;
   ObExplainDisplayOpt display_opt_;
-  ObDMLStmt *explain_query_stmt_;
+  ObStmt *explain_stmt_;
   common::ObString into_table_;
   common::ObString statement_id_;
   DISALLOW_COPY_AND_ASSIGN(ObExplainStmt);

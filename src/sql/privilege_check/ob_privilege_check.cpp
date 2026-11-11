@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SQL_SESSION
 #include "sql/privilege_check/ob_privilege_check.h"
+#include "sql/resolver/ddl/ob_explain_stmt.h"
 
 #include "sql/resolver/ddl/ob_create_table_stmt.h"
 #include "sql/resolver/ddl/ob_create_mlog_stmt.h"
@@ -4442,7 +4443,9 @@ int ObPrivilegeCheck::check_privilege_new(
             K(ret), K(basic_stmt), "session_info", ctx.session_info_,
             "schema manager", ctx.schema_guard_);
       } else if (basic_stmt->is_explain_stmt()) {
-        basic_stmt = static_cast<const ObExplainStmt*>(basic_stmt)->get_explain_query_stmt();
+        const ObExplainStmt *explain_stmt = static_cast<const ObExplainStmt*>(basic_stmt);
+        basic_stmt = explain_stmt->is_ddl_explain() ? explain_stmt->get_explain_ddl_stmt() :
+                                                      explain_stmt->get_explain_query_stmt();
         if (OB_ISNULL(basic_stmt)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Explain query stmt is NULL", K(ret));
@@ -4525,7 +4528,9 @@ int ObPrivilegeCheck::check_privilege(
           K(ret), K(basic_stmt), "session_info", ctx.session_info_,
           "schema manager", ctx.schema_guard_);
     } else if (basic_stmt->is_explain_stmt()) {
-      basic_stmt = static_cast<const ObExplainStmt*>(basic_stmt)->get_explain_query_stmt();
+      const ObExplainStmt *explain_stmt = static_cast<const ObExplainStmt*>(basic_stmt);
+      basic_stmt = explain_stmt->is_ddl_explain() ? explain_stmt->get_explain_ddl_stmt() :
+                                                    explain_stmt->get_explain_query_stmt();
       if (OB_ISNULL(basic_stmt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Explain query stmt is NULL", K(ret));

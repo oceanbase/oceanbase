@@ -543,7 +543,11 @@ int ObRoutePolicy::check_can_route_to_columnstore_replica(const ObStmt *stmt,
   const ObStmt *top_stmt = OB_NOT_NULL(stmt) && stmt->is_explain_stmt() ?
                            static_cast<const ObExplainStmt*>(stmt)->get_explain_query_stmt() :
                            stmt;
-  if (OB_ISNULL(top_stmt) || OB_ISNULL(session_info) ||
+  const bool is_ddl_explain = OB_NOT_NULL(stmt) &&
+                              stmt->is_explain_stmt() &&
+                              static_cast<const ObExplainStmt*>(stmt)->is_ddl_explain();
+  if (is_ddl_explain) {
+  } else if (OB_ISNULL(top_stmt) || OB_ISNULL(session_info) ||
       OB_ISNULL(query_ctx = top_stmt->get_query_ctx()) ||
       OB_ISNULL(schema_guard = query_ctx->sql_schema_guard_.get_schema_guard()) ||
       FALSE_IT(tenant_id = session_info->get_effective_tenant_id())) {

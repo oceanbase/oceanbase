@@ -3755,6 +3755,9 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(arg.is_explain_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected explain ddl with is_add_to_scheduler", KR(ret), K(arg));
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
@@ -3804,7 +3807,7 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
       } else if (arg.alter_table_schema_.is_external_table()) {
         if (compat_version < DATA_VERSION_4_3_1_0
             && (arg.alter_part_type_ == obrpc::ObAlterTableArg::DROP_PARTITION
-             || arg.alter_part_type_ == obrpc::ObAlterTableArg::ADD_PARTITION)) {
+              || arg.alter_part_type_ == obrpc::ObAlterTableArg::ADD_PARTITION)) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("version lower than 4.3.1 does not support this operation", KR(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.3.1.0, alter external table partition ");
@@ -3827,16 +3830,16 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter fulltext dictionary table structure is");
       } else {
         ObCreateDDLTaskParam param(tenant_id,
-                                   ddl_type,
-                                   nullptr,
-                                   nullptr,
-                                   orig_table_schema->get_table_id(),
-                                   orig_table_schema->get_schema_version(),
-                                   arg.parallelism_,
-                                   arg.consumer_group_id_,
-                                   &allocator,
-                                   &arg,
-                                   0 /*parent task id*/);
+                                    ddl_type,
+                                    nullptr,
+                                    nullptr,
+                                    orig_table_schema->get_table_id(),
+                                    orig_table_schema->get_schema_version(),
+                                    arg.parallelism_,
+                                    arg.consumer_group_id_,
+                                    &allocator,
+                                    &arg,
+                                    0 /*parent task id*/);
         if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, sql_proxy_, task_record))) {
           LOG_WARN("submit ddl task failed", K(ret), K(arg));
         } else if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
@@ -3887,6 +3890,24 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
   return ret;
 }
 
+int ObRootService::explain_alter_table(const obrpc::ObAlterTableArg &arg,
+                                       obrpc::ObAlterTableRes &res,
+                                       share::ObAlterTableDDLPlan &ddl_plan)
+{
+  int ret = OB_SUCCESS;
+  ObAlterTableArg &nonconst_arg = const_cast<ObAlterTableArg &>(arg);
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid() || !arg.is_explain_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("explain alter table requires valid explain argument", KR(ret), K(arg));
+  } else if (OB_FAIL(ddl_service_.explain_alter_table(nonconst_arg, res, ddl_plan))) {
+    LOG_WARN("explain alter table failed", KR(ret), K(arg));
+  }
+  return ret;
+}
+
 int ObRootService::exchange_partition(const obrpc::ObExchangePartitionArg &arg, obrpc::ObAlterTableRes &res)
 {
   int ret = OB_SUCCESS;
@@ -3915,15 +3936,17 @@ int ObRootService::exchange_partition(const obrpc::ObExchangePartitionArg &arg, 
       LOG_WARN("fail to check and exchange partition", K(ret), K(arg), K(res));
     }
   }
-  char table_id_buffer[256];
-  snprintf(table_id_buffer, sizeof(table_id_buffer), "table_id:%ld, exchange_table_id:%ld",
-            arg.base_table_id_, arg.inc_table_id_);
-  ROOTSERVICE_EVENT_ADD("ddl scheduler", "alter table",
-                        K(arg.tenant_id_),
-                        "ret", ret,
-                        "trace_id", *ObCurTraceId::get_trace_id(),
-                        "table_id", table_id_buffer,
-                        "schema_version", res.schema_version_);
+  if (!arg.is_explain_) {
+    char table_id_buffer[256];
+    snprintf(table_id_buffer, sizeof(table_id_buffer), "table_id:%ld, exchange_table_id:%ld",
+              arg.base_table_id_, arg.inc_table_id_);
+    ROOTSERVICE_EVENT_ADD("ddl scheduler", "alter table",
+                          K(arg.tenant_id_),
+                          "ret", ret,
+                          "trace_id", *ObCurTraceId::get_trace_id(),
+                          "table_id", table_id_buffer,
+                          "schema_version", res.schema_version_);
+  }
   LOG_INFO("finish alter table ddl", K(ret), K(arg), K(res), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }

@@ -24,6 +24,7 @@ int ObDDLArg::assign(const ObDDLArg &other)
     task_id_ = other.task_id_;
     consumer_group_id_ = other.consumer_group_id_;
     is_parallel_ = other.is_parallel_;
+    is_explain_ = other.is_explain_;
   }
   return ret;
 }
@@ -38,7 +39,8 @@ DEF_TO_STRING(ObDDLArg)
        K_(based_schema_object_infos),
        K_(parallelism),
        K_(task_id),
-       K_(consumer_group_id));
+       K_(consumer_group_id),
+       K_(is_explain));
   return pos;
 }
 

@@ -425,7 +425,7 @@ GLOBAL_ALIAS SESSION_ALIAS WITH_COLUMN_GROUP
 %type <node> subpartition_template_option subpartition_individual_option opt_hash_partition_list hash_partition_list hash_partition_element opt_hash_subpartition_list hash_subpartition_list hash_subpartition_element opt_subpartition_list opt_engine_option
 %type <node> date_unit date_params timestamp_params
 %type <node> drop_table_stmt table_list drop_view_stmt table_or_tables
-%type <node> explain_stmt explainable_stmt format_name kill_stmt help_stmt create_outline_stmt alter_outline_stmt drop_outline_stmt opt_outline_target
+%type <node> explain_stmt explainable_stmt outlineable_stmt format_name kill_stmt help_stmt create_outline_stmt alter_outline_stmt drop_outline_stmt opt_outline_target
 %type <node> expr_list expr expr_const conf_const simple_expr simple_expr_list expr_or_default bit_expr bool_pri predicate explain_or_desc pl_expr_stmt
 %type <node> column_ref multi_delete_table
 %type <node> case_expr func_expr in_expr sub_query_flag search_expr
@@ -17036,7 +17036,7 @@ ROWS
  *
  *****************************************************************************/
 create_outline_stmt:
-create_with_opt_hint opt_replace outline_type OUTLINE relation_name ON explainable_stmt opt_outline_target
+create_with_opt_hint opt_replace outline_type OUTLINE relation_name ON outlineable_stmt opt_outline_target
 {
   ParseNode *name_node = NULL;
   ParseNode *flag_node = new_terminal_node(result->malloc_pool_, T_DEFAULT);
@@ -17070,7 +17070,7 @@ create_with_opt_hint opt_replace outline_type OUTLINE relation_name ON STRING_VA
  *
  *****************************************************************************/
 alter_outline_stmt:
-ALTER outline_type OUTLINE relation_name ADD explainable_stmt opt_outline_target
+ALTER outline_type OUTLINE relation_name ADD outlineable_stmt opt_outline_target
 {
   //(void)($1);
   ParseNode *name_node = NULL;
@@ -17107,7 +17107,7 @@ FORMAT
 }
 
 opt_outline_target:
-TO explainable_stmt
+TO outlineable_stmt
 {
   $$ = $2;
   dup_expr_string($$, result, @2.first_column, @2.last_column);
@@ -17177,6 +17177,11 @@ EXPLAIN {$$ = NULL;}
 ;
 
 explainable_stmt:
+outlineable_stmt      { $$ = $1; }
+| alter_table_stmt    { $$ = $1; }
+;
+
+outlineable_stmt:
 select_stmt         { $$ = $1; }
 | delete_stmt         { $$ = $1; }
 | insert_stmt         { $$ = $1; }

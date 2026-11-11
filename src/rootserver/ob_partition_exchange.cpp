@@ -99,6 +99,11 @@ int ObPartitionExchange::check_and_exchange_partition(const obrpc::ObExchangePar
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "exchange partition on random partition table");
   } else if (OB_FAIL(check_partition_exchange_conditions_(arg, *base_table_schema, *inc_table_schema, is_oracle_mode, schema_guard, part_exchange_type, base_tablet_ids, inc_tablet_ids))) {
     LOG_WARN("fail to check partition exchange conditions", K(ret), K(arg), KPC(base_table_schema), KPC(inc_table_schema), K(is_oracle_mode));
+  } else if (arg.is_explain_) {
+    res.ddl_type_ = (ObPartitionLevel::PARTITION_LEVEL_ONE == arg.exchange_partition_level_)
+                      ? ObDDLType::DDL_EXCHANGE_PARTITION
+                      : ObDDLType::DDL_EXCHANGE_SUBPARTITION;
+    LOG_INFO("[EXPLAIN DDL] exchange partition early return", K(res.ddl_type_), K(arg));
   } else if (OB_FAIL(inner_init(*base_table_schema, *inc_table_schema, is_oracle_mode, schema_guard))) {
     LOG_WARN("fail to inner init", K(ret), K(arg), KPC(base_table_schema), KPC(inc_table_schema), K(is_oracle_mode));
   } else if (OB_FAIL(do_exchange_partitions_(arg, res, *base_table_schema, *inc_table_schema, is_oracle_mode, schema_guard, part_exchange_type, base_tablet_ids, inc_tablet_ids))) {
@@ -573,6 +578,7 @@ int ObPartitionExchange::do_exchange_partitions_(
   }
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
+    DEBUG_SYNC(BEFORE_DDL_SERVICE_TRANS_END);
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
       LOG_WARN_RET(temp_ret, "trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
       ret = (OB_SUCC(ret)) ? temp_ret : ret;
