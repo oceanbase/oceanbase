@@ -1088,7 +1088,7 @@ int ObDelFilesOp::init(const common::ObString &uri, const common::ObObjectStorag
   } else if (OB_FAIL(databuff_printf(dir_path_, sizeof(dir_path_), dir_path_len_,
                                      "%.*s", uri.length(), uri.ptr()))) {
     OB_LOG(WARN, "fail to fill dir_path", KR(ret), K(uri));
-  } else if (dir_path_[dir_path_len_] != '/') {
+  } else if (dir_path_[dir_path_len_ - 1] != '/') {
     if (OB_UNLIKELY(dir_path_len_ >= sizeof(dir_path_) - 1)) {
       ret = OB_INVALID_ARGUMENT;
       OB_LOG(WARN, "uri too long", KR(ret), K(uri), K(dir_path_len_), K(sizeof(dir_path_)));
