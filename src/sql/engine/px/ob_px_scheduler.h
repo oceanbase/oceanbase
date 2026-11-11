@@ -29,6 +29,7 @@ namespace sql
 
 class ObPxCoordOp;
 class ObPxObDfoMgr;
+class ObSQLSessionInfo;
 class ObPxRootDfoAction
 {
 public:
@@ -113,6 +114,7 @@ public:
     batch_rescan_ctl_(NULL),
     pruning_table_location_(NULL),
     table_access_type_(TableAccessType::NO_TABLE),
+    ignore_vtable_error_(false),
     qc_detectable_id_(),
     p2p_dfo_map_(),
     p2p_temp_table_info_(),
@@ -136,7 +138,7 @@ public:
     p2p_dfo_map_.reuse();
     p2p_temp_table_info_.reset();
   }
-  int init();
+  int init(const ObSQLSessionInfo &session);
   bool enable_px_batch_rescan() { return get_rescan_param_count() > 0; }
   int64_t get_rescan_param_count()
   {
@@ -146,10 +148,10 @@ public:
   {
     return NULL == batch_rescan_ctl_ ? 0 : batch_rescan_ctl_->cur_idx_;
   }
-  // if there is no physical op visits user table and at least one physical op visits virtual table, ignore error
-  OB_INLINE bool should_ignore_vtable_error()
+  // Apply the QC's setting only to a DFO tree that accesses virtual tables exclusively.
+  OB_INLINE bool should_ignore_vtable_error() const
   {
-    return TableAccessType::PURE_VIRTUAL_TABLE == table_access_type_;
+    return ignore_vtable_error_ && TableAccessType::PURE_VIRTUAL_TABLE == table_access_type_;
   }
 public:
   ObDfoMgr dfo_mgr_;
@@ -163,6 +165,7 @@ public:
   ObBatchRescanCtl *batch_rescan_ctl_;
   const common::ObIArray<ObTableLocation> *pruning_table_location_;
   TableAccessType table_access_type_;
+  bool ignore_vtable_error_; // Read once when the QC opens; preserve across rescans.
   ObDetectableId qc_detectable_id_;
   // key = p2p_dh_id value = dfo_id + target_addrs
   hash::ObHashMap<int64_t, ObP2PDfoMapNode, hash::NoPthreadDefendMode> p2p_dfo_map_;

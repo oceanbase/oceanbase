@@ -1128,6 +1128,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_global_debug_sync",
   "ob_hnsw_ef_search",
   "ob_hnsw_extra_info_max_size",
+  "ob_ignore_virtual_table_error",
   "ob_interm_result_mem_limit",
   "ob_ivf_nprobes",
   "ob_kv_mode",
@@ -1984,6 +1985,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_GLOBAL_DEBUG_SYNC,
   SYS_VAR_OB_HNSW_EF_SEARCH,
   SYS_VAR_OB_HNSW_EXTRA_INFO_MAX_SIZE,
+  SYS_VAR_OB_IGNORE_VIRTUAL_TABLE_ERROR,
   SYS_VAR_OB_INTERM_RESULT_MEM_LIMIT,
   SYS_VAR_OB_IVF_NPROBES,
   SYS_VAR_OB_KV_MODE,
@@ -3133,7 +3135,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "ob_udf_cost_factor",
   "ob_udf_selectivity",
   "_enable_pl_composite_as_sql_udt",
-  "ob_resource_group"
+  "ob_resource_group",
+  "ob_ignore_virtual_table_error"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -4191,6 +4194,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarObUdfSelectivity)
         + sizeof(ObSysVarEnablePlCompositeAsSqlUdt)
         + sizeof(ObSysVarObResourceGroup)
+        + sizeof(ObSysVarObIgnoreVirtualTableError)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -11874,6 +11878,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_RESOURCE_GROUP))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObResourceGroup));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObIgnoreVirtualTableError())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObIgnoreVirtualTableError", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_IGNORE_VIRTUAL_TABLE_ERROR))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObIgnoreVirtualTableError));
       }
     }
 
@@ -21266,6 +21279,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObResourceGroup())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObResourceGroup", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_IGNORE_VIRTUAL_TABLE_ERROR: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObIgnoreVirtualTableError)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObIgnoreVirtualTableError)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObIgnoreVirtualTableError())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObIgnoreVirtualTableError", K(ret));
       }
       break;
     }

@@ -94,6 +94,7 @@ protected:
                    ObDfoMgr &dfo_mgr);
   /* interrupt */
   int terminate_running_dfos(ObDfoMgr &dfo_mgr);
+  void warn_on_virtual_table_error(int error_code) const;
   int post_init_op_ctx();
 
   /* for debug only */

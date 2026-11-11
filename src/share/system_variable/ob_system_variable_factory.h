@@ -6171,6 +6171,13 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_RESOURCE_GROUP; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(852); }
 };
+class ObSysVarObIgnoreVirtualTableError : public ObBoolSysVar
+{
+public:
+  ObSysVarObIgnoreVirtualTableError() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_IGNORE_VIRTUAL_TABLE_ERROR; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(853); }
+};
 
 
 class ObSysVarFactory
@@ -6194,7 +6201,7 @@ private:
 
 public:
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
-  const static int64_t OB_SYS_VARS_COUNT = 754;
+  const static int64_t OB_SYS_VARS_COUNT = 755;
   const static int64_t OB_SYS_DEFAULT_VALUE_CHANGED_SERIALIZED_VAR_COUNT = 10;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;

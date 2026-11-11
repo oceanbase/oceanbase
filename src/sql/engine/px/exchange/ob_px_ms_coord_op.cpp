@@ -452,6 +452,7 @@ int ObPxMSCoordOp::inner_get_next_row()
         && OB_SUCCESS != ret_terminate) {
       ret = ret_terminate;
     }
+    warn_on_virtual_table_error(ret);
   }
   return ret;
 }
