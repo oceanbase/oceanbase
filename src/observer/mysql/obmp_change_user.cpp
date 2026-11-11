@@ -233,9 +233,15 @@ int ObMPChangeUser::process()
     get_conn()->client_cs_type_ = charset_;
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     session->update_last_active_time();
-    if (OB_FAIL(ObSqlTransControl::rollback_trans(session, need_disconnect))) {
+    // for XA trans, can not rollback it directly, use kill_tx to abort it
+    if (session->associated_xa()) {
+      if (OB_FAIL(ObSqlTransControl::kill_tx(session, OB_TRANS_ROLLBACKED))) {
+        OB_LOG(WARN, "fail to kill xa trans for change user", K(ret));
+      }
+    } else if (OB_FAIL(ObSqlTransControl::rollback_trans(session, need_disconnect))) {
       OB_LOG(WARN, "fail to rollback trans for change user", K(ret), K(session));
-    } else {
+    }
+    if (OB_SUCC(ret)) {
       session->clean_status();
       if (is_proxy_mod && has_proxy_connection_id_key_ &&
           OB_FAIL(update_conn_attrs(get_conn(), session))) {
