@@ -2545,6 +2545,7 @@ private:
     DEF_SYS_VAR_BIT_ENUM(json_float_full_precision, 64)
     DEF_SYS_VAR_BIT_ENUM(max_execution_time, 65)
     DEF_SYS_VAR_BIT_ENUM(enable_pl_composite_as_sql_udt, 66)
+    DEF_SYS_VAR_BIT_ENUM(ob_query_memory_limit, 67)
     BIT_MAX_POSITION = 128  // max position is 128 now
   };
 #undef DEF_SYS_VAR_BIT_ENUM
