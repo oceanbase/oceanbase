@@ -282,22 +282,35 @@ int ObAllVirtualDynamicPartitionTable::build_new_row_(
             // same as __all_part, set tz offset to 0
             ObTimeZoneInfo tz_info;
             tz_info.set_offset(0);
-            const ObRowkey &max_high_bound_val = max_part->get_high_bound_val();
             char *buf = NULL;
             int64_t pos = 0;
             const int64_t high_bound_val_length = OB_MAX_B_HIGH_BOUND_VAL_LENGTH;
             if (OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(high_bound_val_length)))) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
               SERVER_LOG(WARN, "allocate memory failed", KR(ret));
-            } else if (OB_FAIL(ObPartitionUtils::convert_rowkey_to_sql_literal(is_oracle_mode,
-                                                                               max_high_bound_val,
-                                                                               buf,
-                                                                               high_bound_val_length,
-                                                                               pos,
-                                                                               false/*print_collation*/,
-                                                                               &tz_info))) {
-              SERVER_LOG(WARN, "Failed to convert rowkey to sql text", KR(ret), K(max_high_bound_val));
+            } else if (table_schema.is_list_part()) {
+              if (OB_FAIL(ObPartitionUtils::convert_rows_to_sql_literal(is_oracle_mode,
+                                                                        max_part->get_list_row_values(),
+                                                                        buf,
+                                                                        high_bound_val_length,
+                                                                        pos,
+                                                                        false/*print_collation*/,
+                                                                        &tz_info))) {
+                SERVER_LOG(WARN, "Failed to convert list values to sql text", KR(ret), KPC(max_part));
+              }
             } else {
+              const ObRowkey &max_high_bound_val = max_part->get_high_bound_val();
+              if (OB_FAIL(ObPartitionUtils::convert_rowkey_to_sql_literal(is_oracle_mode,
+                                                                          max_high_bound_val,
+                                                                          buf,
+                                                                          high_bound_val_length,
+                                                                          pos,
+                                                                          false/*print_collation*/,
+                                                                          &tz_info))) {
+                SERVER_LOG(WARN, "Failed to convert rowkey to sql text", KR(ret), K(max_high_bound_val));
+              }
+            }
+            if (OB_SUCC(ret)) {
               ObString max_high_bound_val_str;
               max_high_bound_val_str.assign_ptr(buf, pos);
               cells[cell_idx].set_varchar(max_high_bound_val_str);
