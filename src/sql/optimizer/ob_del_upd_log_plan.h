@@ -251,6 +251,14 @@ public:
 protected:
   virtual int generate_normal_raw_plan() override;
   virtual int generate_dblink_raw_plan() override;
+  int retry_table_location_and_sharding_for_interval(const ObDelUpdStmt &stmt,
+                                                     const ObIArray<ObRawExpr*> &filters,
+                                                     const uint64_t table_id,
+                                                     const uint64_t ref_table_id,
+                                                     const ObIArray<common::ObObjectID> *part_ids,
+                                                     ObShardingInfo *&sharding_info,
+                                                     ObTablePartitionInfo *&table_partition_info,
+                                                     bool &is_recovered);
   int allocate_optimizer_stats_gathering_as_top(ObLogicalOperator *&old_top,
                                                 OSGShareInfo &info,
                                                 OSG_TYPE type);
@@ -261,7 +269,6 @@ protected:
                                     ObIArray<ObRawExpr*> &normal_query_refs,
                                     ObIArray<ObRawExpr*> &alias_query_refs,
                                     ObIArray<ObAliasRefRawExpr*> &project_ref_exprs);
-  int check_pdml_interval_partition_supported(const uint64_t ref_table_id) const;
   int check_use_direct_load();
   int check_basic_sharding_for_dml_stmt(ObShardingInfo &target_sharding,
                                         ObLogicalOperator &child,

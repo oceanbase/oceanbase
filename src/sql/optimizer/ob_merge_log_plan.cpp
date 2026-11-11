@@ -244,7 +244,32 @@ int ObMergeLogPlan::candi_allocate_pdml_merge()
                                                           &index_dml_info->part_ids_,
                                                           target_sharding,
                                                           target_table_partition))) {
-    LOG_WARN("failed to calculate table location and sharding", K(ret));
+    if (OB_NO_PARTITION_FOR_GIVEN_VALUE == ret && get_stmt()->has_insert_clause()) {
+      int tmp_ret = OB_SUCCESS;
+      bool is_recovered = false;
+      if (OB_SUCCESS != (tmp_ret = retry_table_location_and_sharding_for_interval(*get_stmt(),
+                                                                                  get_stmt()->get_sharding_conditions(),
+                                                                                  index_dml_info->loc_table_id_,
+                                                                                  index_dml_info->ref_table_id_,
+                                                                                  &index_dml_info->part_ids_,
+                                                                                  target_sharding,
+                                                                                  target_table_partition,
+                                                                                  is_recovered))) {
+        ret = tmp_ret;
+      } else if (is_recovered) {
+        // 1. tmp_ret == OB_SUCCESS && is_recovered == true
+        //    set ret = tmp_ret (OB_SUCCESS)
+        // 2. tmp_ret == OB_SUCCESS && is_recovered == false
+        //    did not retry, keep the original error
+        ret = tmp_ret;
+      }
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to calculate table location and sharding", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
   } else if (OB_ISNULL(target_sharding) || OB_ISNULL(target_table_partition)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(target_sharding), K(target_table_partition), K(ret));

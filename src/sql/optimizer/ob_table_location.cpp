@@ -1958,7 +1958,7 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
             || stmt::T_REPLACE == stmt_type_
             || check_no_partition_)) {
       ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
-      LOG_USER_WARN(OB_NO_PARTITION_FOR_GIVEN_VALUE);
+      LOG_TRACE("no partition found during partition calculation", K(ret));
     }
     //deal partition hint
     if (OB_SUCCESS == ret && part_hint_ids_.count() > 0) {

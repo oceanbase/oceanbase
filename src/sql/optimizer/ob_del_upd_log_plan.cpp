@@ -34,32 +34,6 @@ int ObDelUpdLogPlan::generate_normal_raw_plan()
   return ret;
 }
 
-int ObDelUpdLogPlan::check_pdml_interval_partition_supported(const uint64_t ref_table_id) const
-{
-  int ret = OB_SUCCESS;
-  const ObSimpleTableSchemaV2 *table_schema = nullptr;
-  ObSchemaGetterGuard *schema_guard = optimizer_context_.get_schema_guard();
-  ObSQLSessionInfo *session_info = optimizer_context_.get_session_info();
-  if (OB_ISNULL(schema_guard) || OB_ISNULL(session_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null ptr", K(ret), K(schema_guard), K(session_info));
-  } else if (OB_FAIL(schema_guard->get_simple_table_schema(session_info->get_effective_tenant_id(),
-                                                           ref_table_id,
-                                                           table_schema))) {
-    LOG_WARN("get table schema failed", K(ret), K(ref_table_id));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("table schema is null", K(ret), K(ref_table_id));
-  } else if (table_schema->is_interval_part()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("PDML on interval partition table is not supported",
-             K(ret), K(ref_table_id));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "PDML on interval partition table is");
-  }
-  return ret;
-}
-
 int ObDelUpdLogPlan::compute_dml_parallel()
 {
   int ret = OB_SUCCESS;
@@ -524,12 +498,6 @@ int ObDelUpdLogPlan::calculate_table_location_and_sharding(const ObDelUpdStmt &s
                                          ref_table_id,
                                          part_ids,
                                          *table_partition_info))) {
-      if (OB_NO_PARTITION_FOR_GIVEN_VALUE == ret) {
-        int tmp_ret = check_pdml_interval_partition_supported(ref_table_id);
-        if (OB_NOT_SUPPORTED == tmp_ret) {
-          ret = tmp_ret;
-        }
-      }
       LOG_WARN("failed to calculate table location", KR(ret));
     } else if (OB_FAIL(table_partition_info->get_location_type(server, location_type))) {
       LOG_WARN("get location type failed", K(ret));
@@ -544,6 +512,50 @@ int ObDelUpdLogPlan::calculate_table_location_and_sharding(const ObDelUpdStmt &s
     } else {
       LOG_TRACE("succeed to generate target sharding info", K(*sharding_info),
           K(*table_partition_info));
+    }
+  }
+  return ret;
+}
+
+int ObDelUpdLogPlan::retry_table_location_and_sharding_for_interval(
+    const ObDelUpdStmt &stmt,
+    const ObIArray<ObRawExpr*> &filters,
+    const uint64_t table_id,
+    const uint64_t ref_table_id,
+    const ObIArray<ObObjectID> *part_ids,
+    ObShardingInfo *&sharding_info,
+    ObTablePartitionInfo *&table_partition_info,
+    bool &is_recovered)
+{
+  int ret = OB_SUCCESS;
+  is_recovered = false;
+  if (filters.empty() || get_optimizer_context().is_online_ddl()) {
+    // used empty filter before, no need to retry with empty filter
+  } else if (nullptr != part_ids && !part_ids->empty()) {
+    // e.g. insert into t partition(p0) select ...
+    // do nothing
+  } else {
+    const ObTableSchema *table_schema = nullptr;
+    ObSqlSchemaGuard *schema_guard = get_optimizer_context().get_sql_schema_guard();
+    if (OB_ISNULL(schema_guard)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null schema guard", K(ret));
+    } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), K(ref_table_id));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table schema is null", K(ret), K(ref_table_id));
+    } else if (table_schema->is_interval_part()) {
+      // Defer interval creation to execution, using all existing partitions
+      // to rebuild both the location and sharding for the PX plan.
+      const ObArray<ObRawExpr*> empty_filters;
+      if (OB_FAIL(calculate_table_location_and_sharding(stmt, empty_filters, table_id,
+                                                        ref_table_id, part_ids,
+                                                        sharding_info, table_partition_info))) {
+        LOG_WARN("failed to recalculate table location and sharding", K(ret));
+      } else {
+        is_recovered = true;
+      }
     }
   }
   return ret;
@@ -1351,15 +1363,41 @@ int ObDelUpdLogPlan::candi_allocate_one_pdml_insert(bool is_index_maintenance,
         LOG_WARN("failed to assign sharding conditions", K(ret));
       }
     }
+    const ObIArray<ObObjectID> *part_ids = get_stmt()->is_insert_stmt() ? &index_dml_info->part_ids_ : NULL;
     if (FAILEDx(calculate_table_location_and_sharding(
                        *get_stmt(),
                        sharding_conditions,
                        index_dml_info->loc_table_id_,
                        index_dml_info->ref_table_id_,
-                       get_stmt()->is_insert_stmt() ? &index_dml_info->part_ids_ : NULL,
+                       part_ids,
                        target_sharding,
                        target_table_partition))) {
-      LOG_WARN("failed to calculate table location and sharding", K(ret), KPC(index_dml_info));
+      if (OB_NO_PARTITION_FOR_GIVEN_VALUE == ret && !is_pdml_update_split) {
+        int tmp_ret = OB_SUCCESS;
+        bool is_recovered = false;
+        if (OB_SUCCESS != (tmp_ret = retry_table_location_and_sharding_for_interval(*get_stmt(),
+                                                                                    sharding_conditions,
+                                                                                    index_dml_info->loc_table_id_,
+                                                                                    index_dml_info->ref_table_id_,
+                                                                                    part_ids,
+                                                                                    target_sharding,
+                                                                                    target_table_partition,
+                                                                                    is_recovered))) {
+          ret = tmp_ret;
+        } else if (is_recovered) {
+          // 1. tmp_ret == OB_SUCCESS && is_recovered == true
+          //    set ret = tmp_ret (OB_SUCCESS)
+          // 2. tmp_ret == OB_SUCCESS && is_recovered == false
+          //    did not retry, keep the original error
+          ret = tmp_ret;
+        }
+      }
+      if (OB_FAIL(ret)) {
+        LOG_WARN("failed to calculate table location and sharding", K(ret), KPC(index_dml_info));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
     } else if (OB_ISNULL(target_sharding) || OB_ISNULL(target_table_partition)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(target_sharding), K(target_table_partition), K(ret));
