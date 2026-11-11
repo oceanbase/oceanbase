@@ -166,14 +166,19 @@ int ObGroupByPushdownContext::map_and_check(const common::ObIArray<ObRawExpr *> 
     } else if (OB_ISNULL(replaced_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null replaced expr", K(ret), K(i));
-    } else if (OB_FAIL(replaced_aggr_exprs.push_back(replaced_expr))) {
-      LOG_WARN("failed to pushback expr", K(ret));
-    } else if (check_valid && aggr_exprs_.at(i) == replaced_expr) {
-      if (replaced_expr->is_const_expr()) {
-        // ok
-      } else {
+    } else if (aggr_exprs_.at(i) == replaced_expr) {
+      if (T_FUN_COUNT == replaced_expr->get_expr_type()
+          && 0 == replaced_expr->get_param_count()) {
+        // COUNT(*) has no parameters to replace, but each branch needs its own aggregate node.
+        if (OB_FAIL(copier.copy_expr_node(aggr_exprs_.at(i), replaced_expr))) {
+          LOG_WARN("failed to copy count expr", K(ret));
+        }
+      } else if (check_valid && !replaced_expr->is_const_expr()) {
         is_valid = false;
       }
+    }
+    if (OB_SUCC(ret) && is_valid && OB_FAIL(replaced_aggr_exprs.push_back(replaced_expr))) {
+      LOG_WARN("failed to pushback expr", K(ret));
     }
   }
 
