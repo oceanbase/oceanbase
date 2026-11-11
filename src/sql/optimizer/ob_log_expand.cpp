@@ -63,6 +63,12 @@ int ObLogExpand::get_plan_item_info(PlanText &plan_text, ObSqlPlanItem &plan_ite
         }
         OX(BUF_PRINTF("]"));
       }
+      if (ret == OB_SIZE_OVERFLOW) {
+        // drop the overflowing expand text, so that the remaining operators
+        // can still be printed into the shared plan text buffer
+        ret = OB_SUCCESS;
+        pos = start_pos;
+      }
       END_BUF_PRINT(plan_item.special_predicates_, plan_item.special_predicates_len_);
     }
   }
