@@ -44,7 +44,7 @@ public:
     return instance;
   }
 public:
-  LogIODeviceWrapper() : log_local_device_(NULL), device_manager_(NULL), is_inited_(false) {}
+  LogIODeviceWrapper() : log_local_device_(NULL), io_manager_(NULL), device_manager_(NULL), is_inited_(false) {}
   int init(const char *clog_dir,
            const int64_t disk_io_thread_count,
            const int64_t max_io_depth,
@@ -54,6 +54,7 @@ public:
   share::ObLocalDevice* get_local_device();
 private:
   share::ObLocalDevice *log_local_device_;
+  common::ObIOManager *io_manager_;
   common::ObDeviceManager *device_manager_;
   bool is_inited_;
 };
