@@ -26,6 +26,7 @@ const char* ObRelation::get_relation_type_string(const RelationType type)
     RELATION_TYPE_TO_STR(JOIN)
     RELATION_TYPE_TO_STR(FROM)
     RELATION_TYPE_TO_STR(GROUP)
+    RELATION_TYPE_TO_STR(WINDOW)
     RELATION_TYPE_TO_STR(SELECT)
     RELATION_TYPE_TO_STR(SET)
     default:  str = "UNKNOWN";

@@ -22,6 +22,7 @@ enum class RelationType
   JOIN,
   FROM,
   GROUP,
+  WINDOW,
   SELECT,
   SET,
   MAX
