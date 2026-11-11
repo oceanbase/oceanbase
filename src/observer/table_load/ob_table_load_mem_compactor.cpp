@@ -525,8 +525,9 @@ void ObTableLoadMemCompactor::stop()
 int ObTableLoadMemCompactor::handle_compact_thread_finish()
 {
   int ret = OB_SUCCESS;
+  const int64_t total_thread_cnt = mem_ctx_.total_thread_cnt_ + 1; // sample thread
   const int64_t finish_thread_cnt = ATOMIC_AAF(&finish_thread_cnt_, 1);
-  if (finish_thread_cnt == mem_ctx_.total_thread_cnt_ + 1 /*sample thread*/) {
+  if (finish_thread_cnt == total_thread_cnt) {
     if (OB_LIKELY(!mem_ctx_.has_error_) && OB_FAIL(start_finish())) {
       LOG_WARN("fail to start finish", KR(ret));
     }
