@@ -230,6 +230,7 @@ private:
       ObIArray<transaction::ObTransID> *move_tx_ids);
   int lock_transfer_task_(
       const share::ObTransferTaskInfo &task_info,
+      share::ObTransferTaskInfo &table_task_info,
       common::ObISQLClient &trans);
   int get_start_transfer_out_scn_(
       const share::ObTransferTaskInfo &task_info,
