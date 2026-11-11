@@ -54,8 +54,12 @@ void ObDbmsInfo::reset()
   bind_params_.reset();
   exec_params_.reset();
   sql_stmt_.reset();
+  stmt_type_ = stmt::T_NONE;
+  ps_sql_.reset();
   define_columns_.reuse();
+  define_arrays_.reuse();
   fields_.reset();
+  fetch_rows_.reset();
   if (nullptr != entity_) {
     DESTROY_CONTEXT(entity_);
     entity_ = nullptr;
@@ -580,7 +584,10 @@ int ObDbmsCursorInfo::prepare_entity(sql::ObSQLSessionInfo &session)
 int ObDbmsCursorInfo::parse(const ObString &sql_stmt, ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
-  if (!get_sql_stmt().empty()) {
+  if (!get_sql_stmt().empty()
+      || stmt::T_NONE != get_stmt_type()
+      || nullptr != get_dbms_entity()
+      || nullptr != get_cursor_entity()) {
     OZ (close(session, true));
   }
   OZ (prepare_entity(session), sql_stmt);
@@ -910,6 +917,12 @@ int ObPLDbmsSql::do_parse(ObPLExecCtx &ctx,
     OX (cursor->get_ps_sql().reset());
     OX (cursor->get_sql_stmt().reset());
   }
+  if (OB_FAIL(ret) && OB_NOT_NULL(cursor) && OB_NOT_NULL(session)) {
+    int close_ret = cursor->close(*session, true);
+    if (OB_SUCCESS != close_ret) {
+      LOG_WARN("fail to close cursor after parse failure", K(ret), K(close_ret), K(cursor->get_id()));
+    }
+  }
   return ret;
 }
 
@@ -1141,7 +1154,11 @@ int ObPLDbmsSql::execute(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
       bool flag = false;
       OZ (check_stmt_need_to_be_executed_when_parsing(*cursor, flag));
       if (OB_SUCC(ret)) {
-        if (false == flag) {
+        if (!flag) {
+          if (cursor->get_sql_stmt().empty() || OB_ISNULL(cursor->get_dbms_entity())) {
+            ret = OB_NO_STMT_PARSE;
+            LOG_WARN("cursor has no valid parsed statement", K(ret), K(cursor->get_id()));
+          }
           OZ (do_execute(ctx, *cursor, params, result));
           //every ececute should reset current index of Array
           for (ObDbmsCursorInfo::DefineArrays::iterator iter = cursor->get_define_arrays().begin();
@@ -1385,10 +1402,16 @@ int ObPLDbmsSql::close_cursor(ObPLExecCtx &ctx, ParamStore &params, ObObj &resul
   CK (OB_NOT_NULL(exec_ctx));
   OX (session = exec_ctx->get_my_session());
   CK (OB_NOT_NULL(session));
-  OZ (cursor->close(*session), cursor_id);
-  OZ (session->close_dbms_cursor(cursor_id), cursor_id);
-
-  OX (params.at(0).set_null());
+  if (OB_SUCC(ret)) {
+    int close_ret = cursor->close(*session);
+    int remove_ret = session->close_dbms_cursor(cursor_id);
+    if (OB_SUCCESS != remove_ret) {
+      LOG_WARN("fail to remove dbms cursor", K(remove_ret), K(close_ret), K(cursor_id));
+    } else {
+      params.at(0).set_null();
+    }
+    ret = OB_SUCCESS == close_ret ? remove_ret : close_ret;
+  }
 
   return ret;
 }
