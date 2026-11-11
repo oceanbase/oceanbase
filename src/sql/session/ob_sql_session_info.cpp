@@ -5207,7 +5207,6 @@ int ObSQLSessionInfo::get_mem_ctx_alloc(common::ObIAllocator *&alloc)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_mem_context(get_effective_tenant_id()))) {
-    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get mem context", K(ret));
   } else {
     alloc = &mem_context_->get_malloc_allocator();
