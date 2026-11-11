@@ -399,7 +399,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_stale_vote_committed_log_dive
     LockGuard guard(b_election.lock_);
     b_election.proposer_.last_do_prepare_ts_ =
         ObClockGenerator::getClock() - CALCULATE_MAX_ELECT_COST_TIME();
-    b_election.proposer_.prepare(FOLLOWER);
+    b_election.proposer_.prepare(FOLLOWER, PrepareReason::DIRECT_TRIGGER);
   }
   auto prepares = b_transport.take(b_transport.prepare_requests_);
   ASSERT_EQ(1, prepares.size());
@@ -532,7 +532,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_stale_vote_committed_log_dive
       LockGuard guard(a_election.lock_);
       a_election.proposer_.last_do_prepare_ts_ =
           ObClockGenerator::getClock() - CALCULATE_MAX_ELECT_COST_TIME();
-      a_election.proposer_.prepare(FOLLOWER);
+      a_election.proposer_.prepare(FOLLOWER, PrepareReason::DIRECT_TRIGGER);
     }
     auto valid_prepares = a_transport.take(a_transport.prepare_requests_);
     ASSERT_EQ(1, valid_prepares.size());

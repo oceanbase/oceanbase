@@ -247,7 +247,9 @@ ObCopyTabletInfoArg::ObCopyTabletInfoArg()
     need_check_seq_(false),
     ls_rebuild_seq_(-1),
     is_only_copy_major_(false),
-    version_(OB_INVALID_ID)
+    version_(OB_INVALID_ID),
+    migration_task_id_(),
+    hold_version_list_()
 {
 }
 
@@ -260,6 +262,8 @@ void ObCopyTabletInfoArg::reset()
   ls_rebuild_seq_ = -1;
   is_only_copy_major_ = false;
   version_ = OB_INVALID_ID;
+  migration_task_id_.reset();
+  hold_version_list_.reset();
 }
 
 bool ObCopyTabletInfoArg::is_valid() const
@@ -273,7 +277,9 @@ bool ObCopyTabletInfoArg::is_valid() const
 
 OB_SERIALIZE_MEMBER(ObCopyTabletInfoArg,
     tenant_id_, ls_id_, tablet_id_list_, need_check_seq_, ls_rebuild_seq_,
-    is_only_copy_major_, version_);
+    is_only_copy_major_, version_,
+    migration_task_id_, // FARM COMPAT WHITELIST
+    hold_version_list_);
 
 ObCopyTabletInfo::ObCopyTabletInfo()
   : tablet_id_(),

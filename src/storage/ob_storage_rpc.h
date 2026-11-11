@@ -151,7 +151,8 @@ public:
   void reset();
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id_list), K_(need_check_seq),
-      K_(ls_rebuild_seq), K_(is_only_copy_major), K_(version));
+      K_(ls_rebuild_seq), K_(is_only_copy_major), K_(version), K_(migration_task_id),
+      K_(hold_version_list));
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObSArray<common::ObTabletID> tablet_id_list_;
@@ -159,6 +160,8 @@ public:
   int64_t ls_rebuild_seq_;
   bool is_only_copy_major_;
   uint64_t version_;
+  share::ObTaskId migration_task_id_; // FARM COMPAT WHITELIST
+  common::ObSArray<int64_t> hold_version_list_; // placeholder for migration hold src tablet
 };
 
 struct ObCopyTabletInfo
