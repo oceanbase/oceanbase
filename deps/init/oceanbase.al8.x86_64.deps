@@ -19,7 +19,7 @@ devdeps-mariadb-connector-c-3.1.12-42024100814.al8.x86_64.rpm
 devdeps-libaio-0.3.112-42024092715.al8.x86_64.rpm
 devdeps-relaxed-rapidjson-1.0.0-132024092715.al8.x86_64.rpm
 devdeps-openssl-static-1.1.1u-132024092718.al8.x86_64.rpm
-devdeps-libxml2-2.13.6-22025032016.al8.x86_64.rpm
+devdeps-libxml2-2.15.3-32026080610.al8.x86_64.rpm
 devdeps-mxml-3.3.1-22025092517.al8.x86_64.rpm
 devdeps-apr-1.7.5-122026081109.al8.x86_64.rpm
 devdeps-xz-5.2.2-112024092715.al8.x86_64.rpm

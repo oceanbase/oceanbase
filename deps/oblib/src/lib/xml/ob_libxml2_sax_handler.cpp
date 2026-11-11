@@ -102,7 +102,7 @@ void ObLibXml2SaxHandler::init()
   xsltInitGlobals();
   xsltInit();
 #endif
-  LOG_INFO("saxhandler init", K(xmlIsMainThread()));
+  LOG_INFO("saxhandler init");
 }
 
 void ObLibXml2SaxHandler::destroy()
@@ -356,6 +356,7 @@ static int create_memory_parser_ctxt(const ObString& xml_text, xmlParserCtxt*& c
   xmlParserInputPtr input = nullptr;
   xmlParserInputBufferPtr buf = nullptr;
 
+  // A memory input buffer is already populated in libxml2 2.14+, so grow may return zero.
   if (xml_text.empty()) {
     // do nothing
   } else if (OB_ISNULL(ctxt = xmlNewParserCtxt())) {
@@ -366,7 +367,7 @@ static int create_memory_parser_ctxt(const ObString& xml_text, xmlParserCtxt*& c
     LOG_WARN("create parser input buffer failed", K(ret));
     // free when error
     xmlFreeParserCtxt(ctxt);
-  } else if ((lib_ret = xmlParserInputBufferGrow(buf, xml_text.length())) != xml_text.length()) {
+  } else if ((lib_ret = xmlParserInputBufferGrow(buf, xml_text.length())) < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parser push input failed", K(lib_ret), K(xml_text.length()));
     // free when error
@@ -564,6 +565,11 @@ int ObLibXml2SaxParser::on_error(int code)
     // full recover mode
     if (OB_NOT_NULL(ctxt_)) {
       ctxt_->recovery = 1;
+      // libxml2 2.14+ disables SAX before reporting fatal errors. Resume only
+      // errors accepted by OceanBase; preserve a hard stop (disableSAX == 2).
+      if (ctxt_->disableSAX == 1) {
+        ctxt_->disableSAX = 0;
+      }
     }
   }
   return ret;

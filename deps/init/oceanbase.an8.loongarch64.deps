@@ -12,6 +12,7 @@ repo=https://ob-yum.oceanbase-dev.com/8/loongarch64/current
 repo=http://yum-test.obvos.alibaba-inc.com/oceanbase/development-kit/an/8/loongarch64/loong_3rd.tar.gz
 
 [deps]
+devdeps-libxml2-2.15.3-32026080610.an8.loongarch64.rpm
 obdal-0.2.2-20260630.an8.loongarch64.rpm
 devdeps-mxml-3.3.1-1.an8.loongarch64.rpm
 devdeps-apr-1.7.5-122026081109.an8.loongarch64.rpm
@@ -43,6 +44,7 @@ devdeps-kafka-2.12.1-20260701.an8.loongarch64.rpm
 devdeps-icu-69.1-20260630.an8.loongarch64.rpm
 
 # for business
+devdeps-libxslt-static-1.1.34-112026080612.an8.loongarch64.rpm
 babassl-ob-8.3.7-20260627.an8.loongarch64.rpm
 devdeps-s2geometry-0.10.0-20260630.an8.loongarch64.rpm
 libpalf-1.2.0-12026040115.an8.loongarch64.rpm
