@@ -55,7 +55,8 @@ class ObAllVirtualTableMgr : public common::ObVirtualTableScannerIterator,
     ROW_COUNT,
     UNCOMMIT_TX_INFO,
     ORIGINAL_SIZE,
-    REUSED_OCCUPY_SIZE
+    REUSED_OCCUPY_SIZE,
+    IS_EMBEDDED_SSTABLE
   };
   enum INDEX_KEY_ID
   {

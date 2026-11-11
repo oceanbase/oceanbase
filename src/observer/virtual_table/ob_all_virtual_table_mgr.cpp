@@ -395,6 +395,11 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           cur_row_.cells_[i].set_int(reused_occupy_size);
           break;
         }
+        case IS_EMBEDDED_SSTABLE: {
+          cur_row_.cells_[i].set_varchar("NO");
+          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          break;
+        }
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

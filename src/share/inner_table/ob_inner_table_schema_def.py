@@ -12734,7 +12734,8 @@ def_table_schema(
       ('row_count','int'),
       ('uncommit_tx_info', 'varchar:MAX_UNCOMMIT_TX_INFO_LENGTH'),
       ('original_size', 'int'),
-      ('reused_occupy_size', 'int')
+      ('reused_occupy_size', 'int'),
+      ('is_embedded_sstable', 'varchar:MAX_COLUMN_YES_NO_LENGTH')
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
