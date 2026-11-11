@@ -1436,7 +1436,17 @@ int ObTablet::init_for_sstable_replace(
   } else if (OB_FAIL(old_tablet.get_max_sync_storage_schema_version_(max_sync_schema_version))) {
     LOG_WARN("failed to get max sync storage schema version", K(ret));
   } else if (is_tablet_split && OB_FAIL(tablet_meta_.init(old_tablet.tablet_meta_,
-      param.tablet_split_param_.snapshot_version_, param.tablet_split_param_.multi_version_start_,
+      // M = multi_version_start, V = snapshot_version, S = start_split_commit_version_.
+      // Do not copy V_src: it may exceed commit_version(unflushed dst writes).
+      // M_new = max(M_dst, M_src): reject old snapshots whose history may have been reclaimed.
+      // V_new = max(V_dst, M_src): keep M_new <= V_new, given M_dst <= V_dst.
+      // If V_dst < M_src, keeping V_dst would make init() clamp M_new below M_src,
+      // allowing reads with missing history and potentially wrong results.
+      // If V_new > V_dst, then V_new = M_src <= S < commit_version(dst writes),
+      // so new writes stay above V_new.
+      // dst = old_tablet, read under the bucket lock to include concurrent updates.
+      MAX(old_tablet.get_snapshot_version(), param.tablet_split_param_.multi_version_start_),
+      MAX(old_tablet.get_multi_version_start(), param.tablet_split_param_.multi_version_start_),
       max_sync_schema_version, split_info))) {
     // init split tablet meta.
     LOG_WARN("failed to init tablet meta", K(ret), K(old_tablet), K(param), K(max_sync_schema_version));
@@ -6989,11 +6999,12 @@ int ObTablet::get_kept_snapshot_for_split(int64_t &min_split_snapshot) const
         LOG_WARN("failed to get tx data", K(ret), K(ls_id), K(tablet_id));
       }
     } else if (ObTabletStatus::SPLIT_SRC == user_data.get_tablet_status()) {
-      if (mds::TwoPhaseCommitState::ON_PREPARE == trans_stat) {
-        // commit version may be smaller than min_reserved_snapshot_on_ls, which is calculated from gts
-        min_split_snapshot = get_multi_version_start();
-      } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_stat) {
+      if (mds::TwoPhaseCommitState::ON_COMMIT == trans_stat) {
         min_split_snapshot = user_data.start_split_commit_version_;
+      } else {
+        // M = multi_version_start, S = start_split_commit_version_; S is only available after ON_COMMIT.
+        // Keep M in STATE_INIT, BEFORE_PREPARE and ON_PREPARE: the GTS-based GC bound may exceed S.
+        min_split_snapshot = get_multi_version_start();
       }
     }
   }

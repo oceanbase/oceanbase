@@ -1583,7 +1583,6 @@ int ObTabletSplitMergeTask::update_table_store_with_batch_tables(
   } else if (OB_FAIL(ObTabletSplitUtil::build_update_table_store_param(
       dest_reorg_scn,
       ls_rebuild_seq,
-      src_tablet_handle.get_obj()->get_snapshot_version(),
       src_tablet_handle.get_obj()->get_multi_version_start(),
       dst_tablet_id, tables_handle, merge_type, skipped_split_major_keys,
       param))) {

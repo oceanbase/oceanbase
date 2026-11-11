@@ -1416,7 +1416,6 @@ int ObTabletSplitUtil::check_tablet_ha_status(
 int ObTabletSplitUtil::build_update_table_store_param(
     const share::SCN &reorg_scn,
     const int64_t ls_rebuild_seq,
-    const int64_t snapshot_version,
     const int64_t multi_version_start,
     const ObTabletID &dst_tablet_id,
     const ObTablesHandleArray &tables_handle,
@@ -1430,11 +1429,10 @@ int ObTabletSplitUtil::build_update_table_store_param(
 
   if (OB_UNLIKELY(!dst_tablet_id.is_valid()
       || !is_valid_merge_type(merge_type)
-      || (!is_major_merge_type(merge_type) && tables_handle.empty())
-      || (is_major_merge_type(merge_type) && snapshot_version < 0))) {
+      || multi_version_start < 0
+      || (!is_major_merge_type(merge_type) && tables_handle.empty()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(snapshot_version), K(multi_version_start),
-      K(dst_tablet_id), K(merge_type), K(tables_handle));
+    LOG_WARN("invalid arg", K(ret), K(multi_version_start), K(dst_tablet_id), K(merge_type), K(tables_handle));
   } else if (!is_major_merge_type(merge_type)) { // minor merge or mds mini merge.
     if (OB_FAIL(param.tables_handle_.assign(tables_handle))) {
       LOG_WARN("assign failed", K(ret), K(tables_handle));
@@ -1477,7 +1475,6 @@ int ObTabletSplitUtil::build_update_table_store_param(
   }
 
   if (OB_SUCC(ret)) {
-    param.tablet_split_param_.snapshot_version_         = snapshot_version;
     param.tablet_split_param_.multi_version_start_      = multi_version_start;
     param.tablet_split_param_.merge_type_               = merge_type;
     param.rebuild_seq_                                  = ls_rebuild_seq; // old rebuild seq.
