@@ -439,10 +439,12 @@ int NthValue::may_reuse_last_result(
     }
   }
   // 2. try to peek if (last_frame, current_frame) are all nulls
+  // RANGE frame boundaries jump across whole peer groups, so the distance
+  // between last_frame_ and frame may exceed max_batch_size_. is_all_null
+  // reads rows via the random-access reader over the whole stored partition
+  // and is not limited to the attached batch, so probing any in-store range
+  // is safe here.
   if (!may_store || !last_result_is_valid_) {
-  } else if (end_idx - start_idx > ctx.win_col_.op_.get_spec().max_batch_size_) {
-    ret = OB_UNEXPECT_INTERNAL_ERROR;
-    LOG_WARN("unexpected window", K(ret), K(end_idx), K(start_idx), K(frame), K(last_frame_), K(last_result_is_valid_));
   } else if (end_idx == start_idx) {
     // same frame as the last
     may_reused = true;
@@ -475,11 +477,14 @@ int NthValue::store_result_for_reuse(WinExprEvalCtx &ctx, const char *src,
                                      int32_t len, const Frame &frame) {
   int ret = OB_SUCCESS;
   // 1. alloc for last_result
-  if (last_result_ == nullptr || last_result_capacity_ < len) {
+  // A zero-length value (e.g. a non-null empty string) needs no buffer: the
+  // read path (memcpy_results) does not touch last_result_ when len is 0,
+  // and alloc(0) may return nullptr which would be misreported as -4013.
+  if (len > 0 && (last_result_ == nullptr || last_result_capacity_ < len)) {
     last_result_ = ctx.reserved_buf(len);
     if (OB_ISNULL(last_result_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret));
+      LOG_WARN("allocate memory failed", K(ret), K(len));
     } else {
       LOG_TRACE("allocated temp memory", K(len));
       last_result_capacity_ = len;

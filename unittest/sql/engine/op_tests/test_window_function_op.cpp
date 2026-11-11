@@ -508,6 +508,106 @@ TEST_F(WindowFunctionOpTest, StreamingRescan)
 }
 
 // ============================================================================
+// IGNORE NULLS reuse across RANGE peer-group jumps (Dima 2026102000119918615)
+// RANGE frame boundaries align to peer groups, so the frame distance between
+// adjacent rows can exceed the batch size. The last-result reuse path must
+// probe or recompute correctly instead of raising an internal error (-4388).
+// ============================================================================
+
+TEST_F(WindowFunctionOpTest, IgnoreNullsLastValueRangePeerJump)
+{
+  // Peer group k=2 has 3 rows > batch_size=2: between row 1 and row 2 the
+  // accumulating frame tail jumps 1->4.
+  auto result = window_function_test()
+      .table("t", "k int, lv int")
+      .select("k, last_value(lv) ignore nulls over (order by k range between unbounded preceding and current row)")
+      .with_sorted_data({{1, NULL_VAL}, {2, 7}, {2, 7}, {2, NULL_VAL}}, "k ASC")
+      .with_batch_size(2)
+      .enable_dual_format_check()
+      .run(engine_);
+  EXPECT_TRUE(result.verify_ordered({{1, NULL_VAL}, {2, 7}, {2, 7}, {2, 7}}));
+}
+
+TEST_F(WindowFunctionOpTest, IgnoreNullsFirstValueRangePeerJump)
+{
+  // Peer group k=1 has 3 rows > batch_size=2: between row 3 and row 4 the
+  // shrinking frame head jumps 0->3.
+  auto result = window_function_test()
+      .table("t", "k int, fv int")
+      .select("k, first_value(fv) ignore nulls over (order by k range between current row and unbounded following)")
+      .with_sorted_data({{1, 7}, {1, 7}, {1, 7}, {2, NULL_VAL}}, "k ASC")
+      .with_batch_size(2)
+      .enable_dual_format_check()
+      .run(engine_);
+  EXPECT_TRUE(result.verify_ordered({{1, 7}, {1, 7}, {1, 7}, {2, NULL_VAL}}));
+}
+
+TEST_F(WindowFunctionOpTest, IgnoreNullsLastValueRangeAllNullPeerJump)
+{
+  // The 3-row peer group k=2 is all NULL: the reuse probe must scan across a
+  // jump larger than the batch and reuse the stored non-null result (7).
+  auto result = window_function_test()
+      .table("t", "k int, lv int")
+      .select("k, last_value(lv) ignore nulls over (order by k range between unbounded preceding and current row)")
+      .with_sorted_data({{1, 7}, {1, 7}, {2, NULL_VAL}, {2, NULL_VAL}, {2, NULL_VAL}}, "k ASC")
+      .with_batch_size(2)
+      .enable_dual_format_check()
+      .run(engine_);
+  EXPECT_TRUE(result.verify_ordered({{1, 7}, {1, 7}, {2, 7}, {2, 7}, {2, 7}}));
+}
+
+TEST_F(WindowFunctionOpTest, IgnoreNullsLastValueExprParamRangePeerJump)
+{
+  // Same jump with a computed expression parameter, matching the Dima
+  // reproducer; if the param expr is not in all_expr the probe must be
+  // skipped and the frame recomputed, still producing correct results.
+  auto result = window_function_test()
+      .table("t", "k int, lv int")
+      .select("k, last_value(case when lv is not null then lv + 1 end) ignore nulls "
+              "over (order by k range between unbounded preceding and current row)")
+      .with_sorted_data({{1, NULL_VAL}, {2, 7}, {2, 7}, {2, NULL_VAL}}, "k ASC")
+      .with_batch_size(2)
+      .enable_dual_format_check()
+      .run(engine_);
+  EXPECT_TRUE(result.verify_ordered({{1, NULL_VAL}, {2, 8}, {2, 8}, {2, 8}}));
+}
+
+// ============================================================================
+// IGNORE NULLS reuse of a zero-length value (Dima 2026102100119943178)
+// A non-null empty string cached for result reuse has len=0 and needs no
+// buffer; store_result_for_reuse must not report an allocation failure.
+// ============================================================================
+
+TEST_F(WindowFunctionOpTest, IgnoreNullsFirstValueEmptyStringReuse)
+{
+  // Row 1 evaluates to the empty string and is cached with len=0; the old
+  // implementation failed the store with -4013.
+  auto result = window_function_test()
+      .table("t", "k int, v varchar(20)")
+      .select("k, first_value(v) ignore nulls over (order by k range between unbounded preceding and current row)")
+      .with_sorted_data({{1, ""}, {2, "x"}, {3, NULL_VAL}}, "k ASC")
+      .with_batch_size(2)
+      .enable_dual_format_check()
+      .run(engine_);
+  EXPECT_TRUE(result.verify_ordered({{1, ""}, {2, ""}, {3, ""}}));
+}
+
+TEST_F(WindowFunctionOpTest, IgnoreNullsLastValueEmptyStringReuse)
+{
+  // The whole peer group shares key 1: every row's frame is [0,3) and the
+  // last non-null value is the empty string; caching it with len=0 for reuse
+  // must not fail with -4013.
+  auto result = window_function_test()
+      .table("t", "k int, v varchar(20)")
+      .select("k, last_value(v) ignore nulls over (order by k range between unbounded preceding and current row)")
+      .with_sorted_data({{1, "x"}, {1, ""}, {1, NULL_VAL}}, "k ASC")
+      .with_batch_size(2)
+      .enable_dual_format_check()
+      .run(engine_);
+  EXPECT_TRUE(result.verify_ordered({{1, ""}, {1, ""}, {1, ""}}));
+}
+
+// ============================================================================
 // Single-part parallel test (placeholder)
 // ============================================================================
 
