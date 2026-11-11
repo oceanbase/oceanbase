@@ -2201,6 +2201,7 @@ int ObAlterTableExecutor::set_index_arg_list(ObExecContext &ctx, ObAlterTableStm
         create_index_arg.is_inner_ = my_session->is_inner();
         if (OB_FAIL(create_index_arg.assign(index_stmt.get_create_index_arg()))) {
           LOG_WARN("fail to assign create index arg", K(ret));
+        } else if (OB_FALSE_IT(create_index_arg.session_id_ = alter_table_arg.session_id_)) {
         } else if (OB_FAIL(alter_table_arg.index_arg_list_.push_back(&create_index_arg))) {
           LOG_WARN("fail to push back index_arg", K(ret));
         }
