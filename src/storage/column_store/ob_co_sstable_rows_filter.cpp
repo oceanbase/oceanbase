@@ -152,7 +152,7 @@ int ObCOSSTableRowsFilter::switch_context(
     access_ctx_ = &context;
     batch_size_ = param.get_storage_rowsets_size();
     common::ObSEArray<ObTableIterParam*, 8> iter_params;
-    for (int64_t i = 0; i < iter_filter_node_.count(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < iter_filter_node_.count(); i++) {
       sql::ObPushdownFilterExecutor *filter = iter_filter_node_.at(i);
       ObICGIterator *&cg_iter = filter_iters_.at(i);
       iter_params.reuse();
