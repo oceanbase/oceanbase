@@ -4630,7 +4630,20 @@ int ObDDLService::check_alter_table_partition(const obrpc::ObAlterTableArg &alte
   const uint64_t tablegroup_id = orig_table_schema.get_tablegroup_id();
   const ObPartitionLevel part_level = orig_table_schema.get_part_level();
   const bool is_table_with_clustering_key = orig_table_schema.is_table_with_clustering_key();
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+  const ObAlterTableArg::AlterPartitionType alter_part_type = alter_table_arg.alter_part_type_;
+  const bool is_split_partition = ObAlterTableArg::REORGANIZE_PARTITION == alter_part_type
+                                  || ObAlterTableArg::SPLIT_PARTITION == alter_part_type;
+
+  if (is_split_partition && !alter_table_arg.index_arg_list_.empty()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("partition splitting and index operations in a single statement is not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "partition splitting and index operations in a single statement is");
+  } else if (is_split_partition
+             && alter_table_arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLEGROUP_NAME)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("partition splitting and tablegroup changes in a single statement is not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "partition splitting and tablegroup changes in a single statement is");
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
   } else if (obrpc::ObAlterTableArg::REPARTITION_TABLE == alter_table_arg.alter_part_type_) {
     if (is_oracle_mode && PARTITION_LEVEL_ZERO != part_level) {
