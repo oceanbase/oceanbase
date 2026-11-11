@@ -57,7 +57,7 @@ uint64_t ObIntegerBaseDiffEncoder::ObIntegerData<T>::max_delta() const
 {
   uint64_t delta = 0;
   if (min_ < max_) {
-    delta = max_ - min_;
+    delta = static_cast<uint64_t>(max_) - static_cast<uint64_t>(min_);
   }
   return delta;
 }
