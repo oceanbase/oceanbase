@@ -1105,6 +1105,88 @@ TEST_F(TestCSEncoder, test_decimal_int_encoder)
   reuse();
 }
 
+TEST_F(TestMultiVersionCSEncoder, append_row_rollback_on_buffer_limit)
+{
+  // Regression for Dima 2026100800119605357: failed buffer growth must not leave a partially appended row.
+  const int64_t rowkey_cnt = 3;
+  const int64_t col_cnt = rowkey_cnt + 48;
+  const int64_t row_cnt = 33;
+  const int64_t small_string_size = 352;
+  const int64_t large_string_size = 32 * 1024;
+  ObObjType col_types[col_cnt];
+  for (int64_t i = 0; i < col_cnt; ++i) {
+    col_types[i] = i < rowkey_cnt ? ObIntType : ObVarcharType;
+  }
+  ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
+
+  char *string_data = static_cast<char *>(allocator_.alloc(large_string_size));
+  ASSERT_NE(nullptr, string_data);
+  MEMSET(string_data, 'x', large_string_size);
+  ObDatumRow rows[row_cnt + 1];
+  for (int64_t i = 0; i <= row_cnt; ++i) {
+    ASSERT_EQ(OB_SUCCESS, rows[i].init(allocator_, col_cnt));
+    rows[i].row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+    rows[i].mvcc_row_flag_.set_first_multi_version_row(true);
+    rows[i].mvcc_row_flag_.set_last_multi_version_row(true);
+    rows[i].mvcc_row_flag_.set_compacted_multi_version_row(true);
+    rows[i].storage_datums_[0].set_int(i);
+    rows[i].storage_datums_[1].set_int(-1);
+    rows[i].storage_datums_[2].set_int(0);
+    for (int64_t col_idx = rowkey_cnt; col_idx < col_cnt; ++col_idx) {
+      rows[i].storage_datums_[col_idx].set_string(
+          string_data, i < row_cnt ? small_string_size : large_string_size);
+    }
+    if (i < row_cnt) {
+      ASSERT_EQ(OB_SUCCESS, encoder_.append_row(rows[i]));
+    }
+  }
+
+  // The existing rows occupy a 1 MB buffer. The next row fits alone, but together they exceed 2 MB.
+  ASSERT_EQ(1L << 20, encoder_.row_buf_holder_.size());
+  const int64_t large_row_size = encoder_.calc_datum_row_size_(rows[row_cnt]);
+  ASSERT_LT(large_row_size, ObCSEncodingUtil::DEFAULT_DATA_BUFFER_SIZE);
+  ASSERT_GT(encoder_.row_buf_holder_.length() + large_row_size,
+      ObCSEncodingUtil::DEFAULT_DATA_BUFFER_SIZE);
+  const int64_t committed_length = encoder_.row_buf_holder_.length();
+  ASSERT_EQ(OB_BUF_NOT_ENOUGH, encoder_.append_row(rows[row_cnt]));
+  ASSERT_EQ(row_cnt, encoder_.get_row_count());
+  EXPECT_EQ(committed_length, encoder_.row_buf_holder_.length());
+  for (int64_t col_idx = 0; col_idx < encoder_.all_col_datums_.count(); ++col_idx) {
+    EXPECT_EQ(row_cnt, encoder_.all_col_datums_.at(col_idx)->count()) << "col_idx=" << col_idx;
+  }
+
+  auto check_decoded_rows = [&](const ObMicroBlockDesc &desc, const ObDatumRow *expected_rows) {
+    ObMicroBlockData transformed_data;
+    ObMicroBlockCSDecoder<true> decoder;
+    ASSERT_EQ(OB_SUCCESS, init_cs_decoder(desc.header_, desc, transformed_data, decoder));
+    ObDatumRow decoded_row;
+    ASSERT_EQ(OB_SUCCESS, decoded_row.init(allocator_, col_cnt));
+    for (int64_t i = 0; i < desc.row_count_; ++i) {
+      ASSERT_EQ(OB_SUCCESS, decoder.get_row(i, decoded_row));
+      for (int64_t col_idx = 0; col_idx < col_cnt; ++col_idx) {
+        ASSERT_TRUE(ObDatum::binary_equal(
+            expected_rows[i].storage_datums_[col_idx], decoded_row.storage_datums_[col_idx]))
+            << "row_idx=" << i << ", col_idx=" << col_idx;
+      }
+      ASSERT_EQ(OB_SUCCESS, check_multi_version(expected_rows[i], decoded_row));
+    }
+  };
+
+  // A rejected row must not prevent the macro writer from sealing the previously appended rows.
+  // Call the encoder directly: the fixture's build_block() helper does not propagate failures.
+  ObMicroBlockDesc desc;
+  ASSERT_EQ(OB_SUCCESS, encoder_.build_micro_block_desc_in_unittest(desc));
+  ASSERT_EQ(row_cnt, desc.row_count_);
+  ASSERT_NO_FATAL_FAILURE(check_decoded_rows(desc, rows));
+
+  // After sealing the old block, retry the same large row in an empty block.
+  encoder_.reuse();
+  ASSERT_EQ(OB_SUCCESS, encoder_.append_row(rows[row_cnt]));
+  ASSERT_EQ(OB_SUCCESS, encoder_.build_micro_block_desc_in_unittest(desc));
+  ASSERT_EQ(1, desc.row_count_);
+  ASSERT_NO_FATAL_FAILURE(check_decoded_rows(desc, &rows[row_cnt]));
+}
+
 TEST_F(TestMultiVersionCSEncoder, micro_header)
 {
   const int64_t rowkey_cnt = 3;

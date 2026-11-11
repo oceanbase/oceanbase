@@ -683,10 +683,10 @@ int ObMicroBlockCSEncoder<IS_MULTI_VERSION>::copy_and_append_batch_(const ObBatc
           } else if (OB_UNLIKELY(need_size <= row_buf_holder_.size() - row_buf_holder_.length())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected row holder buf not enough", K(ret), K(need_size), K(row_buf_holder_));
-          } else if (OB_FAIL(row_buf_holder_.ensure_space(need_size))) {
-            LOG_WARN("failed to ensure space", K(ret), K(need_size), K(row_buf_holder_));
           } else if (OB_FAIL(remove_invalid_vec_batch_info_(col_idx))) {
             LOG_WARN("fail to remove_invalid_vec_batch_info_", K(ret), K(column_cnt));
+          } else if (OB_FAIL(row_buf_holder_.ensure_space(need_size))) {
+            LOG_WARN("failed to ensure space", K(ret), K(need_size), K(row_buf_holder_));
           } else {
             is_finish = false;
             break;
@@ -1643,14 +1643,11 @@ int ObMicroBlockCSEncoder<IS_MULTI_VERSION>::copy_and_append_row_(const ObDatumR
           if (OB_UNLIKELY(need_size <= row_buf_holder_.size() - row_buf_holder_.length())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected row holder buf not enough", K(ret), K(need_size), K(row_buf_holder_));
+          } else if (OB_FAIL(remove_invalid_datums_(col_idx))) {
+            LOG_WARN("fail to remove_invalid_datums_", K(ret), K(col_idx), K(column_cnt));
           } else if (OB_FAIL(row_buf_holder_.ensure_space(need_size))) {
             LOG_WARN("failed to ensure space", K(ret), K(need_size), K(row_buf_holder_));
           } else {
-            int tmp_ret = OB_SUCCESS;
-            if (OB_TMP_FAIL(remove_invalid_datums_(col_idx))) {
-              LOG_WARN("fail to remove_invalid_datums_", K(ret), K(tmp_ret), K(column_cnt));
-              ret = tmp_ret;
-            }
             is_finish = false;
             break;
           }
