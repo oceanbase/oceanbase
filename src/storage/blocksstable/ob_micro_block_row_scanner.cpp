@@ -1656,17 +1656,11 @@ int ObIMicroBlockRowScanner::skip_to_rowkey(
     LOG_WARN("invalid range", K(ret), K(begin), K(end), K(key));
   } else if (key.is_min_rowkey()) {
     begin_row_idx = begin;
-  } else if (OB_FAIL(reader_->find_bound(key, true, begin, last, begin_row_idx, equal, common_prefix_len))) {
+  } else if (OB_FAIL(reader_->find_bound(
+          key, inclusive_start, begin, last, begin_row_idx, equal, common_prefix_len))) {
     LOG_WARN("fail to find bound", K(ret), K(key));
   } else if (begin_row_idx == last) {
     has_data = false;
-  } else if (!inclusive_start) {
-    if (equal) {
-      ++begin_row_idx;
-      if (begin_row_idx == last) {
-        has_data = false;
-      }
-    }
   }
   if (OB_SUCC(ret)) {
     skip_row_idx = begin_row_idx;
@@ -1809,6 +1803,39 @@ int ObMicroBlockRowScanner::estimate_row_count(
 }
 
 ///////////////////////////// ObMultiVersionMicroBlockRowScannerV2 ///////////////////////////////////
+int ObMultiVersionMicroBlockRowScanner::skip_to_rowkey(
+    const int64_t begin,
+    const int64_t end,
+    const ObDatumRowkey &key,
+    const bool inclusive_start,
+    const bool is_left_border,
+    const bool is_right_border,
+    int64_t &skip_row_idx,
+    bool &has_data,
+    const int64_t common_prefix_len)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObIMicroBlockRowScanner::skip_to_rowkey(
+          begin,
+          end,
+          key,
+          inclusive_start,
+          is_left_border,
+          is_right_border,
+          skip_row_idx,
+          has_data,
+          common_prefix_len))) {
+    LOG_WARN("failed to skip multi version scanner to rowkey", K(ret), K(key));
+  } else {
+    // An absolute reposition abandons the previous rowkey's unfinished version chain.
+    reuse_prev_micro_row();
+    finish_scanning_cur_rowkey_ = true;
+    is_last_multi_version_row_ = true;
+    cur_rowkey_exist_new_version_ = false;
+  }
+  return ret;
+}
+
 void ObMultiVersionMicroBlockRowScanner::reuse()
 {
   ObIMicroBlockRowScanner::reuse();

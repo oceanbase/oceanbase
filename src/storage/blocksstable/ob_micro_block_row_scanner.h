@@ -191,7 +191,7 @@ public:
       int64_t &skip_row_idx,
       bool &has_data,
       bool &range_finished);
-  int skip_to_rowkey(
+  virtual int skip_to_rowkey(
       const int64_t begin,
       const int64_t end,
       const ObDatumRowkey &key,
@@ -394,6 +394,16 @@ public:
       const ObMicroBlockData &block_data,
       const bool is_left_border,
       const bool is_right_border) override;
+  virtual int skip_to_rowkey(
+      const int64_t begin,
+      const int64_t end,
+      const ObDatumRowkey &key,
+      const bool inclusive_start,
+      const bool is_left_border,
+      const bool is_right_border,
+      int64_t &skip_row_idx,
+      bool &has_data,
+      const int64_t common_prefix_len = 0) override;
   INHERIT_TO_STRING_KV("ObMultiVersionMicroBlockRowScanner",
                        ObIMicroBlockRowScanner, K_(read_row_direct_flag),
                        K_(version_range), K_(is_last_multi_version_row),

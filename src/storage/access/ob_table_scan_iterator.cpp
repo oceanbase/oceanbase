@@ -392,6 +392,7 @@ int ObTableScanIterator::advance_scan(ObTableScanParam &scan_param)
     } else if (OB_FAIL(table_scan_range_.init(*scan_param_, *tablet, is_tablet_spliting, true/*cannot_be_false_range*/))) {
       STORAGE_LOG(WARN, "Failed to init table scan range", K(ret));
     } else if (OB_UNLIKELY(!table_scan_range_.is_scan() || table_scan_range_.get_ranges().count() != 1)) {
+      ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "Unexpected table scan range", K(ret), K(table_scan_range_));
     } else if (OB_FAIL(main_table_ctx_.alloc_skip_scan_factory())) {
       STORAGE_LOG(WARN, "failed to alloc skip scan factory", K(ret));
