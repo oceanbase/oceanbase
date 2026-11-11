@@ -2473,6 +2473,16 @@ int ObSchemaPrinter::print_table_definition_table_options(
     if (full_text_columns.count() <= 0 || OB_UNLIKELY(virtual_column_id == OB_INVALID_ID)) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "invalid domain index infos", K(full_text_columns), K(virtual_column_id));
+    } else if (is_oracle_mode) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "INDEXTYPE IS CTXSYS.CONTEXT "))) {
+        LOG_WARN("fail to print fulltext index type", K(ret));
+      } else if (!table_schema.get_parser_name_str().empty()
+                 && OB_FAIL(ObFtsIndexSchemaPrinter::print_fts_parser_info(
+                     table_schema, strict_compat_, buf, buf_len, pos))) {
+        LOG_WARN("fail to print fts parser info", K(ret), K(table_schema));
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "LOCAL "))) {
+        LOG_WARN("fail to print local fulltext index", K(ret));
+      }
     } else if (!strict_compat_ && OB_FAIL(print_table_definition_fulltext_indexs(
                is_oracle_mode, full_text_columns, virtual_column_id, buf, buf_len, pos))) {
       OB_LOG(WARN, "failed to print table definition full text indexes", K(ret));
@@ -2726,6 +2736,9 @@ int ObSchemaPrinter::print_index_definition_columns(
       } else if (NULL == (col = index_schema.get_column_schema(rowkey_column->column_id_))) {
         ret = OB_SCHEMA_ERROR;
         SHARE_SCHEMA_LOG(WARN, "fail to get column schema", K(ret));
+      } else if (index_schema.is_fts_index()
+          && (col->is_doc_id_column() || col->is_hidden_pk_column_id(col->get_column_id()))) {
+        // 全文索引的文档 ID 列和隐藏主键列不参与 DDL 输出。
       } else if (!col->is_shadow_column()
                  && OB_NOT_NULL(data_schema.get_column_schema(col->get_column_id()))
                  && data_schema.get_column_schema(col->get_column_id())->is_spatial_generated_column()
@@ -2752,8 +2765,8 @@ int ObSchemaPrinter::print_index_definition_columns(
               // domain index
               virtual_column_id = data_col->get_column_id();
               if (OB_FAIL(print_full_text_columns_definition(
-                            data_schema, data_col->get_column_name(), full_text_columns,
-                            buf, buf_len, pos, is_first, is_agent_mode))) {
+                            data_schema, *data_col, full_text_columns,
+                            buf, buf_len, pos, is_first, is_oracle_mode, is_agent_mode))) {
                 OB_LOG(WARN, "failed to print full text columns", K(ret));
               }
             } else if (data_col->is_spatial_cellid_column()) {
@@ -2865,35 +2878,34 @@ int ObSchemaPrinter::print_index_definition_columns(
 }
 
 int ObSchemaPrinter::print_full_text_columns_definition(const ObTableSchema &data_schema,
-                                                             const ObString &generated_column_name,
-                                                             ObIArray<ObString> &full_text_columns,
-                                                             char *buf, const int64_t buf_len, int64_t &pos,
-                                                             bool &is_first,
-                                                             bool is_agent_mode) const
+                                                        const ObColumnSchemaV2 &generated_column,
+                                                        ObIArray<ObString> &full_text_columns,
+                                                        char *buf, const int64_t buf_len, int64_t &pos,
+                                                        bool &is_first,
+                                                        bool is_oracle_mode,
+                                                        bool is_agent_mode) const
 {
   int ret = OB_SUCCESS;
-  const ObColumnSchemaV2 *data_col = NULL;
-  const char *prefix = "__word_segment_";
-  uint64_t column_id = 0;
-  if (OB_UNLIKELY(!generated_column_name.prefix_match(prefix))) {
+  ObSEArray<uint64_t, 4> index_column_ids;
+  if (OB_FAIL(ObFtsIndexBuilderUtil::get_index_column_ids_for_fts(
+              data_schema, generated_column, index_column_ids))) {
+    OB_LOG(WARN, "failed to get full text index column ids", K(ret), K(generated_column));
+  } else if (OB_UNLIKELY(index_column_ids.empty())) {
     ret = OB_ERR_UNEXPECTED;
-    OB_LOG(WARN, "column prefix is invalid", K(ret), K(generated_column_name));
+    OB_LOG(WARN, "full text index columns are empty", K(ret), K(generated_column));
   }
-  for (int64_t i = strlen(prefix); OB_SUCC(ret) && i <= generated_column_name.length(); ++i) {
-    char ch = (i == generated_column_name.length() ? '_' : generated_column_name[i]);
-    if (ch >= '0' && ch <= '9') {
-      column_id = column_id * 10 + (ch - '0');
-    } else if (ch != '_') {
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "invalid character in column name", K(ret), K(ch), K(generated_column_name));
-    } else if (OB_ISNULL(data_col = data_schema.get_column_schema(column_id))) {
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_column_ids.count(); ++i) {
+    const uint64_t column_id = index_column_ids.at(i);
+    const ObColumnSchemaV2 *data_col = data_schema.get_column_schema(column_id);
+    if (OB_ISNULL(data_col)) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "column id is invalid", K(ret), K(column_id));
     } else if (OB_FAIL(full_text_columns.push_back(data_col->get_column_name()))) {
       OB_LOG(WARN, "failed to push back column names", K(ret));
     } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s  ", is_first ? "" : ",\n"))) {
       OB_LOG(WARN, "fail to print column name", K(ret), K(*data_col));
-    } else if (OB_FAIL(print_identifier(buf, buf_len, pos, data_col->get_column_name(), false))) {
+    } else if (OB_FAIL(print_identifier(buf, buf_len, pos, data_col->get_column_name(), is_oracle_mode))) {
       OB_LOG(WARN, "fail to print column name", K(ret), K(*data_col));
     } else if (is_agent_mode
                && OB_FAIL(databuff_printf(buf, buf_len, pos, " id %lu",
@@ -2901,7 +2913,6 @@ int ObSchemaPrinter::print_full_text_columns_definition(const ObTableSchema &dat
       OB_LOG(WARN, "fail to print column id", K(ret), K(*data_col));
     } else {
       is_first = false;
-      column_id = 0;
     }
   }
   return ret;
@@ -3047,7 +3058,7 @@ int ObSchemaPrinter::print_index_table_definition(
     } else if (index_table_schema->is_fts_index()) {
       if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                   !is_oracle_mode ? "CREATE FULLTEXT INDEX if not exists "
-                                                    : "CREATE FULLTEXT INDEX "))) {
+                                                    : "CREATE INDEX "))) {
         OB_LOG(WARN, "fail to print create table prefix", K(ret), K(table_schema->get_table_name()));
       }
     } else {
@@ -3095,7 +3106,8 @@ int ObSchemaPrinter::print_index_table_definition(
     } else if (OB_FAIL(print_table_definition_table_options(
                        *index_table_schema, full_text_columns, virtual_column_id, buf, buf_len, pos, false, NULL, is_agent_mode))) {
       OB_LOG(WARN, "fail to print table options", K(ret), K(*index_table_schema));
-    } else if (!strict_compat_ && OB_FAIL(print_table_index_stroing(index_table_schema, table_schema, buf, buf_len, pos))) {
+    } else if (!strict_compat_ && !index_table_schema->is_fts_index()
+               && OB_FAIL(print_table_index_stroing(index_table_schema, table_schema, buf, buf_len, pos))) {
       OB_LOG(WARN, "fail to print partition table index storing", K(ret), K(*index_table_schema), K(*table_schema));
     } else if (index_table_schema->is_global_index_table()
                && OB_FAIL(print_table_definition_partition_options(*index_table_schema, buf, buf_len, pos, is_agent_mode, tz_info))) {

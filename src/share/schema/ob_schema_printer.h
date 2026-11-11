@@ -117,10 +117,10 @@ public:
       bool is_agent_mode) const;
   int print_full_text_columns_definition(
       const share::schema::ObTableSchema &data_schema,
-      const common::ObString &generated_column_name,
+      const share::schema::ObColumnSchemaV2 &generated_column,
       common::ObIArray<common::ObString> &full_text_columns,
       char* buf, const int64_t buf_len, int64_t& pos, bool &is_first,
-      bool is_agent_mode) const;
+      bool is_oracle_mode, bool is_agent_mode) const;
   int print_index_table_definition(
       const uint64_t tenant_id,
       const uint64_t index_table_id,

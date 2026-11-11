@@ -3565,8 +3565,16 @@ int ObFtsIndexSchemaPrinter::print_fts_parser_info(
   storage::ObFTParser parser;
   storage::ObFTParserJsonProps parser_properties;
   bool is_mysql_compat = false;
-  if (OB_FAIL(parser.parse_from_str(table_schema.get_parser_name_str().ptr(), table_schema.get_parser_name_str().length()))) {
+  bool is_oracle_mode = false;
+  if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to check oracle mode", K(ret), K(table_schema));
+  } else if (OB_FAIL(parser.parse_from_str(table_schema.get_parser_name_str().ptr(), table_schema.get_parser_name_str().length()))) {
     LOG_WARN("fail to parse name from cstring", K(ret), K(parser));
+  } else if (is_oracle_mode) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "PARAMETERS('LEXER %.*s') ",
+        parser.get_parser_name().len(), parser.get_parser_name().str()))) {
+      LOG_WARN("fail to print oracle fts parser name", K(ret), K(parser));
+    }
   } else if (strict_compat
              && OB_FAIL(is_mysql_compat_parser(ObString(parser.get_parser_name().len(), parser.get_parser_name().str()),
                                                is_mysql_compat))) {
