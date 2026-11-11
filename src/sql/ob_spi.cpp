@@ -5802,6 +5802,12 @@ int ObSPIService::spi_extend_collection(pl::ObPLExecCtx *ctx,
     } else if (is_deleted) {
       ret = OB_READ_NOTHING;
       LOG_WARN("element already deleted!", K(ret), K(i), K(is_deleted));
+#ifdef OB_BUILD_ORACLE_PL
+    } else if (n > 0 && table->is_varray()
+               && n > static_cast<ObPLVArray *>(table)->get_capacity() - table->get_count()) {
+      ret = OB_ERR_SUBSCRIPT_OUTSIDE_LIMIT;
+      LOG_WARN("varray size overflow", K(ret), K(n), KPC(table));
+#endif
     } else if (n > 0) {
       if (OB_SUCC(ret)) {
         if (OB_INVALID_ID == table->get_id()) {
