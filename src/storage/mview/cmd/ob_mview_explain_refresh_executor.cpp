@@ -355,7 +355,7 @@ int ObMViewExplainRefreshExecutor::explain_single_mview(const uint64_t mview_id,
     LOG_WARN("mview never refresh", KR(ret), K(mview_info));
   } else if (OB_FAIL(mv_provider.get_mlog_mv_refresh_infos(session_info_,
                                                             &schema_guard,
-                                                            ObMVRefreshMethod::FORCE,
+                                                            mview_info.get_refresh_method(),
                                                             dependency_infos,
                                                             tables_need_mlog,
                                                             can_fast_refresh))) {
