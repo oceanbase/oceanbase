@@ -135,12 +135,13 @@ void ObKVCacheHazardSlot::add_nodes(ObKVCacheHazardNode &list)
  */
 
 ObKVCacheHazardStation::ObKVCacheHazardStation()
-    : version_(0),
+    : inited_(false),
       waiting_node_threshold_(0),
       hazard_slots_(nullptr),
-      slot_num_(0),
+      group_min_version_(nullptr),
       slot_allocator_("KVCACHE_HAZARD", OB_MALLOC_MIDDLE_BLOCK_SIZE, OB_SERVER_TENANT_ID),
-      inited_(false)
+      version_(0),
+      atomic_scan_cursor_(0)
 {
 }
 
@@ -149,28 +150,33 @@ ObKVCacheHazardStation::~ObKVCacheHazardStation()
   destroy();
 }
 
-int ObKVCacheHazardStation::init(const int64_t waiting_node_threshold, const int64_t slot_num)
+int ObKVCacheHazardStation::init(const int64_t waiting_node_threshold)
 {
   int ret = OB_SUCCESS;
 
   void *buf = nullptr;
+  void *group_min_buf = nullptr;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     COMMON_LOG(WARN, "This hazard station has been inited", K(ret), K(inited_));
-  } else if (OB_UNLIKELY(waiting_node_threshold <= 0 || slot_num <= 0)) {
+  } else if (OB_UNLIKELY(waiting_node_threshold <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Invalid argument", K(ret), K(waiting_node_threshold), K(slot_num));
-  } else if (OB_ISNULL(buf = slot_allocator_.alloc(sizeof(ObKVCacheHazardSlot) * slot_num))) {
+    COMMON_LOG(WARN, "Invalid argument", K(ret), K(waiting_node_threshold));
+  } else if (OB_ISNULL(buf = slot_allocator_.alloc_align(sizeof(ObKVCacheHazardSlot) * SLOT_NUM, alignof(ObKVCacheHazardSlot)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     COMMON_LOG(WARN, "Fail to allocate memory for hazard slots", K(ret));
+  } else if (OB_ISNULL(group_min_buf = slot_allocator_.alloc_align(sizeof(GroupMinVersion) * GROUP_NUM, alignof(GroupMinVersion)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    COMMON_LOG(WARN, "Fail to allocate memory for group min", K(ret));
   } else {
-    hazard_slots_ = new (buf) ObKVCacheHazardSlot[slot_num];
+    hazard_slots_ = new (buf) ObKVCacheHazardSlot[SLOT_NUM];
+    group_min_version_ = new (group_min_buf) GroupMinVersion[GROUP_NUM];
     version_ = 0;
+    atomic_scan_cursor_ = 0;
     waiting_node_threshold_ = waiting_node_threshold;
-    slot_num_ = slot_num;
     inited_ = true;
   }
-  COMMON_LOG(DEBUG, "Hazard station init details", K(ret), K(waiting_node_threshold_), K(slot_num_));
+  COMMON_LOG(DEBUG, "Hazard station init details", K(ret), K(waiting_node_threshold_));
 
   return ret;
 }
@@ -181,15 +187,19 @@ void ObKVCacheHazardStation::destroy()
 
   inited_ = false;
   if (OB_NOT_NULL(hazard_slots_)) {
-    for (int64_t i = 0 ; i < slot_num_ ; ++i) {
+    for (int64_t i = 0 ; i < SLOT_NUM ; ++i) {
       hazard_slots_[i].~ObKVCacheHazardSlot();
     }
-    slot_allocator_.free(hazard_slots_);
+    slot_allocator_.free_align(hazard_slots_);
     hazard_slots_ = nullptr;
   }
-  slot_num_ = 0;
+  if (OB_NOT_NULL(group_min_version_)) {
+    slot_allocator_.free_align(group_min_version_);
+    group_min_version_ = nullptr;
+  }
   waiting_node_threshold_ = 0;
   version_ = 0;
+  atomic_scan_cursor_ = 0;
   slot_allocator_.reset();
 }
 
@@ -200,9 +210,9 @@ int ObKVCacheHazardStation::delete_node(const int64_t slot_id, ObKVCacheHazardNo
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "This hazard station is not inited", K(ret), K(inited_));
-  } else if (OB_UNLIKELY(slot_id < 0 || slot_id >= slot_num_ || nullptr == node)) {
+  } else if (OB_UNLIKELY(slot_id < 0 || slot_id >= SLOT_NUM || nullptr == node)) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Invalid argument", K(ret), K(slot_num_), K(slot_id), KP(node));
+    COMMON_LOG(WARN, "Invalid argument", K(ret), K(SLOT_NUM), K(slot_id), KP(node));
   } else {
     node->set_version(ATOMIC_FAA(&version_, 1));
     if (OB_UNLIKELY(nullptr != node->get_next())) {
@@ -226,14 +236,14 @@ int ObKVCacheHazardStation::acquire(int64_t &slot_id)
     COMMON_LOG(WARN, "This hazard station is not inited", K(ret), K(inited_));
   } else {
     int64_t retry_count = 0;
-    int64_t curr = get_itid() % slot_num_;
+    int64_t curr = get_itid() % SLOT_NUM;
     const int64_t end = curr;
     while (OB_SUCC(ret) && !hazard_slots_[curr].acquire(version_)) {
       sched_yield();
-      curr = (curr + 1) % slot_num_;
+      curr = (curr + 1) % SLOT_NUM;
       if (curr == end) {
         if (++retry_count >= MAX_ACQUIRE_RETRY_COUNT) {
-          COMMON_LOG_RET(WARN, common::OB_ENTRY_NOT_EXIST, "hazard version slot maybe not enough", K_(slot_num));
+          COMMON_LOG_RET(WARN, common::OB_ENTRY_NOT_EXIST, "hazard version slot maybe not enough");
           retry_count = 0;
         }
       }
@@ -253,15 +263,20 @@ void ObKVCacheHazardStation::release(const int64_t slot_id)
   if (OB_UNLIKELY(!inited_)) {
     ret  = OB_NOT_INIT;
     COMMON_LOG(WARN, "This hazard station is not inited", K(ret));
-  } else if (OB_UNLIKELY(slot_id < 0 || slot_id >= slot_num_)) {
+  } else if (OB_UNLIKELY(slot_id < 0 || slot_id >= SLOT_NUM)) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Invalid argument", K(ret), K(slot_num_), K(slot_id));
+    COMMON_LOG(WARN, "Invalid argument", K(ret), K(slot_id));
   } else {
     ObKVCacheHazardSlot &slot = hazard_slots_[slot_id];
     slot.release();
     if (slot.get_waiting_count() >= waiting_node_threshold_) {
-      uint64_t min_version = get_min_version();
-      slot.retire(min_version, OB_INVALID_TENANT_ID);
+      const uint64_t advanced_group_idx = ATOMIC_FAA(&atomic_scan_cursor_, 1) % GROUP_NUM;
+      advance_group_min_version(advanced_group_idx);
+      const uint64_t last_retire_version = slot.get_last_retire_version();
+      const uint64_t min_version = get_min_version_for_retire(last_retire_version);
+      if (min_version > last_retire_version) {
+        slot.retire(min_version, OB_INVALID_TENANT_ID);
+      }
     }
   }
 
@@ -278,8 +293,9 @@ int ObKVCacheHazardStation::retire(const uint64_t tenant_id)
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "This hazard station is not inited", K(ret), K(inited_));
   } else {
+    advance_all_group_min_version();
     uint64_t min_version = get_min_version();
-    for (int64_t i = 0 ; i < slot_num_ ; ++i) {
+    for (int64_t i = 0 ; i < SLOT_NUM ; ++i) {
       hazard_slots_[i].retire(min_version, tenant_id);
     }
   }
@@ -310,7 +326,7 @@ int ObKVCacheHazardStation::print_current_status() const
         ret = OB_ALLOCATE_MEMORY_FAILED;
         COMMON_LOG(ERROR, "[KVCACHE-HAZARD] no memory", K(ret));
       } else {
-        for (int64_t i = 0 ; i < slot_num_ ; ++i) {
+        for (int64_t i = 0 ; i < SLOT_NUM ; ++i) {
           ObKVCacheHazardSlot &slot = hazard_slots_[i];
           int64_t waiting_nodes_count = slot.get_waiting_count();
           int64_t acquired_version = slot.get_acquired_version();
@@ -333,19 +349,63 @@ int ObKVCacheHazardStation::print_current_status() const
   return ret;
 }
 
+void ObKVCacheHazardStation::advance_group_min_version(const uint64_t group_idx)
+{
+  // Release Compile will optimize %/* with bit operation
+  const uint64_t slot_start = group_idx * GROUP_SIZE;
+  const uint64_t slot_end = slot_start + GROUP_SIZE;
+  const uint64_t old_group_min_version = ATOMIC_LOAD_RLX(&group_min_version_[group_idx].min_version_);
+
+  uint64_t min_version = ATOMIC_LOAD(&version_);
+  for (uint64_t i = slot_start; i < slot_end; i++) {
+    const uint64_t slot_version = hazard_slots_[i].get_acquired_version_rlx();
+    min_version = MIN(min_version, slot_version);
+    if (min_version <= old_group_min_version) {
+      break;
+    }
+  }
+
+  if (min_version > old_group_min_version) {
+    // Use the value read before scanning. If another scanner has advanced it,
+    // leave its result in place and let a later scan make further progress.
+    (void)ATOMIC_BCAS(&group_min_version_[group_idx].min_version_, old_group_min_version, min_version);
+  }
+}
+
+void ObKVCacheHazardStation::advance_all_group_min_version()
+{
+  for (int64_t i = 0; i < GROUP_NUM; i++) {
+    advance_group_min_version(i);
+  }
+}
+
 uint64_t ObKVCacheHazardStation::get_min_version() const
 {
   uint64_t min_version = ATOMIC_LOAD(&version_);
-  uint64_t slot_version = UINT64_MAX;
-  for (int64_t i = 0 ; i < slot_num_ ; ++i) {
-    slot_version = hazard_slots_[i].get_acquired_version();
-    if (slot_version < min_version) {
-      min_version = slot_version;
+
+  for (int64_t i = 0; i < GROUP_NUM; i++) {
+    uint64_t group_min_version = ATOMIC_LOAD_RLX(&group_min_version_[i].min_version_);
+    if (group_min_version < min_version) {
+      min_version = group_min_version;
     }
   }
+
   return min_version;
 }
 
+uint64_t ObKVCacheHazardStation::get_min_version_for_retire(const uint64_t last_retire_version) const
+{
+  uint64_t min_version = ATOMIC_LOAD(&version_);
+  for (int64_t i = 0; i < GROUP_NUM; i++) {
+    uint64_t group_min_version = ATOMIC_LOAD_RLX(&group_min_version_[i].min_version_);
+    min_version = MIN(min_version, group_min_version);
+    if (min_version <= last_retire_version) {
+      break;
+    }
+  }
+
+  return min_version;
+}
 
 /*
  * -----------------------------------------------------------ObKVCacheHazardGuard-----------------------------------------------------------

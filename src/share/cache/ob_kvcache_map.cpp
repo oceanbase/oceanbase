@@ -52,7 +52,7 @@ int ObKVCacheMap::init(const int64_t bucket_num, ObKVCacheStore *store)
   } else if (OB_FAIL(bucket_lock_.init(bucket_num,
       ObLatchIds::KV_CACHE_BUCKET_LOCK, ObMemAttr(OB_SERVER_TENANT_ID, "CACHE_MAP_LOCK", ObCtxIds::UNEXPECTED_IN_500)))) {
     COMMON_LOG(WARN, "Fail to init bucket lock, ", K(bucket_num), K(ret));
-  } else if (OB_FAIL(global_hazard_station_.init(HAZARD_STATION_WAITING_THRESHOLD, HAZARD_STATION_SLOT_NUM))) {
+  } else if (OB_FAIL(global_hazard_station_.init(HAZARD_STATION_WAITING_THRESHOLD))) {
     COMMON_LOG(WARN, "Fail to init hazard version, ", K(ret));
   } else {
     bucket_size_ = DEFAULT_BUCKET_SIZE;

@@ -42,8 +42,9 @@ public:
   ~ObKVCacheHazardSlot();
 
   OB_INLINE int64_t get_waiting_count() const { return waiting_nodes_count_; }
-  OB_INLINE uint64_t get_last_retire_version() const { return last_retire_version_; }
+  OB_INLINE uint64_t get_last_retire_version() const { return ATOMIC_LOAD_RLX(&last_retire_version_); }
   OB_INLINE uint64_t get_acquired_version() const { return ATOMIC_LOAD(&acquired_version_); }
+  OB_INLINE uint64_t get_acquired_version_rlx() const { return ATOMIC_LOAD_RLX(&acquired_version_); }
   OB_INLINE bool acquire(const uint64_t version);
   OB_INLINE void release();
   void delete_node(ObKVCacheHazardNode &node);
@@ -61,13 +62,13 @@ private:
   int64_t waiting_nodes_count_;  // length of delete_list_
   uint64_t last_retire_version_;  // last version of retire()
   bool is_retiring_;
-};
+} CACHE_ALIGNED;
 
 class ObKVCacheHazardStation {
 public:
   ObKVCacheHazardStation();
   virtual ~ObKVCacheHazardStation();
-  int init(const int64_t thread_waiting_node_threshold, const int64_t sloc_num);
+  int init(const int64_t thread_waiting_node_threshold);
   void destroy();
   int delete_node(const int64_t slot_id, ObKVCacheHazardNode *node);
   int acquire(int64_t &slot_id);  // Thread start to access shared memory, acquire version to protect this version
@@ -76,17 +77,31 @@ public:
   int print_current_status() const ;
 
 private:
-  uint64_t get_min_version() const ;
+  void advance_group_min_version(const uint64_t group_idx);
+  void advance_all_group_min_version();
+  uint64_t get_min_version() const;
+  uint64_t get_min_version_for_retire(const uint64_t last_retire_version) const;
 
 private:
-  static const int64_t MAX_ACQUIRE_RETRY_COUNT = 3;
+  struct GroupMinVersion {
+    GroupMinVersion() : min_version_(0) {}
 
-  uint64_t version_;  // current global version
+    uint64_t min_version_ CACHE_ALIGNED;
+  } CACHE_ALIGNED;
+
+  static constexpr int64_t MAX_ACQUIRE_RETRY_COUNT = 3;
+  static constexpr uint64_t SLOT_NUM = 2L << 10; //  2K
+  static constexpr uint64_t GROUP_SIZE = 64;
+  static constexpr uint64_t GROUP_NUM = SLOT_NUM / GROUP_SIZE;
+
+  bool inited_;
   int64_t waiting_node_threshold_;
   ObKVCacheHazardSlot *hazard_slots_;
-  int64_t slot_num_;
+  GroupMinVersion *group_min_version_;
   ObArenaAllocator slot_allocator_;
-  bool inited_;
+
+  uint64_t version_ CACHE_ALIGNED;  // current global version
+  uint64_t atomic_scan_cursor_ CACHE_ALIGNED;
 };
 
 class ObKVCacheHazardGuard final
