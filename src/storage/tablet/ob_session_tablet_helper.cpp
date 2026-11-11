@@ -38,6 +38,7 @@
 #include "share/location_cache/ob_location_service.h"
 #include "share/tablet/ob_drop_gtt_v2_session_tablet_arg.h"
 #include "storage/tablet/ob_drop_gtt_v2_session_tablet_rpc.h"
+#include "lib/hash/ob_hashmap.h"
 #include "lib/utility/ob_sort.h"
 
 #define USING_LOG_PREFIX STORAGE
@@ -2205,25 +2206,14 @@ int ObSessionTabletGCHelper::get_local_leader_ls_ids(common::ObIArray<share::ObL
 
 // First, check if there are any leader log streams (LS) on the current node.
 // Only delete temporary table tablets from leader LS; otherwise, return without doing anything.
-int ObSessionTabletGCHelper::do_work()
+int ObSessionTabletGCHelper::collect_gc_candidates(
+    common::ObIArray<share::ObLSID> &ls_ids,
+    common::ObIArray<storage::ObSessionTabletInfo> &session_tablet_infos)
 {
   int ret = OB_SUCCESS;
-  int64_t failed_count = 0;
-  ObSessionTabletGCTaskSummary gc_summary;
-  const int64_t start_time = ObTimeUtility::current_time();
-  common::ObSEArray<storage::ObSessionTabletInfo, TABLET_GROUP_SIZE * NUM_OF_TABLET_GROUP> session_tablet_infos;
-  common::ObSEArray<storage::ObSessionTabletInfo *, TABLET_GROUP_SIZE * NUM_OF_TABLET_GROUP> session_tablet_infos_for_delete;
-  common::ObSEArray<common::ObSEArray<storage::ObSessionTabletInfo *, TABLET_GROUP_SIZE>, NUM_OF_TABLET_GROUP> session_tablet_infos_for_delete_grouped;
-  common::ObSEArray<share::ObLSID, 4> ls_ids;
-  hash::ObHashSet<uint64_t> table_id_set1;
-  hash::ObHashSet<uint64_t> table_id_set2;
-  hash::ObHashSet<uint64_t> *previous_batch_table_id_set = &table_id_set1;
-  hash::ObHashSet<uint64_t> *current_batch_table_id_set = &table_id_set2;
-  if (OB_FAIL(table_id_set1.create(SESSION_TABLET_GC_TABLE_ID_SET_BUCKET_CNT))) {
-    LOG_WARN("fail to create previous batch table id set", KR(ret));
-  } else if (OB_FAIL(table_id_set2.create(SESSION_TABLET_GC_TABLE_ID_SET_BUCKET_CNT))) {
-    LOG_WARN("fail to create current batch table id set", KR(ret));
-  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+  ls_ids.reset();
+  session_tablet_infos.reset();
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret));
   } else if (OB_FAIL(get_local_leader_ls_ids(ls_ids))) {
@@ -2236,104 +2226,227 @@ int ObSessionTabletGCHelper::do_work()
   } else if (OB_UNLIKELY(session_tablet_infos.count() == 0)) {
     ret = OB_SUCCESS;
     LOG_INFO("session tablet infos is empty", KR(ret));
-  } else {
-    common::ObArray<uint64_t> session_id_array;
-    common::ObArray<bool> session_alive_array;
+  }
+  return ret;
+}
 
-    if (OB_FAIL(session_id_array.reserve(session_tablet_infos.count()))) {
-      LOG_WARN("failed to reserve session id array", KR(ret));
-    } else if (OB_FAIL(session_alive_array.reserve(session_tablet_infos.count()))) {
-      LOG_WARN("failed to reserve session alive array", KR(ret));
+int ObSessionTabletGCHelper::filter_inactive_session_tablets(
+    common::ObIArray<storage::ObSessionTabletInfo> &session_tablet_infos,
+    common::ObIArray<storage::ObSessionTabletInfo *> &session_tablet_infos_for_delete)
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<uint64_t> session_id_array;
+  common::ObArray<bool> session_alive_array;
+  session_tablet_infos_for_delete.reset();
+
+  if (OB_FAIL(session_id_array.reserve(session_tablet_infos.count()))) {
+    LOG_WARN("failed to reserve session id array", KR(ret));
+  } else if (OB_FAIL(session_alive_array.reserve(session_tablet_infos.count()))) {
+    LOG_WARN("failed to reserve session alive array", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < session_tablet_infos.count(); i++) {
+      if (OB_FAIL(session_id_array.push_back(session_tablet_infos.at(i).get_session_id()))) {
+        LOG_WARN("failed to push back session id", KR(ret));
+      } else if (OB_FAIL(session_alive_array.push_back(false))) {
+        LOG_WARN("failed to push back session alive", KR(ret));
+      }
+    }
+    // TODO: the local observer needs not rpc to check session alive
+    if (FAILEDx(transaction::tablelock::ObTableLockDetectFuncList::batch_detect_session_alive_at_least_one(
+        tenant_id_, session_id_array, nullptr, session_alive_array))) {
+      LOG_WARN("failed to batch detect session alive", KR(ret));
+    } else if (OB_FAIL(session_tablet_infos_for_delete.reserve(session_tablet_infos.count()))) {
+      LOG_WARN("failed to reserve session tablet infos for delete", KR(ret));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < session_tablet_infos.count(); i++) {
-        if (OB_FAIL(session_id_array.push_back(session_tablet_infos.at(i).get_session_id()))) {
-          LOG_WARN("failed to push back session id", KR(ret));
-        } else if (OB_FAIL(session_alive_array.push_back(false))) {
-          LOG_WARN("failed to push back session alive", KR(ret));
+      ARRAY_FOREACH(session_tablet_infos, idx) {
+        if (false == session_alive_array.at(idx)) {
+          if (OB_FAIL(session_tablet_infos_for_delete.push_back(&session_tablet_infos.at(idx)))) {
+            LOG_WARN("failed to push back session tablet info for delete", KR(ret));
+          } else {
+            session_tablet_infos.at(idx).is_creator_ = true;
+          }
         }
       }
-      // TODO: the local observer needs not rpc to check session alive
-      if (FAILEDx(transaction::tablelock::ObTableLockDetectFuncList::batch_detect_session_alive_at_least_one(tenant_id_,
-          session_id_array, nullptr, session_alive_array))) {
-        LOG_WARN("failed to batch detect session alive", KR(ret));
-      } else if (OB_FAIL(session_tablet_infos_for_delete.reserve(session_tablet_infos.count()))) {
-        LOG_WARN("failed to reserve session tablet infos for delete", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSessionTabletGCHelper::build_gc_table_groups(
+    const common::ObIArray<storage::ObSessionTabletInfo *> &session_tablet_infos_for_delete,
+    int64_t &latest_schema_version,
+    int64_t &schema_resolve_cost_us,
+    common::ObIArray<GCTableGroup> &table_groups)
+{
+  int ret = OB_SUCCESS;
+  latest_schema_version = OB_INVALID_VERSION;
+  schema_resolve_cost_us = 0;
+  table_groups.reset();
+
+  /// NOTE: Obtain the latest schema guard for GC.
+  /// The local schema version may lag behind the cluster's.
+  /// (for example after LS migration or RS leader switch over).
+  /// In that case, a lookup against the locally cached schema may fail to
+  /// resolve a table schema even though the table still exists. Session tablet
+  /// GC must not treat a NULL table schema as proof that the table was
+  /// dropped; therefore refresh to the latest schema before GC.
+  if (OB_FAIL(refresh_tenant_schema_if_need(latest_schema_version))) {
+    LOG_WARN("failed to refresh tenant schema", K(ret));
+  } else {
+    share::schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
+    const int64_t schema_resolve_start_ts = ObTimeUtility::current_time();
+    {
+      share::schema::ObSchemaGetterGuard schema_guard;
+      if (OB_ISNULL(schema_service)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema service is null", KR(ret));
+      } else if (OB_FAIL(schema_service->get_tenant_schema_guard(
+                     tenant_id_, schema_guard, latest_schema_version))) {
+        LOG_WARN("failed to get schema guard for gc grouping", KR(ret), K(latest_schema_version));
+      } else if (OB_FAIL(group_by_session_seq_and_base_table(
+                     session_tablet_infos_for_delete, schema_guard, table_groups))) {
+        LOG_WARN("failed to group session tablets by base table", KR(ret));
+      }
+    }
+    schema_resolve_cost_us = ObTimeUtility::current_time() - schema_resolve_start_ts;
+  }
+  return ret;
+}
+
+int ObSessionTabletGCHelper::process_gc_batch(
+    common::ObIArray<storage::ObSessionTabletInfo *> &session_tablet_infos_for_delete_batch,
+    const int64_t latest_schema_version,
+    ObSessionTabletGCTaskSummary &gc_summary,
+    hash::ObHashSet<uint64_t> *&previous_batch_table_id_set,
+    hash::ObHashSet<uint64_t> *&current_batch_table_id_set)
+{
+  const int64_t batch_count = session_tablet_infos_for_delete_batch.count();
+  int ret = inner_process_gc_batch(
+      session_tablet_infos_for_delete_batch,
+      latest_schema_version,
+      gc_summary,
+      *previous_batch_table_id_set,
+      *current_batch_table_id_set);
+  if (OB_SUCCESS != ret) {
+    LOG_WARN("failed to process session tablet gc batch", KR(ret), K(batch_count));
+  }
+  gc_summary.total_cnt_ += batch_count;
+  hash::ObHashSet<uint64_t> *tmp_table_id_set = previous_batch_table_id_set;
+  previous_batch_table_id_set = current_batch_table_id_set;
+  current_batch_table_id_set = tmp_table_id_set;
+  return ret;
+}
+
+int ObSessionTabletGCHelper::process_gc_table_groups(
+    const common::ObIArray<GCTableGroup> &table_groups,
+    const int64_t session_tablet_count,
+    const int64_t latest_schema_version,
+    const int64_t schema_resolve_cost_us,
+    ObSessionTabletGCTaskSummary &gc_summary)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  int64_t max_gc_group_size = 0;
+  common::ObSEArray<storage::ObSessionTabletInfo *, BATCH_DELETE_SESSION_TABLET_COUNT>
+      session_tablet_infos_for_delete_batch;
+  hash::ObHashSet<uint64_t> table_id_set1;
+  hash::ObHashSet<uint64_t> table_id_set2;
+  hash::ObHashSet<uint64_t> *previous_batch_table_id_set = &table_id_set1;
+  hash::ObHashSet<uint64_t> *current_batch_table_id_set = &table_id_set2;
+
+  if (OB_FAIL(table_id_set1.create(SESSION_TABLET_GC_TABLE_ID_SET_BUCKET_CNT))) {
+    LOG_WARN("fail to create previous batch table id set", KR(ret));
+  } else if (OB_FAIL(table_id_set2.create(SESSION_TABLET_GC_TABLE_ID_SET_BUCKET_CNT))) {
+    LOG_WARN("fail to create current batch table id set", KR(ret));
+  } else {
+    // Keep each base table and all of its index tablets in one transaction.
+    // Normal batches are bounded by BATCH_DELETE_SESSION_TABLET_COUNT;
+    // a single oversized table group is processed alone.
+    for (int64_t group_idx = 0;
+         OB_SUCC(ret) && gc_summary.total_cnt_ < MAX_GC_COUNT
+             && group_idx < table_groups.count();
+         ++group_idx) {
+      const GCTableGroup &group = table_groups.at(group_idx);
+      if (OB_UNLIKELY(!group.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid gc table group", KR(ret), K(group));
       } else {
-        ARRAY_FOREACH(session_tablet_infos, idx) {
-          if (false == session_alive_array.at(idx)) {
-            if (OB_FAIL(session_tablet_infos_for_delete.push_back(&session_tablet_infos.at(idx)))) {
-              LOG_WARN("failed to push back session tablet info for delete", KR(ret));
-            } else {
-              session_tablet_infos.at(idx).is_creator_ = true;
-            }
-          }
+        max_gc_group_size = MAX(max_gc_group_size, group.tablet_infos_.count());
+        if (!session_tablet_infos_for_delete_batch.empty()
+            && session_tablet_infos_for_delete_batch.count() + group.tablet_infos_.count()
+               > BATCH_DELETE_SESSION_TABLET_COUNT) {
+          tmp_ret = process_gc_batch(
+              session_tablet_infos_for_delete_batch,
+              latest_schema_version,
+              gc_summary,
+              previous_batch_table_id_set,
+              current_batch_table_id_set);
         }
-        LOG_INFO("tablet infos for delete", KR(ret), K(ls_ids), K(session_tablet_infos_for_delete.count()));
-        int64_t latest_schema_version = OB_INVALID_VERSION;
-        if (OB_FAIL(ret)) {
-        } else if (session_tablet_infos_for_delete.empty()) {
-          // do nothing
-        } else if (OB_FAIL(group_by_session_and_seq(session_tablet_infos_for_delete, session_tablet_infos_for_delete_grouped))) {
-          LOG_WARN("failed to group by session and sequence", KR(ret));
-        }
-        /// NOTE: Obtain the latest schema guard for GC.
-        /// The local schema version may lag behind the cluster's.
-        /// (for example after LS migration or RS leader switch over).
-        /// In that case, a lookup against the locally cached schema may fail to
-        /// resolve a table schema even though the table still exists. Session tablet
-        /// GC must not treat a NULL table schema as proof that the table was
-        /// dropped; therefore refresh to the latest schema before GC.
-        else if (OB_FAIL(refresh_tenant_schema_if_need(latest_schema_version))) {
-          LOG_WARN("failed to refresh tenant schema", K(ret));
-        } else {
-          ObSEArray<storage::ObSessionTabletInfo *, BATCH_DELETE_SESSION_TABLET_COUNT> session_tablet_infos_for_delete_batch;
-          // Remove the session tablet which is not alive
-          // A failure will not affect subsequent delete operations
-          for (int64_t group_idx = 0; gc_summary.total_cnt_ < MAX_GC_COUNT && group_idx < session_tablet_infos_for_delete_grouped.count(); ++group_idx) {
-            ret = OB_SUCCESS;
-            // One group share the same session_id and sequence, must be deleted together
-            ObSEArray<storage::ObSessionTabletInfo *, TABLET_GROUP_SIZE> &group = session_tablet_infos_for_delete_grouped.at(group_idx);
-            // Process batch when it reaches BATCH_DELETE_SESSION_TABLET_COUNT or this is the last group
-            bool is_last_group = (group_idx == session_tablet_infos_for_delete_grouped.count() - 1);
-            if (OB_FAIL(append(session_tablet_infos_for_delete_batch, group))) {
-              LOG_WARN("failed to append session tablet infos to batch", KR(ret));
-            } else if (session_tablet_infos_for_delete_batch.count() > 0 &&
-                (session_tablet_infos_for_delete_batch.count() >= BATCH_DELETE_SESSION_TABLET_COUNT || is_last_group)) {
-              common::ObMySQLTransaction trans;
-              current_batch_table_id_set->reuse();
-              if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
-                LOG_WARN("failed to start transaction", KR(ret));
-              } else {
-                if (OB_SUCC(ret)) {
-                  storage::ObSessionTabletDeleteHelper tablet_delete_helper(tenant_id_, session_tablet_infos_for_delete_batch, trans, latest_schema_version);
-                  tablet_delete_helper.set_timeout_us(0/* no timeout */);
-                  if (OB_FAIL(tablet_delete_helper.do_work_for_gc(
-                      gc_summary, *previous_batch_table_id_set, *current_batch_table_id_set))) {
-                    LOG_WARN("failed to delete session tablets in batch", KR(ret), K(session_tablet_infos_for_delete_batch));
-                  } else {
-                    LOG_INFO("GC succeed to remove session tablets in batch", K(tenant_id_), K(session_tablet_infos_for_delete_batch));
-                  }
-                  gc_summary.total_cnt_ += session_tablet_infos_for_delete_batch.count();
-                }
-              }
-              if (trans.is_started()) {
-                int tmp_ret = OB_SUCCESS;
-                bool is_commit = (OB_SUCCESS == ret);
-                if (OB_TMP_FAIL(trans.end(is_commit))) {
-                  LOG_WARN("failed to end transaction", KR(ret), KR(tmp_ret));
-                  ret = is_commit ? tmp_ret : ret;
-                }
-              }
-              // Only advance the two-batch lock history after the transaction
-              // has released every lock acquired by the current batch.
-              hash::ObHashSet<uint64_t> *tmp_table_id_set = previous_batch_table_id_set;
-              previous_batch_table_id_set = current_batch_table_id_set;
-              current_batch_table_id_set = tmp_table_id_set;
-              session_tablet_infos_for_delete_batch.reset();
-            }
-          }
+        if (gc_summary.total_cnt_ >= MAX_GC_COUNT) {
+          break;
+        } else if (OB_FAIL(append(session_tablet_infos_for_delete_batch, group.tablet_infos_))) {
+          LOG_WARN("failed to append table group to gc batch", KR(ret), K(group));
         }
       }
+    }
+    if (OB_SUCC(ret) && gc_summary.total_cnt_ < MAX_GC_COUNT
+        && !session_tablet_infos_for_delete_batch.empty()) {
+      tmp_ret = process_gc_batch(
+          session_tablet_infos_for_delete_batch,
+          latest_schema_version,
+          gc_summary,
+          previous_batch_table_id_set,
+          current_batch_table_id_set);
+    }
+    LOG_INFO("session tablet gc groups built", K(table_groups.count()),
+        K(session_tablet_count), K(max_gc_group_size),
+        K(schema_resolve_cost_us), K(latest_schema_version));
+    if (OB_SUCC(ret) && OB_SUCCESS != tmp_ret) {
+      ret = tmp_ret;
+    }
+  }
+  return ret;
+}
+
+int ObSessionTabletGCHelper::do_work()
+{
+  int ret = OB_SUCCESS;
+  ObSessionTabletGCTaskSummary gc_summary;
+  const int64_t start_time = ObTimeUtility::current_time();
+  int64_t latest_schema_version = OB_INVALID_VERSION;
+  int64_t schema_resolve_cost_us = 0;
+  common::ObSEArray<storage::ObSessionTabletInfo, TABLET_GROUP_SIZE * NUM_OF_TABLET_GROUP>
+      session_tablet_infos;
+  common::ObSEArray<storage::ObSessionTabletInfo *, TABLET_GROUP_SIZE * NUM_OF_TABLET_GROUP>
+      session_tablet_infos_for_delete;
+  common::ObSEArray<GCTableGroup, NUM_OF_TABLET_GROUP> table_groups;
+  common::ObSEArray<share::ObLSID, 4> ls_ids;
+
+  if (OB_FAIL(collect_gc_candidates(ls_ids, session_tablet_infos))) {
+    LOG_WARN("failed to collect session tablet gc candidates", KR(ret));
+  } else if (session_tablet_infos.empty()) {
+    // do nothing
+  } else if (OB_FAIL(filter_inactive_session_tablets(
+                 session_tablet_infos, session_tablet_infos_for_delete))) {
+    LOG_WARN("failed to filter inactive session tablets", KR(ret));
+  } else {
+    LOG_INFO("tablet infos for delete", KR(ret), K(ls_ids),
+        K(session_tablet_infos_for_delete.count()));
+    if (session_tablet_infos_for_delete.empty()) {
+      // do nothing
+    } else if (OB_FAIL(build_gc_table_groups(
+                   session_tablet_infos_for_delete,
+                   latest_schema_version,
+                   schema_resolve_cost_us,
+                   table_groups))) {
+      LOG_WARN("failed to build session tablet gc groups", KR(ret));
+    } else if (OB_FAIL(process_gc_table_groups(
+                   table_groups,
+                   session_tablet_infos_for_delete.count(),
+                   latest_schema_version,
+                   schema_resolve_cost_us,
+                   gc_summary))) {
+      LOG_WARN("failed to execute session tablet gc groups", KR(ret));
     }
   }
   const int64_t cost_time = ObTimeUtility::current_time() - start_time;
@@ -2575,50 +2688,126 @@ int ObSessionTabletGCHelper::check_if_any_table_has_active_session(
   return ret;
 }
 
-int ObSessionTabletGCHelper::group_by_session_and_seq(
-  const ObIArray<storage::ObSessionTabletInfo *> &session_tablet_infos_for_delete,
-  ObIArray<ObSEArray<storage::ObSessionTabletInfo *, TABLET_GROUP_SIZE>> &session_tablet_infos_for_delete_grouped/* out */)
+int ObSessionTabletGCHelper::GCTableGroup::assign(const GCTableGroup &other)
 {
   int ret = OB_SUCCESS;
-
-  // Temporary data structures for grouping: session_id -> all tablet infos for that session
-  ObSEArray<hash::HashMapPair<uint64_t, int64_t>, NUM_OF_TABLET_GROUP> session_keys;  // List of discovered session IDs
-
-  ARRAY_FOREACH(session_tablet_infos_for_delete, i) {
-    storage::ObSessionTabletInfo &info = *session_tablet_infos_for_delete.at(i);
-    const uint64_t session_id = info.get_session_id();
-    const int64_t sequence = info.get_sequence();
-    int64_t group_idx = -1;
-
-    // Find if this group already exists
-    for (int64_t j = 0; j < session_keys.count(); j++) {
-      if (session_keys.at(j).first == session_id && session_keys.at(j).second == sequence) {
-        group_idx = j;
-        break;
-      }
-    }
-
-    // If this is a new session_id and sequence, create a new group
-    if (group_idx == -1) {
-      ObSEArray<storage::ObSessionTabletInfo *, TABLET_GROUP_SIZE> new_group;
-      hash::HashMapPair<uint64_t, int64_t> new_key;
-      new_key.first = session_id;
-      new_key.second = sequence;
-      if (OB_FAIL(new_group.push_back(&info))) {
-        LOG_WARN("fail to push back info to new group", KR(ret), K(info));
-      } else if (OB_FAIL(session_keys.push_back(new_key))) {
-        LOG_WARN("fail to push back session_id", KR(ret), K(session_id));
-      } else if (OB_FAIL(session_tablet_infos_for_delete_grouped.push_back(new_group))) {
-        LOG_WARN("fail to push back new group", KR(ret));
-      }
+  if (OB_LIKELY(this != &other)) {
+    if (OB_FAIL(tablet_infos_.assign(other.tablet_infos_))) {
+      LOG_WARN("fail to assign tablet infos", KR(ret), K(other));
     } else {
-      // Add to existing group
-      if (OB_FAIL(session_tablet_infos_for_delete_grouped.at(group_idx).push_back(&info))) {
-        LOG_WARN("fail to push back info to existing group", KR(ret), K(group_idx), K(info));
+      key_ = other.key_;
+    }
+  }
+  return ret;
+}
+
+int ObSessionTabletGCHelper::group_by_session_seq_and_base_table(
+    const ObIArray<storage::ObSessionTabletInfo *> &session_tablet_infos_for_delete,
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    ObIArray<GCTableGroup> &table_groups/* out */)
+{
+  int ret = OB_SUCCESS;
+  common::hash::ObHashMap<GCTableGroupKey, int64_t> group_index_map;
+  table_groups.reset();
+
+  if (OB_FAIL(group_index_map.create(
+          MAX(session_tablet_infos_for_delete.count(), 1L),
+          "GTTGCGroupMap",
+          "GTTGCGroupNode",
+          tenant_id_))) {
+    LOG_WARN("failed to create gc table group index map", KR(ret),
+        K(session_tablet_infos_for_delete.count()));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < session_tablet_infos_for_delete.count(); ++i) {
+    storage::ObSessionTabletInfo *tablet_info = session_tablet_infos_for_delete.at(i);
+    const share::schema::ObTableSchema *table_schema = nullptr;
+    uint64_t base_table_id = OB_INVALID_ID;
+    if (OB_ISNULL(tablet_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet info is null", KR(ret), K(i));
+    } else if (OB_FAIL(schema_guard.get_table_schema(
+                   tenant_id_, tablet_info->get_table_id(), table_schema))) {
+      LOG_WARN("failed to get table schema", KR(ret), KPC(tablet_info));
+    } else {
+      if (OB_ISNULL(table_schema)) {
+        // Schema-missing tablets can be deleted independently. Use table_id to
+        // keep the outer grouping conservative; the transaction rechecks it.
+        base_table_id = tablet_info->get_table_id();
+      } else if (table_schema->is_oracle_tmp_table_v2_index_table()) {
+        base_table_id = table_schema->get_data_table_id();
+      } else {
+        base_table_id = table_schema->get_table_id();
+      }
+
+      const GCTableGroupKey key(
+          tablet_info->get_session_id(), tablet_info->get_sequence(), base_table_id);
+      int64_t group_idx = -1;
+      if (OB_UNLIKELY(!key.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid gc table group key", KR(ret), K(key), KPC(tablet_info));
+      } else {
+        const int hash_ret = group_index_map.get_refactored(key, group_idx);
+        if (OB_HASH_NOT_EXIST == hash_ret) {
+          GCTableGroup new_group(key);
+          if (OB_FAIL(new_group.tablet_infos_.push_back(tablet_info))) {
+            LOG_WARN("fail to push tablet info to new group", KR(ret), K(key), KPC(tablet_info));
+          } else if (OB_FAIL(table_groups.push_back(new_group))) {
+            LOG_WARN("fail to push new table group", KR(ret), K(new_group));
+          } else if (FALSE_IT(group_idx = table_groups.count() - 1)) {
+          } else if (OB_FAIL(group_index_map.set_refactored(key, group_idx))) {
+            LOG_WARN("fail to add gc table group index", KR(ret), K(group_idx), K(key));
+          }
+        } else if (OB_SUCCESS != hash_ret) {
+          ret = hash_ret;
+          LOG_WARN("fail to find gc table group index", KR(ret), K(key));
+        } else if (OB_FAIL(table_groups.at(group_idx).tablet_infos_.push_back(tablet_info))) {
+          LOG_WARN("fail to push tablet info to existing group", KR(ret),
+              K(group_idx), K(key), KPC(tablet_info));
+        }
       }
     }
   }
 
+  return ret;
+}
+
+int ObSessionTabletGCHelper::inner_process_gc_batch(
+    ObIArray<storage::ObSessionTabletInfo *> &session_tablet_infos_for_delete_batch,
+    const int64_t latest_schema_version,
+    ObSessionTabletGCTaskSummary &gc_summary,
+    const hash::ObHashSet<uint64_t> &previous_batch_table_id_set,
+    hash::ObHashSet<uint64_t> &current_batch_table_id_set)
+{
+  int ret = OB_SUCCESS;
+  common::ObMySQLTransaction trans;
+  current_batch_table_id_set.reuse();
+  if (OB_UNLIKELY(session_tablet_infos_for_delete_batch.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid empty session tablet gc batch", KR(ret));
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
+    LOG_WARN("failed to start transaction", KR(ret));
+  } else {
+    storage::ObSessionTabletDeleteHelper tablet_delete_helper(
+        tenant_id_, session_tablet_infos_for_delete_batch, trans, latest_schema_version);
+    tablet_delete_helper.set_timeout_us(0/* no timeout */);
+    if (OB_FAIL(tablet_delete_helper.do_work_for_gc(
+            gc_summary, previous_batch_table_id_set, current_batch_table_id_set))) {
+      LOG_WARN("failed to delete session tablets in batch", KR(ret), K(session_tablet_infos_for_delete_batch));
+    } else {
+      LOG_INFO("GC succeed to remove session tablets in batch", K(tenant_id_), K(session_tablet_infos_for_delete_batch));
+    }
+  }
+
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    const bool is_commit = OB_SUCCESS == ret;
+    if (OB_TMP_FAIL(trans.end(is_commit))) {
+      LOG_WARN("failed to end transaction", KR(ret), KR(tmp_ret));
+      ret = is_commit ? tmp_ret : ret;
+    }
+  }
+  session_tablet_infos_for_delete_batch.reuse();
   return ret;
 }
 

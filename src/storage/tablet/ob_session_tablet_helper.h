@@ -451,6 +451,64 @@ public:
   static const int64_t BATCH_DELETE_SESSION_TABLET_COUNT = TABLET_GROUP_SIZE * NUM_OF_TABLET_GROUP;
   TO_STRING_KV(K_(tenant_id));
 private:
+  struct GCTableGroupKey final
+  {
+    GCTableGroupKey()
+      : session_id_(OB_INVALID_ID), sequence_(INT64_MAX), base_table_id_(OB_INVALID_ID)
+    {}
+    GCTableGroupKey(
+        const uint64_t session_id,
+        const int64_t sequence,
+        const uint64_t base_table_id)
+      : session_id_(session_id), sequence_(sequence), base_table_id_(base_table_id)
+    {}
+    bool is_valid() const
+    {
+      return OB_INVALID_ID != session_id_
+          && INT64_MAX != sequence_
+          && OB_INVALID_ID != base_table_id_;
+    }
+    uint64_t hash() const
+    {
+      uint64_t hash_val = common::murmurhash(&session_id_, sizeof(session_id_), 0);
+      hash_val = common::murmurhash(&sequence_, sizeof(sequence_), hash_val);
+      return common::murmurhash(&base_table_id_, sizeof(base_table_id_), hash_val);
+    }
+    int hash(uint64_t &hash_val) const
+    {
+      hash_val = hash();
+      return OB_SUCCESS;
+    }
+    bool operator==(const GCTableGroupKey &other) const
+    {
+      return session_id_ == other.session_id_
+          && sequence_ == other.sequence_
+          && base_table_id_ == other.base_table_id_;
+    }
+    TO_STRING_KV(K_(session_id), K_(sequence), K_(base_table_id));
+
+    uint64_t session_id_;
+    int64_t sequence_;
+    uint64_t base_table_id_;
+  };
+  struct GCTableGroup final
+  {
+    GCTableGroup()
+      : key_(), tablet_infos_()
+    {}
+    explicit GCTableGroup(const GCTableGroupKey &key)
+      : key_(key), tablet_infos_()
+    {}
+    int assign(const GCTableGroup &other);
+    bool is_valid() const
+    {
+      return key_.is_valid() && !tablet_infos_.empty();
+    }
+    TO_STRING_KV(K_(key), K_(tablet_infos));
+
+    GCTableGroupKey key_;
+    common::ObSEArray<storage::ObSessionTabletInfo *, TABLET_GROUP_SIZE> tablet_infos_;
+  };
   static bool need_check_table(
     const share::schema::ObSimpleTableSchemaV2 *schema,
     const obrpc::ObAlterTableArg *alter_table_arg);
@@ -473,10 +531,39 @@ private:
     common::ObMySQLProxy &sql_proxy,
     ObSchemaService &schema_svr,
     /*out*/common::ObIArray<common::ObTableID> &table_ids);
-  // Group session tablet infos by session_id and sequence
-  static int group_by_session_and_seq(
+  int collect_gc_candidates(
+    common::ObIArray<share::ObLSID> &ls_ids,
+    common::ObIArray<storage::ObSessionTabletInfo> &session_tablet_infos);
+  int filter_inactive_session_tablets(
+    common::ObIArray<storage::ObSessionTabletInfo> &session_tablet_infos,
+    common::ObIArray<storage::ObSessionTabletInfo *> &session_tablet_infos_for_delete);
+  int build_gc_table_groups(
+    const common::ObIArray<storage::ObSessionTabletInfo *> &session_tablet_infos_for_delete,
+    int64_t &latest_schema_version,
+    int64_t &schema_resolve_cost_us,
+    common::ObIArray<GCTableGroup> &table_groups);
+  int process_gc_table_groups(
+    const common::ObIArray<GCTableGroup> &table_groups,
+    const int64_t session_tablet_count,
+    const int64_t latest_schema_version,
+    const int64_t schema_resolve_cost_us,
+    ObSessionTabletGCTaskSummary &gc_summary);
+  int group_by_session_seq_and_base_table(
     const ObIArray<storage::ObSessionTabletInfo *> &session_tablet_infos_for_delete,
-    ObIArray<common::ObSEArray<storage::ObSessionTabletInfo *, TABLET_GROUP_SIZE>> &session_tablet_infos_for_delete_grouped/* out */);
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    ObIArray<GCTableGroup> &table_groups/* out */);
+  int inner_process_gc_batch(
+    ObIArray<storage::ObSessionTabletInfo *> &session_tablet_infos_for_delete_batch,
+    const int64_t latest_schema_version,
+    ObSessionTabletGCTaskSummary &gc_summary,
+    const hash::ObHashSet<uint64_t> &previous_batch_table_id_set,
+    hash::ObHashSet<uint64_t> &current_batch_table_id_set);
+  int process_gc_batch(
+    common::ObIArray<storage::ObSessionTabletInfo *> &session_tablet_infos_for_delete_batch,
+    const int64_t latest_schema_version,
+    ObSessionTabletGCTaskSummary &gc_summary,
+    hash::ObHashSet<uint64_t> *&previous_batch_table_id_set,
+    hash::ObHashSet<uint64_t> *&current_batch_table_id_set);
 
 private:
   int refresh_tenant_schema_if_need(int64_t &latest_schema_version);
