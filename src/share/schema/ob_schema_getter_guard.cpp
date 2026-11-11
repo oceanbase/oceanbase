@@ -8013,7 +8013,7 @@ int ObSchemaGetterGuard::generate_tablet_table_map(
   } else if (OB_UNLIKELY(!ObSchemaService::is_formal_version(schema_version))) {
     ret = OB_SCHEMA_EAGAIN;
     LOG_WARN("schema version is not formal, retry to get schema guard", KR(ret), K(tenant_id), K(schema_version));
-  } else if (OB_FAIL(tablet_map.create(BUCKET_NUM, "TabletPairMap", "TabletPairMap", tenant_id))) {
+  } else if (OB_FAIL(tablet_map.create(BUCKET_NUM, "TabletPairMap", "TabletPairMap", OB_SERVER_TENANT_ID))) {
     LOG_WARN("create tablet-table map failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(get_table_schemas_in_tenant(tenant_id, tables))) {
     LOG_WARN("fail to get tables", KR(ret), K(tenant_id));
