@@ -143,8 +143,6 @@ private:
     return ret;
   }
 
-private:
-  static ObIsLockSessionInfo is_lock_session;
 };
 }  // namespace observer
 }  // namespace oceanbase

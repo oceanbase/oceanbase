@@ -14,8 +14,6 @@ namespace oceanbase
 using namespace common;
 namespace observer
 {
-ObIsLockSessionInfo ObFeedbackProxyUtils::is_lock_session(ObFeedbackProxyInfoType::IS_LOCK_SESSION, '1');
-
 void ObFeedbackProxyUtils::refresh_temp_table_feedback_state_(sql::ObSQLSessionInfo &sess)
 {
   // Mark a session when it tracks a GTT session tablet and is eligible for
@@ -98,6 +96,7 @@ int ObFeedbackProxyUtils::append_feedback_proxy_info(common::ObIAllocator &alloc
 int64_t ObFeedbackProxyUtils::get_serialize_size_(sql::ObSQLSessionInfo &sess)
 {
   int64_t size = 0;
+  const ObIsLockSessionInfo is_lock_session(ObFeedbackProxyInfoType::IS_LOCK_SESSION, '1');
   const ObIsTemporaryTableSessionInfo is_temporary_table_session(
       ObFeedbackProxyInfoType::IS_TEMPORARY_TABLE_SESSION, '1');
   size += is_lock_session.get_serialize_size();
@@ -109,11 +108,8 @@ int64_t ObFeedbackProxyUtils::get_serialize_size_(sql::ObSQLSessionInfo &sess)
 int ObFeedbackProxyUtils::serialize_(sql::ObSQLSessionInfo &sess, char *buf, int64_t len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  if (!sess.is_lock_session()) {
-    is_lock_session.set_value('0');
-  } else {
-    is_lock_session.set_value('1');
-  }
+  const ObIsLockSessionInfo is_lock_session(
+      ObFeedbackProxyInfoType::IS_LOCK_SESSION, sess.is_lock_session() ? '1' : '0');
   if (OB_FAIL(is_lock_session.serialize(buf, len, pos))) {
     LOG_WARN("serialize is_lock_session failed", K(ret), K(is_lock_session));
   }

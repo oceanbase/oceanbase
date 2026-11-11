@@ -5,6 +5,8 @@
 
 #define UNITTEST_DEBUG
 #include <gtest/gtest.h>
+#include <atomic>
+#include <thread>
 #define private public
 #include "observer/mysql/ob_feedback_proxy_utils.h"
 #include "src/sql/session/ob_sql_session_info.h"
@@ -83,6 +85,70 @@ TEST(ObFeedbackProxyUtils, test_serialize_from_session)
   std::string hex_string = "0000010000003101000100000031";
   verified = verifyHexString(buf, pos, hex_string);
   ASSERT_TRUE(verified);
+}
+
+TEST(ObFeedbackProxyUtils, concurrent_session_feedback_isolation)
+{
+  const int64_t THREAD_COUNT = 8;
+  const int64_t ITERATION_COUNT = 100000;
+  const int64_t FEEDBACK_LENGTH = 14;
+  std::atomic<int64_t> ready_count(0);
+  std::atomic<bool> start(false);
+  std::thread threads[THREAD_COUNT];
+  int64_t serialize_errors[THREAD_COUNT] = {};
+  int64_t lock_mismatches[THREAD_COUNT] = {};
+  int64_t payload_mismatches[THREAD_COUNT] = {};
+  ObLogger &logger = ObLogger::get_logger();
+  const int32_t old_log_level = logger.get_log_level();
+  logger.set_log_level(OB_LOG_LEVEL_WARN);
+
+  for (int64_t thread_id = 0; thread_id < THREAD_COUNT; ++thread_id) {
+    threads[thread_id] = std::thread([&, thread_id]() {
+      // Each worker owns its session and output buffer. Only the implementation
+      // under test can introduce shared mutable feedback state.
+      sql::ObSQLSessionInfo session;
+      const bool is_lock_session = (thread_id % 2) != 0;
+      const bool is_temp_session = ((thread_id / 2) % 2) != 0;
+      session.set_is_lock_session(is_lock_session);
+      session.set_is_temporary_table_session(is_temp_session);
+      const char expected[FEEDBACK_LENGTH] = {
+          0, 0, 1, 0, 0, 0, is_lock_session ? '1' : '0',
+          1, 0, 1, 0, 0, 0, is_temp_session ? '1' : '0'};
+      ready_count.fetch_add(1, std::memory_order_release);
+      while (!start.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+      }
+      for (int64_t iteration = 0; iteration < ITERATION_COUNT; ++iteration) {
+        char buf[FEEDBACK_LENGTH] = {};
+        int64_t pos = 0;
+        const int64_t size = ObFeedbackProxyUtils::get_serialize_size_(session);
+        const int ret = ObFeedbackProxyUtils::serialize_(session, buf, sizeof(buf), pos);
+        if (OB_SUCCESS != ret || FEEDBACK_LENGTH != pos || FEEDBACK_LENGTH != size) {
+          ++serialize_errors[thread_id];
+        } else {
+          if (buf[6] != expected[6]) {
+            ++lock_mismatches[thread_id];
+          }
+          if (0 != MEMCMP(buf, expected, sizeof(expected))) {
+            ++payload_mismatches[thread_id];
+          }
+        }
+      }
+    });
+  }
+  while (THREAD_COUNT != ready_count.load(std::memory_order_acquire)) {
+    std::this_thread::yield();
+  }
+  start.store(true, std::memory_order_release);
+  for (int64_t thread_id = 0; thread_id < THREAD_COUNT; ++thread_id) {
+    threads[thread_id].join();
+  }
+  logger.set_log_level(old_log_level);
+  for (int64_t thread_id = 0; thread_id < THREAD_COUNT; ++thread_id) {
+    EXPECT_EQ(0, serialize_errors[thread_id]) << "thread_id=" << thread_id;
+    EXPECT_EQ(0, lock_mismatches[thread_id]) << "thread_id=" << thread_id;
+    EXPECT_EQ(0, payload_mismatches[thread_id]) << "thread_id=" << thread_id;
+  }
 }
 
 TEST(ObFeedbackProxyUtils, test_serialize_from_kv)
