@@ -105,7 +105,6 @@ public:
   int32_t non_aggr_reserved_row_size() const;
 
   int init_streaming_function();
-  bool group_concat_whole_frame() const;
 
   // need reset last_aggr_row_ & per_partition_allocator_ (streaming + non-streaming)
   int on_partition_start();

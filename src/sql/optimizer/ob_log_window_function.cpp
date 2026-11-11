@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_log_window_function.h"
 #include "sql/optimizer/ob_join_order.h"
+#include "share/aggregate/iaggregate.h"
 
 #define PRINT_BOUND(bound_name, bound)                 \
   if (OB_SUCC(ret)) {                                 \
@@ -867,8 +868,14 @@ namespace {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("window function expr is null", K(ret), K(win_exprs), K(i));
       } else if (is_non_distinct_aggr(win_func_expr)) {
-        // only non_distinct_aggr over rows + (unbounded, current) is supported streaming window functions
-        if (!is_unbounded_preceding_and_current_row(win_func_expr)) {
+        const ObAggFunRawExpr *agg_expr = win_func_expr->get_agg_expr();
+        const bool has_order_by = OB_NOT_NULL(agg_expr)
+                                  && agg_expr->get_order_items().count() > 0;
+        const bool need_whole_frame = OB_NOT_NULL(agg_expr)
+                                      && oceanbase::share::aggregate::helper::has_extra_info(agg_expr->get_expr_type(),
+                                                                                 agg_expr->is_param_distinct(),
+                                                                                 has_order_by);
+        if (!is_unbounded_preceding_and_current_row(win_func_expr) || need_whole_frame) {
           all_functions_are_streaming = false;
           LOG_TRACE("unsuported window function in non_distinct_aggr", K(*win_func_expr), K(i));
         }

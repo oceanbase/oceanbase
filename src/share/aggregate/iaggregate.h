@@ -40,14 +40,16 @@ namespace helper
 void print_input_rows(const RowSelector &row_sel, const sql::ObBitVector &skip,
                       const sql::EvalBound &bound, const sql::ObAggrInfo &aggr_info,
                       bool is_first_row, sql::ObEvalCtx &ctx, IAggregate *agg, int64_t col_id);
-inline bool has_extra_info(ObAggrInfo &info)
+inline bool has_extra_info(const ObItemType expr_type,
+                          const bool has_distinct,
+                          const bool has_order_by)
 {
   bool has = false;
-  switch (info.get_expr_type()) {
+  switch (expr_type) {
   case T_FUN_WM_CONCAT:
   case T_FUN_GROUP_CONCAT:
   case T_FUN_CK_GROUPCONCAT: {
-    if (info.has_order_by_) {
+    if (has_order_by) {
       has = true;
     } else {
       has = false;
@@ -86,8 +88,12 @@ inline bool has_extra_info(ObAggrInfo &info)
     break;
   }
   }
-  has = has || info.has_distinct_;
+  has = has || has_distinct;
   return has;
+}
+inline bool has_extra_info(const ObAggrInfo &info)
+{
+  return has_extra_info(info.get_expr_type(), info.has_distinct_, info.has_order_by_);
 }
 } // end helper
 

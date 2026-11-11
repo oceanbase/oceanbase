@@ -3443,17 +3443,6 @@ int WinFuncColExpr::init_res_rows(const int64_t tenant_id)
   return ret;
 }
 
-bool WinFuncColExpr::group_concat_whole_frame() const {
-  bool group_concat_whole_frame = false;
-  if ((wf_info_.aggr_info_.get_expr_type() == T_FUN_GROUP_CONCAT
-          || wf_info_.aggr_info_.get_expr_type() == T_FUN_CK_GROUPCONCAT)
-      && (wf_info_.aggr_info_.has_distinct_
-          || wf_info_.aggr_info_.has_order_by_)) {
-    group_concat_whole_frame = true;
-  }
-  return group_concat_whole_frame;
-}
-
 int WinFuncColExpr::init_streaming_function() {
   int ret = OB_SUCCESS;
   if (wf_info_.func_type_ == T_WIN_FUN_NTH_VALUE ||
