@@ -809,6 +809,50 @@ int ObPLDependencyCheck::get_synonym_schema_version(ObPLCacheBasicCtx &pc_ctx,
   return ret;
 }
 
+int ObPLDependencyCheck::check_sys_package_shadowing(ObPLCacheBasicCtx &pc_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(pc_ctx.schema_guard_) || OB_ISNULL(pc_ctx.session_info_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    ObSchemaGetterGuard &schema_guard = *pc_ctx.schema_guard_;
+    const uint64_t tenant_id = pc_ctx.session_info_->get_effective_tenant_id();
+    const int64_t compatible_mode = lib::is_oracle_mode()
+        ? COMPATIBLE_ORACLE_MODE : COMPATIBLE_MYSQL_MODE;
+    for (int64_t i = 0; OB_SUCC(ret) && i < stored_sys_schema_objs_.count(); ++i) {
+      const PCVPlSchemaObj *dep = stored_sys_schema_objs_.at(i);
+      const ObSimplePackageSchema *sys_package = nullptr;
+      const ObPackageInfo *local_package = nullptr;
+      if (OB_ISNULL(dep)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null dependency", K(ret), K(i));
+      } else if (PACKAGE_SCHEMA != dep->schema_type_
+                 || OB_INVALID_ID == dep->invoker_db_id_) {
+        // Only unqualified SYS package fallback records a lookup database.
+      } else if (OB_FAIL(schema_guard.get_simple_package_info(
+                   OB_SYS_TENANT_ID, dep->schema_id_, sys_package))) {
+        LOG_WARN("failed to get system package", K(ret), KPC(dep));
+      } else if (OB_ISNULL(sys_package)) {
+        ret = OB_OLD_SCHEMA_VERSION;
+        set_expired_schema_version(*dep);
+      } else if (OB_FAIL(schema_guard.get_package_info(tenant_id,
+                                                      dep->invoker_db_id_,
+                                                      sys_package->get_package_name(),
+                                                      share::schema::PACKAGE_TYPE,
+                                                      compatible_mode,
+                                                      local_package))) {
+        LOG_WARN("failed to check local package", K(ret), K(tenant_id), KPC(dep));
+      } else if (OB_NOT_NULL(local_package)) {
+        ret = OB_OLD_SCHEMA_VERSION;
+        set_expired_schema_version(*dep);
+        LOG_TRACE("system package is shadowed by local package", K(ret), KPC(dep), KPC(local_package));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPLDependencyCheck::get_all_dep_schema(ObPLCacheBasicCtx &pc_ctx,
                                          int64_t &new_schema_version,
                                          int64_t &new_sys_schema_version,
@@ -831,6 +875,8 @@ int ObPLDependencyCheck::get_all_dep_schema(ObPLCacheBasicCtx &pc_ctx,
     LOG_WARN("invalid argument", K(ret));
   } else {
     if (need_check_schema) {
+      // Creating a local package changes the user tenant schema version only.
+      OZ (check_sys_package_shadowing(pc_ctx));
       OZ (inner_get_all_dep_schema(pc_ctx, stored_schema_objs_, schema_array));
     }
     if (need_check_sys_obj) {

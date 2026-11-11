@@ -45,7 +45,9 @@ int ObPLDependencyUtil::add_dependency_object_impl(ObPLDependencyTable &dep_tbl,
     bool exists = false;
     for (ObPLDependencyTable::iterator it = dep_tbl.begin();
                                   it < dep_tbl.end(); it++) {
-      if (*it == obj_version) {
+      if (*it == obj_version
+          && it->invoker_db_id_ == obj_version.invoker_db_id_) {
+        // Dependencies resolved in different databases must be kept separately.
         exists = true;
         break;
       }
@@ -105,7 +107,8 @@ int ObPLDependencyUtil::collect_synonym_deps(uint64_t tenant_id,
         bool exists = false;
         for (int64_t i = 0; !exists && i < deps->count(); ++i) {
           const ObSchemaObjVersion &cur_obj_version = deps->at(i);
-          if (cur_obj_version == obj_version) {
+          if (cur_obj_version == obj_version
+              && cur_obj_version.invoker_db_id_ == obj_version.invoker_db_id_) {
             exists = true;
           }
         }

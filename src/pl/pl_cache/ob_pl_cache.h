@@ -310,6 +310,7 @@ public:
                                   uint64_t tenant_id,
                                   const PCVPlSchemaObj &pcv_schema,
                                   int64_t &new_version);
+  int check_sys_package_shadowing(ObPLCacheBasicCtx &pc_ctx);
   int get_all_dep_schema(ObPLCacheBasicCtx &pc_ctx,
                           int64_t &new_schema_version,
                           int64_t &new_sys_schema_version,
