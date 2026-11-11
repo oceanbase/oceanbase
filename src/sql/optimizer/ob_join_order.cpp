@@ -18494,10 +18494,6 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
                                                         OPT_CTX.get_params(),
                                                         index_prefix))) {
           LOG_WARN("failed to get range exprs by graph", K(ret));
-          if (OB_SUCCESS == (OB_E(EventTable::EN_CHECK_OPERATOR_OUTPUT_ROWS) OB_SUCCESS)) {
-            ret = OB_SUCCESS;
-            unprecise_opt_mode = 1;
-          }
         } else if (OB_UNLIKELY(est_cost_info.real_range_exprs_.empty())) {
           if (OB_SUCCESS != (OB_E(EventTable::EN_CHECK_OPERATOR_OUTPUT_ROWS) OB_SUCCESS)) {
             ret = OB_ERR_UNEXPECTED;
