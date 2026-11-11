@@ -4,6 +4,7 @@
  */
 
 #include "../test_sql_utils.h"
+#include "lib/worker.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 namespace test
@@ -51,6 +52,37 @@ void TestParser::TearDown()
 }
 
 #ifdef OB_BUILD_ORACLE_PARSER
+TEST_F(TestParser, dynamic_sql_tail_buffer)
+{
+  lib::CompatModeGuard mode_guard(lib::Worker::CompatMode::ORACLE);
+  ObParser parser(allocator_, DEFAULT_ORACLE_MODE | SMO_ORACLE);
+  // 126 placeholders fill the initial buffer; 127 and 128 exceed it by 1 and 2 bytes.
+  const int64_t placeholder_counts[] = {1, 126, 127, 128, 512};
+  for (int64_t count : placeholder_counts) {
+    SCOPED_TRACE(count);
+    std::string query = "select ";
+    std::string expected_sql = "select ";
+    for (int64_t i = 0; i < count; ++i) {
+      if (i > 0) {
+        query += ",";
+        expected_sql += ",";
+      }
+      query += "?";
+      expected_sql += ":" + std::to_string(i);
+    }
+    query += " from dual";
+    expected_sql += " from dual";
+
+    ParseResult parse_result;
+    ASSERT_EQ(OB_SUCCESS, parser.parse(ObString::make_string(query.c_str()), parse_result, DYNAMIC_SQL_MODE));
+    EXPECT_EQ(count, parse_result.question_mark_ctx_.count_);
+    ASSERT_LE(parse_result.no_param_sql_len_, parse_result.no_param_sql_buf_len_);
+    EXPECT_EQ(expected_sql.length(), parse_result.no_param_sql_len_);
+    EXPECT_EQ(expected_sql, std::string(parse_result.no_param_sql_, parse_result.no_param_sql_len_));
+    parser.free_result(parse_result);
+  }
+}
+
 TEST_F(TestParser, basic_test)
 {
   const char* test_file = "./test_parser.test";

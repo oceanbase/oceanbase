@@ -35,6 +35,29 @@ int ObSQLParser::parse(const char * str_ptr, const int64_t str_len, ParseResult 
     // do nothing
   } else if (OB_FAIL(parse_sql(&result, str_ptr, static_cast<size_t>(str_len)))) {
     // do nothing
+  } else if (result.is_dynamic_sql_) {
+    const int64_t tail_len = result.input_sql_len_ - result.pl_parse_info_.last_pl_symbol_pos_;
+    const int64_t req_size = static_cast<int64_t>(result.no_param_sql_len_) + tail_len;
+    if (OB_UNLIKELY(req_size >= INT32_MAX)) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_ERROR("rewritten dynamic SQL is too long", K(ret), K(req_size));
+    } else if (result.no_param_sql_buf_len_ < req_size) {
+      const int64_t new_buf_length = req_size + 1;
+      char *new_buf = static_cast<char *>(parse_malloc(new_buf_length, result.malloc_pool_));
+      if (OB_ISNULL(new_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        MEMCPY(new_buf, result.no_param_sql_, result.no_param_sql_len_);
+        result.no_param_sql_ = new_buf;
+        result.no_param_sql_buf_len_ = new_buf_length;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      memmove(result.no_param_sql_ + result.no_param_sql_len_,
+              result.input_sql_ + result.pl_parse_info_.last_pl_symbol_pos_,
+              tail_len);
+      result.no_param_sql_len_ = req_size;
+    }
   }
 #ifndef SQL_PARSER_COMPILATION
   GET_DIAGNOSTIC_INFO->get_ash_stat().in_parse_ = false;
