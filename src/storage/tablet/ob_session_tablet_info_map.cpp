@@ -50,8 +50,63 @@ ObSessionTabletInfoMap::ObSessionTabletInfoMap()
   tablet_infos_.set_attr(lib::ObMemAttr(MTL_ID(), "SessTblInfoM"));
 }
 
-OB_SERIALIZE_MEMBER(ObSessionTabletInfoMap,
-                    tablet_infos_);
+OB_DEF_SERIALIZE(ObSessionTabletInfoMap)
+{
+  int ret = OB_SUCCESS;
+  lib::ObMutexGuard guard(mutex_);
+  const int64_t count = tablet_infos_.count();
+  if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, count))) {
+    LOG_WARN("failed to encode session tablet info count", KR(ret), K(count));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+    if (OB_FAIL(tablet_infos_.at(i).serialize(buf, buf_len, pos))) {
+      LOG_WARN("failed to serialize session tablet info", KR(ret), K(i), K(count));
+    }
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObSessionTabletInfoMap)
+{
+  int ret = OB_SUCCESS;
+  int64_t count = 0;
+  lib::ObMutexGuard guard(mutex_);
+  tablet_infos_.reset();
+  if (OB_ISNULL(buf) || OB_UNLIKELY(pos < 0 || pos >= data_len)) {
+    ret = OB_DESERIALIZE_ERROR;
+    LOG_WARN("invalid session tablet info payload", KR(ret), KP(buf), K(data_len), K(pos));
+  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &count))) {
+    LOG_WARN("failed to decode session tablet info count", KR(ret), K(data_len), K(pos));
+  } else if (0 == count) {
+    // Empty arrays have no element payload.
+  } else if (OB_UNLIKELY(count < 0 || count >= data_len - pos)) {
+    ret = OB_DESERIALIZE_ERROR;
+    LOG_WARN("invalid session tablet info count", KR(ret), K(count), K(data_len), K(pos));
+  } else if (OB_FAIL(tablet_infos_.prepare_allocate(count))) {
+    LOG_WARN("failed to allocate session tablet infos", KR(ret), K(count));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+    if (OB_UNLIKELY(data_len - pos <= 0)) {
+      ret = OB_DESERIALIZE_ERROR;
+      LOG_WARN("incomplete session tablet info payload", KR(ret), K(i), K(count), K(data_len), K(pos));
+    } else if (OB_FAIL(tablet_infos_.at(i).deserialize(buf, data_len, pos))) {
+      LOG_WARN("failed to deserialize session tablet info", KR(ret), K(i), K(count));
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObSessionTabletInfoMap)
+{
+  int64_t len = 0;
+  lib::ObMutexGuard guard(mutex_);
+  const int64_t count = tablet_infos_.count();
+  len += serialization::encoded_length_vi64(count);
+  for (int64_t i = 0; i < count; ++i) {
+    len += tablet_infos_.at(i).get_serialize_size();
+  }
+  return len;
+}
 
 int ObSessionTabletInfoMap::get_session_tablet_if_not_exist_add(
     const ObSessionTabletInfoKey &key,
@@ -355,8 +410,8 @@ int ObSessionTabletInfoMap::get_table_ids_by_session_id_and_sequence(
 {
   int ret = OB_SUCCESS;
   table_ids.reset();
+  lib::ObMutexGuard guard(mutex_);
   if (!tablet_infos_.empty()) {
-    lib::ObMutexGuard guard(mutex_);
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_infos_.count(); ++i) {
       if (tablet_infos_.at(i).session_id_ == session_id &&
           tablet_infos_.at(i).sequence_ == sequence) {

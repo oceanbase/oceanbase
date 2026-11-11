@@ -228,6 +228,43 @@ TEST_F(TestCreateOracleGTT, prepare_data)
 }
 
 
+TEST_F(TestCreateOracleGTT, test_session_tablet_info_map_serialize)
+{
+  const int64_t counts[] = {0, 1, 65};
+  for (const int64_t count : counts) {
+    ObSessionTabletInfoMap src_map;
+    for (int64_t i = 0; i < count; ++i) {
+      ObSessionTabletInfo info;
+      ASSERT_EQ(OB_SUCCESS, info.init(ObTabletID(200000 + i), ObLSID(1001 + i),
+          500000 + i, 123 + i, 456 + i, i));
+      ASSERT_EQ(OB_SUCCESS, src_map.tablet_infos_.push_back(info));
+    }
+
+    char buf[16384] = {};
+    const int64_t serialize_size = src_map.get_serialize_size();
+    int64_t pos = 0;
+    ASSERT_EQ(OB_SUCCESS, src_map.serialize(buf, sizeof(buf), pos));
+    ASSERT_EQ(serialize_size, pos);
+
+    ObSessionTabletInfoMap dst_map;
+    int64_t deserialize_pos = 0;
+    ASSERT_EQ(OB_SUCCESS, dst_map.deserialize(buf, pos, deserialize_pos));
+    ASSERT_EQ(pos, deserialize_pos);
+    ASSERT_EQ(serialize_size, dst_map.get_serialize_size());
+    ASSERT_EQ(count, dst_map.tablet_infos_.count());
+    for (int64_t i = 0; i < count; ++i) {
+      const ObSessionTabletInfo &expected = src_map.tablet_infos_.at(i);
+      const ObSessionTabletInfo &actual = dst_map.tablet_infos_.at(i);
+      ASSERT_EQ(expected.table_id_, actual.table_id_);
+      ASSERT_EQ(expected.sequence_, actual.sequence_);
+      ASSERT_EQ(expected.session_id_, actual.session_id_);
+      ASSERT_EQ(expected.ls_id_, actual.ls_id_);
+      ASSERT_EQ(expected.tablet_id_, actual.tablet_id_);
+      ASSERT_EQ(expected.transfer_seq_, actual.transfer_seq_);
+    }
+  }
+}
+
 TEST_F(TestCreateOracleGTT, create_and_delete_tablet)
 {
   int ret = OB_SUCCESS;

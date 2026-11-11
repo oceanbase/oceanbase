@@ -204,7 +204,7 @@ private:
       ObSessionTabletInfo &session_tablet_info);
 private:
   common::ObSEArray<ObSessionTabletInfo, MAX_SESSION_TABLET_COUNT> tablet_infos_;
-  lib::ObMutex mutex_;
+  mutable lib::ObMutex mutex_;
   DISALLOW_COPY_AND_ASSIGN(ObSessionTabletInfoMap);
 };
 
