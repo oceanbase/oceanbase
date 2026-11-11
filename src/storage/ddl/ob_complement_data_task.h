@@ -89,7 +89,7 @@ public:
            && orig_ls_id_.is_valid() && dest_ls_id_.is_valid() && common::OB_INVALID_ID != orig_table_id_
            && common::OB_INVALID_ID != dest_table_id_ && orig_tablet_id_.is_valid() && dest_tablet_id_.is_valid()
            && snapshot_version_ > 0 && compat_mode_ != lib::Worker::CompatMode::INVALID && execution_id_ >= 0 && tablet_task_id_ > 0
-           && data_format_version_ > 0 && orig_schema_tablet_size_ > 0 && dest_schema_cg_cnt_ > 0 && user_parallelism_ > 0;
+           && data_format_version_ > 0 && orig_schema_tablet_size_ > 0 && dest_schema_cg_cnt_ >= 0 && user_parallelism_ > 0;
   }
 
   bool has_generated_task_ranges() const {
@@ -129,7 +129,8 @@ public:
   TO_STRING_KV(K_(is_inited), K_(orig_tenant_id), K_(dest_tenant_id), K_(orig_ls_id), K_(dest_ls_id),
       K_(orig_table_id), K_(dest_table_id), K_(orig_tablet_id), K_(dest_tablet_id), K_(orig_schema_version),
       K_(tablet_task_id), K_(dest_schema_version), K_(snapshot_version), K_(task_id),
-      K_(execution_id), K_(compat_mode), K_(data_format_version), K_(orig_schema_tablet_size),K_(user_parallelism),
+      K_(execution_id), K_(compat_mode), K_(data_format_version), K_(orig_schema_tablet_size), K_(dest_schema_cg_cnt),
+      K_(user_parallelism),
       K_(concurrent_cnt), K_(ranges), K_(need_rescan_fill_cg), K_(is_no_logging));
 private:
   int get_complement_parallel_mode(

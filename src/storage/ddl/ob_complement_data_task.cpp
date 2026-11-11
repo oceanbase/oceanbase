@@ -381,7 +381,7 @@ int ObComplementDataParam::split_task_ranges_remote(
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(common::OB_INVALID_TENANT_ID == src_tenant_id
-    ||!src_ls_id.is_valid() || !src_tablet_id.is_valid() || tablet_size <= 0 || dest_schema_cg_cnt <= 0)) {
+    ||!src_ls_id.is_valid() || !src_tablet_id.is_valid() || tablet_size <= 0 || dest_schema_cg_cnt < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(src_tenant_id), K(src_ls_id), K(src_tablet_id), K(tablet_size),
       K(dest_schema_cg_cnt));

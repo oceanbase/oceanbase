@@ -72,10 +72,6 @@ public:
     } else {
       is_valid = (is_valid && compaction_scns_.count() == 0);
     }
-    if (share::is_recover_table_task(ddl_type_)) {
-      is_valid = is_valid && dest_cg_cnt_ > 0;
-    }
-
     return is_valid;
   }
 
