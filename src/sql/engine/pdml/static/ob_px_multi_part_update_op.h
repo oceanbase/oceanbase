@@ -73,8 +73,11 @@ public:
                         ObOpInput *input)
   : ObTableModifyOp(exec_ctx, spec, input),
     data_driver_(&ObOperator::get_eval_ctx(), exec_ctx.get_allocator(), op_monitor_info_),
-    upd_rtdef_()
-  {}
+    upd_rtdef_(),
+    cached_row_exprs_()
+  {
+    cached_row_exprs_.set_attr(ObMemAttr(MTL_ID(), "PDMLCacheExpr"));
+  }
   virtual ~ObPxMultiPartUpdateOp() = default;
 public:
   int read_row(ObExecContext &ctx,
@@ -93,14 +96,17 @@ public:
   {
     // destroy
     upd_rtdef_.~ObUpdRtDef();
+    cached_row_exprs_.reset();
     ObTableModifyOp::destroy();
   }
 private:
   int update_row_to_das(const ObDASTabletLoc *tablet_loc);
+  int restore_cached_row_eval_flags();
 private:
   ObPDMLOpDataDriver data_driver_;
   ObUpdRtDef upd_rtdef_;
-  // 用于对child output row进行calc，并返回DML操作需要的old_row与new_row
+  // Keep checked assignment values across partition writes and returning to global index maintenance.
+  common::ObSEArray<ObExpr *, 16> cached_row_exprs_;
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartUpdateOp);
 };
 }

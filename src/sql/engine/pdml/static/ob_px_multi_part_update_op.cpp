@@ -34,6 +34,13 @@ int ObPxMultiPartUpdateOp::inner_open()
   } else if (!(MY_SPEC.row_desc_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table or row desc is invalid", K(ret), K(MY_SPEC.row_desc_));
+  } else if (OB_ISNULL(child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child op is null", K(ret));
+  } else if (OB_FAIL(cached_row_exprs_.assign(child_->get_spec().output_))) {
+    LOG_WARN("failed to assign child output expressions", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(cached_row_exprs_, MY_SPEC.upd_ctdef_.full_row_))) {
+    LOG_WARN("failed to append update row expressions", K(ret));
   } else if (OB_FAIL(data_driver_.init(get_spec(), ctx_.get_allocator(), upd_rtdef_, this, this, false))) {
     LOG_WARN("failed to init data driver", K(ret));
   } else if (OB_FAIL(ObDMLService::init_upd_rtdef(dml_rtctx_,
@@ -54,32 +61,55 @@ int ObPxMultiPartUpdateOp::inner_get_next_row()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the child op is null", K(ret));
   } else if (MY_SPEC.is_returning_) {
-    if (OB_FAIL(data_driver_.get_next_row(ctx_, child_->get_spec().output_))) {
+    if (OB_FAIL(data_driver_.get_next_row(ctx_, cached_row_exprs_))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("failed get next row from data driver", K(ret));
       } else {
         LOG_TRACE("data driver has been iterated to end");
       }
+    } else if (OB_FAIL(restore_cached_row_eval_flags())) {
+      LOG_WARN("failed to restore cached row evaluation flags", K(ret));
     } else {
-      clear_evaluated_flag();
       LOG_DEBUG("get one row for returning",
         "row", ROWEXPR2STR(get_eval_ctx(), MY_SPEC.output_));
     }
   } else {
     do {
-      if (OB_FAIL(data_driver_.get_next_row(ctx_, child_->get_spec().output_))) {
+      if (OB_FAIL(data_driver_.get_next_row(ctx_, cached_row_exprs_))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("failed get next row from data driver", K(ret));
         } else {
           LOG_TRACE("data driver has been iterated to end");
         }
+      } else if (OB_FAIL(restore_cached_row_eval_flags())) {
+        LOG_WARN("failed to restore cached row evaluation flags", K(ret));
       } else {
-        clear_evaluated_flag();
         LOG_DEBUG("get one row for update loop",
           "row", ROWEXPR2STR(get_eval_ctx(), child_->get_spec().output_));
       }
     } while (OB_SUCC(ret));
   }
+  return ret;
+}
+
+int ObPxMultiPartUpdateOp::restore_cached_row_eval_flags()
+{
+  int ret = OB_SUCCESS;
+
+  // The driver may have filled and written a batch before restoring this row. Invalidate
+  // intermediate results, but retain the values restored from the cache for this row.
+  clear_evaluated_flag();
+  for (int64_t i = 0; OB_SUCC(ret) && i < cached_row_exprs_.count(); ++i) {
+    ObExpr *expr = cached_row_exprs_.at(i);
+
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cached row expression is null", K(ret), K(i), K(cached_row_exprs_.count()));
+    } else if (!expr->is_const_expr()) {
+      expr->set_evaluated_projected(eval_ctx_);
+    }
+  }
+
   return ret;
 }
 
@@ -143,8 +173,8 @@ int ObPxMultiPartUpdateOp::read_row(ObExecContext &ctx,
       // 通过partition id expr获得对应行对应的分区
       ++upd_rtdef_.found_rows_;
       const int64_t part_id_idx = MY_SPEC.row_desc_.get_part_id_index();
-      // 返回的值是child的output exprs
-      row = &child_->get_spec().output_;
+      // Cache the checked new values as well as the child output, including pending rows.
+      row = &cached_row_exprs_;
       if (NO_PARTITION_ID_FLAG == part_id_idx) {
         ObDASTableLoc *table_loc = upd_rtdef_.dupd_rtdef_.table_loc_;
         if (OB_ISNULL(table_loc) || table_loc->get_tablet_locs().size() != 1) {
@@ -183,7 +213,7 @@ int ObPxMultiPartUpdateOp::write_rows(ObExecContext &ctx,
       clear_evaluated_flag();
       if (OB_FAIL(try_check_status())) {
         LOG_WARN("check status failed", K(ret));
-      } else if (OB_FAIL(dml_row_iter.get_next_row(child_->get_spec().output_))) {
+      } else if (OB_FAIL(dml_row_iter.get_next_row(cached_row_exprs_))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("fail to get next row", K(ret));
         } else {
