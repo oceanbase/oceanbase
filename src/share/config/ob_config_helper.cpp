@@ -20,10 +20,11 @@
 #include "share/shared_storage/ob_ss_local_cache_control_mode.h"
 #include "plugin/sys/ob_plugin_load_param.h"
 #include "share/table/ob_table_config_util.h"
+#include "share/ob_time_utility2.h"
 #include "storage/ob_micro_block_format_version_helper.h"
+#include "lib/utility/ob_fast_convert.h"
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/audit/ob_audit_log_format_options.h"
-#include "sql/audit/ob_audit_log_rotate_schedule.h"
 #endif
 
 namespace oceanbase
@@ -501,14 +502,106 @@ bool ObConfigAuditLogQuerySQLChecker::check(const ObConfigItem &t) const
       || 0 == tmp_string.case_compare("NONE");
 }
 
+// The following helpers do a pure syntax check of audit_log_rotate_on_time, so the
+// parameter can be validated the same way in both the closed source build (which also
+// compiles sql::ObAuditLogRotateSchedule) and the open source build. Keep the rules in
+// sync with sql::ObAuditLogRotateSchedule::parse in
+// close_modules/audit_security/sql/audit/ob_audit_log_rotate_schedule.cpp:
+//   - empty (or blank) value disables time based rotation;
+//   - "HH:MM[,HH:MM]*" lists daily rotation time points (duplicated points allowed);
+//   - "HH:MM/Nh" or "HH:MM/Nm" rotates every N hours/minutes starting at HH:MM.
+static const int64_t ROTATE_SCHEDULE_MAX_INTERVAL_HOURS = 24;
+static const int64_t ROTATE_SCHEDULE_MAX_INTERVAL_MINUTES = 24 * 60;
+
+static bool is_valid_rotate_schedule_point(const ObString &text)
+{
+  bool bret = true;
+  ObString minute_text = text;
+  const ObString hour_text = minute_text.split_on(':');
+  if (OB_UNLIKELY(2 != hour_text.length() || 2 != minute_text.length())) {
+    // hour and minute must be two digits each, e.g. '1:00' and '00:0' are invalid
+    bret = false;
+  } else {
+    bool hour_valid = false;
+    bool minute_valid = false;
+    const int hour = ObFastAtoi<int>::atoi_positive(
+        hour_text.ptr(), hour_text.ptr() + hour_text.length(), hour_valid);
+    const int minute = ObFastAtoi<int>::atoi_positive(
+        minute_text.ptr(), minute_text.ptr() + minute_text.length(), minute_valid);
+    // is_valid_time reports 'hour=24 must between 0 and 23' / 'minute=60 must between 0 and 59'
+    // as user errors, which the audit_log_rotate_on_time test case relies on, so the range
+    // check must not be open coded here.
+    if (OB_UNLIKELY(!hour_valid || !minute_valid
+                   || !share::ObTimeUtility2::is_valid_time(hour, minute, 0))) {
+      bret = false;
+    }
+  }
+  return bret;
+}
+
+static bool is_valid_rotate_schedule_points(const ObString &text)
+{
+  bool bret = true;
+  ObString remaining = text;
+  bool has_more = true;
+  while (bret && has_more) {
+    const char *separator = remaining.find(',');
+    has_more = NULL != separator;
+    const ObString point = (has_more ? remaining.split_on(separator) : remaining).trim();
+    // a trailing ',' produces an empty point here and is rejected, as parser does
+    bret = is_valid_rotate_schedule_point(point);
+  }
+  return bret;
+}
+
+static bool is_valid_rotate_schedule_interval(const ObString &text)
+{
+  bool bret = true;
+  ObString interval_text = text;
+  const ObString start_text = interval_text.split_on('/');
+  if (OB_UNLIKELY(interval_text.length() < 2)) {
+    bret = false;
+  } else if (!is_valid_rotate_schedule_point(start_text)) {
+    bret = false;
+  } else {
+    const ObString unit(1, interval_text.ptr() + interval_text.length() - 1);
+    if (OB_UNLIKELY(0 != unit.case_compare("h") && 0 != unit.case_compare("m"))) {
+      // e.g. '00:00/1s' or '00:00/5m,12:00' whose last character is not the interval unit
+      bret = false;
+    } else {
+      const bool is_hours = 0 == unit.case_compare("h");
+      const int64_t limit = is_hours ? ROTATE_SCHEDULE_MAX_INTERVAL_HOURS
+                                     : ROTATE_SCHEDULE_MAX_INTERVAL_MINUTES;
+      bool valid = false;
+      // the whole 'N' part before the unit must be digits, so '00:00/1h/1m' is rejected,
+      // while a leading zero like '00:00/0008M' is still accepted
+      const int64_t value = ObFastAtoi<int64_t>::atoi_positive(
+          interval_text.ptr(), unit.ptr(), valid);
+      if (OB_UNLIKELY(!valid || value <= 0 || value > limit)) {
+        bret = false;
+      }
+    }
+  }
+  return bret;
+}
+
+static bool is_valid_rotate_schedule(const ObString &text)
+{
+  const ObString rule = text.trim();
+  bool bret = true;
+  if (rule.empty()) {
+    // empty value disables time based rotation
+  } else if (NULL != rule.find('/')) {
+    bret = is_valid_rotate_schedule_interval(rule);
+  } else {
+    bret = is_valid_rotate_schedule_points(rule);
+  }
+  return bret;
+}
+
 bool ObConfigAuditLogRotateOnTimeChecker::check(const ObConfigItem &t) const
 {
-#ifdef OB_BUILD_AUDIT_SECURITY
-  sql::ObAuditLogRotateSchedule schedule;
-  return OB_SUCCESS == schedule.parse(ObString(t.str()));
-#else
-  return ObString(t.str()).empty();
-#endif
+  return is_valid_rotate_schedule(ObString(t.str()));
 }
 
 bool ObConfigAuditLogStrategyChecker::check(const ObConfigItem &t) const
