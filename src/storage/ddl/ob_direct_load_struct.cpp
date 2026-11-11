@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_direct_load_struct.h"
+#include "share/ob_debug_sync.h"
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "share/ob_tablet_autoincrement_service.h"
 #include "sql/engine/pdml/static/ob_px_sstable_insert_op.h"
@@ -2551,7 +2552,12 @@ int ObDirectLoadSliceWriter::fill_lob_into_memtable(
 {
   // to insert lob data into memtable.
   int ret = OB_SUCCESS;
-  const int64_t timeout_ts = ObTimeUtility::fast_current_time() + ObInsertLobColumnHelper::LOB_ACCESS_TX_TIMEOUT;
+  const int64_t timeout_ts = is_ddl_direct_load(info.direct_load_type_)
+      ? std::min(THIS_WORKER.get_timeout_ts(), ObTimeUtility::current_time() + GCONF._ob_ddl_timeout)
+      : ObTimeUtility::fast_current_time() + ObInsertLobColumnHelper::LOB_ACCESS_TX_TIMEOUT;
+  if (is_ddl_direct_load(info.direct_load_type_)) {
+    DEBUG_SYNC(BEFORE_DDL_LOB_WRITE);
+  }
   if (OB_FAIL(ObInsertLobColumnHelper::insert_lob_column(
     allocator, info.ls_id_, info.data_tablet_id_, col_type.get_type(), col_type.get_collation_type(),
     lob_storage_param, datum, timeout_ts, true/*has_lob_header*/, info.src_tenant_id_))) {
@@ -2573,7 +2579,12 @@ int ObDirectLoadSliceWriter::fill_lob_into_macro_block(
   // to insert lob data into macro block.
   int ret = OB_SUCCESS;
   int64_t unused_affected_rows = 0;
-  const int64_t timeout_ts = ObTimeUtility::fast_current_time() + ObInsertLobColumnHelper::LOB_ACCESS_TX_TIMEOUT;
+  const int64_t timeout_ts = is_ddl_direct_load(info.direct_load_type_)
+      ? std::min(THIS_WORKER.get_timeout_ts(), ObTimeUtility::current_time() + GCONF._ob_ddl_timeout)
+      : ObTimeUtility::fast_current_time() + ObInsertLobColumnHelper::LOB_ACCESS_TX_TIMEOUT;
+  if (is_ddl_direct_load(info.direct_load_type_)) {
+    DEBUG_SYNC(BEFORE_DDL_LOB_WRITE);
+  }
   if (!datum.is_nop() && !datum.is_null()) {
     {
       ObLobMetaRowIterator *row_iter = nullptr;
