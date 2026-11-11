@@ -14,6 +14,7 @@
 #include "ob_log_fetcher_err_handler.h"       // TCTX
 #include "ob_log_fetcher.h"                   // IObLogFetcher
 #include "logservice/common_util/ob_log_time_utils.h"
+#include "logservice/palf/log_define.h"
 #include "logservice/restoreservice/ob_remote_log_source_allocator.h"
 
 #define STAT(level, fmt, args...) OBLOG_FETCHER_LOG(level, "[STAT] [FETCH_CTX] " fmt, ##args)
@@ -109,6 +110,7 @@ void LSFetchCtx::reset()
   start_parameters_.reset();
   fetch_info_.reset();
   svr_list_need_update_ = false;
+  last_svr_list_check_time_ = OB_INVALID_TIMESTAMP;
   start_lsn_locate_req_.reset();
   end_lsn_locate_req_.reset();
   FetchTaskListNode::reset();
@@ -488,14 +490,13 @@ bool LSFetchCtx::need_update_svr_list()
 {
   int ret = OB_SUCCESS;
   bool bool_ret = false;
-  const int64_t cur_time = get_timestamp();
   int64_t avail_svr_count = 0;
   logservice::ObLogRouteService *log_route_service = nullptr;
 
   if (is_direct_fetching_mode(fetching_mode_)) {
     bool_ret = false;
   } else if(is_integrated_fetching_mode(fetching_mode_)) {
-    if (REACH_TIME_INTERVAL_THREAD_LOCAL(SERVER_LIST_UPDATE_INTERVAL_SEC)) {
+    if (palf::palf_reach_time_interval(SERVER_LIST_UPDATE_INTERVAL_SEC, last_svr_list_check_time_)) {
       if (OB_FAIL(get_log_route_service_(log_route_service))) {
         LOG_ERROR("get_log_route_service_ failed", KR(ret));
       } else if (OB_FAIL(log_route_service->get_server_count(tls_id_.get_tenant_id(), tls_id_.get_ls_id(),

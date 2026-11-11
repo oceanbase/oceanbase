@@ -538,6 +538,7 @@ protected:
   FetchInfo               fetch_info_;
 
   bool                    svr_list_need_update_;
+  int64_t                 last_svr_list_check_time_;
 
   /// start lsn locator request
   StartLSNLocateReq       start_lsn_locate_req_;
