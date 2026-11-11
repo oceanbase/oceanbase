@@ -645,6 +645,7 @@ const ObTxLogType ObTxAbortLog::LOG_TYPE = ObTxLogType::TX_ABORT_LOG;
 const ObTxLogType ObTxRecordLog::LOG_TYPE = ObTxLogType::TX_RECORD_LOG;
 // const ObTxLogType ObTxKeepAliveLog::LOG_TYPE = ObTxLogType::TX_KEEP_ALIVE_LOG;
 const ObTxLogType ObTxStartWorkingLog::LOG_TYPE = ObTxLogType::TX_START_WORKING_LOG;
+const int64_t ObTxStartWorkingLog::MAX_SERIALIZE_SIZE;
 const ObTxLogType ObTxRollbackToLog::LOG_TYPE = ObTxLogType::TX_ROLLBACK_TO_LOG;
 const ObTxLogType ObTxMultiDataSourceLog::LOG_TYPE = ObTxLogType::TX_MULTI_DATA_SOURCE_LOG;
 const ObTxLogType ObTxDirectLoadIncLog::LOG_TYPE = ObTxLogType::TX_DIRECT_LOAD_INC_LOG;

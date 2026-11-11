@@ -52,13 +52,24 @@ public:
   static uint16_t get_max_parallel(const ObTxLogType &type);
   static uint16_t get_sum_parallel();
 
-public:
-  static int64_t LOG_BUF_SIZE;
-  static void decide_log_buf_size();
-
 private:
   ObTxLSLogLimit();
   DISALLOW_COPY_AND_ASSIGN(ObTxLSLogLimit);
+};
+
+// Per-cb inline buffer cap for LS control logs. This is NOT a process-wide
+// mutable size: serialize always uses the buffer owned by the cb.
+// Bounds are derived from the log types themselves; if a log outgrows them,
+// serialize falls back to an exactly-sized heap alloc with a WDIAG.
+struct ObTxLSCtrlLogBufSize
+{
+  static const int64_t BASE_HEADER_SIZE = 16;   // ObLogBaseHeader: i16+i16+i32+i64
+  static const int64_t TX_HEADER_SIZE = 8;      // ObTxLogHeader: i64
+  static const int64_t BLOCK_HEADER_SIZE = 128; // ObTxLogBlockHeader (UNIS + ObAddr)
+  static const int64_t INLINE_SIZE = BASE_HEADER_SIZE
+                                   + TX_HEADER_SIZE
+                                   + BLOCK_HEADER_SIZE
+                                   + ObTxStartWorkingLog::MAX_SERIALIZE_SIZE;
 };
 
 class ObTxLSLogWriter;
@@ -89,13 +100,21 @@ public:
 public:
   INHERIT_TO_STRING_KV("ObTxBaseLogCb", ObTxBaseLogCb, K(type_), KP(log_buf_), K(pos_), KP(base_wr_));
 
+  static const int64_t INLINE_LOG_BUF_SIZE = ObTxLSCtrlLogBufSize::INLINE_SIZE;
+
 private:
-  bool need_alloc_buf_() { return nullptr == log_buf_; }
-  OB_NOINLINE int alloc_log_buf_();
+  OB_NOINLINE int ensure_log_buf_(const int64_t need_size);
+  template <typename T>
+  int serialize_payload_(T &ls_log,
+                         logservice::ObLogBaseHeader &base_header,
+                         ObTxLogBlockHeader &block_header,
+                         ObTxLogHeader &tx_header);
 
 private:
   ObTxLogType type_; // Unkown == unused, not init
+  char inline_log_buf_[INLINE_LOG_BUF_SIZE];
   char *log_buf_;
+  int64_t log_buf_len_;
   int64_t pos_;
   ObTxLSLogWriter *base_wr_;
 };
@@ -111,8 +130,6 @@ int ObTxLSLogCb::serialize_ls_log(T &ls_log,
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "[TxLsLogWriter] invalid arguments", KR(ret), K(T::LOG_TYPE), K(replay_hint),
               KP(base_wr_));
-  } else if (need_alloc_buf_() && OB_FAIL(alloc_log_buf_())) {
-    TRANS_LOG(WARN, "alloc log buf failed", KR(ret));
   } else {
     logservice::ObLogBaseHeader base_header(logservice::ObLogBaseType::TRANS_SERVICE_LOG_BASE_TYPE,
                                             barrier_type, replay_hint);
@@ -122,17 +139,46 @@ int ObTxLSLogCb::serialize_ls_log(T &ls_log,
     if (OB_FAIL(block_header.before_serialize())) {
       TRANS_LOG(WARN, "[TxLsLogWriter] before serialize block header error", KR(ret),
                 K(block_header));
-    } else if (OB_FAIL(base_header.serialize(log_buf_, ObTxLSLogLimit::LOG_BUF_SIZE, pos_))) {
-      TRANS_LOG(WARN, "[TxLsLogWriter] serialize base header error", KR(ret), KP(log_buf_),
-                K(pos_));
-    } else if (OB_FAIL(block_header.serialize(log_buf_, ObTxLSLogLimit::LOG_BUF_SIZE, pos_))) {
-      TRANS_LOG(WARN, "[TxLsLogWriter] serialize block header error", KR(ret), KP(log_buf_),
-                K(pos_));
-    } else if (OB_FAIL(tx_header.serialize(log_buf_, ObTxLSLogLimit::LOG_BUF_SIZE, pos_))) {
-      TRANS_LOG(WARN, "[TxLsLogWriter] serialize tx header error", KR(ret), KP(log_buf_), K(pos_));
-    } else if (OB_FAIL(ls_log.serialize(log_buf_, ObTxLSLogLimit::LOG_BUF_SIZE, pos_))) {
-      TRANS_LOG(WARN, "[TxLsLogWriter] serialize ls_log error", KR(ret), KP(log_buf_), K(pos_));
+    } else {
+      const int64_t need_size = base_header.get_serialize_size()
+                              + block_header.get_serialize_size()
+                              + tx_header.get_serialize_size()
+                              + ls_log.get_serialize_size();
+      if (OB_FAIL(ensure_log_buf_(need_size))) {
+        TRANS_LOG(WARN, "[TxLsLogWriter] ensure log buf error", KR(ret), K(T::LOG_TYPE), K(need_size));
+      } else if (OB_FAIL(serialize_payload_(ls_log, base_header, block_header, tx_header))) {
+        if (OB_BUF_NOT_ENOUGH == ret) {
+          const int64_t grow_to = MAX(need_size * 2, log_buf_len_ * 2);
+          TRANS_LOG(WARN, "[TxLsLogWriter] ls log serialize size underestimated, retry with larger buf",
+                    K(type_), "inline_buf_size", (int64_t)INLINE_LOG_BUF_SIZE,
+                    "required_size", grow_to, K(log_buf_len_));
+          if (OB_FAIL(ensure_log_buf_(grow_to))) {
+            TRANS_LOG(WARN, "[TxLsLogWriter] ensure log buf error", KR(ret), K(T::LOG_TYPE), K(grow_to));
+          } else if (OB_FAIL(serialize_payload_(ls_log, base_header, block_header, tx_header))) {
+            TRANS_LOG(WARN, "[TxLsLogWriter] serialize ls_log error after grow", KR(ret), KP(log_buf_),
+                      K(pos_), K(log_buf_len_));
+          }
+        } else {
+          TRANS_LOG(WARN, "[TxLsLogWriter] serialize ls_log error", KR(ret), KP(log_buf_), K(pos_));
+        }
+      }
     }
+  }
+  return ret;
+}
+
+template <typename T>
+int ObTxLSLogCb::serialize_payload_(T &ls_log,
+                                    logservice::ObLogBaseHeader &base_header,
+                                    ObTxLogBlockHeader &block_header,
+                                    ObTxLogHeader &tx_header)
+{
+  int ret = OB_SUCCESS;
+  pos_ = 0;
+  if (OB_FAIL(base_header.serialize(log_buf_, log_buf_len_, pos_))) {
+  } else if (OB_FAIL(block_header.serialize(log_buf_, log_buf_len_, pos_))) {
+  } else if (OB_FAIL(tx_header.serialize(log_buf_, log_buf_len_, pos_))) {
+  } else if (OB_FAIL(ls_log.serialize(log_buf_, log_buf_len_, pos_))) {
   }
   return ret;
 }
@@ -163,6 +209,7 @@ public:
   int submit_start_working_log(const int64_t &leader_epoch, share::SCN &log_ts);
 
   int64_t get_tenant_id() const { return tenant_id_; }
+  const share::ObLSID &get_ls_id() const { return ls_id_; }
 public:
   int on_success(ObTxLSLogCb *cb);
   int on_failure(ObTxLSLogCb *cb);
@@ -175,7 +222,6 @@ private:
                      share::SCN &log_ts);
   int get_log_cb_(const ObTxLogType &log_type, ObTxLSLogCb *&cb);
   int return_log_cb_(ObTxLSLogCb *cb);
-  bool enough_log_cb_();
   int append_free_log_cb_();
 
   bool reach_parallel_cbs_limit_(const ObTxLogType &log_type, const int32_t &cbs_cnt);
@@ -206,6 +252,7 @@ int ObTxLSLogWriter::submit_ls_log_(T &ls_log,
                                     share::SCN &log_ts)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObSpinLockGuard cb_guard(cbs_lock_);
   ObTxLSLogCb *cb = nullptr;
   int64_t replay_hint = generate_replay_hint_(T::LOG_TYPE);
@@ -216,8 +263,16 @@ int ObTxLSLogWriter::submit_ls_log_(T &ls_log,
     } else {
       TRANS_LOG(WARN, "[TxLsLogWriter] can not get log cb", KR(ret), K(T::LOG_TYPE), KP(cb));
     }
-  } else if (nullptr == cb || OB_FAIL(cb->serialize_ls_log(ls_log, replay_hint, barrier_type))) {
+  } else if (OB_ISNULL(cb)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "[TxLsLogWriter] get null log cb with success ret", KR(ret), K(T::LOG_TYPE));
+  } else if (OB_FAIL(cb->serialize_ls_log(ls_log, replay_hint, barrier_type))) {
     TRANS_LOG(WARN, "[TxLsLogWriter] serialize ls log error", KR(ret), K(T::LOG_TYPE), KP(cb));
+    if (OB_TMP_FAIL(return_log_cb_(cb))) {
+      TRANS_LOG(ERROR, "[TxLsLogWriter] return log cb failed after serialize fail",
+                KR(tmp_ret), K(T::LOG_TYPE), KP(cb));
+    }
+    cb = nullptr;
   } else if (OB_FAIL(tx_log_adapter_->submit_log(cb->get_log_buf(),
                                                  cb->get_log_pos(),
                                                  share::SCN::min_scn(),
@@ -226,7 +281,10 @@ int ObTxLSLogWriter::submit_ls_log_(T &ls_log,
                                                  ObITxLogAdapter::DEFAULT_RETRY_TIMEOUT_US,
                                                  skip_pre_async_wait))) {
     TRANS_LOG(WARN, "[TxLsLogWriter] submit ls log failed", KR(ret), K(T::LOG_TYPE), K(ls_id_), KPC(cb));
-    return_log_cb_(cb);
+    if (OB_TMP_FAIL(return_log_cb_(cb))) {
+      TRANS_LOG(ERROR, "[TxLsLogWriter] return log cb failed after submit fail",
+                KR(tmp_ret), K(T::LOG_TYPE), KP(cb));
+    }
     cb = nullptr;
   } else {
     log_ts = cb->get_log_ts();

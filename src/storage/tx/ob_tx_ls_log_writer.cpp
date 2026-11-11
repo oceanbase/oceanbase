@@ -25,8 +25,6 @@ namespace transaction
 
 //****************** ObTxLsLogLimit ***********************
 
-int64_t ObTxLSLogLimit::LOG_BUF_SIZE = 0;
-
 uint16_t ObTxLSLogLimit::get_max_parallel(const ObTxLogType &type)
 {
   uint16_t tmp_para = 0;
@@ -43,6 +41,8 @@ uint16_t ObTxLSLogLimit::get_max_parallel(const ObTxLogType &type)
   return tmp_para;
 }
 
+const int64_t ObTxLSCtrlLogBufSize::INLINE_SIZE;
+
 uint16_t ObTxLSLogLimit::get_sum_parallel()
 {
   uint16_t tmp_para = 0;
@@ -50,31 +50,17 @@ uint16_t ObTxLSLogLimit::get_sum_parallel()
   return tmp_para;
 }
 
-void ObTxLSLogLimit::decide_log_buf_size()
-{
-  LOG_BUF_SIZE = 0;
-  ObLogBaseHeader base_header;
-  ObTxLogHeader tx_header;
-  ObTxLogBlockHeader block_header(UINT64_MAX, INT64_MAX, INT64_MAX, INT64_MAX, common::ObAddr());
-  ObTxStartWorkingLog sw_log(INT_MAX64);
-
-  block_header.before_serialize();
-  // sw_log.before_serialize();
-  int64_t max_body_size = 0;
-  LOG_BUF_SIZE = base_header.get_serialize_size() + tx_header.get_serialize_size() + block_header.get_serialize_size();
-  max_body_size = OB_MAX(max_body_size, sw_log.get_serialize_size());
-
-  LOG_BUF_SIZE = LOG_BUF_SIZE + max_body_size;
-}
-
 //********************************************************
 
 //****************** ObTxLSLogCb *************************
 ObTxLSLogCb::ObTxLSLogCb(ObTxLSLogWriter *base)
+    : type_(ObTxLogType::UNKNOWN),
+      log_buf_(inline_log_buf_),
+      log_buf_len_(INLINE_LOG_BUF_SIZE),
+      pos_(0),
+      base_wr_(base)
 {
-  log_buf_ = nullptr;
-  reset();
-  base_wr_ = base;
+  reuse();
 }
 
 ObTxLSLogCb::~ObTxLSLogCb()
@@ -93,10 +79,11 @@ void ObTxLSLogCb::reuse()
 void ObTxLSLogCb::reset()
 {
   reuse();
-  if (nullptr != log_buf_) {
+  if (nullptr != log_buf_ && log_buf_ != inline_log_buf_) {
     ob_free(log_buf_);
   }
-  log_buf_ = nullptr;
+  log_buf_ = inline_log_buf_;
+  log_buf_len_ = INLINE_LOG_BUF_SIZE;
 }
 
 int ObTxLSLogCb::occupy_by(const ObTxLogType &log_type)
@@ -140,19 +127,36 @@ int ObTxLSLogCb::on_failure()
   return ret;
 }
 
-int ObTxLSLogCb::alloc_log_buf_()
+int ObTxLSLogCb::ensure_log_buf_(const int64_t need_size)
 {
   int ret = OB_SUCCESS;
 
-  ObMemAttr attr(base_wr_->get_tenant_id(), "TxLSLogBuf");
-  SET_USE_500(attr);
-  if (0 == ObTxLSLogLimit::LOG_BUF_SIZE || nullptr != log_buf_) {
+  if (need_size <= 0 || OB_ISNULL(base_wr_)) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "[TxLsLogWriter] invalid arguments", KR(ret), K(ObTxLSLogLimit::LOG_BUF_SIZE), KP(log_buf_));
-  } else if (nullptr
-             == (log_buf_ = (char *)ob_malloc(ObTxLSLogLimit::LOG_BUF_SIZE, attr))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    TRANS_LOG(WARN, "[TxLsLogWriter] allocate memory failed", KR(ret), K(ObTxLSLogLimit::LOG_BUF_SIZE));
+    TRANS_LOG(WARN, "[TxLsLogWriter] invalid arguments", KR(ret), K(need_size), KP(base_wr_));
+  } else if (need_size <= log_buf_len_) {
+    // the inline buffer (or a previously allocated heap buffer) is large enough
+  } else {
+    // An LS log outgrew the inline buffer. This is unexpected: the buffer cap should
+    // have been derived from the log's own max serialize size. Fall back to an
+    // exactly-sized heap buffer instead of failing, and alert with a WDIAG log.
+    // WARN is printed as WDIAG. The WDIAG level token has no LOG_ERRCODE_FOR_WDIAG.
+    TRANS_LOG(WARN, "[TxLsLogWriter] ls log outgrew inline buffer, fallback to heap alloc",
+              K(type_), "ls_id", base_wr_->get_ls_id(),
+              "inline_buf_size", (int64_t)INLINE_LOG_BUF_SIZE,
+              "required_size", need_size, K(log_buf_len_));
+    ObMemAttr attr(base_wr_->get_tenant_id(), "TxLSLogBuf");
+    char *new_buf = nullptr;
+    if (nullptr == (new_buf = (char *)ob_malloc(need_size, attr))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      TRANS_LOG(WARN, "[TxLsLogWriter] allocate memory failed", KR(ret), K(need_size));
+    } else {
+      if (nullptr != log_buf_ && log_buf_ != inline_log_buf_) {
+        ob_free(log_buf_);
+      }
+      log_buf_ = new_buf;
+      log_buf_len_ = need_size;
+    }
   }
   return ret;
 }
@@ -178,10 +182,8 @@ int ObTxLSLogWriter::init(const int64_t tenant_id,
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
-    tenant_id_ = tenant_id;
     ctx_mgr_ = ctx_mgr;
     tx_log_adapter_ = adapter;
-    ObTxLSLogLimit::decide_log_buf_size();
     while (free_cbs_.get_size() < DEFAULT_LOG_CB_CNT && OB_SUCC(ret)) {
       if (OB_FAIL(append_free_log_cb_())) {
         TRANS_LOG(WARN, "init free log cb error", KR(ret));
@@ -316,14 +318,18 @@ int ObTxLSLogWriter::get_log_cb_(const ObTxLogType &log_type, ObTxLSLogCb *&cb)
     ret = OB_TX_NOLOGCB;
     TRANS_LOG(INFO, "[TxLsLogWriter] reach max parallel limit, need retry", KR(ret), K(log_type),
               K(tmp_cbs->get_size()));
-  } else if (!enough_log_cb_() && (OB_FAIL(append_free_log_cb_()))) {
+  } else if (free_cbs_.is_empty() && OB_FAIL(append_free_log_cb_())) {
     TRANS_LOG(WARN, "[TxLsLogWriter] append free log_cb error", KR(ret));
   } else {
     // move from free_cbs_
     cb = free_cbs_.remove_first();
-    if (OB_FAIL(cb->occupy_by(log_type))) {
+    if (OB_ISNULL(cb)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "[TxLsLogWriter] get null cb from free list", KR(ret), K(log_type));
+    } else if (OB_FAIL(cb->occupy_by(log_type))) {
       TRANS_LOG(ERROR, "[TxLsLogWriter] occupy by ls log_cb failed", KR(ret), K(log_type), K(*cb));
       free_cbs_.add_last(cb);
+      cb = nullptr;
     } else {
       tmp_cbs->add_last(cb);
     }
@@ -351,8 +357,6 @@ int ObTxLSLogWriter::return_log_cb_(ObTxLSLogCb *cb)
   }
   return ret;
 }
-
-bool ObTxLSLogWriter::enough_log_cb_() { return free_cbs_.is_empty(); }
 
 int ObTxLSLogWriter::append_free_log_cb_()
 {

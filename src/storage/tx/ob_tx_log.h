@@ -1222,6 +1222,8 @@ public:
   int ob_admin_dump(share::ObAdminMutatorStringArg &arg);
 
   static const ObTxLogType LOG_TYPE;
+  // UNIS header + compat_bytes_ + leader_epoch_. Keep in sync with serialize().
+  static const int64_t MAX_SERIALIZE_SIZE = 64;
   TO_STRING_KV(K(LOG_TYPE), K(leader_epoch_));
 
 public:
