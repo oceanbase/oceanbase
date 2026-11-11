@@ -878,6 +878,10 @@ int ObShowGrants::print_privs_to_buff(
   }
 
   if (OB_SUCC(ret)) {
+    if (lib::is_oracle_mode()) {
+      // Oracle GRANT ALL excludes the MySQL CREATE TEMPORARY TABLES privilege.
+      priv_all &= ~OB_PRIV_CREATE_TMP_TABLE;
+    }
     if (priv_level == OB_PRIV_OBJ_ORACLE_LEVEL) {
       if (OB_FAIL(print_obj_privs_to_buff_ora(buf, buf_len, pos, priv_set))) {
          SERVER_LOG(WARN, "print obj privs failed", K(ret));
