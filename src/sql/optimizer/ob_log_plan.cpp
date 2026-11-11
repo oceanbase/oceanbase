@@ -297,6 +297,7 @@ int ObLogPlan::generate_join_orders()
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt = NULL;
+  ObQueryCtx *query_ctx = get_optimizer_context().get_query_ctx();
   ObSEArray<ObRawExpr*, 8> quals;
   ObSEArray<TableItem*, 8> from_table_items;
   ObSEArray<TableItem*, 8> base_table_items;
@@ -304,9 +305,9 @@ int ObLogPlan::generate_join_orders()
   JoinOrderArray base_level;
   int64_t join_level = 0;
   common::ObArray<JoinOrderArray> join_rels;
-  if (OB_ISNULL(stmt = get_stmt())) {
+  if (OB_ISNULL(stmt = get_stmt()) || OB_ISNULL(query_ctx)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected NULL", K(stmt), K(ret));
+    LOG_WARN("unexpected NULL", K(stmt), K(query_ctx), K(ret));
   } else if (OB_FAIL(stmt->get_from_tables(from_table_items))) {
     LOG_WARN("failed to get table items", K(ret));
   } else if (OB_FAIL(get_base_table_items(stmt, base_table_items))) {
@@ -349,6 +350,9 @@ int ObLogPlan::generate_join_orders()
                                                              baserel_filters,
                                                              conflict_detectors_))) {
       LOG_WARN("failed to generate conflict detectors", K(ret));
+    } else if (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_4_2_BP4)
+               && OB_FAIL(THIS_WORKER.check_status())) {
+      LOG_WARN("worker status check failed after conflict detector generation", K(ret));
     } else if (OB_FAIL(distribute_filters_to_baserels(base_level, baserel_filters))) {
       LOG_WARN("failed to distribute filters to baserels", K(ret));
     } else {

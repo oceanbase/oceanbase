@@ -532,9 +532,12 @@ int ObConflictDetectorGenerator::generate_conflict_rule(ObConflictDetector *pare
   int ret = OB_SUCCESS;
   bool is_satisfy = false;
   ObRelIds ids;
-  if (OB_ISNULL(parent) || OB_ISNULL(child)) {
+  if (OB_ISNULL(parent) || OB_ISNULL(child) || OB_ISNULL(query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null detector", K(ret));
+    LOG_WARN("unexpected null detector", K(ret), K(parent), K(child), K(query_ctx_));
+  } else if (query_ctx_->check_opt_compat_version(COMPAT_VERSION_4_4_2_BP4)
+             && OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("worker status check failed during conflict rule generation", K(ret));
   } else if (child->is_redundancy_) {
     //do nothing
   } else if (is_left_child) {
@@ -948,9 +951,12 @@ int ObConflictDetectorGenerator::generate_outer_join_detectors(const ObDMLStmt *
 {
   int ret = OB_SUCCESS;
   JoinedTable *joined_table = static_cast<JoinedTable*>(table_item);
-  if (OB_ISNULL(table_item)) {
+  if (OB_ISNULL(table_item) || OB_ISNULL(query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null table item", K(ret));
+    LOG_WARN("unexpected null", K(ret), K(table_item), K(query_ctx_));
+  } else if (query_ctx_->check_opt_compat_version(COMPAT_VERSION_4_4_2_BP4)
+             && OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("worker status check failed during outer join detector generation", K(ret));
   } else if (!table_item->is_joined_table()) {
     //如果是基表，直接把过程谓词分发到join order里
     if (OB_FAIL(distribute_quals(stmt, table_item->table_id_, table_filter, baserel_filters))) {
