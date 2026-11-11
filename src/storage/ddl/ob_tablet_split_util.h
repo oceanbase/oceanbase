@@ -176,7 +176,6 @@ public:
   static int build_update_table_store_param(
       const share::SCN &reorg_scn,
       const int64_t ls_rebuild_seq,
-      const int64_t snapshot_version,
       const int64_t multi_version_start,
       const ObTabletID &dst_tablet_id,
       const ObTablesHandleArray &tables_handle,
