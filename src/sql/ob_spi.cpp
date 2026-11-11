@@ -4325,6 +4325,7 @@ int ObSPIService::dbms_dynamic_open(ObPLExecCtx *pl_ctx,
   bool hidden_rowid = cursor.has_hidden_rowid();
 
   OV (OB_NOT_NULL(pl_ctx->exec_ctx_->get_my_session()));
+  OV (OB_NOT_NULL(cursor.get_dbms_entity()), OB_NO_STMT_PARSE, cursor.get_id());
   if (ObStmt::is_select_stmt(stmt_type)
       || cursor.get_into_names().count() > 0) { // NOTICE: DML Returning also use cursor impl.
     OZ (dbms_cursor_open(
