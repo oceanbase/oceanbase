@@ -2337,6 +2337,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObString config_value_prexec_prepare_with_params("true");
   ObString config_name_append_update_global_indexes_for_dynamic_partition("_append_update_global_indexes_for_dynamic_partition");
   ObString config_value_append_update_global_indexes_for_dynamic_partition("AUTO");
+  ObString config_name_enable_shared_compaction_thread_by_type("enable_shared_compaction_thread_by_type");
+  ObString config_value_enable_shared_compaction_thread_by_type("true");
   ObString config_name_mv_refresh_queuing("_enable_mv_refresh_queuing");
   ObString config_value_mv_refresh_queuing("true");
   ObString config_name_open_cursors("open_cursors");
@@ -2377,6 +2379,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
         LOG_WARN("fail to add config", KR(ret), K(config_name_prexec_prepare_with_params), K(config_value_prexec_prepare_with_params));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_append_update_global_indexes_for_dynamic_partition, config_value_append_update_global_indexes_for_dynamic_partition))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_append_update_global_indexes_for_dynamic_partition), K(config_value_append_update_global_indexes_for_dynamic_partition));
+      } else if (OB_FAIL(tenant_init_config.add_config(config_name_enable_shared_compaction_thread_by_type, config_value_enable_shared_compaction_thread_by_type))) {
+        LOG_WARN("fail to add config", KR(ret), K(config_name_enable_shared_compaction_thread_by_type), K(config_value_enable_shared_compaction_thread_by_type));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_mv_refresh_queuing, config_value_mv_refresh_queuing))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_mv_refresh_queuing), K(config_value_mv_refresh_queuing));
       }

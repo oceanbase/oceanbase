@@ -14,6 +14,8 @@
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
 #include "share/compaction/ob_batch_exec_dag.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "observer/omt/ob_tenant.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 
 namespace oceanbase
@@ -2008,6 +2010,9 @@ const char *ObDagSchedulerInfo::ObValueTypeStr[VALUE_TYPE_MAX] =
     "DAG_NET_COUNT",
     "RUNNING_TASK_CNT",
     "ADAPTIVE_LIMIT",
+    "SHARED_ENABLED",
+    "SHARED_UP_LIMIT",
+    "SHARED_RUNNING_TASK_CNT",
 };
 
 const char* ObDagSchedulerInfo::get_value_type_str(ObValueType type)
@@ -2341,6 +2346,7 @@ void ObDagPrioScheduler::destroy()
   running_task_cnts_ = 0;
   allocator_ = nullptr;
   ha_allocator_ = nullptr;
+  shared_compaction_thread_limiter_ = nullptr;
   running_workers_.reset();
   waiting_workers_.reset();
   COMMON_LOG(INFO, "ObDagPrioScheduler destroyed", K(abort_dag_cnt));
@@ -2541,7 +2547,6 @@ int ObDagPrioScheduler::inner_add_dag_(
     COMMON_LOG(INFO, "add dag success", KP(dag), "id", dag->get_dag_id(), K(dag->hash()), "dag_cnt", scheduler_->get_cur_dag_cnt(),
         "dag_type", OB_DAG_TYPES[dag->get_type()].dag_type_str_,
         "dag_type_cnts", scheduler_->get_type_dag_cnt(dag->get_type()));
-
     dag = nullptr;
   }
   return ret;
@@ -2555,6 +2560,7 @@ void ObDagPrioScheduler::add_schedule_info_(const ObDagType::ObDagTypeEnum dag_t
   scheduler_->add_scheduled_task_cnts(dag_type);
   scheduler_->add_scheduled_data_size(dag_type, data_size);
   ++running_task_cnts_;
+  update_shared_running_count_(MTL_ID());
 }
 
 void ObDagPrioScheduler::add_added_info_(const ObDagType::ObDagTypeEnum dag_type)
@@ -2562,6 +2568,91 @@ void ObDagPrioScheduler::add_added_info_(const ObDagType::ObDagTypeEnum dag_type
   scheduler_->add_cur_dag_cnt();
   scheduler_->add_type_dag_cnt(dag_type);
   scheduler_->add_added_dag_cnts(dag_type);
+}
+
+void ObDagPrioScheduler::set_shared_compaction_thread_limiter(ObSharedCompactionThreadLimiter *limiter)
+{
+  shared_compaction_thread_limiter_ = limiter;
+}
+
+int ObDagPrioScheduler::set_compaction_thread_score(
+  const int64_t score,
+  const bool enable_shared,
+  const int64_t adaptive_score,
+  int64_t &thread_score_delta)
+{
+  int ret = OB_SUCCESS;
+  thread_score_delta = 0;
+  int64_t old_limit = 0;
+  int64_t new_limit = 0;
+  if (OB_NOT_NULL(shared_compaction_thread_limiter_)) {
+    if (OB_FAIL(set_shared_compaction_thread_score(
+            score, enable_shared, adaptive_score, old_limit, new_limit))) {
+      COMMON_LOG(WARN, "failed to set compaction thread score", K(ret), K_(priority),
+          K(score), K(enable_shared), K(adaptive_score));
+    }
+  } else if (OB_FAIL(set_thread_score(score, old_limit, new_limit))) {
+    COMMON_LOG(WARN, "failed to set thread score", K(ret), K_(priority), K(score));
+  }
+  if (OB_SUCC(ret)) {
+    thread_score_delta = new_limit - old_limit;
+    COMMON_LOG(INFO, "set compaction thread score successfully",
+            "prio", OB_DAG_PRIOS[priority_].dag_prio_str_,
+            K(score), K(enable_shared), K(adaptive_score),
+            K(old_limit), K(new_limit), K_(shared_compaction_thread_limiter));
+  }
+  return ret;
+}
+
+int ObDagPrioScheduler::set_shared_compaction_thread_score(
+  const int64_t score,
+  const bool enable_shared,
+  const int64_t adaptive_score,
+  int64_t &old_val,
+  int64_t &new_val)
+{
+  int ret = OB_SUCCESS;
+  common::SpinWLockGuard guard(prio_rwlock_);
+  if (OB_UNLIKELY(score < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid argument", K(ret), K_(priority), K(score));
+  } else if (OB_ISNULL(shared_compaction_thread_limiter_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "shared compaction thread limiter is null", K(ret), K_(priority));
+  } else {
+    // Each tenant only maintains its own running_count under its own prio_rwlock_; the sibling's
+    // running_count is set by the sibling's own reload (triggered via cascade).
+    if (is_user_tenant(MTL_ID())) {
+      const int64_t new_limit = (0 == score) ? adaptive_score : score;
+      if (OB_FAIL(shared_compaction_thread_limiter_->set_user_state(
+              enable_shared, new_limit, running_task_cnts_))) {
+        COMMON_LOG(WARN, "failed to set user compaction state", K(ret), K(enable_shared),
+            K(score), K(adaptive_score), K_(running_task_cnts));
+      }
+    } else if (is_meta_tenant(MTL_ID())) {
+      if (OB_FAIL(shared_compaction_thread_limiter_->set_meta_state(
+              (0 == score) /*meta_use_shared_limit*/, running_task_cnts_))) {
+        COMMON_LOG(WARN, "failed to set meta compaction state", K(ret), K(score), K_(running_task_cnts));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(WARN, "unexpected tenant id", K(ret), "tenant_id", MTL_ID());
+    }
+
+    if (OB_SUCC(ret)) {
+      old_val = limits_;
+      if (0 != score) {
+        limits_ = score;
+      } else if (shared_compaction_thread_limiter_->is_enabled()) {
+        limits_ = shared_compaction_thread_limiter_->get_limit();
+      } else {
+        limits_ = OB_DAG_PRIOS[priority_].score_;
+      }
+      new_val = limits_;
+      adaptive_task_limit_ = limits_;
+    }
+  }
+  return ret;
 }
 
 int ObDagPrioScheduler::schedule_one_()
@@ -2769,8 +2860,7 @@ int ObDagPrioScheduler::pop_task_from_ready_list_(ObITask *&task)
         // TODO(@jingshui) cancel dag
       } else if (cur->get_indegree() > 0) {
         move_dag_to_waiting_list = true;
-      } else if (ObIDag::DAG_STATUS_READY == dag_status
-          || ObIDag::DAG_STATUS_RETRY == dag_status) { // first schedule this dag
+      } else if (cur->can_start_running()) { // first schedule this dag
         if (OB_FAIL(schedule_dag_(*cur, move_dag_to_waiting_list))) {
           COMMON_LOG(WARN, "failed to schedule dag", K(ret), KPC(cur));
         }
@@ -3097,6 +3187,7 @@ void ObDagPrioScheduler::pause_worker_(ObTenantDagWorker &worker)
     // dag still exist now
     scheduler_->sub_running_dag_cnts(worker.get_task()->get_dag()->get_type());
     --running_task_cnts_;
+    update_shared_running_count_(MTL_ID());
     running_workers_.remove(&worker);
     waiting_workers_.add_last(&worker);
     COMMON_LOG(INFO, "pause worker", K(*worker.get_task()),
@@ -3105,18 +3196,92 @@ void ObDagPrioScheduler::pause_worker_(ObTenantDagWorker &worker)
   }
 }
 
+void ObDagPrioScheduler::update_shared_running_count_(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(shared_compaction_thread_limiter_)) {
+    if (is_user_tenant(tenant_id)) {
+      if (OB_FAIL(shared_compaction_thread_limiter_->set_user_running_count(running_task_cnts_))) {
+        COMMON_LOG(WARN, "failed to update user shared running count", K_(running_task_cnts), K_(priority));
+      }
+    } else if (is_meta_tenant(tenant_id)) {
+      if (OB_FAIL(shared_compaction_thread_limiter_->set_meta_running_count(running_task_cnts_))) {
+        COMMON_LOG(WARN, "failed to update meta shared running count", K_(running_task_cnts), K_(priority));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(WARN, "unexpected tenant id, should never happens", K(ret), K(tenant_id));
+    }
+  }
+}
+
+bool ObDagPrioScheduler::is_shared_limiter_enabled_() const
+{
+  return OB_NOT_NULL(shared_compaction_thread_limiter_) && shared_compaction_thread_limiter_->is_enabled();
+}
+
+void ObDagPrioScheduler::refresh_meta_has_waiting_dag()
+{
+  if (is_meta_tenant(MTL_ID()) && OB_NOT_NULL(shared_compaction_thread_limiter_)) {
+    bool has_waiting = false;
+    common::SpinWLockGuard guard(prio_rwlock_);
+    const int64_t dag_cnt = dag_list_[READY_DAG_LIST].get_size();
+    if (dag_cnt > META_HAS_WAITING_DAG_SCAN_THRESHOLD) {
+      // Skip full traversal when the ready list is too large to avoid holding prio_rwlock_ too long.
+      has_waiting = true;
+    } else if (!dag_list_[READY_DAG_LIST].is_empty()) {
+      ObIDag *head = dag_list_[READY_DAG_LIST].get_header();
+      ObIDag *cur = head->get_next();
+      while (NULL != cur && head != cur && !has_waiting) {
+        if (cur->can_start_running()) {
+          has_waiting = true;
+        } else {
+          cur = cur->get_next();
+        }
+      }
+    }
+    shared_compaction_thread_limiter_->set_meta_has_waiting_dag(has_waiting);
+  }
+}
+
+bool ObDagPrioScheduler::check_can_schedule_() const
+{
+  bool enable_shared = false;
+  bool can_schedule = false;
+  if (OB_NOT_NULL(shared_compaction_thread_limiter_)) {
+    shared_compaction_thread_limiter_->check_can_schedule(
+        is_meta_tenant(MTL_ID()), enable_shared, can_schedule);
+  }
+  if (!enable_shared) {
+    can_schedule = running_task_cnts_ < adaptive_task_limit_;
+  }
+  return can_schedule;
+}
+
+bool ObDagPrioScheduler::check_need_pause_() const
+{
+  bool enable_shared = false;
+  bool need_pause = false;
+  if (OB_NOT_NULL(shared_compaction_thread_limiter_)) {
+    shared_compaction_thread_limiter_->check_need_pause(enable_shared, need_pause);
+  }
+  if (!enable_shared) {
+    need_pause = running_task_cnts_ > adaptive_task_limit_;
+  }
+  return need_pause;
+}
+
 int ObDagPrioScheduler::loop_ready_dag_list(bool &is_found)
 {
   int ret = OB_SUCCESS;
   {
     common::SpinWLockGuard guard(prio_rwlock_);
-    if (running_task_cnts_ < adaptive_task_limit_) {
+    if (check_can_schedule_()) {
       // if extra_erase_dag_net not null, the is_found must be false.
       if (!check_need_load_shedding_(true/*for_schedule*/)) {
         is_found = (OB_SUCCESS == schedule_one_());
       }
-
-      while (running_task_cnts_ < adaptive_task_limit_ && is_found) {
+      while (check_can_schedule_() && is_found) {
         if (check_need_load_shedding_(true/*for_schedule*/)) {
           break;
         } else if (OB_SUCCESS != schedule_one_()) {
@@ -3186,11 +3351,28 @@ void ObDagPrioScheduler::dump_dag_status()
 {
   // best-effort snapshot for monitoring only, intentionally unlocked.
   // cross-field consistency is not required for log output.
-  COMMON_LOG(INFO, "dump_dag_status", "priority", OB_DAG_PRIOS[priority_].dag_prio_str_,
-          K_(limits), K_(running_task_cnts), K_(adaptive_task_limit),
-          "ready_dag_count", dag_list_[READY_DAG_LIST].get_size(),
-          "waiting_dag_count", dag_list_[WAITING_DAG_LIST].get_size(),
-          "rank_dag_count", dag_list_[RANK_DAG_LIST].get_size());
+  ObSharedCompactionThreadLimiter *limiter = shared_compaction_thread_limiter_;
+  if (OB_NOT_NULL(limiter)) {
+    int64_t user_running_count = limiter->get_user_running_count();
+    int64_t meta_running_count = limiter->get_meta_running_count();
+    int64_t running_count = user_running_count + meta_running_count;
+    COMMON_LOG(INFO, "dump_dag_status", "priority", OB_DAG_PRIOS[priority_].dag_prio_str_,
+            K_(limits), K_(running_task_cnts), K_(adaptive_task_limit),
+            "shared_enabled", limiter->is_enabled(),
+            "shared_limit", limiter->get_limit(),
+            "shared_running_count", running_count,
+            "user_running_count", user_running_count,
+            "meta_running_count", meta_running_count,
+            "ready_dag_count", dag_list_[READY_DAG_LIST].get_size(),
+            "waiting_dag_count", dag_list_[WAITING_DAG_LIST].get_size(),
+            "rank_dag_count", dag_list_[RANK_DAG_LIST].get_size());
+  } else {
+    COMMON_LOG(INFO, "dump_dag_status", "priority", OB_DAG_PRIOS[priority_].dag_prio_str_,
+            K_(limits), K_(running_task_cnts), K_(adaptive_task_limit),
+            "ready_dag_count", dag_list_[READY_DAG_LIST].get_size(),
+            "waiting_dag_count", dag_list_[WAITING_DAG_LIST].get_size(),
+            "rank_dag_count", dag_list_[RANK_DAG_LIST].get_size());
+  }
 }
 
 int ObDagPrioScheduler::inner_add_dag(
@@ -3255,6 +3437,21 @@ void ObDagPrioScheduler::get_all_dag_scheduler_info(
     ADD_DAG_SCHEDULER_INFO(ObDagSchedulerInfo::UP_LIMIT, OB_DAG_PRIOS[priority_].dag_prio_str_, limits_);
     ADD_DAG_SCHEDULER_INFO(ObDagSchedulerInfo::RUNNING_TASK_CNT, OB_DAG_PRIOS[priority_].dag_prio_str_, running_task_cnts_);
     ADD_DAG_SCHEDULER_INFO(ObDagSchedulerInfo::ADAPTIVE_LIMIT, OB_DAG_PRIOS[priority_].dag_prio_str_, adaptive_task_limit_);
+    if (OB_NOT_NULL(shared_compaction_thread_limiter_)) {
+      bool enable_shared = false;
+      int64_t user_running = 0;
+      int64_t meta_running = 0;
+      int64_t shared_limit = 0;
+      bool meta_has_waiting_dag = false;
+      shared_compaction_thread_limiter_->get_schedule_snapshot(
+          enable_shared, user_running, meta_running, shared_limit, meta_has_waiting_dag);
+      ADD_DAG_SCHEDULER_INFO(ObDagSchedulerInfo::SHARED_ENABLED,
+          OB_DAG_PRIOS[priority_].dag_prio_str_, enable_shared ? 1 : 0);
+      ADD_DAG_SCHEDULER_INFO(ObDagSchedulerInfo::SHARED_UP_LIMIT,
+          OB_DAG_PRIOS[priority_].dag_prio_str_, shared_limit);
+      ADD_DAG_SCHEDULER_INFO(ObDagSchedulerInfo::SHARED_RUNNING_TASK_CNT,
+          OB_DAG_PRIOS[priority_].dag_prio_str_, user_running + meta_running);
+    }
   }
 }
 
@@ -3684,6 +3881,10 @@ int ObDagPrioScheduler::deal_with_finish_task(
     scheduler_->sub_total_running_task_cnt();
     common::SpinWLockGuard guard(prio_rwlock_);
     --running_task_cnts_;
+    //TODO(zs475329)： After the refactoring, worker threads will be released only
+    // when the entire DAG has finished executing, rather than after each individual task.
+    // Accordingly, update_shared_running_count_ also needs to be moved to run only after the DAG completes.
+    update_shared_running_count_(MTL_ID());
     running_workers_.remove(&worker);
   }
   return ret;
@@ -3782,6 +3983,17 @@ int64_t ObDagPrioScheduler::get_running_task_cnt()
   return running_task_cnts_;
 }
 
+void ObDagPrioScheduler::disable_shared_limiter(const uint64_t tenant_id)
+{
+  if (OB_NOT_NULL(shared_compaction_thread_limiter_)) {
+    if (is_user_tenant(tenant_id)) {
+      (void)shared_compaction_thread_limiter_->set_user_state(false, 0, 0);
+    } else if (is_meta_tenant(tenant_id)) {
+      (void)shared_compaction_thread_limiter_->set_meta_state(false, 0);
+    }
+  }
+}
+
 int ObDagPrioScheduler::set_thread_score(const int64_t score, int64_t &old_val, int64_t &new_val)
 {
   int ret = OB_SUCCESS;
@@ -3805,7 +4017,7 @@ bool ObDagPrioScheduler::try_switch(ObTenantDagWorker &worker)
 
   {
     common::SpinWLockGuard guard(prio_rwlock_);
-    if (running_task_cnts_ > adaptive_task_limit_) {
+    if (check_need_pause_()) {
       need_pause = true;
     } else if (is_compaction_dag_prio() && check_need_load_shedding_(false /*for_schedule*/)) {
       need_pause = true;
@@ -3853,6 +4065,10 @@ void ObDagPrioScheduler::adapt_window_thread_cnt()
     LOG_WARN("failed to get adaptive compaction thread cnt, take limits_", KR(ret), K(limits_));
   } else {
     adaptive_task_limit_ = adaptive_thread_cnt;
+  }
+  if (OB_SUCC(ret) && is_user_tenant(MTL_ID()) && is_shared_limiter_enabled_()
+      && OB_FAIL(shared_compaction_thread_limiter_->set_user_limit(adaptive_task_limit_))) {
+    COMMON_LOG(WARN, "failed to set window compaction thread limit", K(ret), K(adaptive_task_limit_));
   }
 }
 
@@ -4549,13 +4765,15 @@ void ObTenantDagScheduler::wait()
 
 void ObTenantDagScheduler::reload_config()
 {
+  inner_reload_config();
+  cascade_reload_to_sibling_tenant();
+}
+
+void ObTenantDagScheduler::inner_reload_config()
+{
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (tenant_config.is_valid()) {
-    set_thread_score(ObDagPrio::DAG_PRIO_COMPACTION_HIGH, tenant_config->compaction_high_thread_score);
-    set_thread_score(ObDagPrio::DAG_PRIO_MDS_COMPACTION_HIGH, tenant_config->mds_compaction_high_thread_score);
-    set_thread_score(ObDagPrio::DAG_PRIO_COMPACTION_MID, tenant_config->compaction_mid_thread_score);
-    set_thread_score(ObDagPrio::DAG_PRIO_MDS_COMPACTION_MID, tenant_config->mds_compaction_mid_thread_score);
-    set_thread_score(ObDagPrio::DAG_PRIO_COMPACTION_LOW, tenant_config->compaction_low_thread_score);
+    reload_compaction_thread_scores(*tenant_config.operator->());
     set_thread_score(ObDagPrio::DAG_PRIO_HA_HIGH, tenant_config->ha_high_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_HA_MID, tenant_config->ha_mid_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_HA_LOW, tenant_config->ha_low_thread_score);
@@ -4563,6 +4781,33 @@ void ObTenantDagScheduler::reload_config()
     set_thread_score(ObDagPrio::DAG_PRIO_DDL_HIGH, tenant_config->ddl_high_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_TTL, tenant_config->ttl_thread_score);
     set_compaction_dag_limit(tenant_config->compaction_dag_cnt_limit);
+  }
+}
+
+// Cascade one reload to the sibling tenant (user<->meta) so it recomputes its own compaction
+// local limits_ / adaptive_task_limit_ that are driven by the shared limiter.
+void ObTenantDagScheduler::cascade_reload_to_sibling_tenant()
+{
+  const uint64_t cur_tenant_id = MTL_ID();
+  uint64_t sibling_tenant_id = OB_INVALID_TENANT_ID;
+  if (is_user_tenant(cur_tenant_id)) {
+    sibling_tenant_id = gen_meta_tenant_id(cur_tenant_id);
+  } else if (is_meta_tenant(cur_tenant_id)) {
+    sibling_tenant_id = gen_user_tenant_id(cur_tenant_id);
+  }
+  if (is_valid_tenant_id(sibling_tenant_id)) {
+    int ret = OB_SUCCESS;
+    MTL_SWITCH(sibling_tenant_id) {
+      ObTenantDagScheduler *sibling_scheduler = MTL(ObTenantDagScheduler *);
+      if (OB_NOT_NULL(sibling_scheduler)) {
+        sibling_scheduler->inner_reload_config();
+      }
+    }
+    // sibling may not exist yet (bootstrap) or already be stopped (drop); the next reload
+    // round will converge, so just log and move on.
+    if (OB_FAIL(ret)) {
+      COMMON_LOG(INFO, "skip cascade reload to sibling tenant", K(ret), K(cur_tenant_id), K(sibling_tenant_id));
+    }
   }
 }
 
@@ -4636,7 +4881,9 @@ int ObTenantDagScheduler::init(
     }
   }
 
-  if (FAILEDx(TG_SET_RUNNABLE_AND_START(tg_id_, *this))) {
+  if (FAILEDx(init_shared_compaction_thread_limiters(tenant_id))) {
+    COMMON_LOG(WARN, "failed to init shared compaction thread limiters", K(ret), K(tenant_id));
+  } else if (OB_FAIL(TG_SET_RUNNABLE_AND_START(tg_id_, *this))) {
     COMMON_LOG(WARN, "failed to start dag scheduler", K(ret));
   } else {
     is_inited_ = true;
@@ -4678,6 +4925,7 @@ void ObTenantDagScheduler::reset()
   WEAK_BARRIER();
   dump_dag_status(true);
 
+  clear_shared_thread_limiters();
   for (int64_t i = 0; i < ObDagPrio::DAG_PRIO_MAX; ++i) {
     prio_sche_[i].destroy();
   }
@@ -4747,6 +4995,14 @@ void ObTenantDagScheduler::inner_free_dag(ObIAllocator &allocator, ObIDag &dag)
   }
   dag.~ObIDag();
   allocator.free(&dag);
+}
+
+void ObTenantDagScheduler::clear_shared_thread_limiters()
+{
+  for (int64_t i = 0; i < ObIDag::MergeDagPrioCnt; ++i) {
+    prio_sche_[ObIDag::MergeDagPrio[i]].disable_shared_limiter(MTL_ID());
+  }
+  ObSharedCompactionLimiterPool::get_instance().release(MTL_ID());
 }
 
 int ObTenantDagScheduler::create_and_schedule_dag_net_finalizer_(ObIDagNet &dag_net)
@@ -5012,7 +5268,8 @@ int ObTenantDagScheduler::get_all_dag_scheduler_info(
 {
   int ret = OB_SUCCESS;
   int64_t idx = 0;
-  int64_t total_cnt = 3 + 4 * ObDagPrio::DAG_PRIO_MAX + ObDagType::DAG_TYPE_MAX + ObDagNetType::DAG_NET_TYPE_MAX;
+  int64_t total_cnt = 3 + 4 * ObDagPrio::DAG_PRIO_MAX + 3 * ObIDag::MergeDagPrioCnt
+      + ObDagType::DAG_TYPE_MAX + ObDagNetType::DAG_NET_TYPE_MAX;
   void *buf = nullptr;
   ObDagSchedulerInfo *info_list = nullptr;
   if (OB_ISNULL(buf = allocator.alloc(sizeof(ObDagSchedulerInfo) * total_cnt))) {
@@ -5485,6 +5742,10 @@ int ObTenantDagScheduler::schedule()
   int tmp_ret = OB_SUCCESS;
   ret = loop_ready_dag_lists(); // loop ready dag lists
 
+  for (int64_t i = 0; i < ObIDag::MergeDagPrioCnt; ++i) {
+    prio_sche_[ObIDag::MergeDagPrio[i]].refresh_meta_has_waiting_dag();
+  }
+
   if (REACH_THREAD_TIME_INTERVAL(loop_waiting_dag_list_period_))  {
     for (int i = 0; i < ObDagPrio::DAG_PRIO_MAX; ++i) {
       if (OB_TMP_FAIL(prio_sche_[i].loop_waiting_dag_list())) {
@@ -5695,6 +5956,120 @@ int ObTenantDagScheduler::set_thread_score(const int64_t priority, const int64_t
   }
   return ret;
 }
+
+void ObTenantDagScheduler::set_compaction_thread_limiters_for_scheduler(
+    ObSharedCompactionThreadLimiter *limiters)
+{
+  // limiters is the non-null base of this tenant's pool slot; only called at init.
+  for (int64_t i = 0; i < ObIDag::MergeDagPrioCnt; ++i) {
+    prio_sche_[ObIDag::MergeDagPrio[i]].set_shared_compaction_thread_limiter(&limiters[i]);
+  }
+}
+
+int ObTenantDagScheduler::init_shared_compaction_thread_limiters(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  // Borrow the shared slot from the process-resident pool. User and meta resolve to the same slot
+  // via the normalized user tenant id, so the order they init in does not matter.
+  // A null slot (pool exhausted) is non-fatal: the tenant falls back to independent limits.
+  if (is_user_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
+    ObSharedCompactionThreadLimiter *limiters = nullptr;
+    int tmp_ret = ObSharedCompactionLimiterPool::get_instance().bind(tenant_id, limiters);
+    if (OB_SUCCESS != tmp_ret) {
+      // non-fatal: pool exhausted (OB_SIZE_OVERFLOW) -> fall back to independent limits
+      COMMON_LOG(WARN, "failed to bind shared compaction limiter pool, fall back to independent limits",
+          K(tmp_ret), K(tenant_id));
+    } else if (OB_NOT_NULL(limiters)) {
+      set_compaction_thread_limiters_for_scheduler(limiters);
+    }
+  }
+  return ret;
+}
+
+int ObTenantDagScheduler::get_compaction_thread_score_from_config(
+    const int64_t prio,
+    const omt::ObTenantConfig &tenant_config,
+    int64_t &score)
+{
+  int ret = OB_SUCCESS;
+  score = 0;
+  switch (prio) {
+    case ObDagPrio::DAG_PRIO_COMPACTION_HIGH: {
+      score = tenant_config.compaction_high_thread_score;
+      break;
+    }
+    case ObDagPrio::DAG_PRIO_COMPACTION_MID: {
+      score = tenant_config.compaction_mid_thread_score;
+      break;
+    }
+    case ObDagPrio::DAG_PRIO_COMPACTION_LOW: {
+      score = tenant_config.compaction_low_thread_score;
+      break;
+    }
+    case ObDagPrio::DAG_PRIO_MDS_COMPACTION_HIGH: {
+      score = tenant_config.mds_compaction_high_thread_score;
+      break;
+    }
+    case ObDagPrio::DAG_PRIO_MDS_COMPACTION_MID: {
+      score = tenant_config.mds_compaction_mid_thread_score;
+      break;
+    }
+    default: {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid compaction dag prio", KR(ret), K(prio));
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObTenantDagScheduler::reload_compaction_thread_scores(const omt::ObTenantConfig &tenant_config)
+{
+  int ret = OB_SUCCESS;
+  bool enable_shared = false;
+  int64_t adaptive_score = 0;
+  get_user_compaction_thread_params(tenant_config, enable_shared, adaptive_score);
+  for (int64_t i = 0; i < ObIDag::MergeDagPrioCnt && OB_SUCC(ret); ++i) {
+    const int64_t prio = ObIDag::MergeDagPrio[i];
+    int64_t score = 0;
+    int64_t thread_score_delta = 0;
+    if (OB_FAIL(get_compaction_thread_score_from_config(prio, tenant_config, score))) {
+      LOG_WARN("failed to get compaction thread score from config", KR(ret), K(prio));
+    } else if (OB_UNLIKELY(score < 0 || score > INT32_MAX || adaptive_score < 0 || adaptive_score > INT32_MAX)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), K(prio), K(score), K(adaptive_score));
+    } else if (OB_FAIL(prio_sche_[prio].set_compaction_thread_score(
+        score, enable_shared, adaptive_score, thread_score_delta))) {
+      LOG_WARN("failed to set compaction thread score", KR(ret), K(prio), K(score),
+          K(enable_shared), K(adaptive_score));
+    }
+
+    if (OB_SUCC(ret) && 0 != thread_score_delta) {
+      ObThreadCondGuard guard(scheduler_sync_);
+      work_thread_num_ += thread_score_delta;
+      if (OB_FAIL(scheduler_sync_.signal())) {
+        STORAGE_LOG(WARN, "Failed to signal", K(ret), K(prio), K(score));
+      }
+    }
+  }
+  return ret;
+}
+
+void ObTenantDagScheduler::get_user_compaction_thread_params(
+    const omt::ObTenantConfig &tenant_config,
+    bool &enable_shared,
+    int64_t &adaptive_score)
+{
+  if (is_user_tenant(MTL_ID())) {
+    enable_shared = tenant_config.enable_shared_compaction_thread_by_type;
+    const int64_t max_cpu = static_cast<int64_t>(MTL_CPU_COUNT());
+    adaptive_score = (max_cpu + COMPACTION_THREAD_SCORE_RATIO - 1) / COMPACTION_THREAD_SCORE_RATIO;
+  } else {
+    enable_shared = false;
+    adaptive_score = 0;
+  }
+}
+
 
 int64_t ObTenantDagScheduler::get_running_task_cnt(const ObDagPrio::ObDagPrioEnum priority)
 {

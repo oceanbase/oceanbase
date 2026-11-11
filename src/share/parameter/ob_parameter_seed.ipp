@@ -1282,6 +1282,10 @@ DEF_INT(compaction_high_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
 DEF_INT(mds_compaction_high_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of mds high priority compaction. Range: [0,100] in integer. Especially, 0 means default value",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_shared_compaction_thread_by_type, OB_TENANT_PARAMETER, "False",
+        "specifies whether compaction threads of the same type are shared between the User and Meta tenants. "
+        "Value: True: shared per type; False: not shared.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(ha_high_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of high availability high thread. Range: [0,100] in integer. Especially, 0 means default value",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -64,6 +64,7 @@ const char* const BALANCER_IDLE_TIME = "balancer_idle_time";
 const char* const LOG_DISK_UTILIZATION_LIMIT_THRESHOLD = "log_disk_utilization_limit_threshold";
 const char* const LOG_DISK_THROTTLING_PERCENTAGE = "log_disk_throttling_percentage";
 const char* const ARCHIVE_LAG_TARGET = "archive_lag_target";
+const char* const ENABLE_SHARED_COMPACTION_THREAD_BY_TYPE = "enable_shared_compaction_thread_by_type";
 const char* const OB_VECTOR_MEMORY_LIMIT_PERCENTAGE = "ob_vector_memory_limit_percentage";
 const char* const _TRANSFER_TASK_TABLET_COUNT_THRESHOLD = "_transfer_task_tablet_count_threshold";
 const char* const DEFAULT_TABLE_ORGANIZATION = "default_table_organization";

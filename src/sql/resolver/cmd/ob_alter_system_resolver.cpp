@@ -3043,6 +3043,35 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                           LOG_WARN("fail to check param valid", K(ret));
                         }
 #endif
+                      } else if (0 == config_name.case_compare(ENABLE_SHARED_COMPACTION_THREAD_BY_TYPE)) {
+                        ObSArray <uint64_t> tenant_ids;
+                        bool affect_all = false;
+                        bool affect_all_user = false;
+                        bool affect_all_meta = false;
+                        if (OB_FAIL(ObAlterSystemResolverUtil::resolve_tenant(*n,
+                                                                              tenant_id,
+                                                                              tenant_ids,
+                                                                              affect_all,
+                                                                              affect_all_user,
+                                                                              affect_all_meta))) {
+                          LOG_WARN("fail to resolve tenant", K(ret), "exec_tenant_id", tenant_id);
+                        } else if (affect_all || affect_all_meta) {
+                          ret = OB_NOT_SUPPORTED;
+                          LOG_WARN("all/all_meta is not supported for enable_shared_compaction_thread_by_type",
+                                  KR(ret), K(affect_all), K(affect_all_user), K(affect_all_meta));
+                          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                                        "setting enable_shared_compaction_thread_by_type for META or SYS tenant is");
+                        } else if (!tenant_ids.empty()) {
+                          ARRAY_FOREACH_X(tenant_ids, i, cnt, OB_SUCC(ret)) {
+                            if (!is_user_tenant(tenant_ids.at(i))) {
+                              ret = OB_NOT_SUPPORTED;
+                              LOG_WARN("enable_shared_compaction_thread_by_type only supports user tenant",
+                                      KR(ret), "tenant_id", tenant_ids.at(i));
+                              LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                                            "setting enable_shared_compaction_thread_by_type for META or SYS tenant is");
+                            }
+                          }
+                        }
                       } else if (0 == config_name.case_compare(ARCHIVE_LAG_TARGET)) {
                         ObSArray <uint64_t> tenant_ids;
                         bool affect_all;
@@ -3187,7 +3216,13 @@ int ObSetConfigResolver::check_param_valid(int64_t tenant_id ,
 {
   int ret = OB_SUCCESS;
   if (tenant_id == OB_SYS_TENANT_ID) {
-    if (0 == name.case_compare(SSL_EXTERNAL_KMS_INFO)) {
+    if (0 == name.case_compare(ENABLE_SHARED_COMPACTION_THREAD_BY_TYPE)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("enable_shared_compaction_thread_by_type only supports user tenant",
+               KR(ret), K(tenant_id));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                     "setting enable_shared_compaction_thread_by_type for META or SYS tenant is");
+    } else if (0 == name.case_compare(SSL_EXTERNAL_KMS_INFO)) {
 #ifndef OB_BUILD_TDE_SECURITY
       ret = OB_NOT_SUPPORTED;
 #else

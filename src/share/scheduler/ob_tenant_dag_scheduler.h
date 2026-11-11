@@ -17,6 +17,7 @@
 #include "lib/profile/ob_trace_id.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_scheduler_config.h"
+#include "share/scheduler/ob_shared_compaction_thread_limiter.h"
 #include "share/scheduler/ob_diagnose_config.h"
 #include "share/ob_table_range.h"
 #include "common/errsim_module/ob_errsim_module_type.h"
@@ -24,6 +25,10 @@
 
 namespace oceanbase
 {
+namespace omt
+{
+class ObTenantConfig;
+} // namespace omt
 namespace compaction
 {
 struct ObTabletCompactionProgress;
@@ -524,7 +529,7 @@ public:
 
   const static char *ObIDagStatusStr[];
 
-  static const int64_t MergeDagPrioCnt = 5;
+  static const int64_t MergeDagPrioCnt = MERGE_DAG_PRIO_CNT;
   static const ObDagPrio::ObDagPrioEnum MergeDagPrio[];
   static const int64_t MergeDagTypeCnt = 9;
   static const ObDagType::ObDagTypeEnum MergeDagType[];
@@ -547,6 +552,11 @@ public:
       const int line, const char* function) { error_location_.set(filename, line, function); }
   void set_dag_status(const ObDagStatus status) { dag_status_ = status; }
   ObDagStatus get_dag_status() const { return dag_status_; }
+  bool can_start_running() const
+  {
+    return 0 == get_indegree()
+        && (ObIDag::DAG_STATUS_READY == dag_status_ || ObIDag::DAG_STATUS_RETRY == dag_status_);
+  }
   bool is_dag_failed() const { return ObIDag::DAG_STATUS_NODE_FAILED == dag_status_; }
   bool is_inactive_status() const { return is_stop_ || (!is_independent_ && (is_dag_failed() || is_finish_status(dag_status_))); }
   void set_add_time() { add_time_ = ObTimeUtility::fast_current_time(); }
@@ -973,6 +983,9 @@ public:
     DAG_NET_COUNT,
     RUNNING_TASK_CNT,
     ADAPTIVE_LIMIT,
+    SHARED_ENABLED,          // whether cross-tenant thread sharing is in effect for this prio
+    SHARED_UP_LIMIT,         // total shared quota (limit) of the slot
+    SHARED_RUNNING_TASK_CNT, // currently occupied count (user + meta) on the shared slot
     VALUE_TYPE_MAX,
   };
   static const char *ObValueTypeStr[VALUE_TYPE_MAX];
@@ -1186,7 +1199,8 @@ public:
       priority_(ObDagPrio::DAG_PRIO_MAX),
       running_task_cnts_(0),
       limits_(0),
-      adaptive_task_limit_(0)
+      adaptive_task_limit_(0),
+      shared_compaction_thread_limiter_(nullptr)
   {}
   ~ObDagPrioScheduler() { destroy();}
   void destroy();
@@ -1210,6 +1224,10 @@ public:
   // func with lock inside
   int loop_ready_dag_list(bool &is_found);
   int loop_waiting_dag_list();
+  // Periodically republish (for the meta tenant) whether this priority still has schedulable dags,
+  // so the sibling user tenant knows when it may reclaim the shared slot reserved for meta. Takes
+  // prio_rwlock_ inside; a no-op for non-meta tenants or priorities without a shared limiter.
+  void refresh_meta_has_waiting_dag();
   void dump_dag_status();
   int inner_add_dag(
     const bool check_size_overflow,
@@ -1284,8 +1302,17 @@ public:
   int64_t get_adaptive_limit();
   void set_adaptive_limit(const int64_t limit);
   int64_t get_running_task_cnt();
+  void disable_shared_limiter(const uint64_t tenant_id);
   int set_thread_score(const int64_t score, int64_t &old_val, int64_t &new_val);
   bool try_switch(ObTenantDagWorker &worker);
+  // Called only at init (before workers start). This scheduler sets its limiter pointer exactly
+  // once and never changes it afterwards. The pool keeps the slot's memory
+  // alive for the whole process, so the pointer never dangles while this scheduler is alive. The
+  // slot may later be recycled to another tenant, but only after THIS scheduler is destroyed, so it
+  // never observes that. Hence no lock is taken here.
+  void set_shared_compaction_thread_limiter(ObSharedCompactionThreadLimiter *limiter);
+  int set_compaction_thread_score(const int64_t score, const bool enable_shared,
+      const int64_t adaptive_score, int64_t &thread_score_delta);
 
   void adapt_window_thread_cnt(); // only for DAG_PRIO_COMPACTION_LOW
 
@@ -1358,6 +1385,12 @@ private:
   int erase_dag_(ObIDag &dag);
   int deal_with_fail_dag_(ObIDag &dag, ObITask *&cur_task, const int errcode, bool &retry_flag);
   int finish_task_in_dag_(ObITask *&task, ObIDag *&dag);
+  int set_shared_compaction_thread_score(const int64_t score, const bool enable_shared,
+      const int64_t adaptive_score, int64_t &old_val, int64_t &new_val);
+  bool is_shared_limiter_enabled_() const;
+  bool check_can_schedule_() const;
+  bool check_need_pause_() const;
+  void update_shared_running_count_(const uint64_t tenant_id);
   void pause_worker_(ObTenantDagWorker &worker);
   bool check_need_load_shedding_(const bool for_schedule);
 
@@ -1371,6 +1404,7 @@ private:
                           common::hash::hash_func<const ObIDag *>,
                           common::hash::equal_to<const ObIDag *> > DagMap;
   static const int32_t COMPACTION_DAG_RERANK_FACTOR = 10;
+  static const int32_t META_HAS_WAITING_DAG_SCAN_THRESHOLD = 100;
   static const int64_t DUMP_STATUS_INTERVAL = 10 * 1000LL * 1000LL;
 private:
   DagMap dag_map_;
@@ -1385,6 +1419,8 @@ private:
   int64_t running_task_cnts_;
   int64_t limits_;           // needs to be equal with thread_score
   int64_t adaptive_task_limit_;
+  // Points into a process-resident pool slot; set once at init, never re-pointed, never dangles.
+  ObSharedCompactionThreadLimiter *shared_compaction_thread_limiter_;
 };
 
 #define DEFINE_ATOMIC_ARRAY_FUNC(name, var) \
@@ -1575,6 +1611,7 @@ private:
   static const int64_t LOOP_RUNNING_DAG_NET_MAP_INTERVAL = 1 * 60 * 1000 * 1000L; // 1m
   static const int32_t MAX_SHOW_DAG_NET_CNT_PER_PRIO = 500;
   static const int64_t MANY_DAG_COUNT = 2000;
+  static const int64_t COMPACTION_THREAD_SCORE_RATIO = 4;
 private:
   int schedule();
   void loop_dag_net();
@@ -1594,6 +1631,22 @@ private:
       int64_t &idx);
   common::ObIAllocator &get_allocator(const bool is_ha);
   int init_allocator(const uint64_t tenant_id, const lib::ObLabel &label, lib::MemoryContext &mem_context);
+  void inner_reload_config();
+  void set_compaction_thread_limiters_for_scheduler(ObSharedCompactionThreadLimiter *limiters);
+  int init_shared_compaction_thread_limiters(const uint64_t tenant_id);
+  void clear_shared_thread_limiters();
+  int reload_compaction_thread_scores(const omt::ObTenantConfig &tenant_config);
+  int get_compaction_thread_score_from_config(
+      const int64_t prio,
+      const omt::ObTenantConfig &tenant_config,
+      int64_t &score);
+  void cascade_reload_to_sibling_tenant();
+  // enable_shared and adaptive_score are only meaningful for user tenant;
+  // for non-user tenants enable_shared is false and adaptive_score is 0.
+  void get_user_compaction_thread_params(
+      const omt::ObTenantConfig &tenant_config,
+      bool &enable_shared,
+      int64_t &adaptive_score);
   void adapt_window_thread_cnt() { (void) prio_sche_[ObDagPrio::DAG_PRIO_COMPACTION_LOW].adapt_window_thread_cnt(); }
 private:
   bool is_inited_;

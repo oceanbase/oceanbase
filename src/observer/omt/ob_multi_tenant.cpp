@@ -1355,6 +1355,7 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
 int ObMultiTenant::update_tenant_unit_no_lock(const ObUnitInfoGetter::ObTenantConfig &unit)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
 
   ObTenant *tenant = nullptr;
   const double min_cpu = static_cast<double>(unit.config_.min_cpu());
@@ -1395,6 +1396,10 @@ int ObMultiTenant::update_tenant_unit_no_lock(const ObUnitInfoGetter::ObTenantCo
     }
     if (tenant->unit_max_cpu() != max_cpu) {
       tenant->set_unit_max_cpu(max_cpu);
+      // Reload tenant config (including compaction thread scores derived from unit max_cpu).
+      if (OB_TMP_FAIL(update_tenant_config(tenant_id))) {
+        LOG_WARN("fail to update tenant dag scheduler config", K(tmp_ret), K(tenant_id));
+      }
     }
     tenant->set_tenant_unit(allowed_new_unit);
     LOG_INFO("succecc to set tenant unit config", K(unit));
