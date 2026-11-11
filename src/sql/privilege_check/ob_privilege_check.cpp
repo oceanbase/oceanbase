@@ -853,6 +853,50 @@ int get_seq_db_name(
   return ret;
 }
 
+int get_udf_owner_database(
+    const ObSqlCtx &ctx,
+    const ObObjectType obj_type,
+    const uint64_t obj_id,
+    bool &is_sys_obj,
+    ObString &db_name)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = pl::get_tenant_id_by_object_id(obj_id);
+  uint64_t db_id = OB_INVALID_ID;
+  is_sys_obj = false;
+  db_name.reset();
+  CK (OB_NOT_NULL(ctx.schema_guard_));
+  if (OB_FAIL(ret)) {
+  } else if (OB_SYS_TENANT_ID == tenant_id) {
+    is_sys_obj = true;
+  } else if (ObObjectType::FUNCTION == obj_type) {
+    const ObRoutineInfo *routine_info = NULL;
+    OZ (ctx.schema_guard_->get_routine_info(tenant_id, obj_id, routine_info));
+    OX (db_id = OB_NOT_NULL(routine_info) ? routine_info->get_database_id() : OB_INVALID_ID);
+  } else if (ObObjectType::PACKAGE == obj_type) {
+    const ObPackageInfo *package_info = NULL;
+    OZ (ctx.schema_guard_->get_package_info(tenant_id, obj_id, package_info));
+    OX (db_id = OB_NOT_NULL(package_info) ? package_info->get_database_id() : OB_INVALID_ID);
+  } else if (ObObjectType::TYPE == obj_type) {
+    const ObUDTTypeInfo *udt_info = NULL;
+    OZ (ctx.schema_guard_->get_udt_info(tenant_id, obj_id, udt_info));
+    OX (db_id = OB_NOT_NULL(udt_info) ? udt_info->get_database_id() : OB_INVALID_ID);
+  }
+  if (OB_FAIL(ret) || is_sys_obj) {
+  } else if (OB_INVALID_ID == db_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("udf priv object not found", K(ret), "obj_type", static_cast<uint64_t>(obj_type), K(obj_id));
+  } else if (OB_SYS_DATABASE_ID == db_id) {
+    is_sys_obj = true;
+  } else {
+    const ObDatabaseSchema *db_schema = NULL;
+    OZ (ctx.schema_guard_->get_database_schema(tenant_id, db_id, db_schema));
+    CK (OB_NOT_NULL(db_schema));
+    OX (db_name = db_schema->get_database_name_str());
+  }
+  return ret;
+}
+
 int add_udf_expr_priv(
     const ObSqlCtx &ctx,
     const ObRawExpr *expr,
@@ -872,14 +916,17 @@ int add_udf_expr_priv(
     LOG_WARN("unexpected null", KPC(expr), K(ret));
   } else if (!udf_expr->get_dblink_name().empty()) {
     is_dblink_udf = true;
-  } else if (0 == udf_expr->get_database_name().case_compare(OB_SYS_DATABASE_NAME)) {
-    is_sys_udf = true;
   } else if (common::OB_INVALID_ID != udf_expr->get_type_id()) {
     need_priv.obj_id_ = udf_expr->get_type_id();
     need_priv.obj_type_ = static_cast<uint64_t>(ObObjectType::TYPE);
   } else if (common::OB_INVALID_ID != udf_expr->get_pkg_id()) {
-    need_priv.obj_id_ = udf_expr->get_pkg_id();
-    need_priv.obj_type_ = static_cast<uint64_t>(ObObjectType::PACKAGE);
+    if (udf_expr->get_is_udt_udf()) {
+      need_priv.obj_id_ = ObUDTObjectType::clear_object_id_mask(udf_expr->get_pkg_id());
+      need_priv.obj_type_ = static_cast<uint64_t>(ObObjectType::TYPE);
+    } else {
+      need_priv.obj_id_ = udf_expr->get_pkg_id();
+      need_priv.obj_type_ = static_cast<uint64_t>(ObObjectType::PACKAGE);
+    }
   } else if (common::OB_INVALID_ID != udf_expr->get_udf_id()) {
     need_priv.obj_id_ = udf_expr->get_udf_id();
     need_priv.obj_type_ = static_cast<uint64_t>(ObObjectType::FUNCTION);
@@ -887,12 +934,20 @@ int add_udf_expr_priv(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid udf expr", KPC(udf_expr), K(ret));
   }
+  if (OB_SUCC(ret) && !is_dblink_udf) {
+    OZ (get_udf_owner_database(ctx,
+                               static_cast<ObObjectType>(need_priv.obj_type_),
+                               need_priv.obj_id_,
+                               is_sys_udf,
+                               db_name),
+        KPC(udf_expr));
+  }
   if (OB_SUCC(ret) && !is_sys_udf && !is_dblink_udf) {
     // todo: check sys udf privilege after grant privs to public role
     need_priv.grantee_id_ = user_id;
     need_priv.obj_level_ = OBJ_LEVEL_FOR_TAB_PRIV;
     need_priv.check_flag_ = check_flag;
-    need_priv.db_name_ = udf_expr->get_database_name();
+    need_priv.db_name_ = db_name;
     OZ (set_need_priv_owner_id(ctx, need_priv));
     OZ (ObPrivPacker::pack_raw_obj_priv(NO_OPTION, OBJ_PRIV_ID_EXECUTE, packed_privs));
     OX (need_priv.obj_privs_ = packed_privs);
