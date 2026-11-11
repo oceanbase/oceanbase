@@ -519,6 +519,8 @@ int ObMviewAlterService::update_mlog_in_modify_column(
   const uint64_t tenant_id = new_table_schema.get_tenant_id();
   const ObTableSchema *mlog_schema = NULL;
   ObTableSchema new_mlog_schema;
+  bool need_new_progressive_round = false;
+  bool skip_index_attr_changed = false;
   if (!new_table_schema.has_mlog_table()) {
     // do nothing
   } else if (OB_FAIL(schema_guard.get_table_schema(new_table_schema.get_tenant_id(), new_table_schema.get_mlog_tid(), mlog_schema))) {
@@ -544,6 +546,8 @@ int ObMviewAlterService::update_mlog_in_modify_column(
       } else if (OB_FAIL(new_mlog_column->assign(*base_table_column))) {
         LOG_WARN("fail to assign base column to mlog column", K(ret), KPC(base_table_column));
       } else {
+        skip_index_attr_changed |= orig_mlog_column->get_skip_index_attr().get_packed_value() != new_mlog_column->get_skip_index_attr().get_packed_value();
+        need_new_progressive_round = need_new_progressive_round ||  skip_index_attr_changed;
         new_mlog_column->set_autoincrement(orig_mlog_column->is_autoincrement());
         new_mlog_column->set_is_hidden(orig_mlog_column->is_hidden());
         new_mlog_column->set_rowkey_position(orig_mlog_column->get_rowkey_position());
@@ -566,6 +570,9 @@ int ObMviewAlterService::update_mlog_in_modify_column(
       }
     }
     if (OB_SUCC(ret)) {
+      if (need_new_progressive_round) {
+        new_mlog_schema.set_progressive_merge_round(mlog_schema->get_progressive_merge_round() + 1);
+      }
       ObSchemaOperationType operation_type = OB_DDL_ALTER_TABLE;
       if (OB_FAIL(ddl_operator.update_table_attribute(new_mlog_schema, trans, operation_type))) {
         LOG_WARN("fail to update mlog table schema version", K(ret));

@@ -2454,7 +2454,8 @@ public:
   {
     return alter_table_schema_.alter_option_bitset_.has_member(DUPLICATE_SCOPE);
   }
-  bool need_progressive_merge() const {
+  // unchanged encryption does not require progressive merge
+  bool need_progressive_merge(const bool count_encryption = true) const {
     return alter_table_schema_.alter_option_bitset_.has_member(BLOCK_SIZE)
         || alter_table_schema_.alter_option_bitset_.has_member(COMPRESS_METHOD)
         || alter_table_schema_.alter_option_bitset_.has_member(PCTFREE)
@@ -2462,7 +2463,7 @@ public:
         || alter_table_schema_.alter_option_bitset_.has_member(STORAGE_FORMAT_VERSION)
         || alter_table_schema_.alter_option_bitset_.has_member(PROGRESSIVE_MERGE_ROUND)
         || alter_table_schema_.alter_option_bitset_.has_member(PROGRESSIVE_MERGE_NUM)
-        || alter_table_schema_.alter_option_bitset_.has_member(ENCRYPTION)
+        || (count_encryption && alter_table_schema_.alter_option_bitset_.has_member(ENCRYPTION))
         || alter_table_schema_.alter_option_bitset_.has_member(ENABLE_MACRO_BLOCK_BLOOM_FILTER)
         || alter_table_schema_.alter_option_bitset_.has_member(MICRO_BLOCK_FORMAT_VERSION);
   }

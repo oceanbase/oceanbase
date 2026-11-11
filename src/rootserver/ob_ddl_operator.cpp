@@ -4395,7 +4395,7 @@ int ObDDLOperator::alter_index_table_tablespace(const uint64_t data_table_id,
   } else {
     const uint64_t tenant_id = alter_tablespace_arg.tenant_id_;
     int64_t new_schema_version = OB_INVALID_VERSION;
-    const ObTableSchema *index_table_schema = NULL;
+    const ObTableSchema *index_table_schema = NULL; // index schema snapshot before this ALTER DDL
     ObString index_table_name;
     ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
     const ObString &index_name = alter_tablespace_arg.index_name_;
@@ -4438,14 +4438,22 @@ int ObDDLOperator::alter_index_table_tablespace(const uint64_t data_table_id,
     } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
       LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
     } else {
+      const uint64_t index_table_id = index_table_schema->get_table_id();
       ObTableSchema new_index_table_schema;
-      if (OB_FAIL(new_index_table_schema.assign(*index_table_schema))) {
-        LOG_WARN("fail to assign schema", K(ret));
+      ObRefreshSchemaStatus schema_status;
+      schema_status.tenant_id_ = tenant_id;
+      // read the latest index schema in the same DDL trans, otherwise table options modified earlier by a compound DDL would be overwritten here
+      if (OB_FAIL(schema_service->get_table_schema_from_inner_table(schema_status, index_table_id, trans, new_index_table_schema))) {
+        LOG_WARN("fail to get the latest index table schema", K(ret), K(tenant_id), "table_id", index_table_schema->get_table_id());
+      } else if (OB_FAIL(new_index_table_schema.set_encryption_str(alter_tablespace_arg.encryption_))) {
+        LOG_WARN("fail to set index encryption", K(ret), K(tenant_id), "table_id", index_table_schema->get_table_id());
       } else {
         new_index_table_schema.set_schema_version(new_schema_version);
         new_index_table_schema.set_tablespace_id(alter_tablespace_arg.tablespace_id_);
-        new_index_table_schema.set_encryption_str(alter_tablespace_arg.encryption_);
-        new_index_table_schema.set_progressive_merge_round(index_table_schema->get_progressive_merge_round() + 1);
+        if (!new_index_table_schema.is_equal_encryption(*index_table_schema)) {
+          new_index_table_schema.set_progressive_merge_round(std::max(new_index_table_schema.get_progressive_merge_round(),
+                                                                      index_table_schema->get_progressive_merge_round() + 1));
+        }
         if (OB_FAIL(schema_service->get_table_sql_service().update_table_options(
                         trans,
                         *index_table_schema,
@@ -4582,6 +4590,7 @@ int ObDDLOperator::update_aux_table(
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();
   const bool is_index = USER_INDEX == table_type;
+  const bool need_new_progressive_round = new_table_schema.get_progressive_merge_round() > table_schema.get_progressive_merge_round();
   ObSEArray<uint64_t, 16> aux_tid_array;
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   uint64_t lob_meta_table_id = OB_INVALID_ID;
@@ -4665,7 +4674,7 @@ int ObDDLOperator::update_aux_table(
           new_aux_table_schema.set_store_format(new_table_schema.get_store_format());
           new_aux_table_schema.set_progressive_merge_round(
               std::max(new_table_schema.get_progressive_merge_round(),
-                       aux_table_schema->get_progressive_merge_round()));
+                       aux_table_schema->get_progressive_merge_round() + (need_new_progressive_round ? 1 : 0)));
           new_aux_table_schema.set_storage_format_version(new_table_schema.get_storage_format_version());
           if (aux_table_schema->is_vec_delta_buffer_type() || aux_table_schema->is_vec_index_id_type()) {
             // set TABLE_MODE_QUEUING_EXTREME for delta_buffer and index_id table.

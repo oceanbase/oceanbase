@@ -15385,16 +15385,9 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             need_progressive_merge))) {
           LOG_WARN("failed to check need progressive round", KR(ret));
         }
-      } else if (alter_table_arg.is_alter_options_
-          && alter_table_arg.need_progressive_merge()) {
-        if (alter_table_arg.alter_table_schema_.alter_option_bitset_.
-            has_member(ObAlterTableArg::ENCRYPTION) &&
-            alter_table_arg.alter_table_schema_.is_equal_encryption(*orig_table_schema)) {
-          // If the values before and after changing the encryption algorithm in the table are the same,
-          // the merge is not marked
-        } else {
-          need_progressive_merge = true;
-        }
+      } else if (alter_table_arg.is_alter_options_) {
+        const bool is_encryption_changed = !alter_table_arg.alter_table_schema_.is_equal_encryption(*orig_table_schema);
+        need_progressive_merge = alter_table_arg.need_progressive_merge(is_encryption_changed);
       }
       if (OB_SUCC(ret) && need_progressive_merge) {
         alter_table_arg.is_alter_options_ = true;
