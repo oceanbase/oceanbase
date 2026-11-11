@@ -10975,12 +10975,25 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
                              schema_guard, alter_table_arg.data_version_, new_table_schema))) {
                 LOG_WARN("failed to adjust dependent prefix generated column",
                     K(ret), KPC(orig_column_schema), K(new_column_schema));
-              } else if (OB_FAIL(new_table_schema.alter_column(
-                           new_column_schema, ObTableSchema::CHECK_MODE_OFFLINE, false))) {
-                LOG_WARN("alter column failed", K(ret));
-              } else if (alter_column_schema->is_primary_key_) {
-                if (OB_FAIL(new_pk_column.push_back(alter_column_schema->get_column_name_str()))) {
-                  LOG_WARN("push back element failed", K(ret));
+              } else {
+                const ObColumnSchemaV2 *current_column_schema =
+                    new_table_schema.get_column_schema(new_column_schema.get_column_id());
+                if (OB_ISNULL(current_column_schema)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("current column schema is null", K(ret), K(new_column_schema));
+                } else {
+                  // Removing dependent prefix columns may update this column's links
+                  // after new_column_schema was copied. Preserve the current order.
+                  new_column_schema.set_prev_column_id(current_column_schema->get_prev_column_id());
+                  new_column_schema.set_next_column_id(current_column_schema->get_next_column_id());
+                  if (OB_FAIL(new_table_schema.alter_column(
+                               new_column_schema, ObTableSchema::CHECK_MODE_OFFLINE, false))) {
+                    LOG_WARN("alter column failed", K(ret));
+                  } else if (alter_column_schema->is_primary_key_) {
+                    if (OB_FAIL(new_pk_column.push_back(alter_column_schema->get_column_name_str()))) {
+                      LOG_WARN("push back element failed", K(ret));
+                    }
+                  }
                 }
               }
               if (OB_FAIL(ret)) {
