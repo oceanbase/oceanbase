@@ -1239,11 +1239,8 @@ int ObRestoreUtil::get_restore_log_piece_array_from_multi_path_(
     ObIArray<ObRestoreLogPieceBriefInfo> &backup_piece_list)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObPieceKey> piece_keys;
+  ObArray<ObTenantArchivePieceAttr> piece_attrs;
   common::hash::ObHashMap<ObPieceKey, ObString> multi_path_map;
-  bool is_empty_piece = true;
-  ObExternPieceWholeInfo piece_whole_info;
-  ObBackupDest dest;
   backup_piece_list.reset();
   if (multi_path_array.empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1253,39 +1250,28 @@ int ObRestoreUtil::get_restore_log_piece_array_from_multi_path_(
     LOG_WARN("invalid argument", K(ret), K(restore_start_scn), K(restore_end_scn));
   } else if (OB_FAIL(multi_path_map.create(OB_MAX_BACKUP_PIECE_NUM, "MultiPathMap"))) {
     LOG_WARN("fail to create multi path map", K(ret));
-  } else if (OB_FAIL(get_all_piece_keys_(multi_path_array, piece_keys, multi_path_map))) {
-    LOG_WARN("fail to get all piece keys", K(ret));
-  } else if (OB_FAIL(get_latest_non_empty_piece_(piece_keys, multi_path_map, piece_whole_info, is_empty_piece))) {
-    LOG_WARN("fail to get latest non empty piece", K(ret), K(piece_keys));
-  } else if (is_empty_piece) {
-    ret = OB_ENTRY_NOT_EXIST;
-    LOG_WARN("no piece is found", K(ret), K(restore_start_scn), K(restore_end_scn));
-    LOG_USER_ERROR(OB_RESTORE_SOURCE_NOT_ENOUGH, "No enough log for restore");
-  } else if (OB_FAIL(piece_whole_info.his_frozen_pieces_.push_back(piece_whole_info.current_piece_))) {
-    LOG_WARN("failed to push backup piece", K(ret));
-  } else if (OB_FAIL(get_piece_paths_in_range_from_multi_path_(piece_whole_info.his_frozen_pieces_,
-                      multi_path_map, restore_start_scn, restore_end_scn, time_zone_wrap, backup_piece_list))) {
-    LOG_WARN("fail to get pieces paths in range from multi path", K(ret),
-                K(piece_whole_info), K(restore_start_scn), K(restore_end_scn));
+  } else if (OB_FAIL(get_all_piece_infos_(multi_path_array, piece_attrs, multi_path_map))) {
+    LOG_WARN("fail to get all piece infos", K(ret));
+  } else if (OB_FAIL(get_piece_paths_from_round_groups_(piece_attrs, multi_path_map,
+                      restore_start_scn, restore_end_scn, time_zone_wrap, backup_piece_list))) {
+    LOG_WARN("fail to get piece paths from round groups", K(ret), K(restore_start_scn), K(restore_end_scn), K(piece_attrs));
   }
   return ret;
 }
 
-int ObRestoreUtil::get_all_piece_keys_(const ObIArray<ObString> &multi_path_array,
-                        ObArray<ObPieceKey> &piece_keys,
+int ObRestoreUtil::get_all_piece_infos_(const ObIArray<ObString> &multi_path_array,
+                        ObArray<ObTenantArchivePieceAttr> &piece_attrs,
                         common::hash::ObHashMap<ObPieceKey, ObString> &multi_path_map)
 {
   int ret = OB_SUCCESS;
-  piece_keys.reset();
+  piece_attrs.reset();
   uint64_t tenant_id = UINT64_MAX;
-  ObPieceKey key;
   ObArchiveStore store;
   ObBackupDest dest;
   ObSinglePieceDesc piece_desc;
   bool is_empty_piece = true;
   ARRAY_FOREACH_X(multi_path_array, i, cnt, OB_SUCC(ret)) {
     ObString multi_path = multi_path_array.at(i);
-    key.reset();
     store.reset();
     dest.reset();
     piece_desc.piece_.reset();
@@ -1299,94 +1285,162 @@ int ObRestoreUtil::get_all_piece_keys_(const ObIArray<ObString> &multi_path_arra
                || ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE != piece_desc.piece_.file_status_) {
       LOG_INFO("skip non log dir or unavailable piece", K(dest));
     } else {
-      key.dest_id_ = piece_desc.piece_.key_.dest_id_;
-      key.piece_id_ = piece_desc.piece_.key_.piece_id_;
-      key.round_id_ = piece_desc.piece_.key_.round_id_;
       tenant_id = UINT64_MAX == tenant_id ? piece_desc.piece_.key_.tenant_id_ : tenant_id;
       if (tenant_id != piece_desc.piece_.key_.tenant_id_) {
         ret = OB_OP_NOT_ALLOW;
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "restoring backup pieces of different tenants");
-      } else if (OB_FAIL(piece_keys.push_back(key))) {
-        LOG_WARN("fail to push back", K(ret));
-      } else if (OB_FAIL(multi_path_map.set_refactored(key, multi_path))) {
-        LOG_WARN("fail to set refactored", K(ret), K(key));
-      } else {
-        LOG_INFO("found a piece", K(key));
+      } else if (OB_FAIL(add_piece_attr_(piece_desc.piece_, multi_path, piece_attrs, multi_path_map))) {
+        LOG_WARN("fail to add piece attr", K(ret), K(piece_desc), K(multi_path));
       }
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (!piece_keys.empty()) {
-      lib::ob_sort(piece_keys.begin(), piece_keys.end());
-    } else {
-      ret = OB_RESTORE_SOURCE_NOT_ENOUGH;
-      LOG_USER_ERROR(OB_RESTORE_SOURCE_NOT_ENOUGH, "no usable log pieces");
-    }
+  if (OB_FAIL(ret)) {
+  } else if (piece_attrs.empty()) {
+    ret = OB_RESTORE_SOURCE_NOT_ENOUGH;
+    LOG_USER_ERROR(OB_RESTORE_SOURCE_NOT_ENOUGH, "no usable log pieces");
+  } else {
+    ObTenantArchivePieceAttrComparator cmp;
+    lib::ob_sort(piece_attrs.begin(), piece_attrs.end(), cmp);
   }
   return ret;
 }
 
-int ObRestoreUtil::get_latest_non_empty_piece_(
-             const ObArray<ObPieceKey> &piece_keys,
-             const common::hash::ObHashMap<ObPieceKey, ObString> &multi_path_map,
-             ObExternPieceWholeInfo &piece_whole_info,
-             bool &is_empty_piece)
+int ObRestoreUtil::add_piece_attr_(
+    const ObTenantArchivePieceAttr &piece,
+    const ObString &multi_path,
+    ObArray<ObTenantArchivePieceAttr> &piece_attrs,
+    common::hash::ObHashMap<ObPieceKey, ObString> &multi_path_map)
 {
   int ret = OB_SUCCESS;
-  is_empty_piece = true;
-  for (int64_t i = piece_keys.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
-    const ObPieceKey &key = piece_keys.at(i);
-    ObString multi_path;
-    ObBackupDest dest;
-    ObArchiveStore store;
-    if (OB_FAIL(multi_path_map.get_refactored(key, multi_path))) {
-      LOG_WARN("fail to get refactored", K(ret), K(key));
-    } else if (OB_FAIL(dest.set(multi_path))) {
-      LOG_WARN("fail to set backup dest", K(ret));
-    } else if (OB_FAIL(store.init(dest))) {
-      LOG_WARN("fail to init ObArchiveStore", K(ret), K(dest));
-    } else if (OB_FAIL(store.get_whole_piece_info(is_empty_piece, piece_whole_info))) {
-      LOG_WARN("failed to get whole piece info", K(ret), K(key));
-    } else if (!is_empty_piece) {
-      break;
+  ObPieceKey key(piece.key_.dest_id_, piece.key_.round_id_, piece.key_.piece_id_);
+  if (OB_FAIL(multi_path_map.set_refactored(key, multi_path))) {
+    if (OB_HASH_EXIST == ret) {
+      // Only frozen pieces can be copied, copies of the same piece are identical, just keep the first one.
+      ret = OB_SUCCESS;
+      LOG_INFO("duplicate piece in multiple path, just skip", K(key), K(multi_path));
+    } else {
+      LOG_WARN("fail to set refactored", K(ret), K(key), K(multi_path));
     }
+  } else if (OB_FAIL(piece_attrs.push_back(piece))) {
+    LOG_WARN("fail to push back", K(ret), K(piece));
+  } else {
+    LOG_INFO("found a piece", K(key), K(multi_path));
   }
-  if (OB_SUCC(ret) && !is_empty_piece) {
-    LOG_INFO("get latest non empty piece", K(piece_whole_info));
+  return ret;
+}
+
+void ObRestoreUtil::update_max_restorable_scn_(
+    const SCN &restore_start_scn,
+    const SCN &round_max_restorable_scn,
+    SCN &max_restorable_scn)
+{
+  // The last piece of a stopped round may also cover restore_start_scn by [start_scn, end_scn), while
+  // its checkpoint_scn is smaller than restore_start_scn. Such round can not restore from restore_start_scn,
+  // ignore it, and keep the max one among the others.
+  if (!round_max_restorable_scn.is_valid() || round_max_restorable_scn < restore_start_scn) {
+  } else if (!max_restorable_scn.is_valid() || max_restorable_scn < round_max_restorable_scn) {
+    max_restorable_scn = round_max_restorable_scn;
+  }
+}
+
+int ObRestoreUtil::get_piece_paths_from_round_groups_(
+    const ObArray<ObTenantArchivePieceAttr> &piece_attrs,
+    const common::hash::ObHashMap<ObPieceKey, ObString> &multi_path_map,
+    const SCN &restore_start_scn,
+    const SCN &restore_end_scn,
+    const ObTimeZoneInfoWrap &time_zone_wrap,
+    ObIArray<share::ObRestoreLogPieceBriefInfo> &pieces)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObArray<ObTenantArchivePieceAttr> round_pieces;
+  ObArray<ObRestoreLogPieceBriefInfo> round_piece_list;
+  SCN max_restorable_scn; // used for log print
+  bool found = false;
+  int64_t i = 0;
+  pieces.reset();
+  // Pieces of different dest or round are never continuous, check each <dest_id, round_id> group separately.
+  // Rounds never overlap, so at most one round can support restore.
+  while (OB_SUCC(ret) && !found && i < piece_attrs.count()) {
+    const int64_t dest_id = piece_attrs.at(i).key_.dest_id_;
+    const int64_t round_id = piece_attrs.at(i).key_.round_id_;
+    SCN round_max_restorable_scn;
+    round_pieces.reset();
+    round_piece_list.reset();
+    // 1. collect the pieces which have the same dest id and round id
+    for (; OB_SUCC(ret) && i < piece_attrs.count(); ++i) {
+      const ObTenantArchivePieceAttr &piece = piece_attrs.at(i);
+      if (piece.key_.dest_id_ != dest_id || piece.key_.round_id_ != round_id) {
+        break;
+      } else if (OB_FAIL(round_pieces.push_back(piece))) {
+        LOG_WARN("fail to push back", K(ret), K(piece));
+      }
+    }
+    // 2. check the curr round pieces can be used to restore
+    if (FAILEDx(get_piece_paths_in_range_from_multi_path_(round_pieces, multi_path_map,
+                restore_start_scn, restore_end_scn, round_piece_list, round_max_restorable_scn))) {
+      if (OB_RESTORE_SOURCE_NOT_ENOUGH == ret) {
+        ret = OB_SUCCESS;
+        update_max_restorable_scn_(restore_start_scn, round_max_restorable_scn, max_restorable_scn);
+      } else {
+        LOG_WARN("fail to get piece paths in range from multi path", K(ret), K(dest_id), K(round_id));
+      }
+    } else if (OB_FAIL(pieces.assign(round_piece_list))) {
+      LOG_WARN("fail to assign pieces", K(ret), K(round_piece_list));
+    } else {
+      found = true;
+      LOG_INFO("select pieces for restore", K(dest_id), K(round_id), K(restore_start_scn), K(restore_end_scn), K(pieces));
+    }
+  } // end while
+
+  if (OB_FAIL(ret) || found) {
+  } else if (!max_restorable_scn.is_valid()) {
+    ret = OB_RESTORE_SOURCE_NOT_ENOUGH;
+    LOG_WARN("no round can support restore", K(ret), K(restore_start_scn), K(restore_end_scn), K(piece_attrs));
+    LOG_USER_ERROR(OB_RESTORE_SOURCE_NOT_ENOUGH, "no enough log for restore");
+  } else {
+    ret = OB_RESTORE_SOURCE_NOT_ENOUGH;
+    int64_t time_str_pos = 0;
+    int64_t msg_pos = 0;
+    char err_msg[OB_MAX_ERROR_MSG_LEN] = { 0 };
+    char time_str[OB_MAX_TIME_STR_LENGTH] = { 0 };
+    if (OB_TMP_FAIL(ObTimeConverter::scn_to_str(max_restorable_scn.get_val_for_inner_table_field(),
+                                                time_zone_wrap.get_time_zone_info(),
+                                                time_str, OB_MAX_TIME_STR_LENGTH, time_str_pos))) {
+      LOG_WARN("fail to convert scn to str", K(ret), K(tmp_ret), K(max_restorable_scn), K(time_zone_wrap));
+    } else if (OB_TMP_FAIL(databuff_printf(err_msg, OB_MAX_ERROR_MSG_LEN, msg_pos,
+                          "no enough log, maximum restorable time is %s",
+                          time_str))) {
+      LOG_WARN("fail to databuff printf", K(ret), K(tmp_ret), K(msg_pos), K(time_str));
+    }
+    LOG_WARN(err_msg, K(ret), K(max_restorable_scn), K(restore_end_scn));
+    LOG_USER_ERROR(OB_RESTORE_SOURCE_NOT_ENOUGH, err_msg);
   }
   return ret;
 }
 
 int ObRestoreUtil::get_piece_paths_in_range_from_multi_path_(
-                   const ObArray<ObTenantArchivePieceAttr> &candidate_pieces,
-                   const common::hash::ObHashMap<ObPieceKey, ObString> &multi_path_map,
-                   const SCN &restore_start_scn,
-                   const SCN &restore_end_scn,
-                   const ObTimeZoneInfoWrap &time_zone_wrap,
-                   ObIArray<share::ObRestoreLogPieceBriefInfo> &pieces)
+    const ObArray<ObTenantArchivePieceAttr> &candidate_pieces,
+    const common::hash::ObHashMap<ObPieceKey, ObString> &multi_path_map,
+    const SCN &restore_start_scn,
+    const SCN &restore_end_scn,
+    ObIArray<share::ObRestoreLogPieceBriefInfo> &pieces,
+    SCN &max_restorable_scn)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  int64_t dest_id = 0;
   int64_t last_piece_idx = -1;
   int64_t i = 0;
   int64_t pieces_cnt = candidate_pieces.count();
+  pieces.reset();
+  max_restorable_scn.reset();
   if (candidate_pieces.empty()) {
     LOG_WARN("candidate pieces is empty!", K(ret));
-  } else {
-   dest_id = candidate_pieces.at(0).key_.dest_id_;
   }
 
   while (OB_SUCC(ret) && i < pieces_cnt) {
     const ObTenantArchivePieceAttr &cur = candidate_pieces.at(i);
     ObBackupPath piece_path;
-    if (cur.key_.dest_id_ != dest_id) {
-      // Filter pieces archived at other path.
-      ++i;
-      continue;
-    }
-
     if (cur.file_status_ != ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE) {
       // Filter unavailable piece
       ++i;
@@ -1413,7 +1467,8 @@ int ObRestoreUtil::get_piece_paths_in_range_from_multi_path_(
       if (!pieces.empty()) {
         const ObTenantArchivePieceAttr &prev = candidate_pieces.at(last_piece_idx);
         // If pieces are not enough, and current piece is continous with previous one.
-        if (prev.end_scn_ == cur.start_scn_ && prev.checkpoint_scn_ < restore_end_scn) {
+        if (prev.key_.piece_id_ + 1 == cur.key_.piece_id_ && prev.status_.is_frozen() &&
+            prev.end_scn_ == cur.start_scn_ && prev.checkpoint_scn_ < restore_end_scn) {
           if (OB_FAIL(multi_path_map.get_refactored(key, path))) {
             if (OB_HASH_NOT_EXIST == ret) {
               LOG_WARN("miss log archive piece", K(ret), K(key), K(candidate_pieces));
@@ -1469,12 +1524,13 @@ int ObRestoreUtil::get_piece_paths_in_range_from_multi_path_(
         ret = OB_RESTORE_SOURCE_NOT_ENOUGH;
         LOG_WARN("no enough log for restore",
                   K(ret), K(cur), K(restore_start_scn), K(restore_end_scn));
-        LOG_USER_ERROR(OB_RESTORE_SOURCE_NOT_ENOUGH, "no enough log for retore");
         break;
       }
     } else {
       const ObTenantArchivePieceAttr &prev = candidate_pieces.at(last_piece_idx);
-      if (prev.end_scn_ != cur.start_scn_) {
+      if (prev.key_.piece_id_ + 1 != cur.key_.piece_id_ ||
+          !prev.status_.is_frozen() ||
+          prev.end_scn_ != cur.start_scn_) {
         // The <start_scn, checkpoint_scn, end_scn> of pieces are as following:
         // Piece#1 : <2022-06-01 00:00:00, 2022-06-01 06:00:00, 2022-06-02 00:00:00>
         // Piece#2 : <2022-06-01 08:00:00, 2022-06-02 07:59:00, 2022-06-02 08:00:00>
@@ -1485,6 +1541,8 @@ int ObRestoreUtil::get_piece_paths_in_range_from_multi_path_(
         //  Previously, Piece#1 is required, and pushed into 'pieces'. However, when i = 1,
         //  we find that Piece#2 is not continous with Piece#1, and Piece#1 is not required actually.
         //  Then Piece#1 is abandoned, and recompute the required pieces.
+        // Logs are continuous up to prev, used for error message.
+        max_restorable_scn = prev.checkpoint_scn_;
         pieces.reset();
         last_piece_idx = -1;
         // Do not do ++i, recompute if current piece can be used to restore.
@@ -1517,26 +1575,12 @@ int ObRestoreUtil::get_piece_paths_in_range_from_multi_path_(
     ret = OB_RESTORE_SOURCE_NOT_ENOUGH;
     LOG_WARN("archive log pieces are behind the latest backup set, or pieces are not contiuous",
               K(ret), K(last_piece_idx), K(restore_end_scn), K(candidate_pieces));
-    LOG_USER_ERROR(OB_RESTORE_SOURCE_NOT_ENOUGH, "no enough log for restore");
   } else {
     const ObTenantArchivePieceAttr &last_piece = candidate_pieces.at(last_piece_idx);
     if (last_piece.checkpoint_scn_ < restore_end_scn) {
       ret = OB_RESTORE_SOURCE_NOT_ENOUGH;
-      int64_t time_str_pos = 0;
-      int64_t msg_pos = 0;
-      char err_msg[OB_MAX_ERROR_MSG_LEN] = { 0 };
-      char time_str[OB_MAX_TIME_STR_LENGTH] = { 0 };
-      if (OB_TMP_FAIL(ObTimeConverter::scn_to_str(last_piece.checkpoint_scn_.get_val_for_inner_table_field(),
-                                                  time_zone_wrap.get_time_zone_info(),
-                                                  time_str, OB_MAX_TIME_STR_LENGTH, time_str_pos))) {
-        LOG_WARN("fail to convert scn to str", K(ret), K(tmp_ret), K(last_piece), K(time_zone_wrap));
-      } else if (OB_TMP_FAIL(databuff_printf(err_msg, OB_MAX_ERROR_MSG_LEN, msg_pos,
-                            "no enough log, maximum restorable time is %s",
-                            time_str))) {
-        LOG_WARN("fail to databuff printf", K(ret), K(tmp_ret), K(msg_pos), K(time_str));
-      }
-      LOG_WARN(err_msg,  K(ret), K(last_piece), K(restore_end_scn));
-      LOG_USER_ERROR(OB_RESTORE_SOURCE_NOT_ENOUGH, err_msg);
+      max_restorable_scn = last_piece.checkpoint_scn_;
+      LOG_WARN("no enough log for restore", K(ret), K(last_piece), K(restore_end_scn));
     }
   }
 
