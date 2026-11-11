@@ -1344,6 +1344,7 @@ macro_block_type	varchar(4096)	NO		NULL
 compressor_name	varchar(128)	NO		NULL	
 row_store_type	varchar(128)	NO		NULL	
 cg_idx	bigint(20)	NO		NULL	
+is_embedded_sstable	varchar(3)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tablet_sstable_macro_info;
 IF(count(*) >= 0, 1, 0)
 1

@@ -57,7 +57,8 @@ class ObAllVirtualTabletSSTableMacroInfo : public common::ObVirtualTableScannerI
     BLOCK_TYPE,
     COMPRESSOR_NAME,
     ROW_STORE_TYPE,
-    CG_IDX
+    CG_IDX,
+    IS_EMBEDDED_SSTABLE
   };
   // primary index
   enum PRI_IDX_KEY

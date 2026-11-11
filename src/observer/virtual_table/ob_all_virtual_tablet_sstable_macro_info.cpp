@@ -463,6 +463,10 @@ int ObAllVirtualTabletSSTableMacroInfo::gen_row(
         //cg_idx
         cur_row_.cells_[i].set_int(table_key.get_column_group_id());
         break;
+      case IS_EMBEDDED_SSTABLE:
+        cur_row_.cells_[i].set_varchar("NO");
+        cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        break;
       default:
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "invalid column id, ", K(ret), K(col_id));

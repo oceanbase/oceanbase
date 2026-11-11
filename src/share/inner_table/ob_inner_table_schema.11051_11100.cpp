@@ -893,6 +893,21 @@ int ObInnerTableSchema::all_virtual_tablet_sstable_macro_info_schema(ObTableSche
       false, //is_nullable
       false); //is_autoincrement
   }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("is_embedded_sstable", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      MAX_COLUMN_YES_NO_LENGTH, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
   if (OB_SUCC(ret)) {
     table_schema.get_part_option().set_part_num(1);
     table_schema.set_part_level(PARTITION_LEVEL_ONE);
@@ -1346,7 +1361,24 @@ int ObInnerTableSchema::all_virtual_tablet_sstable_macro_info_all_virtual_tablet
       true);//is_storing_column
   }
 
-  table_schema.set_max_used_column_id(column_id + 23);
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("is_embedded_sstable", //column_name
+      column_id + 24, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      MAX_COLUMN_YES_NO_LENGTH, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false,//is_nullable
+      false,//is_autoincrement
+      false,//is_hidden
+      true);//is_storing_column
+  }
+
+  table_schema.set_max_used_column_id(column_id + 24);
   return ret;
 }
 

@@ -11126,6 +11126,7 @@ def_table_schema(
       ('compressor_name', 'varchar:OB_MAX_COMPRESSOR_NAME_LENGTH'),
       ('row_store_type', 'varchar:OB_MAX_COMPRESSOR_NAME_LENGTH'),
       ('cg_idx', 'int'),
+      ('is_embedded_sstable', 'varchar:MAX_COLUMN_YES_NO_LENGTH'),
    ],
     partition_columns = ['svr_ip', 'svr_port'],
     vtable_route_policy = 'distributed',
