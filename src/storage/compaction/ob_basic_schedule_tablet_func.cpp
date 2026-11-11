@@ -43,8 +43,10 @@ int ObBasicScheduleTabletFunc::switch_ls(ObLSHandle &ls_handle)
 {
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_handle.get_ls()->get_ls_id();
+  const bool allow_loop_not_ready_ls = loop_cnt_ >= 0
+      && 0 == (loop_cnt_ % ObLSStatusCache::LOOP_NOT_READY_LS_INTERVAL);
 
-  if (OB_FAIL(ls_status_.init_for_major(merge_version_, ls_handle))) {
+  if (OB_FAIL(ls_status_.init_for_major(merge_version_, ls_handle, allow_loop_not_ready_ls))) {
     if (OB_LS_NOT_EXIST != ret) {
       LOG_WARN("failed to init ls status", KR(ret), K_(merge_version), K(ls_id));
     }
@@ -141,6 +143,10 @@ int ObBasicScheduleTabletFunc::check_with_schedule_scn(
   const bool weak_read_ts_ready = ls_status_.weak_read_ts_.get_val_for_tx() >= schedule_scn;
 
   if (need_merge) {
+    // NOTE: weak_read_ts_ready is checked against the tablet's own schedule_scn, not merge_version.
+    // When ls is LOOP_NOT_READY_LS (ls weak_read_ts < merge_version), an unfinished medium whose
+    // schedule_scn <= weak_read_ts is still allowed to be force-frozen and executed here, otherwise
+    // anything waiting for that medium to finish (e.g. tablet split replay) would block forever.
     const bool tablet_and_weak_read_ts_ready = (tablet_status.can_merge() && weak_read_ts_ready);
     if (tablet_and_weak_read_ts_ready) {
       if (tablet.get_snapshot_version() >= schedule_scn) {

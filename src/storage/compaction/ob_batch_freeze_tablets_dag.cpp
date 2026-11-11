@@ -10,6 +10,8 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/compaction/ob_medium_compaction_func.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/tx_storage/ob_ls_service.h"
 namespace oceanbase
@@ -18,6 +20,8 @@ using namespace share;
 using namespace storage;
 namespace compaction
 {
+// make batch freeze tablets dag fail on follower ls of user tenant
+ERRSIM_POINT_DEF(EN_COMPACTION_FOLLOWER_SKIP_FORCE_FREEZE);
 /*
  *  ----------------------------------------ObBatchFreezeTabletsDag--------------------------------------------
  */
@@ -119,6 +123,22 @@ int ObBatchFreezeTabletsTask::inner_process()
   } else {
     weak_read_ts = ls->get_ls_wrs_handler()->get_ls_weak_read_ts().get_val_for_tx();
   }
+
+#ifdef ERRSIM
+  // block force freeze on follower ls to keep tablet snapshot behind the unfinished medium
+  if (OB_SUCC(ret) && is_user_tenant(MTL_ID())) {
+    const int errsim_ret = EN_COMPACTION_FOLLOWER_SKIP_FORCE_FREEZE;
+    if (OB_SUCCESS != errsim_ret) {
+      bool is_leader = false;
+      if (OB_FAIL(ObMediumCompactionScheduleFunc::is_election_leader(param.ls_id_, is_leader))) {
+        LOG_WARN("failed to check ls leader", K(ret), K(param));
+      } else if (!is_leader) {
+        ret = errsim_ret;
+        FLOG_INFO("ERRSIM EN_COMPACTION_FOLLOWER_SKIP_FORCE_FREEZE", K(ret), K(param));
+      }
+    }
+  }
+#endif
 
   int64_t fail_freeze_cnt = 0;
   int64_t succ_schedule_cnt = 0;

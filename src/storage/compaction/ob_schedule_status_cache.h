@@ -31,8 +31,14 @@ struct ObLSStatusCache final
     CAN_MERGE = 0,
     WEAK_READ_TS_NOT_READY,
     OFFLINE_OR_DELETED,
+    // weak_read_ts < merge_version, but periodically loop this ls to execute
+    // unfinished medium (and the force freeze it needs) whose own schedule_scn
+    // is already covered by weak_read_ts. Never launch new round in this state.
+    LOOP_NOT_READY_LS,
     STATE_MAX,
   };
+  // when weak read ts is not ready for merge_version, loop ls once per LOOP_NOT_READY_LS_INTERVAL loops
+  static const int64_t LOOP_NOT_READY_LS_INTERVAL = 50;
   static const char *ls_state_to_str(const LSState &state);
   static bool is_valid_ls_state(const LSState state)
   {
@@ -46,8 +52,13 @@ struct ObLSStatusCache final
       state_(STATE_MAX)
   {}
   ~ObLSStatusCache() {}
-  int init_for_major(const int64_t merge_version, storage::ObLSHandle &ls_handle);
-  bool can_merge() const { return CAN_MERGE == state_; }
+  // allow_loop_not_ready_ls is false by default to avoid LOOP_NOT_READY_LS in diagnose path
+  int init_for_major(
+      const int64_t merge_version,
+      storage::ObLSHandle &ls_handle,
+      const bool allow_loop_not_ready_ls = false);
+  bool can_merge() const { return CAN_MERGE == state_ || LOOP_NOT_READY_LS == state_; }
+  bool is_loop_not_ready_ls() const { return LOOP_NOT_READY_LS == state_; }
   void reset();
   int check_restore_status(storage::ObLS &ls);
   static void check_ls_state(storage::ObLS &ls, LSState &state);

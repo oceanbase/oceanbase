@@ -21,6 +21,7 @@ const static char * ObLSStateStr[] = {
     "CAN_MERGE",
     "WEAK_READ_TS_NOT_READY",
     "OFFLINE_OR_DELETED",
+    "LOOP_NOT_READY_LS",
     "STATE_MAX"
 };
 
@@ -42,7 +43,8 @@ const char * ObLSStatusCache::ls_state_to_str(const ObLSStatusCache::LSState &st
 */
 int ObLSStatusCache::init_for_major(
   const int64_t merge_version,
-  ObLSHandle &ls_handle)
+  ObLSHandle &ls_handle,
+  const bool allow_loop_not_ready_ls)
 {
   int ret = OB_SUCCESS;
   reset(); // reset before init
@@ -59,7 +61,17 @@ int ObLSStatusCache::init_for_major(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid weak read ts", KR(ret), K_(weak_read_ts));
   } else if (merge_version > 0 && weak_read_ts_.get_val_for_tx() < merge_version) {
-    state_ = WEAK_READ_TS_NOT_READY;
+    if (allow_loop_not_ready_ls) {
+      // weak read ts of this ls is behind merge_version, maybe replay is blocked by
+      // something waiting for an unfinished medium of this ls (e.g. tablet split).
+      // Loop the ls occasionally so that unfinished medium whose schedule_scn <= weak_read_ts
+      // can still be force-frozen and executed. is_leader_ stays false: no new round here.
+      state_ = LOOP_NOT_READY_LS;
+      LOG_INFO("weak read ts not ready, loop ls to schedule unfinished medium", K_(ls_id),
+          K(allow_loop_not_ready_ls), K(merge_version), K_(weak_read_ts));
+    } else {
+      state_ = WEAK_READ_TS_NOT_READY;
+    }
   } else if (can_merge() && OB_FAIL(ObMediumCompactionScheduleFunc::is_election_leader(ls_id_, is_leader_))) {
     is_leader_ = false;
     if (OB_LS_NOT_EXIST != ret) {

@@ -32,12 +32,16 @@
 #include "storage/mview/ob_mview_refresh_helper.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "lib/utility/ob_sort.h"
+#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::obrpc;
 using namespace oceanbase::sql;
+
+// only leader replica is regarded as split replica of user tenant, followers are ignored like offline replicas
+ERRSIM_POINT_DEF(EN_SPLIT_ONLY_LEADER_REPLICA);
 
 const char *oceanbase::share::get_ddl_type(ObDDLType ddl_type)
 {
@@ -2625,17 +2629,28 @@ int ObDDLUtil::get_split_replicas_addrs(
       } else {
         const ObLSReplica &leader_replica = all_replicas.at(leader_replica_index);
         const ObLSReplica::MemberList &member_list = leader_replica.get_member_list();
+        bool only_leader_replica = false;
+#ifdef ERRSIM
+        // regard followers as offline replicas, so that split will not wait for them
+        if (is_user_tenant(tenant_id) && OB_SUCCESS != EN_SPLIT_ONLY_LEADER_REPLICA) {
+          only_leader_replica = true;
+          FLOG_INFO("ERRSIM EN_SPLIT_ONLY_LEADER_REPLICA", K(tenant_id), K(ls_id),
+              "leader", leader_replica.get_server());
+        }
+#endif
         for (int64_t idx = 0; OB_SUCC(ret) && idx < member_list.count(); ++idx) {
           const common::ObAddr &addr = member_list.at(idx).get_server();
           if (common::is_contain(filter_replica_addrs, addr)) {
             // filter.
             LOG_TRACE("ignore replica", K(ret), K(addr));
+          } else if (only_leader_replica && addr != leader_replica.get_server()) {
+            LOG_TRACE("errsim ignore follower replica", K(ret), K(addr));
           } else if (OB_FAIL(member_addrs_array.push_back(addr))) {
             LOG_WARN("failed to push addr", K(ret));
           }
         }
         const common::GlobalLearnerList &learner_list = leader_replica.get_learner_list();
-        for (int64_t idx = 0; OB_SUCC(ret) && idx < learner_list.get_member_number(); ++idx) {
+        for (int64_t idx = 0; !only_leader_replica && OB_SUCC(ret) && idx < learner_list.get_member_number(); ++idx) {
           common::ObAddr addr;
           if (OB_FAIL(learner_list.get_server_by_index(idx, addr))) {
             LOG_WARN("failed to push addr", KR(ret), K(idx));

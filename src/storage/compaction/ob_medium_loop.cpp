@@ -142,6 +142,12 @@ int ObMediumLoop::loop_in_ls(
       schedule_stats_.all_ls_weak_read_ts_ready_ = false;
     }
   } else {
+    if (func.get_ls_status().is_loop_not_ready_ls()) {
+      // ls weak read ts is still behind merge_version, only unfinished medium is scheduled in this loop,
+      // keep the same bookkeeping as the skipped(OB_STATE_NOT_MATCH) case
+      ls_tablet_iter_.update_merge_finish(false);
+      schedule_stats_.all_ls_weak_read_ts_ready_ = false;
+    }
     ObTabletHandle tablet_handle;
     ObTablet *tablet = nullptr;
     ObTabletID tablet_id;
