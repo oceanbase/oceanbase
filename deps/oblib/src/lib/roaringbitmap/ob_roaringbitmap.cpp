@@ -199,13 +199,12 @@ int ObRoaringBitmap::value_and(ObRoaringBitmap *rb)
     }
   } else if (is_set_type()) {
     hash::ObHashSet<uint64_t>::const_iterator iter = set_.begin();
-    int set_size = set_.size();
-    for (int i = 0; OB_SUCC(ret) && i < set_size; i++) {
-      if (i != 0) {
-        iter++;
-      }
-      if (!rb->is_contains(iter->first) && OB_FAIL(value_remove(iter->first))) {
-        LOG_WARN("failed to remove value", K(ret), K(iter->first));
+    while (OB_SUCC(ret) && iter != set_.end()) {
+      const uint64_t value = iter->first;
+      // Advance while the current node is still alive; value_remove may erase it.
+      ++iter;
+      if (!rb->is_contains(value) && OB_FAIL(value_remove(value))) {
+        LOG_WARN("failed to remove value", K(ret), K(value));
       }
     }
   } else if (is_bitmap_type()) {
@@ -331,13 +330,12 @@ int ObRoaringBitmap::value_andnot(ObRoaringBitmap *rb)
       }
     } else if (is_set_type()) {
       hash::ObHashSet<uint64_t>::const_iterator iter = set_.begin();
-      int set_size = set_.size();
-      for (int i = 0; OB_SUCC(ret) && i < set_size; i++) {
-        if (i != 0) {
-          iter++;
-        }
-        if (rb->is_contains(iter->first) && OB_FAIL(value_remove(iter->first))) {
-          LOG_WARN("failed to remove value", K(ret), K(iter->first));
+      while (OB_SUCC(ret) && iter != set_.end()) {
+        const uint64_t value = iter->first;
+        // Advance while the current node is still alive; value_remove may erase it.
+        ++iter;
+        if (rb->is_contains(value) && OB_FAIL(value_remove(value))) {
+          LOG_WARN("failed to remove value", K(ret), K(value));
         }
       }
     } else if (is_bitmap_type()) {
@@ -363,22 +361,21 @@ int ObRoaringBitmap::value_and(ObRoaringBin *roaring_bin)
     }
   } else if (is_set_type()) {
     hash::ObHashSet<uint64_t>::const_iterator iter = set_.begin();
-    int set_size = set_.size();
-    for (int i = 0; OB_SUCC(ret) && i < set_size; i++) {
+    while (OB_SUCC(ret) && iter != set_.end()) {
+      const uint64_t value = iter->first;
+      // Advance while the current node is still alive; value_remove may erase it.
+      ++iter;
       is_contains = false;
-      if (i != 0) {
-        iter++;
-      }
-      if (iter->first > UINT32_MAX) {
-        if (OB_FAIL(value_remove(iter->first))) {
-          LOG_WARN("failed to remove value", K(ret), K(iter->first));
+      if (value > UINT32_MAX) {
+        if (OB_FAIL(value_remove(value))) {
+          LOG_WARN("failed to remove value", K(ret), K(value));
         }
-      } else if (OB_FAIL(roaring_bin->contains(static_cast<uint32_t>(iter->first), is_contains))) {
+      } else if (OB_FAIL(roaring_bin->contains(static_cast<uint32_t>(value), is_contains))) {
         LOG_WARN("failed to get roaring bin contains", K(ret));
-      } else if (!is_contains && OB_FAIL(value_remove(iter->first))) {
-        LOG_WARN("failed to remove value", K(ret), K(iter->first));
+      } else if (!is_contains && OB_FAIL(value_remove(value))) {
+        LOG_WARN("failed to remove value", K(ret), K(value));
       }
-    } // end for
+    }
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("rb in bitmap type is not supported", K(ret), K(get_type()));
@@ -400,18 +397,17 @@ int ObRoaringBitmap::value_and(ObRoaring64Bin *roaring_bin)
     }
   } else if (is_set_type()) {
     hash::ObHashSet<uint64_t>::const_iterator iter = set_.begin();
-    int set_size = set_.size();
-    for (int i = 0; OB_SUCC(ret) && i < set_size; i++) {
+    while (OB_SUCC(ret) && iter != set_.end()) {
+      const uint64_t value = iter->first;
+      // Advance while the current node is still alive; value_remove may erase it.
+      ++iter;
       is_contains = false;
-      if (i != 0) {
-        iter++;
-      }
-      if (OB_FAIL(roaring_bin->contains(iter->first, is_contains))) {
+      if (OB_FAIL(roaring_bin->contains(value, is_contains))) {
         LOG_WARN("failed to get roaring bin contains", K(ret));
-      } else if (!is_contains && OB_FAIL(value_remove(iter->first))) {
-        LOG_WARN("failed to remove value", K(ret), K(iter->first));
+      } else if (!is_contains && OB_FAIL(value_remove(value))) {
+        LOG_WARN("failed to remove value", K(ret), K(value));
       }
-    } // end for
+    }
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("rb in bitmap type is not supported", K(ret), K(get_type()));
