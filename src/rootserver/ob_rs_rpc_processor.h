@@ -540,7 +540,7 @@ DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_PARALLEL_DROP_TABLE, ObRpcParallelDro
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_RENAME_TABLE, ObRpcRenameTableP, rename_table(arg_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_TRUNCATE_TABLE, ObRpcTruncateTableP, truncate_table(arg_, result_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_TRUNCATE_TABLE_V2, ObRpcTruncateTableV2P, truncate_table_v2(arg_, result_));
-DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_AUX_INDEX, ObRpcCreateAuxIndexP, create_aux_index(arg_, result_));
+DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_CREATE_AUX_INDEX, ObRpcCreateAuxIndexP, create_aux_index(arg_, result_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_CREATE_INDEX, ObRpcCreateIndexP, create_index(arg_, result_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_PARALLEL_CREATE_INDEX, ObRpcParallelCreateIndexP, parallel_create_index(arg_, result_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_DROP_INDEX, ObRpcDropIndexP, drop_index(arg_, result_));

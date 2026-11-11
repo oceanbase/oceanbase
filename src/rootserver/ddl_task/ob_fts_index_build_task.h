@@ -134,11 +134,12 @@ private:
   int prepare_aux_index_tables();
   int construct_create_index_arg(
       const ObIndexType index_type,
+      common::ObIAllocator &allocator,
       obrpc::ObCreateIndexArg &arg);
-  int construct_rowkey_doc_arg(obrpc::ObCreateIndexArg &arg);
-  int construct_doc_rowkey_arg(obrpc::ObCreateIndexArg &arg);
-  int construct_domain_index_aux_arg(obrpc::ObCreateIndexArg &arg);
-  int construct_fts_doc_word_arg(obrpc::ObCreateIndexArg &arg);
+  int construct_rowkey_doc_arg(common::ObIAllocator &allocator, obrpc::ObCreateIndexArg &arg);
+  int construct_doc_rowkey_arg(common::ObIAllocator &allocator, obrpc::ObCreateIndexArg &arg);
+  int construct_domain_index_aux_arg(common::ObIAllocator &allocator, obrpc::ObCreateIndexArg &arg);
+  int construct_fts_doc_word_arg(common::ObIAllocator &allocator, obrpc::ObCreateIndexArg &arg);
   int get_index_table_id(
       const obrpc::ObCreateIndexArg *create_index_arg,
       uint64_t &index_table_id);
