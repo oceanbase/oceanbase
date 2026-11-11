@@ -84,6 +84,7 @@ ObLocalDevice::ObLocalDevice()
   : is_inited_(false),
     is_marked_(false),
     block_fd_(0),
+    last_data_disk_check_ret_(OB_NOT_INIT),
     block_lock_(common::ObLatchIds::LOCAL_DEVICE_LOCK),
     block_size_(0),
     block_file_size_(0),
@@ -285,6 +286,7 @@ void ObLocalDevice::destroy()
   block_fd_ = 0;
   is_inited_ = false;
   is_marked_ = false;
+  last_data_disk_check_ret_ = OB_NOT_INIT;
   is_fs_support_punch_hole_ = true;
 
   MEMSET(store_dir_, 0, sizeof(store_dir_));
@@ -1313,15 +1315,22 @@ int ObLocalDevice::check_write_limited() const
   if (OB_UNLIKELY(!is_marked_)) {
     ret = OB_NOT_INIT;
     SHARE_LOG(WARN, "The ObLocalDevice has not been marked", K(ret));
+  } else if (0 == limit_percent) {
+    // Skip the disk usage calculation when the write limit is disabled.
+  } else if (!is_sys_tenant(MTL_ID())) {
+    ret = ATOMIC_LOAD(&last_data_disk_check_ret_);
   } else if (OB_FAIL(get_data_disk_used_percentage_(required_size,
                                                     used_percent))) {
     SHARE_LOG(WARN, "Fail to get disk used percentage", K(ret));
-  } else if (limit_percent != 0 && used_percent >= limit_percent) {
+  } else if (used_percent >= limit_percent) {
     ret = OB_SERVER_OUTOF_DISK_SPACE;
     if (REACH_TIME_INTERVAL(60 * 1000 * 1000 /* 1min */)) {
       SHARE_LOG(WARN, "disk is full, user write should be stopped", K(ret), K(used_percent),
                 K(limit_percent));
     }
+  }
+  if (is_sys_tenant(MTL_ID())) {
+    ATOMIC_STORE(&last_data_disk_check_ret_, ret);
   }
   return ret;
 }

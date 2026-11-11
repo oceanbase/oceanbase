@@ -228,6 +228,7 @@ private:
   bool is_inited_;
   bool is_marked_;
   int block_fd_;
+  mutable int last_data_disk_check_ret_;
   char store_dir_[common::OB_MAX_FILE_NAME_LENGTH];
   char sstable_dir_[common::OB_MAX_FILE_NAME_LENGTH];
   char store_path_[common::OB_MAX_FILE_NAME_LENGTH];
