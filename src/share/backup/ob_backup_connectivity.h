@@ -206,6 +206,11 @@ public:
       const uint64_t tenant_id,
       const ObBackupPathString &backup_path,
       share::ObBackupDest &backup_dest);
+  static int get_backup_dest(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      const ObBackupPathString &backup_dest_str,
+      ObBackupPathString &complete_backup_dest_str);
   static int get_backup_dest_by_dest_id(
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
