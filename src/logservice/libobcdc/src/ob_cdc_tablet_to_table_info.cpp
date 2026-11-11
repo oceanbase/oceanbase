@@ -166,10 +166,13 @@ int ObCDCTabletChangeInfo::parse_create_tablet_op_(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ObBatchCreateTabletArg is invalid", KR(ret), K(tls_id), K(create_tablet_arg));
   } else {
-    // the schema in create tablet arg is ObCreateTabletSchema after 4.2.2.0, the previous is ObTableSchema
+    // 租户数据版本从 4.2.2.0 起使用 ObCreateTabletSchema，旧格式使用 ObTableSchema。
     const common::ObSArray<share::schema::ObTableSchema> &table_schemas = create_tablet_arg.table_schemas_;
     const ObSArray<ObCreateTabletSchema*> &create_tablet_schemas = create_tablet_arg.create_tablet_schemas_;
     const common::ObSArray<obrpc::ObCreateTabletInfo> &tablets_info = create_tablet_arg.tablets_;
+    // 新数组非空时优先解析新格式，否则回退到旧格式；索引必须按实际访问的数组长度校验。
+    // 反序列化和共享 is_valid() 不保证两个数组互斥，不能用另一个数组的长度放行越界索引。
+    const int64_t schema_count = create_tablet_schemas.empty() ? table_schemas.count() : create_tablet_schemas.count();
 
     for (int64_t create_tablet_idx = 0; OB_SUCC(ret) && create_tablet_idx < tablets_info.count(); create_tablet_idx++) {
       const obrpc::ObCreateTabletInfo &ob_create_tablet_info = tablets_info.at(create_tablet_idx);
@@ -181,10 +184,9 @@ int ObCDCTabletChangeInfo::parse_create_tablet_op_(
         const int64_t table_schema_idx = tb_schema_index_arr.at(tablet_id_idx);
         uint64_t table_id = common::OB_INVALID_ID;
         share::schema::ObTableType table_type = share::schema::MAX_TABLE_TYPE;
-        if (OB_UNLIKELY(0 > table_schema_idx
-              || (create_tablet_schemas.count() <= table_schema_idx && table_schemas.count() <= table_schema_idx))) {
+        if (OB_UNLIKELY(0 > table_schema_idx || table_schema_idx >= schema_count)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("invalid table_schema_index", KR(ret), K(tls_id), K(ob_create_tablet_info), K(table_schemas), K(table_schema_idx));
+          LOG_ERROR("invalid table_schema_index", KR(ret), K(tls_id), K(ob_create_tablet_info), K(schema_count), K(table_schema_idx));
         } else if (create_tablet_schemas.count() > 0) {
           const ObCreateTabletSchema *create_tablet_schema = create_tablet_schemas.at(table_schema_idx);
           if (OB_ISNULL(create_tablet_schema)) {
