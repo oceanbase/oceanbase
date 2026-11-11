@@ -4,10 +4,11 @@
  */
 
 #include "sql/resolver/ddl/ob_drop_table_resolver.h"
+#include "lib/hash/ob_hashset.h"
 namespace oceanbase
 {
 using namespace common;
-using common::hash::ObPlacementHashSet;
+using common::hash::ObHashSet;
 using obrpc::ObTableItem;
 namespace sql
 {
@@ -103,14 +104,8 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
       }
     }
 
-    ObPlacementHashSet<ObTableItem> *tmp_ptr = NULL;
-    ObPlacementHashSet<ObTableItem> *table_item_set = NULL;
-    if (NULL == (tmp_ptr = (ObPlacementHashSet<ObTableItem> *)
-      allocator_->alloc(sizeof(ObPlacementHashSet<ObTableItem>)))){
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      SQL_RESV_LOG(ERROR, "failed to allocate memory", K(ret));
-    } else {
-      table_item_set = new(tmp_ptr) ObPlacementHashSet<ObTableItem>();
+    if (OB_SUCC(ret)) {
+      ObHashSet<ObTableItem, hash::NoPthreadDefendMode> table_item_set;
       ObString db_name;
       ObString table_name;
       obrpc::ObTableItem table_item;
@@ -125,6 +120,18 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
           SQL_RESV_LOG(WARN, "parse tree node is null", K(ret), K(TABLE_LIST_NODE));
         } else {
           max_table_num = parse_tree.children_[TABLE_LIST_NODE]->num_child_;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        static const int64_t MAX_DROP_OBJECT_COUNT = 4096;
+        // Bound the input list before allocating the set or resolving individual names.
+        if (max_table_num > MAX_DROP_OBJECT_COUNT) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "DROP TABLE/VIEW with more than 4096 names is");
+          SQL_RESV_LOG(WARN, "too many names in drop statement", K(ret), K(max_table_num), K(MAX_DROP_OBJECT_COUNT));
+        } else if (OB_FAIL(table_item_set.create(max_table_num,
+            ObMemAttr(session_info_->get_effective_tenant_id(), "DropTableSet")))) {
+          SQL_RESV_LOG(WARN, "failed to create table item set", K(ret), K(max_table_num));
         }
       }
       for (i = 0; OB_SUCC(ret) && i < max_table_num; ++i) {
@@ -163,10 +170,10 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
             } else {
               table_item.database_name_ = db_name;
               table_item.table_name_ = table_name;
-              if (OB_HASH_EXIST == table_item_set->exist_refactored(table_item)) {
+              if (OB_HASH_EXIST == table_item_set.exist_refactored(table_item)) {
                 ret = OB_ERR_NONUNIQ_TABLE;
                 LOG_USER_ERROR(OB_ERR_NONUNIQ_TABLE, table_item.table_name_.length(), table_item.table_name_.ptr());
-              } else if (OB_FAIL(table_item_set->set_refactored(table_item))) {
+              } else if (OB_FAIL(table_item_set.set_refactored(table_item))) {
                 SQL_RESV_LOG(WARN, "failed to add table item!", K(table_item), K(ret));
               } else if (OB_FAIL(drop_table_stmt->add_table_item(table_item))) {
                 SQL_RESV_LOG(WARN, "failed to add table item!", K(table_item), K(ret));
