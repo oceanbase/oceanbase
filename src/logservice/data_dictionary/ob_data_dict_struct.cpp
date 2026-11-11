@@ -776,7 +776,7 @@ void ObDictColumnMeta::reset()
   udt_set_id_ = 0;
   sub_type_ = 0;
   srs_id_ = 0;
-  local_session_vars_.reset();
+  local_session_vars_.reset_and_free();
 }
 
 DEFINE_EQUAL(ObDictColumnMeta)

@@ -355,6 +355,24 @@ void ObLocalSessionVar::reset()
   local_session_vars_.reset();
 }
 
+void ObLocalSessionVar::reset_and_free()
+{
+  if (OB_NOT_NULL(alloc_)) {
+    for (int64_t i = 0; i < local_session_vars_.count(); ++i) {
+      ObSessionSysVar *var = local_session_vars_.at(i);
+      if (OB_NOT_NULL(var)) {
+        if (var->val_.need_deep_copy()) {
+          alloc_->free(var->val_.get_deep_copy_obj_ptr());
+        }
+        var->~ObSessionSysVar();
+        alloc_->free(var);
+        local_session_vars_.at(i) = nullptr;
+      }
+    }
+  }
+  reset();
+}
+
 int ObLocalSessionVar::set_local_var_capacity(int64_t sz)
 {
   int ret = OB_SUCCESS;

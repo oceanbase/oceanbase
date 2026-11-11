@@ -14,6 +14,7 @@
 
 
 #include "data_dict_test_utils.h"
+#include "lib/allocator/ob_concurrent_fifo_allocator.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -169,6 +170,171 @@ TEST(ObDictColumnMeta, test_raw)
   col_meta_after.orig_default_value_.set_meta_type(new_meta);
   EXPECT_FALSE(col_meta == col_meta_after);
 }
+
+#ifndef OB_USE_ASAN
+// FIFO bypasses allocation accounting in ASAN builds.
+class TestDictSessionVars : public ::testing::Test
+{
+public:
+  void SetUp() override
+  {
+    ASSERT_EQ(OB_SUCCESS, source_allocator_.init(64 * 1024 * 1024, 0, 64 * 1024));
+    ASSERT_EQ(OB_SUCCESS, allocator_.init(64 * 1024 * 1024, 0, 64 * 1024));
+    source_allocator_.set_nway(1);
+    allocator_.set_nway(1);
+    void *ptr = allocator_.alloc(1);
+    ASSERT_NE(nullptr, ptr);
+    allocator_.purge();
+    ASSERT_GT(allocator_.allocated(), 0);
+    allocator_.free(ptr);
+    allocator_.purge();
+    ASSERT_EQ(0, allocator_.allocated());
+  }
+  void TearDown() override
+  {
+    source_allocator_.purge();
+    allocator_.purge();
+    EXPECT_EQ(0, source_allocator_.allocated());
+    EXPECT_EQ(0, allocator_.allocated());
+  }
+  void add_local_vars(sql::ObLocalSessionVar &vars)
+  {
+    ObObj value;
+    ASSERT_EQ(OB_SUCCESS, vars.set_local_var_capacity(2));
+    value.set_int(123);
+    ASSERT_EQ(OB_SUCCESS, vars.add_local_var(SYS_VAR_SQL_MODE, value));
+    value.set_varchar("Asia/Shanghai");
+    ASSERT_EQ(OB_SUCCESS, vars.add_local_var(SYS_VAR_TIME_ZONE, value));
+  }
+  ObConcurrentFIFOAllocator source_allocator_;
+  ObConcurrentFIFOAllocator allocator_;
+};
+
+TEST_F(TestDictSessionVars, column_reset_and_destruct)
+{
+  ObDictColumnMeta source(&source_allocator_);
+  ObDictColumnMeta dest(&allocator_);
+  ASSERT_EQ(OB_SUCCESS, dest.assign(source));
+  dest.reset();
+  allocator_.purge();
+  EXPECT_EQ(0, allocator_.allocated());
+  add_local_vars(source.get_local_session_var());
+  for (int64_t i = 0; i < 3; ++i) {
+    ASSERT_EQ(OB_SUCCESS, dest.assign(source));
+    ASSERT_EQ(OB_SUCCESS, dest.assign(source));
+    EXPECT_TRUE(source.get_local_session_var() == dest.get_local_session_var());
+    dest.reset();
+    dest.reset();
+    allocator_.purge();
+    EXPECT_EQ(0, allocator_.allocated());
+  }
+
+  const int64_t size = source.get_serialize_size();
+  char *buf = static_cast<char *>(source_allocator_.alloc(size));
+  ASSERT_NE(nullptr, buf);
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, source.serialize(buf, size, pos));
+  ObDictMetaHeader header(ObDictMetaType::TABLE_META);
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, dest.deserialize(header, buf, size, pos));
+  EXPECT_EQ(size, pos);
+  EXPECT_TRUE(source.get_local_session_var() == dest.get_local_session_var());
+  source_allocator_.free(buf);
+  dest.reset();
+  allocator_.purge();
+  EXPECT_EQ(0, allocator_.allocated());
+  ASSERT_EQ(OB_SUCCESS, dest.assign(source));
+}
+
+TEST_F(TestDictSessionVars, table_replace_and_destruct)
+{
+  ObDictTableMeta source(&source_allocator_);
+  ObDictTableMeta empty(&source_allocator_);
+  ObDictTableMeta dest(&allocator_);
+  void *buf = source_allocator_.alloc(sizeof(ObDictColumnMeta));
+  ASSERT_NE(nullptr, buf);
+  source.col_metas_ = new (buf) ObDictColumnMeta(&source_allocator_);
+  source.column_count_ = 1;
+  add_local_vars(source.col_metas_[0].get_local_session_var());
+  for (int64_t i = 0; i < 3; ++i) {
+    ASSERT_EQ(OB_SUCCESS, dest.assign(source));
+    ASSERT_EQ(OB_SUCCESS, dest.assign(source));
+    ASSERT_EQ(OB_SUCCESS, dest.assign(empty));
+    allocator_.purge();
+    EXPECT_EQ(0, allocator_.allocated());
+  }
+  ASSERT_EQ(OB_SUCCESS, dest.assign(source));
+}
+
+TEST_F(TestDictSessionVars, repeated_table_allocation_and_free_releases_session_vars)
+{
+  const int64_t COLUMN_COUNT = 2;
+  const int64_t ITERATION_COUNT = 1000;
+  ObDictTableMeta source(&source_allocator_);
+  void *buf = source_allocator_.alloc(sizeof(ObDictColumnMeta) * COLUMN_COUNT);
+  ASSERT_NE(nullptr, buf);
+  source.col_metas_ = static_cast<ObDictColumnMeta *>(buf);
+  for (int64_t i = 0; i < COLUMN_COUNT; ++i) {
+    new (source.col_metas_ + i) ObDictColumnMeta(&source_allocator_);
+    ++source.column_count_;
+  }
+  ASSERT_NO_FATAL_FAILURE(add_local_vars(source.col_metas_[1].get_local_session_var()));
+  sql::ObSessionSysVar *source_var = nullptr;
+  ASSERT_EQ(OB_SUCCESS,
+      source.col_metas_[1].get_local_session_var().get_local_var(SYS_VAR_TIME_ZONE, source_var));
+  ASSERT_NE(nullptr, source_var);
+
+  for (int64_t i = 0; i < ITERATION_COUNT; ++i) {
+    buf = allocator_.alloc(sizeof(ObDictTableMeta));
+    ASSERT_NE(nullptr, buf);
+    ObDictTableMeta *dest = new (buf) ObDictTableMeta(&allocator_);
+    ASSERT_EQ(OB_SUCCESS, dest->assign(source));
+    ASSERT_EQ(COLUMN_COUNT, dest->get_column_count());
+    EXPECT_EQ(0, dest->col_metas_[0].get_local_session_var().get_var_count());
+    EXPECT_EQ(2, dest->col_metas_[1].get_local_session_var().get_var_count());
+    EXPECT_TRUE(source.col_metas_[1].get_local_session_var()
+        == dest->col_metas_[1].get_local_session_var());
+    sql::ObSessionSysVar *copied_var = nullptr;
+    ASSERT_EQ(OB_SUCCESS,
+        dest->col_metas_[1].get_local_session_var().get_local_var(SYS_VAR_TIME_ZONE, copied_var));
+    ASSERT_NE(nullptr, copied_var);
+    EXPECT_NE(source_var, copied_var);
+    EXPECT_NE(source_var->val_.get_string_ptr(), copied_var->val_.get_string_ptr());
+
+    dest->~ObDictTableMeta();
+    allocator_.free(dest);
+    dest = nullptr;
+    allocator_.purge();
+    ASSERT_EQ(0, allocator_.allocated()) << "iteration=" << i;
+    EXPECT_EQ(ObString("Asia/Shanghai"), source_var->val_.get_string());
+  }
+}
+
+TEST_F(TestDictSessionVars, shallow_copy_keeps_source)
+{
+  sql::ObLocalSessionVar source(&source_allocator_);
+  add_local_vars(source);
+  sql::ObSessionSysVar *source_var = nullptr;
+  ASSERT_EQ(OB_SUCCESS, source.get_local_var(SYS_VAR_TIME_ZONE, source_var));
+  ASSERT_NE(nullptr, source_var);
+  const char *value_ptr = source_var->val_.get_string_ptr();
+  {
+    sql::ObLocalSessionVar borrowed(&allocator_);
+    ASSERT_EQ(OB_SUCCESS, borrowed.assign(source));
+    borrowed.reset();
+    ASSERT_EQ(OB_SUCCESS, borrowed.assign(source));
+  }
+  allocator_.purge();
+  EXPECT_EQ(0, allocator_.allocated());
+  sql::ObSessionSysVar *var = nullptr;
+  ASSERT_EQ(OB_SUCCESS, source.get_local_var(SYS_VAR_TIME_ZONE, var));
+  ASSERT_EQ(source_var, var);
+  EXPECT_EQ(value_ptr, var->val_.get_string_ptr());
+  EXPECT_EQ(ObString("Asia/Shanghai"), var->val_.get_string());
+  source.reset_and_free();
+  source.reset_and_free();
+}
+#endif
 
 TEST(ObObjMeta, test_objmeta_serialize)
 {

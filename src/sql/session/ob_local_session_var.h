@@ -63,6 +63,7 @@ public:
     local_session_vars_.set_allocator(allocator);
   }
   void reset();
+  void reset_and_free();
   int set_local_var_capacity(int64_t sz);
   template<class T>
   int set_local_vars(T &var_array);
