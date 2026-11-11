@@ -614,7 +614,7 @@ int ObMViewRefresher::collect_and_check_detail_table_changes(ObMViewTransaction 
       } else if (OB_NOT_NULL(dep_schema)) {
         ObMViewDetailTableChangeStats detail_change(detail_table_id);
         if (OB_FALSE_IT(tmp_scn_range = dep_schema->mv_container_table() ? mview_refresh_scn_range_ : base_table_scn_range_)) {
-        } else if ((collection_level_ >= ObMVRefreshStatsCollectionLevel::TYPICAL || enable_adaptive_refresh)
+        } else if ((ObMVRefreshStatsCollectionLevel::ADVANCED == collection_level_ || enable_adaptive_refresh)
                    && OB_FAIL(ObMViewRefreshHelper::get_table_row_num(trans,
                                                                       param_.tenant_id_,
                                                                       dep.get_ref_obj_id(),
