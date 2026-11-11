@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "ob_sstable_builder.h"
 #include "storage/compaction/ob_basic_tablet_merge_ctx.h"
+#include "share/ob_io_device_helper.h"
 
 namespace oceanbase
 {
@@ -325,6 +326,11 @@ int ObSSTableRebuilder::check_need_rebuild(const ObStaticMergeParam &merge_param
   if (OB_FAIL(pre_check_rebuild(merge_param, iter, need_check_rebuild))) {
     STORAGE_LOG(WARN, "Fail to pre check need rebuild", K(ret));
   } else if (need_check_rebuild) {
+    // get_next_macro_block() may read macro metadata from disk, and
+    // rebuild_macro_block() may then read data blocks before close_with_macro_seq().
+    if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) {
+      STORAGE_LOG(WARN, "fail to fsync block before checking macro block rebuild", K(ret), K(merge_param));
+    }
     // find continues macro to rewrite
     while (OB_SUCC(ret) && OB_SUCC(iter.get_next_macro_block(macro_meta))) {
       if (check_macro_block_could_merge(macro_meta)) {
