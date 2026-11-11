@@ -721,7 +721,9 @@ int ObSSTableMeta::fsync_block(const ObTabletCreateSSTableParam &param)
   int ret = OB_SUCCESS;
   const bool root_block_in_disk = param.root_block_addr_.is_disked();
   const bool macro_meta_in_disk = param.data_block_macro_meta_addr_.is_disked();
-  if (root_block_in_disk || macro_meta_in_disk) {
+  // ObTablet::update_tablet_status_from_sstable() may read MDS data blocks
+  // before tablet persistence, even when both roots are in memory.
+  if (root_block_in_disk || macro_meta_in_disk || param.table_key_.is_mds_sstable()) {
     if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) {
       LOG_WARN("fail to fsync_block", K(ret));
     }

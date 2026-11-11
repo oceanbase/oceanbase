@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_struct.h"
+#include "share/ob_io_device_helper.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "logservice/ob_log_service.h"
 #include "share/transfer/ob_transfer_task_operator.h"
@@ -2656,7 +2657,10 @@ int ObMacroBlockReuseMgr::update_single_reuse_map(const ObITable::TableKey &tabl
 
   if (OB_SUCC(ret) && need_build) {
     LOG_INFO("build reuse map for major sstable", K(ret), K(need_build), K(table_key));
-    if (OB_FAIL(build_single_reuse_map_(table_key, tablet_handle, sstable))) {
+    // Flush newly written macro blocks before reading secondary meta to build the reuse map.
+    if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) {
+      LOG_WARN("failed to fsync block before building reuse map", K(ret), K(table_key));
+    } else if (OB_FAIL(build_single_reuse_map_(table_key, tablet_handle, sstable))) {
       LOG_WARN("failed to build reuse map", K(ret), K(table_key));
     } else {
       LOG_INFO("success to update reuse map", K(ret), K(max_snapshot_version), K(input_snapshot_version), K(table_key));
