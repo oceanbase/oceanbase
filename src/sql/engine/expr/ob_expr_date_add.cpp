@@ -208,7 +208,10 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
                                                       is_add, date_sql_mode))) {
         if (OB_UNLIKELY(OB_INVALID_DATE_VALUE == ret || OB_TOO_MANY_DATETIME_PARTS == ret)) {
           expr_datum.set_null();
-          if (OB_TOO_MANY_DATETIME_PARTS == ret) {
+          if (OB_INVALID_DATE_VALUE == ret) {
+            // MySQL DATE_ADD/DATE_SUB: NULL + warning ER_DATETIME_FUNCTION_OVERFLOW.
+            LOG_USER_WARN(OB_DATETIME_FUNCTION_OVERFLOW);
+          } else if (OB_TOO_MANY_DATETIME_PARTS == ret) {
             LOG_USER_WARN(OB_TOO_MANY_DATETIME_PARTS);
           }
           ret = OB_SUCCESS;
@@ -766,7 +769,15 @@ int vector_date_add(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
                                                res_dt_val, is_add, date_sql_mode))) {
         if (OB_UNLIKELY(OB_INVALID_DATE_VALUE == ret || OB_TOO_MANY_DATETIME_PARTS == ret)) {
           res_vec->set_null(idx);
-          if (OB_TOO_MANY_DATETIME_PARTS == ret) {
+          if (OB_INVALID_DATE_VALUE == ret) {
+            // MySQL DATE_ADD/DATE_SUB: NULL + ER_DATETIME_FUNCTION_OVERFLOW (1441).
+            // LOG_USER_WARN looks up lib:: and fails in this function template.
+            if (oceanbase::lib::is_oracle_mode()) {
+              LOG_ORACLE_USER_WARN(OB_DATETIME_FUNCTION_OVERFLOW);
+            } else {
+              LOG_MYSQL_USER_WARN(OB_DATETIME_FUNCTION_OVERFLOW);
+            }
+          } else if (OB_TOO_MANY_DATETIME_PARTS == ret) {
             // LOG_USER_WARN(OB_TOO_MANY_DATETIME_PARTS);
             LOG_WARN("OB_TOO_MANY_DATETIME_PARTS", K(ret));
           }

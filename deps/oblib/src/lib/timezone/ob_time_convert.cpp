@@ -3155,7 +3155,7 @@ int ObTimeConverter::str_to_ob_interval(const ObString &str, ObDateUnitType unit
           // date_add('2012-1-1', interval '1.234' second_microsecond) => 2012-01-01 00:00:01.234000 .
           // date_add('2012-1-1', interval '1.2345678' second_microsecond) => 2012-01-01 00:00:03.345678 .
           // do not trunc or round.
-          if (DT_USEC == i + idx_diff && expect_cnt > 1) {
+          if (DT_USEC == i + idx_diff && expect_cnt > 1 && digits[i].len_ <= INT32_MAX_DIGITS_LEN) {
             ret = normalize_usecond_trunc(digits[i], false);
           }
           ob_interval.parts_[i + idx_diff] = digits[i].value_;
