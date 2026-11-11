@@ -49,6 +49,7 @@ public:
   common::ObSEArray<common::ObTabletID, 2> hidden_tablet_ids_;
   common::ObTabletID lob_meta_tablet_id_;
   common::ObTabletID lob_piece_tablet_id_;
+  int64_t min_readable_schema_version_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletBindingInfo);
 };

@@ -72,6 +72,7 @@ public:
   common::ObTabletID hidden_tablet_id_;
   common::ObTabletID lob_meta_tablet_id_;
   common::ObTabletID lob_piece_tablet_id_;
+  int64_t min_readable_schema_version_;
   bool redefined_;
   bool is_old_mds_;
 };

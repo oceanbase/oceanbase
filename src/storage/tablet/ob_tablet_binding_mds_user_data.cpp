@@ -26,6 +26,7 @@ ObTabletBindingMdsUserData::ObTabletBindingMdsUserData()
     hidden_tablet_id_(),
     lob_meta_tablet_id_(),
     lob_piece_tablet_id_(),
+    min_readable_schema_version_(0),
     redefined_(false)
 {
 }
@@ -35,6 +36,7 @@ void ObTabletBindingMdsUserData::reset()
   redefined_ = false;
   snapshot_version_ = INT64_MAX;
   schema_version_ = INT64_MAX;
+  min_readable_schema_version_ = 0;
   data_tablet_id_.reset();
   hidden_tablet_id_.reset();
   lob_meta_tablet_id_.reset();
@@ -46,6 +48,7 @@ void ObTabletBindingMdsUserData::set_default_value()
   redefined_ = false;
   snapshot_version_ = 0;
   schema_version_ = 0;
+  min_readable_schema_version_ = 0;
   data_tablet_id_.reset();
   hidden_tablet_id_.reset();
   lob_meta_tablet_id_.reset();
@@ -63,6 +66,7 @@ int ObTabletBindingMdsUserData::assign(const ObTabletBindingMdsUserData &other)
   redefined_ = other.redefined_;
   snapshot_version_ = other.snapshot_version_;
   schema_version_ = other.schema_version_;
+  min_readable_schema_version_ = other.min_readable_schema_version_;
   data_tablet_id_ = other.data_tablet_id_;
   hidden_tablet_id_ = other.hidden_tablet_id_;
   lob_meta_tablet_id_ = other.lob_meta_tablet_id_;
@@ -85,6 +89,7 @@ int ObTabletBindingMdsUserData::assign_from_tablet_meta(const ObTabletBindingInf
     redefined_ = other.redefined_;
     snapshot_version_ = other.snapshot_version_;
     schema_version_ = other.schema_version_;
+    min_readable_schema_version_ = other.min_readable_schema_version_;
     data_tablet_id_ = other.data_tablet_id_;
     lob_meta_tablet_id_ = other.lob_meta_tablet_id_;
     lob_piece_tablet_id_ = other.lob_piece_tablet_id_;
@@ -104,6 +109,7 @@ int ObTabletBindingMdsUserData::dump_to_tablet_meta(ObTabletBindingInfo &other)
     other.redefined_ = redefined_;
     other.snapshot_version_ = snapshot_version_;
     other.schema_version_ = schema_version_;
+    other.min_readable_schema_version_ = min_readable_schema_version_;
     other.data_tablet_id_ = data_tablet_id_;
     other.lob_meta_tablet_id_ = lob_meta_tablet_id_;
     other.lob_piece_tablet_id_ = lob_piece_tablet_id_;
@@ -160,6 +166,7 @@ OB_SERIALIZE_MEMBER(
   data_tablet_id_,
   hidden_tablet_id_,
   lob_meta_tablet_id_,
-  lob_piece_tablet_id_);
+  lob_piece_tablet_id_,
+  min_readable_schema_version_);
 } // namespace storage
 } // namespace oceanbase

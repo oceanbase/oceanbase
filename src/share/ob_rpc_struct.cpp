@@ -13215,7 +13215,7 @@ int ObBatchSetTabletAutoincSeqRes::assign(const ObBatchSetTabletAutoincSeqRes &o
   return autoinc_params_.assign(other.autoinc_params_);
 }
 
-OB_SERIALIZE_MEMBER(ObBatchGetTabletBindingArg, tenant_id_, ls_id_, tablet_ids_, check_committed_);
+OB_SERIALIZE_MEMBER(ObBatchGetTabletBindingArg, tenant_id_, ls_id_, tablet_ids_, check_committed_, check_physical_empty_);
 
 int ObBatchGetTabletBindingArg::assign(const ObBatchGetTabletBindingArg &other)
 {
@@ -13223,6 +13223,7 @@ int ObBatchGetTabletBindingArg::assign(const ObBatchGetTabletBindingArg &other)
   tenant_id_ = other.tenant_id_;
   ls_id_ = other.ls_id_;
   check_committed_ = other.check_committed_;
+  check_physical_empty_ = other.check_physical_empty_;
   if (OB_FAIL(tablet_ids_.assign(other.tablet_ids_))) {
     LOG_WARN("failed to assign", K(ret));
   }
@@ -13235,6 +13236,7 @@ int ObBatchGetTabletBindingArg::init(const uint64_t tenant_id, const share::ObLS
   tenant_id_ = tenant_id;
   ls_id_ = ls_id;
   check_committed_ = check_committed;
+  check_physical_empty_ = false;
   if (OB_FAIL(tablet_ids_.assign(tablet_ids))) {
     LOG_WARN("failed to assign", K(ret));
   }
@@ -13245,10 +13247,11 @@ int ObBatchGetTabletBindingArg::init(const uint64_t tenant_id, const share::ObLS
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObBatchGetTabletBindingRes, binding_datas_);
+OB_SERIALIZE_MEMBER(ObBatchGetTabletBindingRes, binding_datas_, all_tablets_physically_empty_);
 
 int ObBatchGetTabletBindingRes::assign(const ObBatchGetTabletBindingRes &other)
 {
+  all_tablets_physically_empty_ = other.all_tablets_physically_empty_;
   return binding_datas_.assign(other.binding_datas_);
 }
 

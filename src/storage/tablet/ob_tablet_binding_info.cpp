@@ -25,7 +25,8 @@ ObTabletBindingInfo::ObTabletBindingInfo()
     data_tablet_id_(),
     hidden_tablet_ids_(),
     lob_meta_tablet_id_(),
-    lob_piece_tablet_id_()
+    lob_piece_tablet_id_(),
+    min_readable_schema_version_(0)
 {
 }
 
@@ -34,6 +35,7 @@ void ObTabletBindingInfo::reset()
   redefined_ = false;
   snapshot_version_ = INT64_MAX;
   schema_version_ = INT64_MAX;
+  min_readable_schema_version_ = 0;
   data_tablet_id_.reset();
   hidden_tablet_ids_.reset();
   lob_meta_tablet_id_.reset();
@@ -62,6 +64,7 @@ int ObTabletBindingInfo::assign(const ObTabletBindingInfo &other)
     redefined_ = other.redefined_;
     snapshot_version_ = other.snapshot_version_;
     schema_version_ = other.schema_version_;
+    min_readable_schema_version_ = other.min_readable_schema_version_;
     data_tablet_id_ = other.data_tablet_id_;
     lob_meta_tablet_id_ = other.lob_meta_tablet_id_;
     lob_piece_tablet_id_ = other.lob_piece_tablet_id_;
@@ -95,6 +98,7 @@ OB_SERIALIZE_MEMBER(
     data_tablet_id_,
     hidden_tablet_ids_,
     lob_meta_tablet_id_,
-    lob_piece_tablet_id_);
+    lob_piece_tablet_id_,
+    min_readable_schema_version_);
 } // namespace storage
 } // namespace oceanbase

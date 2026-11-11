@@ -13453,7 +13453,7 @@ struct ObBatchGetTabletBindingArg final
   OB_UNIS_VERSION(1);
 public:
   ObBatchGetTabletBindingArg()
-    : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_ids_(), check_committed_(false)
+    : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_ids_(), check_committed_(false), check_physical_empty_(false)
   {}
   ~ObBatchGetTabletBindingArg() {}
 public:
@@ -13466,13 +13466,14 @@ public:
   share::ObLSID ls_id_;
   common::ObSArray<common::ObTabletID> tablet_ids_;
   bool check_committed_;
+  bool check_physical_empty_;
 };
 
 struct ObBatchGetTabletBindingRes final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObBatchGetTabletBindingRes() : binding_datas_() {}
+  ObBatchGetTabletBindingRes() : binding_datas_(), all_tablets_physically_empty_(false) {}
   ~ObBatchGetTabletBindingRes() {}
 public:
   int assign(const ObBatchGetTabletBindingRes &other);
@@ -13480,6 +13481,7 @@ public:
   TO_STRING_KV(K_(binding_datas));
 public:
   common::ObSArray<ObTabletBindingMdsUserData> binding_datas_;
+  bool all_tablets_physically_empty_;
 };
 
 struct ObBatchGetTabletSplitArg final
