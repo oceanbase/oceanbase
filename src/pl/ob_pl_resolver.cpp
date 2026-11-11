@@ -353,6 +353,9 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
         break;
       case T_VARIABLE_SET: {
         RESOLVE_STMT(PL_ASSIGN, resolve_assign, ObPLAssignStmt);
+        // Initialize before rewriting so generated nodes inherit statement metadata.
+        OX (stmt->set_level(current_level_));
+        OX (stmt->set_location(parse_tree->stmt_loc_.first_line_, parse_tree->stmt_loc_.first_column_));
         OZ (try_transform_assign_to_dynamic_SQL(stmt, func));
       }
         break;
@@ -11803,7 +11806,7 @@ int ObPLResolver::try_transform_assign_to_dynamic_SQL(ObPLStmt *&old_stmt, ObPLF
       if(OB_SUCC(ret) && sql_expr->get_expr_type() == T_FUN_SUBQUERY &&
         into_expr->get_expr_type() == T_OP_GET_USER_VAR) {
           OZ (transform_to_new_assign_stmt(var_val_pos_array, assign_stmt));
-          OZ (transform_var_val_to_dynamic_SQL(sql_expr_index, into_expr_index, func));
+          OZ (transform_var_val_to_dynamic_SQL(*assign_stmt, i, func));
           OX (is_need_transform_to_dynamic = true);
           LOG_INFO("try transform var_val to dynamic SQL!",K(ret), K(sql_expr_index), K(into_expr_index), K(i));
       } else {
@@ -11821,9 +11824,13 @@ int ObPLResolver::try_transform_assign_to_dynamic_SQL(ObPLStmt *&old_stmt, ObPLF
   return ret;
 }
 
-int ObPLResolver::transform_var_val_to_dynamic_SQL(int64_t sql_expr_index, int64_t into_expr_index, ObPLFunctionAST &func)
+int ObPLResolver::transform_var_val_to_dynamic_SQL(const ObPLAssignStmt &assign_stmt,
+                                                 int64_t assign_idx,
+                                                 ObPLFunctionAST &func)
 {
   int ret = OB_SUCCESS;
+  const int64_t sql_expr_index = assign_stmt.get_value_index(assign_idx);
+  const int64_t into_expr_index = assign_stmt.get_into_index(assign_idx);
   ObPLStmt *stmt = NULL;
   ObPLExecuteStmt* execute_stmt = NULL;
   ObObjParam val;
@@ -11833,6 +11840,9 @@ int ObPLResolver::transform_var_val_to_dynamic_SQL(int64_t sql_expr_index, int64
   ObCollationType collation_connection = CS_TYPE_INVALID;
   OZ (stmt_factory_.allocate(PL_EXECUTE, current_block_, stmt));
   CK (OB_NOT_NULL(execute_stmt = static_cast<ObPLExecuteStmt *>(stmt)));
+  OX (execute_stmt->set_level(assign_stmt.get_level()));
+  // Keep the continuation keys distinct for nodes generated from the same SET.
+  OX (execute_stmt->set_location(assign_stmt.get_line(), assign_stmt.get_col() + assign_idx));
   CK (OB_NOT_NULL(sql = static_cast<ObPlQueryRefRawExpr *>(func.get_expr(sql_expr_index))));
   // for SQL, construct an ObConstRawExpr from ObPlQueryRefRawExpr
   OZ (ob_write_string(resolve_ctx_.allocator_, sql->get_ps_sql(), str_val));
@@ -11873,6 +11883,8 @@ int ObPLResolver::transform_to_new_assign_stmt(ObIArray<int64_t> &transform_arra
     ObPLAssignStmt * new_assign_stmt = NULL;
     OZ (stmt_factory_.allocate(PL_ASSIGN, current_block_, stmt));
     CK (OB_NOT_NULL(new_assign_stmt = static_cast<ObPLAssignStmt *>(stmt)));
+    OX (new_assign_stmt->set_level(old_stmt->get_level()));
+    OX (new_assign_stmt->set_location(old_stmt->get_line(), old_stmt->get_col() + transform_array.at(0)));
     for(int64_t i = 0; i < transform_array.count() && OB_SUCC(ret); i++) {
       OZ (new_assign_stmt->add_into(old_stmt->get_into_index(transform_array.at(i))));
       OZ (new_assign_stmt->add_value(old_stmt->get_value_index(transform_array.at(i))));

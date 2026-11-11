@@ -2167,6 +2167,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLExecuteStmt &s)
     OZ (generator_.generate_dynamic_sql(s, out_param_guard, params, ret_err));
     OZ (generator_.generate_after_dynamic_sql(s, ret_err));
     OZ (generator_.generate_spi_pl_profiler_after_record(s));
+    OZ (generator_.register_dispatch_map(s.get_stmt_id(), generator_.get_current()), s);
   }
   return ret;
 }

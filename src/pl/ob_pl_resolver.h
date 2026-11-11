@@ -1202,7 +1202,8 @@ private:
                               const ObPLDataType *expected_type,
                               ObPLCompileUnitAST &func);
   int try_transform_assign_to_dynamic_SQL(ObPLStmt *&old_stmt, ObPLFunctionAST &func);
-  int transform_var_val_to_dynamic_SQL(int64_t sql_expr_index, int64_t into_expr_index, ObPLFunctionAST &func);
+  int transform_var_val_to_dynamic_SQL(const ObPLAssignStmt &assign_stmt, int64_t assign_idx,
+                                      ObPLFunctionAST &func);
   int transform_to_new_assign_stmt(ObIArray<int64_t> &transform_array, ObPLAssignStmt *&old_stmt);
 
   int analyze_calc_once_exprs(ObPLFunctionAST &func);
