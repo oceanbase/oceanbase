@@ -68,6 +68,29 @@ static void* DW_REF_ObPLEH_eh_personality = (void*)(&ObPLEH::eh_personality);
 ERRSIM_POINT_DEF(OBPLCONTEXT_INIT);
 #endif // ERRSIM
 
+// Restore session stmt type when the outermost PL execution finishes, so that
+// nested statements of PL do not leak their stmt type to the outer statement.
+class ObPLStmtTypeGuard
+{
+public:
+  explicit ObPLStmtTypeGuard(ObSQLSessionInfo *session)
+    : session_(session), saved_stmt_type_(stmt::T_NONE)
+  {
+    if (OB_NOT_NULL(session_)) {
+      saved_stmt_type_ = session_->get_stmt_type();
+    }
+  }
+  ~ObPLStmtTypeGuard()
+  {
+    if (OB_NOT_NULL(session_)) {
+      session_->set_stmt_type(saved_stmt_type_);
+    }
+  }
+private:
+  ObSQLSessionInfo *session_;
+  stmt::StmtType saved_stmt_type_;
+};
+
 
 
 int ObPL::init(common::ObMySQLProxy &sql_proxy)
@@ -2935,6 +2958,7 @@ int ObPL::parameter_ps_anonymous_block(ObExecContext &ctx,
 int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *block)
 {
   int ret = OB_SUCCESS;
+  ObPLStmtTypeGuard stmt_type_guard(ctx.get_my_session());
   CK (OB_NOT_NULL(block));
   lib::MemoryContext mem_context = NULL;
   lib::ContextParam param;
@@ -3108,6 +3132,7 @@ int ObPL::execute(ObExecContext &ctx,
                   ObBitSet<OB_DEFAULT_BITSET_SIZE> &out_args)
 {
   int ret = OB_SUCCESS;
+  ObPLStmtTypeGuard stmt_type_guard(ctx.get_my_session());
   ObPLFunction *routine = NULL;
   ObCacheObjGuard cacheobj_guard(PL_ANON_HANDLE);
   int64_t old_worker_timeout_ts = 0;
@@ -3206,6 +3231,7 @@ int ObPLExecuteArg::obtain_routine(ObExecContext &ctx,
                                     const ObIArray<int64_t> &subprogram_path)
 {
   int ret = OB_SUCCESS;
+  ObPLStmtTypeGuard stmt_type_guard(ctx.get_my_session());
   ObPLFunction *local_routine = NULL;
   ObPLExecInfo *inner_exec_info = nullptr;
   ObCacheObjGuard* func_guard = nullptr;
@@ -3266,8 +3292,6 @@ int ObPLExecuteArg::obtain_routine(ObExecContext &ctx,
     CK (OB_NOT_NULL(package_guard));
     if (OB_SUCC(ret)) {
       int64_t old_worker_timeout_ts = 0;
-      // NOTE: need save current stmt type avoid PL-Compile corrupt session.stmt_type
-      auto saved_stmt_type = ctx.get_my_session()->get_stmt_type();
       if (OB_ISNULL(ctx.get_my_session()->get_pl_context())) {
         int64_t pl_block_timeout = 0;
         int64_t query_start_time = ctx.get_my_session()->get_query_start_time();
@@ -3285,8 +3309,6 @@ int ObPLExecuteArg::obtain_routine(ObExecContext &ctx,
                                             subprogram_path,
                                             cacheobj_guard_,
                                             local_routine));
-      // NOTE: restore stmt type saved before get_pl_function before start execution
-      ctx.get_my_session()->set_stmt_type(saved_stmt_type);
       // restore work timeout
       if (old_worker_timeout_ts != 0) {
         THIS_WORKER.set_timeout_ts(old_worker_timeout_ts);
@@ -3352,6 +3374,7 @@ int ObPL::execute(ObExecContext &ctx,
   ObCurTraceId::TraceId parent_trace_id;
   ObSQLSessionInfo *session_info = ctx.get_my_session();
   CK (OB_NOT_NULL(session_info));
+  ObPLStmtTypeGuard stmt_type_guard(session_info);
   ObPLASHGuard guard(package_id, routine_id);
 
   /* !!!
