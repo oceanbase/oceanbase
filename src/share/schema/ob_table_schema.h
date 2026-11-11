@@ -457,7 +457,8 @@ public:
                "mv_enable_query_rewrite_flag", mv_enable_query_rewrite_flag_,
                "mv_on_query_computation_flag", mv_on_query_computation_flag_,
                "ddl_table_ignore_sync_cdc_flag", ddl_table_ignore_sync_cdc_flag_,
-               "table_organization_mode", table_organization_mode_);
+               "table_organization_mode", table_organization_mode_,
+               "view_column_list_specified_flag", view_column_list_specified_flag_);
   union {
     int32_t mode_;
     struct {
@@ -926,6 +927,11 @@ public:
     { return (ObViewCreatedMethodFlag)table_mode_.view_created_method_flag_; }
   inline bool is_view_created_by_or_replace_force() const
   { return VIEW_CREATED_BY_OR_REPLACE == (ObViewCreatedMethodFlag)table_mode_.view_created_method_flag_; }
+
+  inline void set_view_column_list_specified_mode(const bool specified)
+  { table_mode_.view_column_list_specified_flag_ = specified; }
+  inline bool get_view_column_list_specified_mode() const
+  { return table_mode_.view_column_list_specified_flag_; }
 
   inline void set_table_auto_increment_mode(const ObTableAutoIncrementMode table_auto_increment_mode)
     { table_mode_.auto_increment_mode_ =  table_auto_increment_mode; }

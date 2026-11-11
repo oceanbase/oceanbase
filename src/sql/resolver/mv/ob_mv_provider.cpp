@@ -66,12 +66,18 @@ int ObMVProvider::align_mv_stmt_output_column_names(ObSelectStmt *stmt,
         LOG_WARN("unexpected null select expression or column schema", K(ret), K(i),
                  KP(select_item.expr_), KP(column_schema));
       } else {
+        if (lib::is_oracle_mode()) {
+          // Oracle mode does not support explicit column lists on generated tables.
+          // Outer MV queries need to reference these columns, so use container column
+          // names instead of SELECT aliases.
+          select_item.select_alias_name_.reset();
+        } else if (select_item.select_alias_name_.empty()) {
+          select_item.select_alias_name_ = select_item.alias_name_;
+        }
         select_item.alias_name_ = column_schema->get_column_name_str();
         select_item.is_real_alias_ = true;
-        select_item.expr_->set_alias_column_name(select_item.alias_name_);
       }
     }
-    // Set branches are printed independently and must use the same physical output names.
     if (OB_SUCC(ret) && stmt->is_set_stmt()) {
       ObIArray<ObSelectStmt *> &set_queries = stmt->get_set_query();
       for (int64_t i = 0; OB_SUCC(ret) && i < set_queries.count(); ++i) {

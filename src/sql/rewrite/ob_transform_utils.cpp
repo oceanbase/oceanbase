@@ -11378,14 +11378,17 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
           LOG_WARN("failed to replace with groupby columns.", K(ret));
         } else { /*do nothing.*/ }
       }
-      bool is_existed = false;
+      // A SELECT alias wrapper preserves the syntax written by the user. Its referenced
+      // expression has already been visited above and may be shared with a GROUP BY expression,
+      // but the wrapper itself must not be replaced.
+      bool is_existed = expr->is_select_alias_ref();
       for (int64_t i = 0; OB_SUCC(ret) && !is_existed && i < groupby_exprs.count(); i++) {
         if (OB_ISNULL(groupby_exprs.at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("got an unexpected null", K(ret));
         } else if ((is_mysql_mode() || !expr->is_static_const_expr())
                     && groupby_exprs.at(i)->same_as(*expr, &check_context)) {
-          expr = groupby_exprs.at(i);
+          expr = ObRawExpr::unwrap_select_alias_ref(groupby_exprs.at(i));
           is_existed = true;
         } else { /*do nothing.*/ }
       }
@@ -11395,7 +11398,7 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
           LOG_WARN("got an unexpected null", K(ret));
         } else if ((lib::is_mysql_mode()|| !expr->is_static_const_expr())
                     && rollup_exprs.at(i)->same_as(*expr, &check_context)) {
-          expr = rollup_exprs.at(i);
+          expr = ObRawExpr::unwrap_select_alias_ref(rollup_exprs.at(i));
           is_existed = true;
         } else { /*do nothing.*/ }
       }
@@ -11410,7 +11413,7 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("got an unexpected null", K(ret));
             } else if (groupby_exprs.at(k)->same_as(*expr, &check_context)) {
-              expr = groupby_exprs.at(k);
+              expr = ObRawExpr::unwrap_select_alias_ref(groupby_exprs.at(k));
               is_existed = true;
             } else if (trans_ctx != NULL && in_add_expr &&
                        expr->get_expr_type() == T_QUESTIONMARK &&
@@ -11447,7 +11450,7 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
                   ret = OB_ERR_UNEXPECTED;
                   LOG_WARN("got an unexpected null", K(ret));
                 } else if (groupby_exprs.at(m)->same_as(*expr, &check_context)) {
-                  expr = groupby_exprs.at(m);
+                  expr = ObRawExpr::unwrap_select_alias_ref(groupby_exprs.at(m));
                   is_existed = true;
                 } else { /*do nothing.*/ }
               }
@@ -11465,7 +11468,7 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
                   ret = OB_ERR_UNEXPECTED;
                   LOG_WARN("got an unexpected null", K(ret));
                 } else if (groupby_exprs.at(m)->same_as(*expr, &check_context)) {
-                  expr = groupby_exprs.at(m);
+                  expr = ObRawExpr::unwrap_select_alias_ref(groupby_exprs.at(m));
                   is_existed = true;
                 } else { /*do nothing.*/ }
               }
@@ -11483,7 +11486,7 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("got an unexpected null", K(ret));
               } else if (groupby_exprs.at(k)->same_as(*expr, &check_context)) {
-                expr = groupby_exprs.at(k);
+                expr = ObRawExpr::unwrap_select_alias_ref(groupby_exprs.at(k));
                 is_existed = true;
               } else { /*do nothing.*/ }
             }
@@ -11499,7 +11502,7 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("got an unexpected null", K(ret));
             } else if (groupby_exprs.at(k)->same_as(*expr, &check_context)) {
-              expr = groupby_exprs.at(k);
+              expr = ObRawExpr::unwrap_select_alias_ref(groupby_exprs.at(k));
               is_existed = true;
             } else { /*do nothing.*/
             }

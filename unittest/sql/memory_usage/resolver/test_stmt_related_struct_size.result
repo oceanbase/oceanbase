@@ -12,7 +12,7 @@
 | PartExprItem | 32 |
 | CheckConstraintItem | 96 |
 | ObDMLSequenceInfo | 16 |
-| SelectItem | 1568 |
+| SelectItem | 1584 |
 | ObSelectIntoItem | 224 |
 | ObGroupbyExpr | 40 |
 | ObRollupItem | 40 |

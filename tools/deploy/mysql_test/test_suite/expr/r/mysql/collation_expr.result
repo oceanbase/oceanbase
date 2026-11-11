@@ -538,11 +538,11 @@ create or replace view v1(c1,c2,c3,c4) as select cast('abc' as char), cast('abc'
 cast('abc' as char char set binary),  cast('abc' as binary);
 show create view v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE VIEW `v1` AS select cast('abc' as char charset utf8mb4) AS `c1`,cast('abc' as char charset utf8mb4) AS `c2`,cast('abc' as char charset binary) AS `c3`,cast('abc' as char charset binary) AS `c4`	utf8mb4	utf8mb4_bin
+v1	CREATE VIEW `v1` (`c1`, `c2`, `c3`, `c4`)  AS select cast('abc' as char charset utf8mb4) AS `c1`,cast('abc' as char charset utf8mb4) AS `c2`,cast('abc' as char charset binary) AS `c3`,cast('abc' as char charset binary) AS `c4`	utf8mb4	utf8mb4_bin
 create or replace view v1(c1,c2,c3,c4) as select cast('abc' as char(10)), cast('abc' as char(10) char set utf8mb4),
 cast('abc' as char(10) char set binary),  cast('abc' as binary(10));
 show create view v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE VIEW `v1` AS select cast('abc' as char(10) charset utf8mb4) AS `c1`,cast('abc' as char(10) charset utf8mb4) AS `c2`,cast('abc' as char(10) charset binary) AS `c3`,cast('abc' as char(10) charset binary) AS `c4`	utf8mb4	utf8mb4_bin
+v1	CREATE VIEW `v1` (`c1`, `c2`, `c3`, `c4`)  AS select cast('abc' as char(10) charset utf8mb4) AS `c1`,cast('abc' as char(10) charset utf8mb4) AS `c2`,cast('abc' as char(10) charset binary) AS `c3`,cast('abc' as char(10) charset binary) AS `c4`	utf8mb4	utf8mb4_bin
 drop table coll_test;
 drop view v1;

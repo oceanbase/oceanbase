@@ -221,6 +221,7 @@ struct TableItem : public ObRelation
     cte_type_ = CTEType::NOT_CTE;
     type_ = BASE_TABLE;
     is_view_table_ = false;
+    is_column_list_specified_ = false;
     for_update_ = false;
     for_update_wait_us_ = -1;
     skip_locked_ = false;
@@ -262,7 +263,8 @@ struct TableItem : public ObRelation
                "view_base_item",
                (NULL == view_base_item_ ? OB_INVALID_ID : view_base_item_->table_id_),
                K_(ddl_schema_version), K_(ddl_table_id),
-               K_(is_view_table), K_(part_ids), K_(part_names), K_(cte_type),
+               K_(is_view_table), K_(is_column_list_specified),
+               K_(part_ids), K_(part_names), K_(cte_type),
                KPC_(function_table_expr),
                K_(flashback_query_type), KPC_(flashback_query_expr), K_(table_type),
                K_(exec_params), KPC_(sample_info), K_(mview_id), K_(need_expand_rt_mv),
@@ -394,6 +396,8 @@ struct TableItem : public ObRelation
   bool is_system_table_;
   bool is_index_table_; //just for index table resolver
   bool is_view_table_; //for VIEW privilege check
+  // Whether a column list is explicitly specified for this table.
+  bool is_column_list_specified_;
   bool is_recursive_union_fake_table_; //mark whether this table is a tmp fake table for resolve the recursive cte table
   share::schema::ObTableType table_type_;
   CTEType cte_type_;

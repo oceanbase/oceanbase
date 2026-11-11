@@ -1756,7 +1756,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     ctx.is_from_show_resolver_ = params_.is_from_show_resolver_;
     ctx.is_expanding_view_ = params_.is_expanding_view_;
     ctx.is_in_system_view_ = params_.is_in_sys_view_;
-    ctx.is_need_print_ = params_.is_from_create_view_ || params_.is_from_create_table_ || params_.is_returning_;
+    ctx.is_need_print_ = params_.need_print_stmt();
     ctx.is_mview_definition_sql_ = params_.is_mview_definition_sql_;
     ObRawExprResolverImpl expr_resolver(ctx);
     ObIArray<ObUserVarIdentRawExpr *> &user_var_exprs = get_stmt()->get_user_vars();
@@ -7379,6 +7379,7 @@ int ObDMLResolver::do_resolve_generate_table(const ParseNode &table_node,
     // Such as "select c1,(@rownum:= @rownum+1) as CCBH from t1,(SELECT@rownum:=0) B"
     LOG_WARN("extract var init exprs failed", K(ret));
   } else {
+    table_item->is_column_list_specified_ = OB_NOT_NULL(column_alias_node);
     LOG_DEBUG("finish do_resolve_generate_table", K(alias_name), KPC(table_item),
                                                   KPC(table_item->ref_query_));
   }
@@ -9902,7 +9903,7 @@ int ObDMLResolver::resolve_and_split_sql_expr(const ParseNode &node, ObIArray<Ob
     ctx.session_info_ = session_info_;
     ctx.secondary_namespace_ = params_.secondary_namespace_;
     ctx.query_ctx_ = params_.query_ctx_;
-    ctx.is_need_print_ = params_.is_from_create_view_ || params_.is_from_create_table_ || params_.is_returning_;
+    ctx.is_need_print_ = params_.need_print_stmt();
     if (OB_FAIL(ObInListResolver::try_merge_inlists(ctx, true, &node, merged_node))) {
       LOG_WARN("fail to merge inlist", K(ret));
     } else if (OB_ISNULL(merged_node)) {
@@ -20416,8 +20417,12 @@ int ObDMLResolver::resolve_with_clause_opt_alias_colnames(const ParseNode *parse
   } else if (OB_SUCC(ret)) {
     sub_select_stmt = table_item->ref_query_;
     ObIArray<SelectItem> &sub_select_items = sub_select_stmt->get_select_items();
+    table_item->is_column_list_specified_ = OB_NOT_NULL(parse_tree);
     for (int64_t i = 0; i < column_alias.count(); ++i) {
       SelectItem &select_item = sub_select_items.at(i);
+      if (select_item.is_real_alias_ && select_item.select_alias_name_.empty()) {
+        select_item.select_alias_name_ = select_item.alias_name_;
+      }
       select_item.alias_name_ = column_alias.at(i);
       select_item.is_real_alias_ = true;
       // cte设置了别名，所以不需要参数化信息了
@@ -21455,6 +21460,9 @@ int ObDMLResolver::refine_generate_table_column_name(const ParseNode &column_ali
         LOG_WARN("get unexpected error", K(ret));
       } else {
         SelectItem &select_item = select_stmt.get_select_item(i);
+        if (select_item.is_real_alias_ && select_item.select_alias_name_.empty()) {
+          select_item.select_alias_name_ = select_item.alias_name_;
+        }
         select_item.alias_name_.assign_ptr(column_alias_node.children_[i]->str_value_,
                                            column_alias_node.children_[i]->str_len_);
         select_item.is_real_alias_ = true;
