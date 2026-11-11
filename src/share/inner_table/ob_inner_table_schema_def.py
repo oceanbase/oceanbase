@@ -18881,6 +18881,8 @@ def_table_schema(
 
 # 12629: __all_virtual_proxy_ls_location
 
+# 12630: __all_virtual_tablet_access_stat
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -19494,6 +19496,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15557', all_def_ke
 # 15560: __all_virtual_jvm_status
 # 15561: __all_virtual_java_udf_stats
 # 15562: __all_virtual_proxy_ls_location
+# 15563: __all_virtual_tablet_access_stat
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
@@ -48635,6 +48638,9 @@ def_table_schema(
 # 21756: V$OB_JAVA_SANDBOX_STATUS
 # 21757: GV$OB_JAVA_UDF_STATS
 # 21758: V$OB_JAVA_UDF_STATS
+
+# 21761: GV$OB_TABLET_ACCESS_STAT
+# 21762: V$OB_TABLET_ACCESS_STAT
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -84358,6 +84364,8 @@ def_table_schema(
 # 28307: V$OB_JAVA_SANDBOX_STATUS
 # 28308: GV$OB_JAVA_UDF_STATS
 # 28309: V$OB_JAVA_UDF_STATS
+# 28310: GV$OB_TABLET_ACCESS_STAT
+# 28311: V$OB_TABLET_ACCESS_STAT
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
