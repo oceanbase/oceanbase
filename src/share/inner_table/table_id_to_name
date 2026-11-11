@@ -3421,6 +3421,9 @@
 # 14993: __idx_11021_all_virtual_sysstat_i1
 # 14993: all_virtual_sysstat_i1  # INDEX_NAME
 # 14993: __all_virtual_sysstat  # DATA_BASE_TABLE_NAME
+# 14985: __idx_11024_all_virtual_memstore_info_i1
+# 14985: all_virtual_memstore_info_i1  # INDEX_NAME
+# 14985: __all_virtual_memstore_info  # DATA_BASE_TABLE_NAME
 # 14992: __idx_11031_all_virtual_sql_audit_i1
 # 14992: all_virtual_sql_audit_i1  # INDEX_NAME
 # 14992: __all_virtual_sql_audit  # DATA_BASE_TABLE_NAME
@@ -3433,9 +3436,15 @@
 # 14991: __idx_12185_all_virtual_sql_plan_monitor_i1
 # 14991: all_virtual_sql_plan_monitor_i1  # INDEX_NAME
 # 14991: __all_virtual_sql_plan_monitor  # DATA_BASE_TABLE_NAME
+# 14986: __idx_12288_all_virtual_tablet_info_i1
+# 14986: all_virtual_tablet_info_i1  # INDEX_NAME
+# 14986: __all_virtual_tablet_info  # DATA_BASE_TABLE_NAME
 # 14990: __idx_12302_all_virtual_ash_i1
 # 14990: all_virtual_ash_i1  # INDEX_NAME
 # 14990: __all_virtual_ash  # DATA_BASE_TABLE_NAME
+# 14984: __idx_12513_all_virtual_cs_replica_tablet_stats_i1
+# 14984: all_virtual_cs_replica_tablet_stats_i1  # INDEX_NAME
+# 14984: __all_virtual_cs_replica_tablet_stats  # DATA_BASE_TABLE_NAME
 # 14989: __idx_12514_all_virtual_ddl_diagnose_info_i1
 # 14989: all_virtual_ddl_diagnose_info_i1  # INDEX_NAME
 # 14989: __all_virtual_ddl_diagnose_info  # DATA_BASE_TABLE_NAME
@@ -3455,6 +3464,10 @@
 # 19996: all_virtual_session_wait_history_i1  # INDEX_NAME
 # 19996: __all_virtual_session_wait_history  # DATA_BASE_TABLE_NAME
 # 19996: ALL_VIRTUAL_SESSION_WAIT_HISTORY  # DATA_BASE_TABLE_NAME1
+# 19989: __idx_15040_all_virtual_memstore_info_i1
+# 19989: all_virtual_memstore_info_i1  # INDEX_NAME
+# 19989: __all_virtual_memstore_info  # DATA_BASE_TABLE_NAME
+# 19989: ALL_VIRTUAL_MEMSTORE_INFO  # DATA_BASE_TABLE_NAME1
 # 19995: __idx_15042_all_virtual_sesstat_i1
 # 19995: all_virtual_sesstat_i1  # INDEX_NAME
 # 19995: __all_virtual_sesstat  # DATA_BASE_TABLE_NAME
@@ -3479,6 +3492,10 @@
 # 19991: all_virtual_ash_i1  # INDEX_NAME
 # 19991: __all_virtual_ash  # DATA_BASE_TABLE_NAME
 # 19991: ALL_VIRTUAL_ASH  # DATA_BASE_TABLE_NAME1
+# 19988: __idx_15493_all_virtual_cs_replica_tablet_stats_i1
+# 19988: all_virtual_cs_replica_tablet_stats_i1  # INDEX_NAME
+# 19988: __all_virtual_cs_replica_tablet_stats  # DATA_BASE_TABLE_NAME
+# 19988: ALL_VIRTUAL_CS_REPLICA_TABLET_STATS  # DATA_BASE_TABLE_NAME1
 # 100001: __idx_3_idx_data_table_id
 # 100001: idx_data_table_id  # INDEX_NAME
 # 100001: __all_table  # DATA_BASE_TABLE_NAME

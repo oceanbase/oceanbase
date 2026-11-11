@@ -10486,6 +10486,8 @@ def_table_schema(
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
+  index = {'all_virtual_memstore_info_i1' : { 'index_columns' : ['tenant_id', 'ls_id', 'tablet_id'],
+                     'index_using_type' : 'USING_HASH', 'index_table_id' : '14985', 'index_table_id_ora' : '19989'}},
 )
 
 def_table_schema(
@@ -14796,6 +14798,8 @@ def_table_schema(
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
+  index = {'all_virtual_tablet_info_i1' : { 'index_columns' : ['tenant_id', 'ls_id', 'tablet_id'],
+                     'index_using_type' : 'USING_HASH', 'index_table_id' : '14986'}},
 )
 
 def_table_schema(
@@ -17612,6 +17616,8 @@ def_table_schema(
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
+  index = {'all_virtual_cs_replica_tablet_stats_i1' : { 'index_columns' : ['tenant_id', 'ls_id', 'tablet_id'],
+                     'index_using_type' : 'USING_HASH', 'index_table_id' : '14984', 'index_table_id_ora' : '19988'}},
 )
 
 # 12514: __all_virtual_ddl_diagnose_info
