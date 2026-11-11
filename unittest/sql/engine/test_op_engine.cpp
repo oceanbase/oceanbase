@@ -70,11 +70,22 @@ void TestOpEngine::destory()
   OB_STORAGE_OBJECT_MGR.wait();
   OB_STORAGE_OBJECT_MGR.destroy();
   OB_STORE_CACHE.destroy();
+  destroy_tenant_io();
   ObIOManager::get_instance().destroy();
   ObKVGlobalCache::get_instance().destroy();
   ObClusterVersion::get_instance().destroy();
 
   // LOCAL_DEVICE_INSTANCE.destroy();
+}
+
+void TestOpEngine::destroy_tenant_io()
+{
+  common::ObTenantIOManager *io_service = tbase_.get<common::ObTenantIOManager *>();
+  common::ObTenantIOManager::mtl_destroy(io_service);
+  tbase_.set(io_service);
+  if (&tbase_ == ObTenantEnv::get_tenant()) {
+    ObTenantEnv::set_tenant(&tbase_);
+  }
 }
 
 common::ObIODevice *TestOpEngine::get_device_inner()

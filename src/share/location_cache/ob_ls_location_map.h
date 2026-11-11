@@ -15,6 +15,7 @@
 
 #include "share/location_cache/ob_location_struct.h"
 #include "lib/lock/ob_qsync_lock.h"
+#include "lib/objectpool/ob_concurrency_objpool.h"
 
 namespace oceanbase
 {
@@ -59,7 +60,10 @@ public:
       : is_inited_(false),
         size_(0),
         ls_buckets_(nullptr),
-        buckets_lock_(nullptr)
+        buckets_lock_(nullptr),
+        location_allocator_(
+            SET_USE_500("ObLSLocation", common::ObCtxIds::LOCATION_SERVICE),
+            common::get_cpu_count())
   {
     destroy();
   }
@@ -86,6 +90,7 @@ private:
   ObLSLocation **ls_buckets_;
   const static int64_t BUCKETS_CNT = 1 << 8;
   common::ObQSyncLock *buckets_lock_;
+  common::ObFixedClassAllocator<ObLSLocation> location_allocator_;
 };
 
 template <typename Function>

@@ -25,7 +25,7 @@ int ObTabletLSMap::init()
 {
   int ret = OB_SUCCESS;
   const char *OB_TABLET_LS_MAP = "TabletLSMap";
-  ObMemAttr mem_attr(OB_SERVER_TENANT_ID, OB_TABLET_LS_MAP);
+  ObMemAttr mem_attr(OB_SERVER_TENANT_ID, OB_TABLET_LS_MAP, ObCtxIds::LOCATION_SERVICE);
   void *buf = NULL;
 
   if (OB_UNLIKELY(is_inited_)) {
@@ -121,11 +121,13 @@ int ObTabletLSMap::update(
     if (OB_ISNULL(curr)) {
       // insert
       if (!update_only) {
-        ObTabletLSCache *tmp = op_alloc(ObTabletLSCache);
+        ObTabletLSCache *tmp = op_instance_alloc_args(&tablet_ls_allocator_, ObTabletLSCache);
         if (OB_ISNULL(tmp)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_ERROR("ls location memory alloc error", KR(ret), K(key), K(tablet_ls_cache));
         } else if (OB_FAIL(tmp->assign(tablet_ls_cache))) {
+          op_free(tmp);
+          tmp = nullptr;
           LOG_WARN("fail to assign tablet_ls_cache", KR(ret), K(tablet_ls_cache));
         } else {
           tmp->next_ = ls_buckets_[pos];

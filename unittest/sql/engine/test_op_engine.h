@@ -66,6 +66,7 @@ public:
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestOpEngine);
+  void destroy_tenant_io();
 
 protected:
   // function members

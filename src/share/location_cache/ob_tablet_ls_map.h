@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_OB_TABLET_LS_MAP
 
 #include "lib/lock/ob_qsync_lock.h" // ObQSyncLockWriteGuard
+#include "lib/objectpool/ob_concurrency_objpool.h"
 #include "share/location_cache/ob_location_struct.h" // ObTabletLSKey, ObTabletLSCache
 
 namespace oceanbase
@@ -33,7 +34,10 @@ public:
       : is_inited_(false),
         size_(0),
         ls_buckets_(nullptr),
-        buckets_lock_(nullptr)
+        buckets_lock_(nullptr),
+        tablet_ls_allocator_(
+            SET_USE_500("ObTabletLSCache", common::ObCtxIds::LOCATION_SERVICE),
+            common::get_cpu_count())
   {
     destroy();
   }
@@ -66,6 +70,7 @@ private:
   int64_t size_;
   ObTabletLSCache **ls_buckets_;
   common::ObQSyncLock *buckets_lock_;
+  common::ObFixedClassAllocator<ObTabletLSCache> tablet_ls_allocator_;
 };
 
 template <typename Function>

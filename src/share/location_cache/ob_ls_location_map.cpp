@@ -23,7 +23,7 @@ int ObLSLocationMap::init()
 {
   int ret = OB_SUCCESS;
   const char *OB_LS_LOCATION_MAP = "LSLocationMap";
-  ObMemAttr mem_attr(OB_SERVER_TENANT_ID, OB_LS_LOCATION_MAP);
+  ObMemAttr mem_attr(OB_SERVER_TENANT_ID, OB_LS_LOCATION_MAP, ObCtxIds::LOCATION_SERVICE);
   void *buf = NULL;
 
   if (OB_UNLIKELY(is_inited_)) {
@@ -120,11 +120,13 @@ int ObLSLocationMap::update(
 
     if (OB_ISNULL(curr)) {
       // insert
-      ObLSLocation *tmp = op_alloc(ObLSLocation);
-      if (NULL == tmp) {
+      ObLSLocation *tmp = op_instance_alloc_args(&location_allocator_, ObLSLocation);
+      if (OB_ISNULL(tmp)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("ls location memory alloc error", KR(ret), K(key), K(ls_location));
       } else if (OB_FAIL(tmp->deep_copy(ls_location))) {
+        op_free(tmp);
+        tmp = nullptr;
         LOG_WARN("ls location deep copy error", KR(ret), K(ls_location));
       } else {
         if (common::ObClockGenerator::getClock() > tmp->get_last_access_ts() + MAX_ACCESS_TIME_UPDATE_THRESHOLD) {
