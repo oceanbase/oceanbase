@@ -86,7 +86,12 @@ OB_SERIALIZE_MEMBER(ObPxRpcInitSqcResponse,
                     rc_,
                     reserved_thread_count_,
                     px_tablets_info_, // FARM COMPAT WHITELIST for partitions_info_
-                    sqc_order_gi_tasks_);
+                    sqc_order_gi_tasks_,
+                    has_sqc_finish_msg_,
+                    sqc_finish_msg_,
+                    has_fast_init_dtl_msg_,
+                    fast_init_dtl_channel_id_,
+                    fast_init_dtl_msg_buf_);
 OB_SERIALIZE_MEMBER(ObSqcTableLocationKey,
                     table_location_key_,
                     ref_table_id_,
@@ -496,6 +501,7 @@ OB_DEF_SERIALIZE(ObPxRpcInitSqcArgs)
   if (OB_SUCC(ret) && sqc_.is_fulltree()) {
     ret = exec_ctx_->serialize_group_pwj_map(buf, buf_len, pos);
   }
+  LST_DO_CODE(OB_UNIS_ENCODE, qc_support_fast_init_sqc_report_);
   LOG_TRACE("serialize sqc", K_(sqc));
   LOG_DEBUG("end trace sqc args", K(pos), K(buf_len), K(this->get_serialize_size()));
   return ret;
@@ -552,6 +558,7 @@ OB_DEF_SERIALIZE_SIZE(ObPxRpcInitSqcArgs)
   if (OB_SUCC(ret) && sqc_.is_fulltree()) {
     len += exec_ctx_->get_group_pwj_map_serialize_size();
   }
+  LST_DO_CODE(OB_UNIS_ADD_LEN, qc_support_fast_init_sqc_report_);
   return len;
 }
 
@@ -576,6 +583,7 @@ void ObPxRpcInitSqcArgs::set_deserialize_param(ObExecContext &exec_ctx,
 int ObPxRpcInitSqcArgs::do_deserialize(int64_t &pos, const char *net_buf, int64_t data_len)
 {
   int ret = OB_SUCCESS;
+  qc_support_fast_init_sqc_report_ = false;
   /**
    * 不需要记录des allocator分配出来这段buf，因为sqc handler回收的时候，一定
    * 会进行reset，从而释放掉该内存。
@@ -657,6 +665,7 @@ int ObPxRpcInitSqcArgs::do_deserialize(int64_t &pos, const char *net_buf, int64_
     if (OB_SUCC(ret) && sqc_.is_fulltree() && pos < data_len) {
       ret = exec_ctx_->deserialize_group_pwj_map(buf, data_len, pos);
     }
+    LST_DO_CODE(OB_UNIS_DECODE, qc_support_fast_init_sqc_report_);
     LOG_TRACE("deserialize qc order gi tasks", K(qc_order_gi_tasks_), K(sqc_), K(this));
   }
   return ret;
@@ -673,6 +682,7 @@ int ObPxRpcInitSqcArgs::assign(ObPxRpcInitSqcArgs &other)
     op_spec_root_ = other.op_spec_root_;
     static_engine_root_ = other.static_engine_root_;
     des_allocator_ = other.des_allocator_;
+    qc_support_fast_init_sqc_report_ = other.qc_support_fast_init_sqc_report_;
   }
   return ret;
 }

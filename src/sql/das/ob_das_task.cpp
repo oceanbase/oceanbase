@@ -602,7 +602,9 @@ ObDASTaskResp::ObDASTaskResp()
     op_results_(),
     rcode_(),
     trans_result_(),
-    das_factory_(nullptr)
+    das_factory_(nullptr),
+    flags_(0),
+    completed_task_count_(0)
 {
 }
 
@@ -657,7 +659,9 @@ OB_DEF_SERIALIZE(ObDASTaskResp)
   }
   LST_DO_CODE(OB_UNIS_ENCODE,
               rcode_,
-              trans_result_);
+              trans_result_,
+              flags_,
+              completed_task_count_);
   return ret;
 }
 
@@ -666,6 +670,8 @@ OB_DEF_DESERIALIZE(ObDASTaskResp)
   int ret = OB_SUCCESS;
   int64_t count = 0;
   ObIDASTaskResult *op_result = nullptr;
+  flags_ = 0;
+  completed_task_count_ = 0;
   LST_DO_CODE(OB_UNIS_DECODE,
               has_more_,
               ctrl_svr_,
@@ -687,7 +693,9 @@ OB_DEF_DESERIALIZE(ObDASTaskResp)
   }
   LST_DO_CODE(OB_UNIS_DECODE,
               rcode_,
-              trans_result_);
+              trans_result_,
+              flags_,
+              completed_task_count_);
   return ret;
 }
 
@@ -704,7 +712,9 @@ OB_DEF_SERIALIZE_SIZE(ObDASTaskResp)
   }
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               rcode_,
-              trans_result_);
+              trans_result_,
+              flags_,
+              completed_task_count_);
   return len;
 }
 

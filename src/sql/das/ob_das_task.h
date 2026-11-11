@@ -127,7 +127,8 @@ public:
       uint64_t need_subschema_ctx_              : 1;
       uint64_t has_attach_ctdef_                : 1;
       uint64_t should_use_deser_cache_format    : 1;
-      uint64_t reserved_                        : 57;
+      uint64_t enable_server_batch_scan_result_ : 1; // placeholder for 4_4_x_release compatibility
+      uint64_t reserved_                        : 56;
     };
   };
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
@@ -497,6 +498,14 @@ private:
   obrpc::ObRpcResultCode rcode_; //返回的错误信息
   transaction::ObTxExecResult trans_result_;
   ObDASTaskFactory *das_factory_;  // no need to serialize
+  union {
+    uint64_t flags_; // placeholder for 4_4_x_release compatibility
+    struct {
+      uint64_t server_batch_scan_result_ : 1;
+      uint64_t reserved_                 : 63;
+    };
+  };
+  int64_t completed_task_count_; // placeholder for 4_4_x_release compatibility
 };
 
 template <typename T>

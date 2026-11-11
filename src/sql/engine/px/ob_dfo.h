@@ -882,7 +882,8 @@ public:
         des_allocator_(NULL),
         sqc_handler_(NULL),
         scan_spec_ops_(),
-        qc_order_gi_tasks_(true)
+        qc_order_gi_tasks_(true),
+        qc_support_fast_init_sqc_report_(false)
   {}
   ~ObPxRpcInitSqcArgs() = default;
 
@@ -920,6 +921,8 @@ public:
   ObSqcSerializeCache ser_cache_;
   // whether qc support order gi tasks. default value is true and set false before deserialize.
   bool qc_order_gi_tasks_;
+  // Compatibility placeholder for fast-init SQC finish reports.
+  bool qc_support_fast_init_sqc_report_;
 };
 
 struct ObPxCleanDtlIntermResInfo
@@ -1274,7 +1277,12 @@ public:
       : rc_(common::OB_NOT_INIT),
         reserved_thread_count_(0),
         px_tablets_info_(),
-        sqc_order_gi_tasks_(false)
+        sqc_order_gi_tasks_(false),
+        has_sqc_finish_msg_(false),
+        sqc_finish_msg_(),
+        has_fast_init_dtl_msg_(false),
+        fast_init_dtl_channel_id_(common::OB_INVALID_ID),
+        fast_init_dtl_msg_buf_()
   {}
   TO_STRING_KV(K_(rc), K_(reserved_thread_count));
 public:
@@ -1283,6 +1291,12 @@ public:
   // px_tablets_info_ is useless, only for serialize compatibility
   ObSEArray<ObPxTabletInfo, 8> px_tablets_info_;
   bool sqc_order_gi_tasks_;
+  // Compatibility placeholders for piggybacked SQC finish and DTL messages.
+  bool has_sqc_finish_msg_;
+  ObPxFinishSqcResultMsg sqc_finish_msg_;
+  bool has_fast_init_dtl_msg_;
+  int64_t fast_init_dtl_channel_id_;
+  common::ObString fast_init_dtl_msg_buf_;
 };
 
 class ObPxWorkerEnvArgs
