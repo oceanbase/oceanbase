@@ -249,11 +249,13 @@ public:
   bool has_next_tablet_; // alignment: 1B, size: 2B (abandoned, don't use this field)
   bool is_empty_shell_; // alignment: 1B, size: 2B
   bool micro_index_clustered_; // alignment: 1B, size: 2B
-  // TODO(fanyin): placeholder 44X
-  bool need_memtable_filter_after_truncate_tablet_; // alignment: 1B
   share::ObSplitTabletInfo split_info_; // alignment: 8B, size: 16B
   bool has_truncate_info_; // be True after first major with truncate info
   int64_t inc_major_snapshot_; // recording the latest inc major merge snapshot
+  bool need_memtable_filter_after_truncate_tablet_;
+  // Compatibility placeholders for upgrades to 5.0.x; serialized as zero bytes.
+  // Future flags should preferably reuse these 24 bits (3 bytes) before adding new fields.
+  int8_t unused_flags_[3];
 private:
   void update_extra_medium_info(
       const compaction::ObMergeType merge_type,
@@ -409,8 +411,10 @@ public:
 
   share::SCN min_ss_tablet_version_;
   int64_t inc_major_snapshot_; // recording the latest inc major merge snapshot
-  // TODO(fanyin): placeholder 44X
   bool need_memtable_filter_after_truncate_tablet_;
+  // Compatibility placeholders for upgrades to 5.0.x; serialized as zero bytes.
+  // Future flags should preferably reuse these 56 bits (7 bytes) before adding new fields.
+  int8_t unused_flags_[7];
   // Add new serialization member before this line, below members won't serialize
   common::ObArenaAllocator allocator_; // for storage schema
 };

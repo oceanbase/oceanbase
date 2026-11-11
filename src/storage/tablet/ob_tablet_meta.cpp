@@ -30,6 +30,56 @@ const SCN ObTabletMeta::INVALID_CREATE_SCN = SCN::min_scn();
 // create tablet buffer, so the init create scn for tablet could be -1.
 const SCN ObTabletMeta::INIT_CREATE_SCN = SCN::invalid_scn();
 
+static int serialize_unused_flags(
+    char *buf,
+    const int64_t len,
+    int64_t &pos,
+    const int8_t *unused_flags,
+    const int64_t flags_count)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_pos = pos;
+  if (OB_ISNULL(unused_flags)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(unused_flags));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < flags_count; ++i) {
+      if (OB_FAIL(serialization::encode_i8(buf, len, new_pos, unused_flags[i]))) {
+        LOG_WARN("failed to serialize unused flag", K(ret), K(len), K(new_pos), K(i), K(flags_count));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    pos = new_pos;
+  }
+  return ret;
+}
+
+static int deserialize_unused_flags(
+    const char *buf,
+    const int64_t len,
+    int64_t &pos,
+    int8_t *unused_flags,
+    const int64_t flags_count)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_pos = pos;
+  if (OB_ISNULL(unused_flags)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(unused_flags));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < flags_count; ++i) {
+      if (OB_FAIL(serialization::decode_i8(buf, len, new_pos, &unused_flags[i]))) {
+        LOG_WARN("failed to deserialize unused flag", K(ret), K(len), K(new_pos), K(i), K(flags_count));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    pos = new_pos;
+  }
+  return ret;
+}
+
 ObTabletMeta::ObTabletMeta()
   : version_(TABLET_META_VERSION),
     length_(0),
@@ -65,10 +115,11 @@ ObTabletMeta::ObTabletMeta()
     has_next_tablet_(false),
     is_empty_shell_(false),
     micro_index_clustered_(false),
-    need_memtable_filter_after_truncate_tablet_(false),
     split_info_(),
     has_truncate_info_(false),
     inc_major_snapshot_(0),
+    need_memtable_filter_after_truncate_tablet_(false),
+    unused_flags_(),
     is_inited_(false)
 {
 }
@@ -686,9 +737,8 @@ int ObTabletMeta::init(
       if (old_tablet_meta.has_truncate_info_ || (OB_NOT_NULL(tablet_meta) && tablet_meta->has_truncate_info_)) {
         has_truncate_info_ = true;
       }
-      if (OB_ISNULL(tablet_meta)) {
-        need_memtable_filter_after_truncate_tablet_ = old_tablet_meta.need_memtable_filter_after_truncate_tablet_;
-      } else {
+      need_memtable_filter_after_truncate_tablet_ = old_tablet_meta.need_memtable_filter_after_truncate_tablet_;
+      if (OB_NOT_NULL(tablet_meta)) {
         need_memtable_filter_after_truncate_tablet_ = (old_tablet_meta.need_memtable_filter_after_truncate_tablet_ || tablet_meta->need_memtable_filter_after_truncate_tablet_);
       }
       min_ss_tablet_version_ = old_tablet_meta.min_ss_tablet_version_;
@@ -788,6 +838,7 @@ void ObTabletMeta::reset()
   has_truncate_info_ = false;
   min_ss_tablet_version_.set_min();
   need_memtable_filter_after_truncate_tablet_ = false;
+  MEMSET(unused_flags_, 0, sizeof(unused_flags_));
   is_inited_ = false;
 }
 
@@ -919,6 +970,8 @@ int ObTabletMeta::serialize(const uint64_t data_version, char *buf, const int64_
     LOG_WARN("failed to serialize inc major snapshot", K(ret), K(len), K(new_pos), K_(inc_major_snapshot));
   } else if (new_pos - pos < length && OB_FAIL(serialization::encode_bool(buf, len, new_pos, need_memtable_filter_after_truncate_tablet_))) {
     LOG_WARN("failed to serialize need_memtable_filter_after_truncate_tablet", K(ret), K(len), K(new_pos), K_(need_memtable_filter_after_truncate_tablet));
+  } else if (new_pos - pos < length && OB_FAIL(serialize_unused_flags(buf, len, new_pos, unused_flags_, ARRAYSIZEOF(unused_flags_)))) {
+    LOG_WARN("failed to serialize unused flags", K(ret), K(len), K(new_pos));
   } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet meta's length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length), K(length));
@@ -1030,6 +1083,8 @@ int ObTabletMeta::deserialize(
       LOG_WARN("failed to deserialize inc major snapshot", K(ret), K(len), K(new_pos));
     } else if (new_pos - pos < length_ && OB_FAIL(serialization::decode_bool(buf, len, new_pos, &need_memtable_filter_after_truncate_tablet_))) {
       LOG_WARN("failed to deserialize need_memtable_filter_after_truncate_tablet", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length_ && OB_FAIL(deserialize_unused_flags(buf, len, new_pos, unused_flags_, ARRAYSIZEOF(unused_flags_)))) {
+      LOG_WARN("failed to deserialize unused flags", K(ret), K(len), K(new_pos));
     } else if (OB_UNLIKELY(length_ < new_pos - pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet's length doesn't match standard length", K(ret), K(new_pos), K(pos), K_(length));
@@ -1093,6 +1148,9 @@ int64_t ObTabletMeta::get_serialize_size(const uint64_t data_version) const
   size += min_ss_tablet_version_.get_fixed_serialize_size();
   size += serialization::encoded_length_i64(inc_major_snapshot_);
   size += serialization::encoded_length_bool(need_memtable_filter_after_truncate_tablet_);
+  for (int64_t i = 0; i < ARRAYSIZEOF(unused_flags_); ++i) {
+    size += serialization::encoded_length_i8(unused_flags_[i]);
+  }
   return size;
 }
 
@@ -1340,6 +1398,7 @@ ObMigrationTabletParam::ObMigrationTabletParam()
     min_ss_tablet_version_(SCN::min_scn()),
     inc_major_snapshot_(0),
     need_memtable_filter_after_truncate_tablet_(false),
+    unused_flags_(),
     allocator_("MigTblParam", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID)
 {
 }
@@ -1536,6 +1595,8 @@ int ObMigrationTabletParam::serialize(char *buf, const int64_t len, int64_t &pos
     LOG_WARN("failed to serialize inc_major_snapshot", K(ret), K(len), K(new_pos), K_(inc_major_snapshot));
   } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(serialization::encode_bool(buf, len, new_pos, need_memtable_filter_after_truncate_tablet_))) {
     LOG_WARN("failed to serialize need_memtable_filter_after_truncate_tablet", K(ret), K(len), K(new_pos), K_(need_memtable_filter_after_truncate_tablet));
+  } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(serialize_unused_flags(buf, len, new_pos, unused_flags_, ARRAYSIZEOF(unused_flags_)))) {
+    LOG_WARN("failed to serialize unused flags", K(ret), K(len), K(new_pos));
   } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length));
@@ -1641,6 +1702,8 @@ int ObMigrationTabletParam::deserialize_v2_v3(const char *buf, const int64_t len
     LOG_WARN("failed to deserialize inc_major_snapshot", K(ret), K(len));
   } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(serialization::decode_bool(buf, len, new_pos, &need_memtable_filter_after_truncate_tablet_))) {
     LOG_WARN("failed to deserialize need_memtable_filter_after_truncate_tablet", K(ret), K(len), K(new_pos));
+  } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(deserialize_unused_flags(buf, len, new_pos, unused_flags_, ARRAYSIZEOF(unused_flags_)))) {
+    LOG_WARN("failed to deserialize unused flags", K(ret), K(len), K(new_pos));
   } else if (OB_UNLIKELY(length < new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet's length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length), KPC(this));
@@ -1855,6 +1918,9 @@ int64_t ObMigrationTabletParam::get_serialize_size() const
     size += min_ss_tablet_version_.get_fixed_serialize_size();
     size += serialization::encoded_length_i64(inc_major_snapshot_);
     size += serialization::encoded_length_bool(need_memtable_filter_after_truncate_tablet_);
+    for (int64_t i = 0; i < ARRAYSIZEOF(unused_flags_); ++i) {
+      size += serialization::encoded_length_i8(unused_flags_[i]);
+    }
   }
   return size;
 }
@@ -1903,6 +1969,7 @@ void ObMigrationTabletParam::reset()
   min_ss_tablet_version_.set_min();
   inc_major_snapshot_ = 0;
   need_memtable_filter_after_truncate_tablet_ = false;
+  MEMSET(unused_flags_, 0, sizeof(unused_flags_));
   allocator_.reset();
 }
 

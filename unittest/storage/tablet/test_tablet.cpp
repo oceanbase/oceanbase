@@ -17,6 +17,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
+#include "common/ob_version_def.h"
 #include "storage/tablet/ob_tablet_binding_info.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 
@@ -424,6 +425,184 @@ void TestTablet::SetUp()
 
 void TestTablet::TearDown()
 {
+}
+
+TEST_F(TestTablet, test_tablet_meta_need_filter_placeholders)
+{
+  ObTabletMeta meta;
+  ASSERT_FALSE(meta.need_memtable_filter_after_truncate_tablet_);
+  for (const auto unused_flag : meta.unused_flags_) {
+    ASSERT_EQ(0, unused_flag);
+  }
+  ASSERT_EQ(OB_SUCCESS, meta.init(ObLSID(3), ObTabletID(200001), ObTabletID(200001),
+      SCN::base_scn(), 10, lib::Worker::CompatMode::ORACLE, ObTabletTableStoreFlag(), 1,
+      SCN::base_scn(), SCN::base_scn(), ObSplitTabletInfo(), false, false, false, false));
+  const int64_t size = meta.get_serialize_size(DATA_CURRENT_VERSION);
+  for (const bool need_filter : {false, true}) {
+    meta.need_memtable_filter_after_truncate_tablet_ = need_filter;
+    ASSERT_EQ(size, meta.get_serialize_size(DATA_CURRENT_VERSION));
+    ObTabletMeta assigned;
+    ASSERT_EQ(OB_SUCCESS, assigned.assign(meta));
+    ASSERT_EQ(need_filter, assigned.need_memtable_filter_after_truncate_tablet_);
+    for (const auto unused_flag : assigned.unused_flags_) {
+      ASSERT_EQ(0, unused_flag);
+    }
+
+    char *buf = static_cast<char *>(allocator_.alloc(size + 1));
+    ASSERT_NE(nullptr, buf);
+    MEMSET(buf, 0x5a, size + 1);
+    int64_t pos = 0;
+    ASSERT_EQ(OB_SUCCESS, meta.serialize(DATA_CURRENT_VERSION, buf, size, pos));
+    ASSERT_EQ(size, pos);
+    const int64_t flags_pos = size - serialization::encoded_length_bool(need_filter) - sizeof(meta.unused_flags_);
+    // The bool and three zero bytes form the same four-byte flags slot as master.
+    ASSERT_EQ(need_filter ? 1 : 0, buf[flags_pos]);
+    for (int64_t i = 0; i < static_cast<int64_t>(sizeof(meta.unused_flags_)); ++i) {
+      ASSERT_EQ(0, buf[flags_pos + 1 + i]);
+    }
+    int64_t flags_read_pos = flags_pos;
+    int32_t flags = 0;
+    ASSERT_EQ(OB_SUCCESS, serialization::decode_i32(buf, size, flags_read_pos, &flags));
+    ASSERT_EQ(static_cast<int32_t>(need_filter) << 24, flags);
+    ASSERT_EQ(size, flags_read_pos);
+    ASSERT_EQ(0x5a, buf[size]);
+    ObTabletMeta decoded;
+    pos = 0;
+    ASSERT_EQ(OB_SUCCESS, decoded.deserialize(buf, size + 1, pos));
+    ASSERT_EQ(size, pos);
+    ASSERT_EQ(need_filter, decoded.need_memtable_filter_after_truncate_tablet_);
+    for (const auto unused_flag : decoded.unused_flags_) {
+      ASSERT_EQ(0, unused_flag);
+    }
+    ASSERT_EQ(meta.inc_major_snapshot_, decoded.inc_major_snapshot_);
+    ASSERT_EQ(0x5a, buf[pos]);
+
+    bool legacy_need_filter = false;
+    pos = flags_pos;
+    ASSERT_EQ(OB_SUCCESS, serialization::decode_bool(buf, size, pos, &legacy_need_filter));
+    ASSERT_EQ(need_filter, legacy_need_filter);
+
+    const int64_t legacy_size = size - sizeof(meta.unused_flags_);
+    for (int64_t padding_size = 0; padding_size < static_cast<int64_t>(sizeof(meta.unused_flags_)); ++padding_size) {
+      const int64_t record_size = legacy_size + padding_size;
+      int64_t length_pos = serialization::encoded_length_i32(meta.version_);
+      ASSERT_EQ(OB_SUCCESS, serialization::encode_i32(buf, size + 1, length_pos, record_size));
+      ObTabletMeta old_record;
+      pos = 0;
+      if (0 == padding_size) {
+        ASSERT_EQ(OB_SUCCESS, old_record.deserialize(buf, size + 1, pos));
+        ASSERT_EQ(record_size, pos);
+        ASSERT_EQ(need_filter, old_record.need_memtable_filter_after_truncate_tablet_);
+      } else {
+        ASSERT_EQ(OB_ERR_UNEXPECTED, old_record.deserialize(buf, size + 1, pos));
+        ASSERT_EQ(0, pos);
+      }
+    }
+
+    assigned.reset();
+    ASSERT_FALSE(assigned.need_memtable_filter_after_truncate_tablet_);
+    for (const auto unused_flag : assigned.unused_flags_) {
+      ASSERT_EQ(0, unused_flag);
+    }
+  }
+}
+
+TEST_F(TestTablet, test_migration_tablet_param_need_filter_placeholders)
+{
+  ObMigrationTabletParam param;
+  ASSERT_FALSE(param.need_memtable_filter_after_truncate_tablet_);
+  for (const auto unused_flag : param.unused_flags_) {
+    ASSERT_EQ(0, unused_flag);
+  }
+  param.is_empty_shell_ = true;
+  param.ls_id_ = ObLSID(3);
+  param.tablet_id_ = ObTabletID(200001);
+  param.data_tablet_id_ = ObTabletID(200001);
+  param.create_scn_ = SCN::base_scn();
+  param.start_scn_ = SCN::base_scn();
+  param.clog_checkpoint_scn_ = SCN::base_scn();
+  param.mds_checkpoint_scn_ = SCN::base_scn();
+  param.snapshot_version_ = 10;
+  param.multi_version_start_ = 0;
+  param.compat_mode_ = lib::Worker::CompatMode::ORACLE;
+  param.last_persisted_committed_tablet_status_.reset();
+  ASSERT_EQ(OB_SUCCESS, param.ha_status_.init_status());
+  ASSERT_EQ(OB_SUCCESS, param.transfer_info_.init());
+  ASSERT_TRUE(param.is_valid());
+  const int64_t size = param.get_serialize_size();
+  for (const bool need_filter : {false, true}) {
+    param.need_memtable_filter_after_truncate_tablet_ = need_filter;
+    ASSERT_EQ(size, param.get_serialize_size());
+    ObMigrationTabletParam assigned;
+    ASSERT_EQ(OB_SUCCESS, assigned.assign(param));
+    ASSERT_EQ(need_filter, assigned.need_memtable_filter_after_truncate_tablet_);
+    for (const auto unused_flag : assigned.unused_flags_) {
+      ASSERT_EQ(0, unused_flag);
+    }
+    ObTabletMeta meta;
+    ASSERT_EQ(OB_SUCCESS, meta.init(param, false));
+    ASSERT_EQ(need_filter, meta.need_memtable_filter_after_truncate_tablet_);
+    for (const auto unused_flag : meta.unused_flags_) {
+      ASSERT_EQ(0, unused_flag);
+    }
+
+    char *buf = static_cast<char *>(allocator_.alloc(size + 1));
+    ASSERT_NE(nullptr, buf);
+    MEMSET(buf, 0x5a, size + 1);
+    int64_t pos = 0;
+    ASSERT_EQ(OB_SUCCESS, param.serialize(buf, size, pos));
+    ASSERT_EQ(size, pos);
+    const int64_t flags_pos = size - serialization::encoded_length_bool(need_filter) - sizeof(param.unused_flags_);
+    ASSERT_EQ(need_filter ? 1 : 0, buf[flags_pos]);
+    for (int64_t i = 0; i < static_cast<int64_t>(sizeof(param.unused_flags_)); ++i) {
+      ASSERT_EQ(0, buf[flags_pos + 1 + i]);
+    }
+    int64_t flags_read_pos = flags_pos;
+    int64_t flags = 0;
+    ASSERT_EQ(OB_SUCCESS, serialization::decode_i64(buf, size, flags_read_pos, &flags));
+    ASSERT_EQ(static_cast<int64_t>(need_filter) << 56, flags);
+    ASSERT_EQ(size, flags_read_pos);
+    ASSERT_EQ(0x5a, buf[size]);
+    ObMigrationTabletParam decoded;
+    pos = 0;
+    ASSERT_EQ(OB_SUCCESS, decoded.deserialize(buf, size + 1, pos));
+    ASSERT_EQ(size, pos);
+    ASSERT_EQ(need_filter, decoded.need_memtable_filter_after_truncate_tablet_);
+    for (const auto unused_flag : decoded.unused_flags_) {
+      ASSERT_EQ(0, unused_flag);
+    }
+    ASSERT_EQ(param.inc_major_snapshot_, decoded.inc_major_snapshot_);
+    ASSERT_EQ(0x5a, buf[pos]);
+
+    bool legacy_need_filter = false;
+    pos = flags_pos;
+    ASSERT_EQ(OB_SUCCESS, serialization::decode_bool(buf, size, pos, &legacy_need_filter));
+    ASSERT_EQ(need_filter, legacy_need_filter);
+
+    const int64_t legacy_size = size - sizeof(param.unused_flags_);
+    for (int64_t padding_size = 0; padding_size < static_cast<int64_t>(sizeof(param.unused_flags_)); ++padding_size) {
+      const int64_t record_size = legacy_size + padding_size;
+      int64_t length_pos = serialization::encoded_length_i64(param.magic_number_)
+          + serialization::encoded_length_i64(param.version_);
+      ASSERT_EQ(OB_SUCCESS, serialization::encode_i64(buf, size + 1, length_pos, record_size));
+      ObMigrationTabletParam old_record;
+      pos = 0;
+      if (0 == padding_size) {
+        ASSERT_EQ(OB_SUCCESS, old_record.deserialize(buf, size + 1, pos));
+        ASSERT_EQ(record_size, pos);
+        ASSERT_EQ(need_filter, old_record.need_memtable_filter_after_truncate_tablet_);
+      } else {
+        ASSERT_EQ(OB_ERR_UNEXPECTED, old_record.deserialize(buf, size + 1, pos));
+        ASSERT_EQ(0, pos);
+      }
+    }
+
+    assigned.reset();
+    ASSERT_FALSE(assigned.need_memtable_filter_after_truncate_tablet_);
+    for (const auto unused_flag : assigned.unused_flags_) {
+      ASSERT_EQ(0, unused_flag);
+    }
+  }
 }
 
 TEST_F(TestTablet, test_serialize_meta_compat)
