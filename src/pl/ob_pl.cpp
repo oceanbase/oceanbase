@@ -1536,10 +1536,14 @@ void ObPLContext::clean_pl_async_commit_state(sql::ObSQLSessionInfo &session_inf
   bool has_async_query_sender = session_info.has_async_query_sender();
   bool is_in_transaction = session_info.is_in_transaction();
   observer::ObPLEndTransCb &pl_end_trans_cb = session_info.get_pl_end_trans_cb();
+  // A function/trigger can be the top PL frame of an unfinished request,
+  // such as package default-value evaluation. It must wait for its commit
+  // without taking over or clearing the enclosing request's async response state.
   if (OB_SUCCESS != ret
     || !has_async_query_sender
     || (is_in_transaction && !is_autonomous_)
     || is_package_init_
+    || is_function_or_trigger_
     || in_nested_sql_ctrl()) {
     int tmp_ret = pl_end_trans_cb.wait_tx_end(NULL, TRUE);
     if (OB_SUCCESS != tmp_ret) {
@@ -1559,7 +1563,7 @@ void ObPLContext::clean_pl_async_commit_state(sql::ObSQLSessionInfo &session_inf
     // Overwrite the current error code with the error code from the preceding transaction.
     ret = OB_SUCCESS == tmp_ret ? ret : tmp_ret;
     trans_state.clear_end_trans_executed();
-    if (!is_package_init_) {
+    if (!is_package_init_ && !is_function_or_trigger_) {
       pl_end_trans_cb.destroy();
       session_info.set_is_pl_async_commit(false);
       session_info.set_has_async_query_sender(false);
