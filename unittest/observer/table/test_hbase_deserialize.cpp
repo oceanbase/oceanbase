@@ -30,6 +30,7 @@ private:
   FRIEND_TEST(TestHbaseDeserialize, reject_full_request_invalid_metadata);
   FRIEND_TEST(TestHbaseDeserialize, accept_valid_batch_request);
   FRIEND_TEST(TestHbaseDeserialize, reject_malformed_request_and_continue);
+  FRIEND_TEST(TestHbaseDeserialize, reject_missing_table_objects);
 
   enum { BUF_SIZE = 32768 };
 
@@ -780,6 +781,49 @@ TEST_F(TestHbaseDeserialize, reject_malformed_request_and_continue)
   ASSERT_EQ(1, valid_request.cf_rows_.count());
   ASSERT_EQ(1, valid_request.cf_rows_.at(0).count());
   EXPECT_EQ(1, valid_request.cf_rows_.at(0).get_cf_row(0).cells_.count());
+}
+
+TEST_F(TestHbaseDeserialize, reject_missing_table_objects)
+{
+  char null_obj[] = {static_cast<char>(ObTableNullType)};
+  ObObj obj;
+  int64_t pos = sizeof(null_obj);
+  EXPECT_EQ(OB_DESERIALIZE_ERROR,
+            ObTableSerialUtil::deserialize(null_obj, sizeof(null_obj), pos, obj));
+  EXPECT_EQ(sizeof(null_obj), pos);
+
+  pos = -1;
+  EXPECT_EQ(OB_DESERIALIZE_ERROR,
+            ObTableSerialUtil::deserialize(null_obj, sizeof(null_obj), pos, obj));
+  EXPECT_EQ(-1, pos);
+
+  pos = 0;
+  EXPECT_EQ(OB_DESERIALIZE_ERROR,
+            ObTableSerialUtil::deserialize(nullptr, sizeof(null_obj), pos, obj));
+  EXPECT_EQ(0, pos);
+
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            ObTableSerialUtil::deserialize(null_obj, sizeof(null_obj), pos, obj));
+  EXPECT_EQ(sizeof(null_obj), pos);
+  EXPECT_TRUE(obj.is_null());
+
+  char entity_buf[32];
+  int64_t entity_len = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            serialization::encode_vi64(entity_buf, sizeof(entity_buf), entity_len, 0));
+  ASSERT_EQ(OB_SUCCESS,
+            serialization::encode_vi64(
+                entity_buf, sizeof(entity_buf), entity_len, INT64_C(1) << 62));
+
+  ObSEArray<ObString, 1> names;
+  ObTableSingleOpEntity entity;
+  entity.set_dictionary(&names, &names);
+  pos = 0;
+  EXPECT_EQ(OB_DESERIALIZE_ERROR, entity.deserialize_(entity_buf, entity_len, pos));
+  EXPECT_EQ(entity_len, pos);
+  EXPECT_EQ(0, entity.get_rowkey_size());
+  EXPECT_EQ(0, entity.get_properties_count());
 }
 
 int main(int argc, char **argv)

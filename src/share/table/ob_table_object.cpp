@@ -874,7 +874,12 @@ int ObTableSerialUtil::deserialize(const char *buf, const int64_t data_len, int6
 {
   int ret = OB_SUCCESS;
   uint8_t type = uint8_t();
-  OB_UNIS_DECODE(type);
+  if (OB_UNLIKELY(pos < 0 || pos >= data_len)) {
+    ret = OB_DESERIALIZE_ERROR;
+    LOG_WARN("table object payload is missing", K(ret), KP(buf), K(data_len), K(pos));
+  } else {
+    OB_UNIS_DECODE(type);
+  }
   if (OB_SUCC(ret)) {
     ObTableObjType table_type = static_cast<ObTableObjType>(type);
     if (table_type >= ObTableObjTypeMax || table_type < 0) {
