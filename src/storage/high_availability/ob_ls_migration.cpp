@@ -3838,7 +3838,10 @@ int ObTabletFinishMigrationTask::update_data_and_expected_status_(bool &is_skipp
       } else {
         LOG_WARN("[HA]failed to update tablet ha data status", K(ret), KPC(copy_tablet_ctx_), K(data_status));
       }
-    } else if (OB_FAIL(update_co_convert_status_for_cs_replica(false /*tablet_is_deleted*/))) {
+    } else if (!copy_tablet_ctx_->tablet_id_.is_ls_inner_tablet()
+        && OB_FAIL(ObStorageHAUtils::check_tablet_is_deleted(copy_tablet_ctx_->tablet_handle_, is_skipped))) {
+      LOG_WARN("failed to check whether migration tablet is deleted", K(ret), KPC(copy_tablet_ctx_));
+    } else if (OB_FAIL(update_co_convert_status_for_cs_replica(is_skipped /*tablet_is_deleted*/))) {
       LOG_WARN("failed to schedule convert merge if needed", K(ret), KPC_(copy_tablet_ctx));
     } else {
       LOG_INFO("update tablet ha data status", KPC(copy_tablet_ctx_), K(data_status));
