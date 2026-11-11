@@ -6293,6 +6293,8 @@ int ObAdminFlushCacheArg::assign(const ObAdminFlushCacheArg &other)
 
 OB_SERIALIZE_MEMBER(ObAdminFlushCacheArg, tenant_ids_, cache_type_, db_ids_, sql_id_, is_fine_grained_, ns_type_, schema_id_, sequence_name_);
 
+OB_SERIALIZE_MEMBER(ObDBMSSharedPoolArg, op_, object_id_, object_type_, schema_id_, body_schema_id_);
+
 int ObFlushCacheArg::assign(const ObFlushCacheArg &other)
 {
   int ret = OB_SUCCESS;
@@ -6304,13 +6306,14 @@ int ObFlushCacheArg::assign(const ObFlushCacheArg &other)
   ns_type_ = other.ns_type_;
   schema_id_ = other.schema_id_;
   sequence_name_ = other.sequence_name_;
+  dbms_shared_pool_arg_ = other.dbms_shared_pool_arg_;
   if (OB_FAIL(db_ids_.assign(other.db_ids_))) {
     LOG_WARN("failed to assign db ids", K(ret));
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObFlushCacheArg, is_all_tenant_, tenant_id_, cache_type_, db_ids_, sql_id_, is_fine_grained_, ns_type_, schema_id_, sequence_name_);
+OB_SERIALIZE_MEMBER(ObFlushCacheArg, is_all_tenant_, tenant_id_, cache_type_, db_ids_, sql_id_, is_fine_grained_, ns_type_, schema_id_, sequence_name_, dbms_shared_pool_arg_);
 
 OB_SERIALIZE_MEMBER(ObGetAllSchemaArg,
                     schema_version_,

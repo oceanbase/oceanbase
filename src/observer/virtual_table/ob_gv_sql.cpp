@@ -1447,6 +1447,11 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       }
       break;
     }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::IS_KEPT: {
+      // Compatibility placeholder; KEEP/UNKEEP is not supported yet.
+      cells[i].set_bool(false);
+      break;
+    }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::PARAMS_VALUE: {
       cells[i].set_null();
       break;

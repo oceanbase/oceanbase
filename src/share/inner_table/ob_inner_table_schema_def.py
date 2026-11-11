@@ -10050,6 +10050,7 @@ def_table_schema(
       ('strict_location_constraint', 'longtext'),
       ('non_strict_location_constraint', 'longtext'),
       ('params_value', 'longtext'),
+      ('is_kept', 'bool'),
   ],
   vtable_route_policy = 'distributed',
   partition_columns = ['svr_ip', 'svr_port'],

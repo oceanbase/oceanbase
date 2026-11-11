@@ -7699,6 +7699,35 @@ public:
   common::ObString sequence_name_;
 };
 
+// Compatibility placeholder for DBMS_SHARED_POOL KEEP/UNKEEP.
+enum ObDBMSSharedPoolOp
+{
+  DBMS_SHARED_POOL_INVALID_OP = 0,
+  DBMS_SHARED_POOL_KEEP = 1,
+  DBMS_SHARED_POOL_UNKEEP = 2,
+  DBMS_SHARED_POOL_MAX_OP,
+};
+
+struct ObDBMSSharedPoolArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDBMSSharedPoolArg()
+    : op_(DBMS_SHARED_POOL_INVALID_OP),
+      object_id_(common::OB_INVALID_ID),
+      object_type_(share::schema::ObObjectType::INVALID),
+      schema_id_(common::OB_INVALID_ID),
+      body_schema_id_(common::OB_INVALID_ID)
+  {}
+  TO_STRING_KV(K_(op), K_(object_id), K_(object_type), K_(schema_id), K_(body_schema_id));
+
+  ObDBMSSharedPoolOp op_;
+  uint64_t object_id_;
+  share::schema::ObObjectType object_type_;
+  uint64_t schema_id_;
+  uint64_t body_schema_id_;
+};
+
 struct ObAdminMigrateUnitArg
 {
   OB_UNIS_VERSION(1);
@@ -8411,6 +8440,7 @@ public:
   sql::ObLibCacheNameSpace ns_type_;
   uint64_t schema_id_;
   common::ObString sequence_name_;
+  ObDBMSSharedPoolArg dbms_shared_pool_arg_;
 };
 
 struct ObGetAllSchemaArg
