@@ -435,10 +435,12 @@ int ObDASTaskResultMgr::save_task_result(int64_t task_id,
           scan_rtdef->tsc_monitor_info_->reset_stat();
         }
 
-        LOG_DEBUG("save_task_result: ", KPC(tcb), KPC(mem_profile_info), K(mem_profile_info->profile_.get_mem_used()),
-                                        K(mem_profile_info->sql_mem_processor_.get_sql_mem_mgr()->get_workarea_hold_size()),
-                                        K(mem_profile_info->sql_mem_processor_.get_sql_mem_mgr()->get_workarea_count()),
-                                        K(mem_profile_info->sql_mem_processor_.get_sql_mem_mgr()->get_total_mem_used()));
+        ObTenantSqlMemoryManager *sql_mem_mgr = mem_profile_info->sql_mem_processor_.get_sql_mem_mgr();
+        LOG_TRACE("save_task_result: ", KPC(tcb), KPC(mem_profile_info), K(mem_profile_info->profile_.get_mem_used()),
+                  KP(sql_mem_mgr),
+                  "workarea_hold_size", OB_ISNULL(sql_mem_mgr) ? 0 : sql_mem_mgr->get_workarea_hold_size(),
+                  "workarea_count", OB_ISNULL(sql_mem_mgr) ? 0 : sql_mem_mgr->get_workarea_count(),
+                  "total_mem_used", OB_ISNULL(sql_mem_mgr) ? 0 : sql_mem_mgr->get_total_mem_used());
 
         /**
           This tcb has not yet been inserted into the tcb map, and is not considered to exist elsewhere,
