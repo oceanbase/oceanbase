@@ -10819,7 +10819,7 @@ int ObSchemaServiceSQLImpl::get_table_id(
               bool tmp_case_compare = is_mysql_sys_database_id(database_id) ? true : case_compare;
               if (schema_name_is_equal(
                   table_name, tmp_table_name,
-                  case_compare, compare_with_collation)
+                  tmp_case_compare, compare_with_collation)
                   && 0 == tmp_session_id) {
                 candidate_inner_table_id = tmp_table_id;
                 candidate_inner_table_type = tmp_table_type;
