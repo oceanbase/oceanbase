@@ -447,6 +447,12 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigAuditLogQuerySQLChecker);
 };
 
+class ObConfigAuditLogRotateOnTimeChecker : public ObConfigChecker
+{
+public:
+  bool check(const ObConfigItem &t) const override;
+};
+
 class ObConfigAuditLogStrategyChecker
   : public ObConfigChecker
 {
