@@ -15054,7 +15054,8 @@ int ObDMLResolver::resolve_pseudo_column(
       LOG_WARN("resolve old_new pseudo column failed", K(ret));
     }
   } else if (lib::is_oracle_mode() &&
-             0 == q_name.col_name_.case_compare(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME)) {
+             ((0 == q_name.col_name_.case_compare(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME)) ||
+             (0 == q_name.col_name_.case_compare(OB_HIDDEN_UPDATE_TABLE_ROWID_COLUMN_NAME)))) {
     if (OB_FAIL(resolve_rowid_pseudo_column(q_name, real_ref_expr))) {
       LOG_WARN("resolve rowid pseudo column failed", K(ret));
     }
@@ -15286,41 +15287,44 @@ int ObDMLResolver::resolve_rowid_pseudo_column(
                                                               *table_item,
                                                               real_ref_expr))) {
       LOG_WARN("build empty rowid expr failed", K(ret));
+    } else if (0 == q_name.col_name_.case_compare(OB_HIDDEN_UPDATE_TABLE_ROWID_COLUMN_NAME)) {
+      ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr*>(real_ref_expr);
+      col_expr->set_column_name(OB_HIDDEN_UPDATE_TABLE_ROWID_COLUMN_NAME);
     }
   } else if (OB_FAIL(resolve_rowid_expr(cur_stmt, *table_item, real_ref_expr))) {
     LOG_WARN("resolve rowid expr failed", K(ret));
   }
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(real_ref_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("real_ref_expr is null", K(ret));
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(real_ref_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("real_ref_expr is null", K(ret));
+  } else if (0 == q_name.col_name_.case_compare(OB_HIDDEN_UPDATE_TABLE_ROWID_COLUMN_NAME)) {
+    // do nothing
+  } else {
+    ObRawExpr *same_rowid_expr = NULL;
+    if (OB_FAIL(cur_stmt->check_and_get_same_rowid_expr(real_ref_expr, same_rowid_expr))) {
+      LOG_WARN("failed to check and get same rowid expr", K(ret));
+    } else if (same_rowid_expr != NULL) {
+      real_ref_expr = same_rowid_expr;
+      LOG_DEBUG("rowid_expr build success", K(*real_ref_expr));
+    } else if (OB_FAIL(cur_stmt->get_pseudo_column_like_exprs().push_back(real_ref_expr))) {
+      LOG_WARN("failed to push back", K(ret));
     } else {
-      ObRawExpr *same_rowid_expr = NULL;
-      if (OB_FAIL(cur_stmt->check_and_get_same_rowid_expr(real_ref_expr, same_rowid_expr))) {
-        LOG_WARN("failed to check and get same rowid expr", K(ret));
-      } else if (same_rowid_expr != NULL) {
-        real_ref_expr = same_rowid_expr;
-        LOG_DEBUG("rowid_expr build success", K(*real_ref_expr));
-      } else if (OB_FAIL(cur_stmt->get_pseudo_column_like_exprs().push_back(real_ref_expr))) {
-        LOG_WARN("failed to push back", K(ret));
+      LOG_DEBUG("rowid_expr build success", K(*real_ref_expr));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (cur_level != current_level_) {
+      ObRawExpr *exec_param = NULL;
+      if (OB_ISNULL(query_ref_exec_params)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("no subquery is found", K(ret), K(query_ref_exec_params));
+      } else if (OB_FAIL(ObRawExprUtils::get_exec_param_expr(*params_.expr_factory_,
+                                                              query_ref_exec_params,
+                                                              real_ref_expr,
+                                                              exec_param))) {
+        LOG_WARN("failed to get exec param expr", K(ret));
       } else {
-        LOG_DEBUG("rowid_expr build success", K(*real_ref_expr));
-      }
-      if (OB_SUCC(ret)) {
-        if (cur_level != current_level_) {
-          ObRawExpr *exec_param = NULL;
-          if (OB_ISNULL(query_ref_exec_params)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("no subquery is found", K(ret), K(query_ref_exec_params));
-          } else if (OB_FAIL(ObRawExprUtils::get_exec_param_expr(*params_.expr_factory_,
-                                                                  query_ref_exec_params,
-                                                                  real_ref_expr,
-                                                                  exec_param))) {
-            LOG_WARN("failed to get exec param expr", K(ret));
-          } else {
-            real_ref_expr = exec_param;
-          }
-        }
+        real_ref_expr = exec_param;
       }
     }
   }

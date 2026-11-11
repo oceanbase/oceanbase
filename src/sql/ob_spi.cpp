@@ -4701,7 +4701,7 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
 
           ObSPIRetryCtrlGuard retry_guard(retry_ctrl, *spi_result, session_info, ctx, ret, is_retry);
           bool is_iter_end = false;
-	  if (cursor.is_ps_cursor()) {
+          if (cursor.is_ps_cursor()) {
             spi_result->get_sql_ctx().can_reroute_sql_ = ctx->exec_ctx_->get_sql_ctx()->can_reroute_sql_;
           }
           OZ (inner_open(ctx,
