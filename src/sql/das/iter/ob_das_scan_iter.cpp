@@ -134,6 +134,9 @@ int ObDASScanIter::inner_get_next_row()
       LOG_WARN("failed to try check vector pre-filter timeout", K(ret));
     }
   }
+  if (OB_NOT_NULL(scan_param_)) {
+    scan_param_->need_update_tablet_param_ = false;
+  }
   return ret;
 }
 
@@ -159,7 +162,17 @@ int ObDASScanIter::inner_get_next_rows(int64_t &count, int64_t capacity)
     const ObBitVector *skip = nullptr;
     PRINT_VECTORIZED_ROWS(SQL, DEBUG, *eval_ctx_, *output_, count, skip);
   }
+  if (OB_NOT_NULL(scan_param_)) {
+    scan_param_->need_update_tablet_param_ = false;
+  }
   return ret;
+}
+
+void ObDASScanIter::set_need_update_tablet_param()
+{
+  if (OB_NOT_NULL(scan_param_)) {
+    scan_param_->need_update_tablet_param_ = true;
+  }
 }
 
 void ObDASScanIter::clear_evaluated_flag()

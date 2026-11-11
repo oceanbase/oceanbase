@@ -108,6 +108,8 @@ public:
   int get_next_row();
   int get_next_rows(int64_t &count, int64_t capacity);
   virtual void clear_evaluated_flag() {}
+  // Restore tablet parameters before resuming a scan whose expression frames may be shared.
+  virtual void set_need_update_tablet_param();
 
   // required by iters related to DAS SCAN OP
   virtual int do_table_scan() { return OB_NOT_IMPLEMENT; }

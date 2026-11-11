@@ -83,6 +83,7 @@ public:
   virtual int rescan() override;
   virtual int advance_scan() override;
   virtual void clear_evaluated_flag() override;
+  virtual void set_need_update_tablet_param() override;
 
   virtual int set_scan_rowkey(ObEvalCtx *eval_ctx,
                               const ObIArray<ObExpr *> &rowkey_exprs,

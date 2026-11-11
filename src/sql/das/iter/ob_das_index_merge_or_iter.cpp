@@ -176,6 +176,7 @@ int ObDASIndexMergeOrIter::sort_get_next_row()
       if (OB_ISNULL(child_iter)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr", K(i));
+      } else if (FALSE_IT(prepare_child_scan(*child_iter))) {
       } else if (OB_FAIL(child_iter->get_next_row())) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;

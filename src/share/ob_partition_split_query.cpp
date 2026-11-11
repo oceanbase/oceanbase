@@ -423,6 +423,10 @@ int ObPartitionSplitQuery::fill_auto_split_params(
       }
     }
   }
+  // Unlike BEFORE_FILL_AUTO_SPLIT_PARAMS above, this point must be compiled in every build:
+  // split_partition mysqltests drive it through ob_global_debug_sync to freeze a scan right
+  // after it cached its split bounds. GDS.execute() is a no-op unless an action is armed.
+  DEBUG_SYNC(AFTER_FILL_AUTO_SPLIT_PARAMS);
   return ret;
 }
 
@@ -468,8 +472,8 @@ int ObPartitionSplitQuery::fill_range_filter_param(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", K(ret), K(expr));
       }
-      LOG_DEBUG("print filter batch result flag", K(expr->batch_result_));
       if (OB_SUCC(ret)) {
+        LOG_DEBUG("print filter batch result flag", K(expr->batch_result_));
         const int col_idx = (i - 1) % part_column_cnt;
         ObDatum &expr_datum = check_only ? expr->locate_expr_datum(eval_ctx) : expr->locate_datum_for_write(eval_ctx);
         if (i == 0) { // 1. bypass param expr.
@@ -523,6 +527,8 @@ int ObPartitionSplitQuery::fill_range_filter_param(
         }
       } else {
         expr_datum.set_outrow(); // min
+        // Split-bound sentinels use only the flag and have no payload.
+        expr_datum.len_ = 0;
       }
     } else if (datum.is_max()) {
       if (check_only) {
@@ -532,6 +538,8 @@ int ObPartitionSplitQuery::fill_range_filter_param(
         }
       } else {
         expr_datum.set_ext(); // max
+        // The exec param buffer may be smaller than the default EXT payload.
+        expr_datum.len_ = 0;
       }
     } else {
       if (check_only) {

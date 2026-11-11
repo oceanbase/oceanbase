@@ -419,6 +419,17 @@ int ObDASMergeIter::inner_get_next_rows(int64_t &count, int64_t capacity)
   return ret;
 }
 
+void ObDASMergeIter::request_tablet_param_refresh(ObDASScanOp &scan_op)
+{
+  scan_op.get_scan_param().need_update_tablet_param_ = true;
+  if (scan_op.is_local_task() && OB_NOT_NULL(scan_op.get_output_result_iter())) {
+    // For a local task the output result iter is the root of its das iter tree.
+    // Propagate the request to every scan leaf so that index merge children and
+    // the lookup data scan refill their split filter params before reading again.
+    static_cast<ObDASIter *>(scan_op.get_output_result_iter())->set_need_update_tablet_param();
+  }
+}
+
 void ObDASMergeIter::reset_datum_ptr(ObDASScanOp *scan_op, int64_t &capacity)
 {
   ObDASCtx &das_ctx = scan_op->get_rtdef()->eval_ctx_->exec_ctx_.get_das_ctx();
@@ -857,7 +868,7 @@ int ObDASMergeIter::get_next_seq_row()
         LOG_WARN("unexpected das task op type", K(ret));
       } else {
         if (first_get_row_) {
-          scan_op->get_scan_param().need_update_tablet_param_ = true;
+          request_tablet_param_refresh(*scan_op);
         }
         ret = scan_op->get_output_result_iter()->get_next_row();
         scan_op->get_scan_param().need_update_tablet_param_ = false;
@@ -876,7 +887,7 @@ int ObDASMergeIter::get_next_seq_row()
           } else {
             ret = OB_SUCCESS;
             scan_op = DAS_SCAN_OP(das_tasks_arr_.at(seq_task_idx_));
-            scan_op->get_scan_param().need_update_tablet_param_ = true;
+            request_tablet_param_refresh(*scan_op);
             if (OB_FAIL(update_pseudo_columns(scan_op))) {
               LOG_WARN("failed to update_pseudo_columns", K(ret), K(scan_op->get_tablet_loc()->tablet_id_));
             } else if (need_update_partition_id_) {
@@ -917,7 +928,7 @@ int ObDASMergeIter::get_next_seq_rows(int64_t &count, int64_t capacity)
         if (OB_SUCC(ret)) {
           count = 0;
           if (first_get_row_) {
-            scan_op->get_scan_param().need_update_tablet_param_ = true;
+            request_tablet_param_refresh(*scan_op);
           }
           ret = scan_op->get_output_result_iter()->get_next_rows(count, capacity);
           scan_op->get_scan_param().need_update_tablet_param_ = false;
@@ -942,7 +953,7 @@ int ObDASMergeIter::get_next_seq_rows(int64_t &count, int64_t capacity)
           } else {
             ret = OB_SUCCESS;
             scan_op = DAS_SCAN_OP(das_tasks_arr_.at(seq_task_idx_));
-            scan_op->get_scan_param().need_update_tablet_param_ = true;
+            request_tablet_param_refresh(*scan_op);
             if (OB_FAIL(update_pseudo_columns(scan_op))) {
               LOG_WARN("failed to update_pseudo_columns", K(ret),
                 K(scan_op->get_tablet_loc()->tablet_id_));
@@ -977,7 +988,7 @@ int ObDASMergeIter::get_next_sorted_row()
         if (OB_ISNULL(scan_op)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected das task op type", K(ret), KPC(das_tasks_arr_[i]));
-        } else if (FALSE_IT(scan_op->get_scan_param().need_update_tablet_param_ = true)) {
+        } else if (FALSE_IT(request_tablet_param_refresh(*scan_op))) {
         } else if (OB_SUCC(scan_op->get_output_result_iter()->get_next_row())) {
           if (OB_FAIL(merge_store_rows_arr_[i].save(false, 1))) {
             LOG_WARN("failed to save store row", K(ret));
@@ -1071,7 +1082,7 @@ int ObDASMergeIter::get_next_sorted_rows(int64_t &count, int64_t capacity)
               reset_datum_ptr(scan_op, capacity);
             }
             count = 0;
-            scan_op->get_scan_param().need_update_tablet_param_ = true;
+            request_tablet_param_refresh(*scan_op);
             ret = scan_op->get_output_result_iter()->get_next_rows(count, capacity);
             if (OB_ITER_END == ret && count > 0) {
               ret = OB_SUCCESS;

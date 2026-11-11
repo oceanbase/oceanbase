@@ -222,6 +222,10 @@ private:
   char iter_alloc_buf_[sizeof(common::ObArenaAllocator)];
   typedef common::ObSEArray<ObIDASTaskOp*, 8> DasTaskArray;
   DasTaskArray das_tasks_arr_;
+  // Local tasks of one table scan share the split filter param exprs, so switching to another
+  // task must refresh every scan leaf of that task's iter tree (index merge children and the
+  // lookup data scan own their scan params), not only the op-level scan param.
+  void request_tablet_param_refresh(ObDASScanOp &scan_op);
   int (ObDASMergeIter::*get_next_row_)();
   int (ObDASMergeIter::*get_next_rows_)(int64_t&, int64_t);
   bool first_get_row_;

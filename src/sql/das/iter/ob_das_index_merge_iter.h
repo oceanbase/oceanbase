@@ -197,6 +197,7 @@ public:
       rowkey_exprs_(nullptr),
       mem_ctx_(),
       child_iters_(),
+      last_child_iter_(nullptr),
       child_stores_(),
       child_bitmaps_(),
       mock_skip_(nullptr),
@@ -224,6 +225,7 @@ protected:
   // compare the first row of two stores
   int compare(IndexMergeRowStore &cur_store, IndexMergeRowStore &cmp_store, int &cmp_ret) const;
   int fill_child_stores(int64_t capacity, common::ObIArray<ObExpr*> *relevance_exprs = nullptr);
+  void prepare_child_scan(ObDASIter &child_iter);
   int fill_one_child_store(int64_t capacity, int64_t index, common::ObIArray<ObExpr*> *relevance_exprs, ObDASIter *child_iter = nullptr);
   int fill_child_bitmaps();
   int save_row_to_result_buffer(int64_t size);
@@ -277,6 +279,7 @@ protected:
   const ExprFixedArray *rowkey_exprs_;
   lib::MemoryContext mem_ctx_;
   common::ObFixedArray<ObDASIter*, common::ObIAllocator> child_iters_;
+  ObDASIter *last_child_iter_;
   common::ObFixedArray<IndexMergeRowStore, common::ObIAllocator> child_stores_;
   common::ObFixedArray<ObRoaringBitmap*, common::ObIAllocator> child_bitmaps_;
   // mock skip vector for add batch rows

@@ -29,6 +29,15 @@ int ObDASIter::set_merge_status(MergeType merge_type)
   return ret;
 }
 
+void ObDASIter::set_need_update_tablet_param()
+{
+  for (uint32_t i = 0; i < children_cnt_; ++i) {
+    if (OB_NOT_NULL(children_[i])) {
+      children_[i]->set_need_update_tablet_param();
+    }
+  }
+}
+
 int ObDASIter::init(ObDASIterParam &param)
 {
   int ret = OB_SUCCESS;

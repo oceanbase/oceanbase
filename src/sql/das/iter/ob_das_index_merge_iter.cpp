@@ -533,6 +533,7 @@ int ObDASIndexMergeIter::result_buffer_rows_to_expr(int64_t expect_size)
 int ObDASIndexMergeIter::do_table_scan()
 {
   int ret = OB_SUCCESS;
+  last_child_iter_ = nullptr;
   for (int64_t i = 0; OB_SUCC(ret) && i < child_scan_rtdefs_.count(); ++i) {
     ObDASScanRtDef *scan_rtdef = child_scan_rtdefs_.at(i);
     ObDASIter *iter = child_iters_.at(i);
@@ -560,6 +561,7 @@ int ObDASIndexMergeIter::do_table_scan()
 int ObDASIndexMergeIter::rescan()
 {
   int ret = OB_SUCCESS;
+  last_child_iter_ = nullptr;
   for (int64_t i = 0; OB_SUCC(ret) && i < child_scan_rtdefs_.count(); ++i) {
     ObDASScanRtDef *scan_rtdef = child_scan_rtdefs_.at(i);
     ObDASIter *iter = child_iters_.at(i);
@@ -621,6 +623,7 @@ int ObDASIndexMergeIter::set_ls_tablet_ids(const ObLSID &ls_id, const ObDASRelat
 int ObDASIndexMergeIter::inner_reuse()
 {
   int ret = OB_SUCCESS;
+  last_child_iter_ = nullptr;
   for (int64_t i = 0; OB_SUCC(ret) && i < child_scan_rtdefs_.count(); ++i) {
     ObDASScanRtDef *scan_rtdef = child_scan_rtdefs_.at(i);
     ObDASIter *iter = child_iters_.at(i);
@@ -678,6 +681,7 @@ int ObDASIndexMergeIter::inner_reuse()
 int ObDASIndexMergeIter::inner_release()
 {
   int ret = OB_SUCCESS;
+  last_child_iter_ = nullptr;
   child_iters_.reset();
   child_scan_rtdefs_.reset();
   child_tablet_ids_.reset();
@@ -791,6 +795,16 @@ int ObDASIndexMergeIter::update_skip_id(int64_t child_idx, uint64_t *skip_id)
   return ret;
 }
 
+void ObDASIndexMergeIter::prepare_child_scan(ObDASIter &child_iter)
+{
+  // Consecutive reads of the same child reuse its tablet parameters.
+  // Refresh requests from outer iterators still propagate directly to the scan leaves.
+  if (last_child_iter_ != &child_iter) {
+    child_iter.set_need_update_tablet_param();
+    last_child_iter_ = &child_iter;
+  }
+}
+
 int ObDASIndexMergeIter::fill_one_child_store(
     int64_t capacity,
     int64_t index,
@@ -817,6 +831,7 @@ int ObDASIndexMergeIter::fill_one_child_store(
         LOG_WARN("failed to update skip id", K(ret));
       } else {
         while (OB_SUCC(ret) && !child_store.iter_end_ && child_count == 0) {
+          prepare_child_scan(*child_iter);
           if (OB_FAIL(child_iter->get_next_rows(child_count, child_capacity))) {
             if (ret == OB_ITER_END) {
               ret = OB_SUCCESS;

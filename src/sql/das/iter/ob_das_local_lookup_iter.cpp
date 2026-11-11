@@ -171,6 +171,8 @@ void ObDASLocalLookupIter::reset_lookup_state()
 {
   ObDASLookupIter::reset_lookup_state();
   trans_info_array_.reuse();
+  // Lookup can overwrite the split parameters shared with the index scan.
+  index_table_iter_->set_need_update_tablet_param();
 }
 
 int ObDASLocalLookupIter::add_rowkey()

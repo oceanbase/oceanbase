@@ -141,6 +141,8 @@ int ObDASIndexMergeAndIter::inner_get_next_rows(int64_t &count, int64_t capacity
         }
       }
       if (OB_SUCC(ret) && count > 0) {
+        // The main scan can overwrite the split parameters of the last index child.
+        last_child_iter_ = nullptr;
         // reuse main scan iter and release memory of query range
         main_scan_param_->need_switch_param_ = false;
         main_scan_iter_->reuse();
@@ -304,6 +306,7 @@ int ObDASIndexMergeAndIter::sort_get_next_row()
           if (OB_ISNULL(child_iter)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected nullptr", K(i));
+          } else if (FALSE_IT(prepare_child_scan(*child_iter))) {
           } else if (OB_FAIL(child_iter->get_next_row())) {
             if (OB_ITER_END == ret) {
               ret = OB_SUCCESS;
@@ -563,6 +566,7 @@ int ObDASIndexMergeAndIter::BitmapRowIdCursor::build_bitmap()
   int ret = OB_SUCCESS;
 
   int64_t total_count = 0;
+  scan_iter_->set_need_update_tablet_param();
   while (OB_SUCC(ret)) {
     int64_t count = 0;
     if (OB_FAIL(scan_iter_->get_next_rows(count, scan_size_))) {

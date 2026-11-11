@@ -1579,12 +1579,14 @@ int ObMultipleMerge::refresh_filter_params_on_demand(const bool is_open)
     if (has_split_filter && (is_open || (OB_NOT_NULL(iter_param.need_update_tablet_param_) && *iter_param.need_update_tablet_param_))) {
       const bool is_split_dst = iter_param.is_tablet_spliting();
       ObTablet *tablet = tablet_read_tables_->tablet_iter_.get_tablet_handle().get_obj();
+      // Split bounds are copied into expression buffers, so release temporary split info after each refresh.
+      ObArenaAllocator tmp_allocator("SplitFilterTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
       ObPartitionSplitQuery split_query;
       if (OB_ISNULL(tablet)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet is null", K(ret), K(table_id), K(iter_param));
       } else if (OB_FAIL(split_query.fill_auto_split_params(*tablet, is_split_dst,
-          iter_param.op_, iter_param.auto_split_filter_type_, iter_param.auto_split_params_, *access_ctx_->stmt_allocator_))) {
+          iter_param.op_, iter_param.auto_split_filter_type_, iter_param.auto_split_params_, tmp_allocator))) {
         LOG_WARN("fail to fill split params.", K(ret));
       }
     }
