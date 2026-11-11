@@ -1180,6 +1180,24 @@ private:
       const uint64_t data_version,
       const ObMigrationTabletParam &param,
       ObTabletHandle &tablet_handle);
+  // The caller must not hold bucket_lock_. Sets is_update if the tablet already exists.
+  int try_create_empty_shell_tablet(
+      const uint64_t data_version,
+      const ObMigrationTabletParam &param,
+      ObTabletHandle &tablet_handle,
+      bool &is_update);
+  // The caller must not hold bucket_lock_. Only replaces an existing tablet.
+  int update_empty_shell_tablet(
+      const uint64_t data_version,
+      const ObMigrationTabletParam &param,
+      ObTabletHandle &tablet_handle);
+  int try_update_empty_shell_tablet(
+      const uint64_t data_version,
+      const ObTabletMapKey &key,
+      const ObMetaDiskAddr &old_tablet_addr,
+      const ObTabletHandle &old_tablet_handle,
+      ObTabletHandle &new_tablet_handle,
+      ObTimeGuard &time_guard);
   int check_rollback_tablet_is_same_(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
