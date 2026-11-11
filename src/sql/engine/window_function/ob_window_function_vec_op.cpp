@@ -1934,7 +1934,7 @@ int ObWindowFunctionVecOp::output_stored_rows(const int64_t out_processed_cnt,
 namespace {
 // check if all the window functions are applicable for tiny partition optimization
 bool allow_eval_in_expr_for_wf_list(WinFuncColExpr *start, WinFuncColExpr *end,
-                                    int current_count,
+                                    int64_t current_count,
                                     const int64_t partition_end_index_in_expr,
                                     const ObBatchRows *input_brs) {
   bool ret = true;
@@ -2038,7 +2038,7 @@ int ObWindowFunctionVecOp::compute_wf_values(
   LOG_TRACE("compute_wf_values", K(partition_end_index_in_expr), K(allow_eval_in_expr), K(batch_partition_distribution_));
   FOREACH_WINCOL(end) {
     if (it == wf_list_.get_last()) {
-      const int v = input_stores_.cur_->count() - it->part_first_row_idx_;
+      const int64_t v = input_stores_.cur_->count() - it->part_first_row_idx_;
       if (v > 0) {
         last_computed_part_rows_ = v;
       }

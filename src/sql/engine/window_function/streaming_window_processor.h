@@ -53,7 +53,7 @@ public:
 
   ObCompactRow *get_rd_last_row() const { return rd_last_row_; }
 
-  int get_last_computed_part_rows() const { return last_computed_part_rows_; }
+  int64_t get_last_computed_part_rows() const { return last_computed_part_rows_; }
 
   bool has_processed_rows() const { return metrics_.num_rows_ > 0; }
 
