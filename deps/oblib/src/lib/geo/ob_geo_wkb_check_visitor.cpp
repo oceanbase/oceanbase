@@ -165,6 +165,15 @@ int ObGeoWkbCheckVisitor::check_geometrycollection(T *geo)
   if (OB_FAIL(check_common_header(geo, ObGeoType::GEOMETRYCOLLECTION, bo_))) {
     LOG_WARN("invaid wkb geo", K(ret), K(wkb_), K(pos_), K(ObGeoType::GEOMETRYCOLLECTION));
   } else {
+    uint32_t geo_num = ObGeoWkbByteOrderUtil::read<uint32_t>((wkb_.ptr() + pos_), bo_);
+    // each sub geometry costs at least [bo][type] header; reject an absurd num before
+    // iterating, otherwise a forged num drives a huge offset-array allocation later
+    uint64_t min_needed = static_cast<uint64_t>(geo_num) * (WKB_GEO_BO_SIZE + WKB_GEO_TYPE_SIZE);
+    uint64_t remain = static_cast<uint64_t>(wkb_.length()) - pos_ - WKB_GEO_ELEMENT_NUM_SIZE;
+    if (min_needed > remain) {
+      ret = OB_INVALID_DATA;
+      LOG_WARN("invalid geo number of collection", K(ret), K(pos_), K(geo_num), K(wkb_.length()));
+    }
     pos_ += WKB_GEO_ELEMENT_NUM_SIZE;
   }
   return ret;
