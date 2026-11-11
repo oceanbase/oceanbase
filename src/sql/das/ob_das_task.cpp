@@ -776,7 +776,7 @@ int ObDASRemoteInfo::deser_ctdef_expr_with_cache(ObDASRemoteInfo &remote_info,
                   K(ctdef_expr_len),
                   "ctdef_cnt", val->ctdefs_.count());
       }
-    } else if (OB_SQL_PC_NOT_EXIST != get_ret) {
+    } else if (OB_SQL_PC_NOT_EXIST != get_ret && OB_PC_LOCK_CONFLICT != get_ret) {
       ret = get_ret;
       LOG_WARN("get das deserialize cache obj failed", K(ret), K(key_hash));
     } else {
@@ -806,7 +806,9 @@ int ObDASRemoteInfo::deser_ctdef_expr_with_cache(ObDASRemoteInfo &remote_info,
         }
         if (OB_SUCC(ret)) {
           ObDasCacheMemStat mem_stat;
-          if (!mem_stat.can_add_das_cache_obj(*lib_cache, *obj, key)) {
+          if (OB_PC_LOCK_CONFLICT == get_ret) {
+            LOG_TRACE("[DAS_DESER_CACHE] SKIP_INSERT_LOCK_CONFLICT", K(key_hash));
+          } else if (!mem_stat.can_add_das_cache_obj(*lib_cache, *obj, key)) {
             if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
               LOG_TRACE("[DAS_DESER_CACHE] SKIP_INSERT_MEM_LIMIT",
                         "type", static_cast<int>(key.type_),
@@ -824,8 +826,8 @@ int ObDASRemoteInfo::deser_ctdef_expr_with_cache(ObDASRemoteInfo &remote_info,
                         K(ctdef_expr_len),
                         "ctdef_cnt",
                         val->ctdefs_.count());
-            } else if (OB_SQL_PC_PLAN_DUPLICATE == add_ret) {
-              LOG_TRACE("[DAS_DESER_CACHE] MISS insert race, use local obj", K(key_hash));
+            } else if (OB_SQL_PC_PLAN_DUPLICATE == add_ret || OB_PC_LOCK_CONFLICT == add_ret) {
+              LOG_TRACE("[DAS_DESER_CACHE] MISS insert race, use local obj", K(add_ret), K(key_hash));
             } else {
               ret = add_ret;
               LOG_WARN("add das deserialize cache obj failed", K(ret), K(key_hash));
@@ -960,7 +962,7 @@ int ObDASRemoteInfo::deser_session_with_cache(ObDASRemoteInfo &remote_info,
         templ = cache_val->templ_;
         LOG_TRACE("[DAS_DESER_CACHE] SESSION HIT", K(key_hash), K(inv_len));
       }
-    } else if (OB_SQL_PC_NOT_EXIST != get_ret) {
+    } else if (OB_SQL_PC_NOT_EXIST != get_ret && OB_PC_LOCK_CONFLICT != get_ret) {
       ret = get_ret;
       LOG_WARN("get das session cache obj failed", K(ret), K(key_hash));
     } else {
@@ -988,7 +990,9 @@ int ObDASRemoteInfo::deser_session_with_cache(ObDASRemoteInfo &remote_info,
         }
         if (OB_SUCC(ret)) {
           ObDasCacheMemStat mem_stat;
-          if (!mem_stat.can_add_das_cache_obj(*lib_cache, *obj, key)) {
+          if (OB_PC_LOCK_CONFLICT == get_ret) {
+            LOG_TRACE("[DAS_DESER_CACHE] SESSION SKIP_INSERT_LOCK_CONFLICT", K(key_hash));
+          } else if (!mem_stat.can_add_das_cache_obj(*lib_cache, *obj, key)) {
             if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
               LOG_TRACE("[DAS_DESER_CACHE] SKIP_INSERT_MEM_LIMIT",
                         "type", static_cast<int>(key.type_),
@@ -1002,8 +1006,8 @@ int ObDASRemoteInfo::deser_session_with_cache(ObDASRemoteInfo &remote_info,
             int add_ret = lib_cache->add_cache_obj(ctx, &key, obj);
             if (OB_SUCCESS == add_ret) {
               LOG_TRACE("[DAS_DESER_CACHE] SESSION MISS_INSERT", K(key_hash), K(inv_len));
-            } else if (OB_SQL_PC_PLAN_DUPLICATE == add_ret) {
-              LOG_TRACE("[DAS_DESER_CACHE] SESSION MISS insert race, use local obj", K(key_hash));
+            } else if (OB_SQL_PC_PLAN_DUPLICATE == add_ret || OB_PC_LOCK_CONFLICT == add_ret) {
+              LOG_TRACE("[DAS_DESER_CACHE] SESSION MISS insert race, use local obj", K(add_ret), K(key_hash));
             } else {
               ret = add_ret;
               LOG_WARN("add das session cache obj failed", K(ret), K(key_hash));
