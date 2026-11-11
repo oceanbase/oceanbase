@@ -350,7 +350,8 @@ int ObDelUpdResolver::resolve_column_and_values(const ParseNode &assign_list,
             CK (OB_NOT_NULL(c_expr));
             if (OB_FAIL(ret)) {
             } else if (col_expr->get_result_type().get_obj_meta().is_enum_or_set()
-              || col_expr->get_result_type().get_obj_meta().is_urowid()) {
+              || col_expr->get_result_type().get_obj_meta().is_urowid()
+              || col_expr->get_result_type().is_user_defined_sql_type()) {
               // enum, set, rowid do not support cast
               int64_t param_idx = 0;
               OZ (c_expr->get_value().get_unknown(param_idx));

@@ -281,7 +281,9 @@ int ObPlanSet::match_param_info(ObPlanCacheCtx &pc_ctx,
   // insert into t values (:0)
   // two sql have the same key `insert into t values (?)`
   // but they have complete different plans
-  if ((param_info.flag_.need_to_check_type_ || need_match_all_params_)
+  // A scalar assignment plan may disable type checks, but cannot accept a SQL UDT bind.
+  if (param_info.flag_.need_to_check_type_ || need_match_all_params_
+      || param.is_user_defined_sql_type()
       || (is_sql_planset && lib::is_oracle_mode() &&
           (param_info.type_ == ObTinyIntType || param.get_type() == ObTinyIntType))) {
     if (lib::is_oracle_mode() &&

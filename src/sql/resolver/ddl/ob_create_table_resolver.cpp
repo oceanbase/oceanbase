@@ -2422,7 +2422,26 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
                 LOG_WARN("unsupported udt type for sql udt",
                          K(ret), K(expr->get_result_type()), K(expr->get_result_type().get_udt_id()));
               } else {
-                column.set_sub_data_type(expr->get_result_type().get_udt_id());
+                const uint64_t udt_id = expr->get_result_type().get_udt_id();
+                const uint64_t udt_tenant_id = pl::get_tenant_id_by_object_id(udt_id);
+                const ObUDTTypeInfo *udt_info = NULL;
+                column.set_sub_data_type(udt_id);
+                // Inferred CTAS columns need the same TYPE dependencies as explicitly declared columns.
+                if (OB_FAIL(schema_checker_->get_udt_info(udt_tenant_id, udt_id, udt_info))) {
+                  LOG_WARN("failed to get CTAS column udt info", K(ret), K(udt_tenant_id), K(udt_id));
+                } else if (OB_ISNULL(udt_info)) {
+                  ret = OB_OBJECT_NAME_NOT_EXIST;
+                  LOG_USER_ERROR(OB_OBJECT_NAME_NOT_EXIST, "UDT");
+                  LOG_WARN("CTAS column udt does not exist", K(ret), K(udt_tenant_id), K(udt_id));
+                } else if (OB_FAIL(ObDependencyInfo::collect_dep_info(
+                               create_table_stmt->get_create_table_arg().dep_infos_,
+                               ObObjectType::TABLE, udt_id, udt_info->get_schema_version(), DEPENDENCY_TYPE))) {
+                  LOG_WARN("failed to collect CTAS column udt dependency", K(ret), K(udt_id));
+                } else if (OB_FAIL(ob_add_ddl_dependency(udt_id, UDT_SCHEMA,
+                                                       udt_info->get_schema_version(), udt_tenant_id,
+                                                       create_table_stmt->get_ddl_arg()))) {
+                  LOG_WARN("failed to add CTAS column udt ddl dependency", K(ret), K(udt_id));
+                }
               }
             }
             if (OB_SUCC(ret) && lib::is_mysql_mode() && ob_is_geometry(expr->get_result_type().get_type())) {

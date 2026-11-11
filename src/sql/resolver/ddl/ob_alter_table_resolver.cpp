@@ -7127,13 +7127,7 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
         }
         if (OB_SUCC(ret) && alter_column_schema.is_udt_related_column(lib::is_oracle_mode())) {
           ObString tmp_str;
-          if (alter_column_schema.is_user_defined_sql_type() && !alter_column_schema.is_xmltype()
-             && !alter_column_schema.get_cur_default_value().is_null()) {
-            //udt column default value is not allowed to be modified
-            ret = OB_INVALID_MODIFICATION_OF_COLUMNS;
-            LOG_USER_ERROR(OB_INVALID_MODIFICATION_OF_COLUMNS);
-            SQL_RESV_LOG(WARN, "modify udt column default value not allowed", K(ret));
-          } else if (OB_FAIL(ObDDLResolver::check_udt_default_value(alter_column_schema.get_cur_default_value(),
+          if (OB_FAIL(ObDDLResolver::check_udt_default_value(alter_column_schema.get_cur_default_value(),
                                                              session_info_->get_tz_info_wrap(),
                                                              &tmp_str,    // useless
                                                              *allocator_,
