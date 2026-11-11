@@ -19,6 +19,7 @@
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
 #include "storage/compaction/ob_compaction_memory_pool.h"
+#include "storage/compaction/ob_compaction_suggestion.h"
 #include "storage/ob_tenant_tablet_stat_mgr.h"
 #include "lib/random/ob_random.h"
 
@@ -588,6 +589,14 @@ public:
   TestHALowDag() : TestDag(ObDagType::DAG_TYPE_BACKUP_PREPARE) {}
 private:
   DISALLOW_COPY_AND_ASSIGN(TestHALowDag);
+};
+
+class TestHAHighDag : public TestDag
+{
+public:
+  TestHAHighDag() : TestDag(ObDagType::DAG_TYPE_INITIAL_COMPLETE_MIGRATION) {}
+private:
+  DISALLOW_COPY_AND_ASSIGN(TestHAHighDag);
 };
 
 class TestCompMidDag : public TestDag
@@ -1420,7 +1429,7 @@ TEST_P(TestDagScheduler, test_priority)
   EXPECT_EQ(OB_SUCCESS, alloc_task(*dag2, mul_task));
   EXPECT_EQ(OB_SUCCESS, mul_task->init(1, concurrency, finish_flag[1]));
   EXPECT_EQ(OB_SUCCESS, dag2->add_task(*mul_task));
-  TestCompLowDag *dag3 = NULL;
+  TestHAHighDag *dag3 = NULL;
   EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag3));
   EXPECT_EQ(OB_SUCCESS, dag3->init(3));
   EXPECT_EQ(OB_SUCCESS, alloc_task(*dag3, inc_task));
@@ -1466,7 +1475,6 @@ TEST_P(TestDagScheduler, test_priority)
   CHECK_EQ_UTIL_TIMEOUT(uplimit, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_HA_LOW));
   CHECK_EQ_UTIL_TIMEOUT(uplimit, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_DDL));
 
-  dag3->set_priority(ObDagPrio::DAG_PRIO_HA_HIGH);
   EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag3));
   CHECK_EQ_UTIL_TIMEOUT(uplimit, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_HA_HIGH));
   CHECK_EQ_UTIL_TIMEOUT(uplimit, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_HA_LOW));
@@ -1976,6 +1984,69 @@ TEST_P(TestDagScheduler, test_get_compaction_dag_count)
   int64_t dag_count = -1;
   ASSERT_EQ(OB_SUCCESS, scheduler->get_compaction_dag_count(dag_count));
   EXPECT_EQ(1, dag_count);
+}
+
+TEST_P(TestDagScheduler, test_get_minor_exe_dag_info_from_low_meta)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+  ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice));
+  scheduler->stop();
+  scheduler->wait();
+
+  ObTabletMergeDagParam meta_param;
+  meta_param.merge_type_ = META_MAJOR_MERGE;
+  meta_param.merge_version_ = 100;
+  meta_param.ls_id_ = ObLSID(1);
+  meta_param.tablet_id_ = ObTabletID(200001);
+  meta_param.skip_get_tablet_ = true;
+  ObTabletMetaMajorMergeDag *meta_dag = nullptr;
+  ASSERT_EQ(OB_SUCCESS, scheduler->alloc_dag(meta_dag));
+  EXPECT_EQ(ObDagPrio::DAG_PRIO_COMPACTION_LOW, meta_dag->get_priority());
+  ASSERT_EQ(OB_SUCCESS, meta_dag->init_by_param(&meta_param));
+  ASSERT_EQ(OB_SUCCESS, meta_dag->create_first_task());
+  ASSERT_EQ(OB_SUCCESS, meta_dag->result_.scn_range_.start_scn_.convert_for_tx(10));
+  ASSERT_EQ(OB_SUCCESS, meta_dag->result_.scn_range_.end_scn_.convert_for_tx(20));
+  ASSERT_EQ(OB_SUCCESS, scheduler->add_dag(meta_dag));
+  EXPECT_EQ(1, scheduler->get_type_dag_cnt(ObDagType::DAG_TYPE_META_MAJOR_MERGE));
+
+  ObTabletMergeDagParam minor_param = meta_param;
+  minor_param.merge_type_ = MINOR_MERGE;
+  minor_param.merge_version_ = ObVersion::MIN_VERSION;
+  ObSEArray<ObScnRange, 1> merge_ranges;
+  ASSERT_EQ(OB_SUCCESS, scheduler->get_minor_exe_dag_info(minor_param, merge_ranges));
+  ASSERT_EQ(1, merge_ranges.count());
+  EXPECT_EQ(10, merge_ranges.at(0).start_scn_.get_val_for_tx());
+  EXPECT_EQ(20, merge_ranges.at(0).end_scn_.get_val_for_tx());
+}
+
+TEST_P(TestDagScheduler, test_meta_suggestion_uses_low_priority)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+  ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice));
+  scheduler->stop();
+  scheduler->wait();
+
+  const int64_t dag_cnt = ObTenantDagScheduler::MANY_DAG_COUNT + 1;
+  ATOMIC_SET(&scheduler->dag_cnts_[ObDagType::DAG_TYPE_META_MAJOR_MERGE], dag_cnt);
+  ATOMIC_SET(&scheduler->added_dag_cnts_[ObDagType::DAG_TYPE_META_MAJOR_MERGE], dag_cnt);
+  ATOMIC_SET(&scheduler->scheduled_dag_cnts_[ObDagType::DAG_TYPE_META_MAJOR_MERGE], 0);
+
+  int64_t reason = ObCompactionSuggestionMgr::ObCompactionSuggestionReason::MAX_REASON;
+  scheduler->get_suggestion_reason(ObDagPrio::DAG_PRIO_COMPACTION_MID, reason);
+  EXPECT_EQ(ObCompactionSuggestionMgr::ObCompactionSuggestionReason::MAX_REASON, reason);
+  scheduler->get_suggestion_reason(ObDagPrio::DAG_PRIO_COMPACTION_LOW, reason);
+  EXPECT_EQ(ObCompactionSuggestionMgr::ObCompactionSuggestionReason::SCHE_SLOW, reason);
+
+  const int64_t dag_limit = scheduler->get_dag_limit(ObDagPrio::DAG_PRIO_COMPACTION_LOW);
+  ATOMIC_SET(&scheduler->dag_cnts_[ObDagType::DAG_TYPE_META_MAJOR_MERGE], dag_limit);
+  ATOMIC_SET(&scheduler->added_dag_cnts_[ObDagType::DAG_TYPE_META_MAJOR_MERGE], 0);
+  scheduler->get_suggestion_reason(ObDagPrio::DAG_PRIO_COMPACTION_MID, reason);
+  EXPECT_EQ(ObCompactionSuggestionMgr::ObCompactionSuggestionReason::MAX_REASON, reason);
+
+  scheduler->get_suggestion_reason(ObDagPrio::DAG_PRIO_COMPACTION_LOW, reason);
+  EXPECT_EQ(ObCompactionSuggestionMgr::ObCompactionSuggestionReason::DAG_FULL, reason);
 }
 
 TEST_P(TestDagScheduler, test_destroy_when_running)

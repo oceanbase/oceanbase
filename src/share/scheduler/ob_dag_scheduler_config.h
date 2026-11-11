@@ -64,6 +64,8 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MERGE_EXECUTE, ObDagPrio::DAG_PRIO_COMPACTIO
     true, 3, {"ls_id", "tablet_id", "compaction_scn"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MAJOR_MERGE, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::SSTABLE_MAJOR_MERGE_TASK, "MAJOR_MERGE/MEDIUM_MERGE", "COMPACTION",
     true, 3, {"ls_id", "tablet_id", "compaction_scn"})
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_META_MAJOR_MERGE, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::SSTABLE_MAJOR_MERGE_TASK, "META_MAJOR_MERGE", "COMPACTION",
+    true, 3, {"ls_id", "tablet_id", "compaction_scn"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_CO_MERGE_BATCH_EXECUTE, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::SSTABLE_MAJOR_MERGE_TASK, "CO_MERGE_BATCH_EXECUTE", "COMPACTION",
     false, 5, {"ls_id", "tablet_id", "compaction_scn", "start_cg_idx", "end_cg_idx"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_CO_MERGE_PREPARE, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::SSTABLE_MAJOR_MERGE_TASK, "CO_MERGE_PREPARE", "COMPACTION",
@@ -392,6 +394,7 @@ inline bool is_compaction_dag(ObDagType::ObDagTypeEnum dag_type)
          ObDagType::DAG_TYPE_MAJOR_MERGE == dag_type ||
          ObDagType::DAG_TYPE_MINI_MERGE == dag_type ||
          ObDagType::DAG_TYPE_MERGE_EXECUTE == dag_type ||
+         ObDagType::DAG_TYPE_META_MAJOR_MERGE == dag_type ||
          ObDagType::DAG_TYPE_TX_TABLE_MERGE == dag_type ||
          ObDagType::DAG_TYPE_MDS_MINI_MERGE == dag_type ||
          ObDagType::DAG_TYPE_MDS_MINOR_MERGE == dag_type;
