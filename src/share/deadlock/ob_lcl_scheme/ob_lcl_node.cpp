@@ -572,7 +572,9 @@ int ObLCLNode::process_lcl_message(const ObLCLMessage &lcl_msg)
           (void)get_state_snapshot_(blocklist_snapshot, lclv_snapshot, public_label_snapshot);
         }
       }
-      ret = OB_SUCCESS;
+      if (OB_EAGAIN == ret) {
+        ret = OB_SUCCESS;
+      }
     }
     if (detected_flag) {
       CLICK();
@@ -591,8 +593,15 @@ int ObLCLNode::process_msg_as_lclp_msg_(const ObLCLMessage &lcl_msg)
   int ret = OB_SUCCESS;
 
   DETECT_TIME_GUARD(100_ms);
-  if (lcl_msg.get_lclv() + 1 > lclv_) {
-    lclv_ = lcl_msg.get_lclv() + 1;
+  const uint64_t remote_lclv = lcl_msg.get_lclv();
+  // Leave room for the increment and keep INVALID_VALUE out of the clock.
+  if (remote_lclv >= static_cast<uint64_t>(INVALID_VALUE - 1)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    const int64_t next_lclv = static_cast<int64_t>(remote_lclv) + 1;
+    if (next_lclv > lclv_) {
+      lclv_ = next_lclv;
+    }
   }
   // DETECT_LOG_(INFO, "process lclp message done", KR(ret), K(lcl_msg), K(*this));
   return ret;
@@ -604,9 +613,12 @@ int ObLCLNode::process_msg_as_lcls_msg_(const ObLCLMessage &lcl_msg,
   int ret = OB_SUCCESS;
 
   DETECT_TIME_GUARD(100_ms);
-  if (lcl_msg.get_lclv() >= lclv_) {
-    lclv_ = lcl_msg.get_lclv();
-    if (lcl_msg.get_lclv() == lclv_ &&
+  const uint64_t remote_lclv = lcl_msg.get_lclv();
+  if (remote_lclv >= static_cast<uint64_t>(INVALID_VALUE)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (static_cast<int64_t>(remote_lclv) >= lclv_) {
+    lclv_ = static_cast<int64_t>(remote_lclv);
+    if (static_cast<int64_t>(remote_lclv) == lclv_ &&
         lcl_msg.get_label() == private_label_) {
       if (last_send_collect_info_period_ == lcl_period_) {
         ret = OB_EAGAIN;
