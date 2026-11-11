@@ -791,10 +791,17 @@ int ObExprBaseLRpad::get_padding_info_mysql_vector(const ObCollationType &cs,
   int64_t text_size = str_text.length();
   int64_t pad_size = str_padtext.length();
   // GOAL: get repeat_count, prefix_size and pad space.
-  repeat_count = std::min((len - text_len) / pad_len, (max_result_size - text_size) / pad_size);
-  int64_t remain_len = len - (text_len + pad_len * repeat_count);
-  prefix_size = ObCharsetStringHelper::fast_charpos<false, false>(cs, str_padtext, remain_len);
-  size = text_size + pad_size * repeat_count + prefix_size;
+  if (OB_UNLIKELY(text_size > max_result_size)) {
+    // A negative repeat count can overflow the remaining length before the caller checks the byte limit.
+    repeat_count = 0;
+    prefix_size = 0;
+    size = text_size;
+  } else {
+    repeat_count = std::min((len - text_len) / pad_len, (max_result_size - text_size) / pad_size);
+    int64_t remain_len = len - (text_len + pad_len * repeat_count);
+    prefix_size = ObCharsetStringHelper::fast_charpos<false, false>(cs, str_padtext, remain_len);
+    size = text_size + pad_size * repeat_count + prefix_size;
+  }
   return ret;
 }
 
@@ -1169,7 +1176,7 @@ int ObExprBaseLRpad::init_pad_ctx(const ObExpr &expr,
     if (OB_UNLIKELY(pad_size > pad_len * mbmaxlen)) {
       pad_len = 0;
     }
-    // Cache a zero count too; only rows that actually need padding report it as an error.
+    // Zero disables cached padding; the generic path recomputes the actual count when padding is needed.
     pad_ctx->set_pad_len(pad_len);
     pad_ctx->set_mbmaxlen(mbmaxlen);
   }
@@ -1365,12 +1372,15 @@ int ObExprBaseLRpad::calc_mysql_inner_vector_optimized(const ObExpr &expr,
         res_vec->set_string(idx, str_text.ptr(), result_size);
       } else if (OB_UNLIKELY(str_pad.empty())) {
         res_vec->set_null(idx);
-      } else if (OB_UNLIKELY(pad_len == 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid pad character length", K(ret), K(pad_len), K(str_pad));
-      } else if (OB_UNLIKELY(str_text.length() > text_len * mbmaxlen)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("text size exceeds character length bound", K(ret), K(str_text), K(text_len), K(mbmaxlen));
+      } else if (OB_UNLIKELY(pad_len == 0)
+                 || OB_UNLIKELY(str_text.length() > text_len * mbmaxlen)) {
+        // Invalid encodings may exceed the fixed cache's byte bound.
+        int64_t result_limit = max_result_size;
+        if (OB_FAIL(calc_mysql_inner_vector<ResVec>(IsLeftPad ? LPAD_TYPE : RPAD_TYPE,
+                expr, ctx, length, result_limit, str_text, str_pad,
+                pad_len == 0 ? -1 : pad_len, res_vec, idx, IsAscii))) {
+          LOG_WARN("Failed to evaluate generic lrpad", K(ret), K(str_text), K(str_pad));
+        }
       } else {
         const int64_t repeat_count = (length - text_len) / pad_len;
         const int64_t remain_len = (length - text_len) % pad_len;
@@ -2539,12 +2549,15 @@ int ObExprBaseLRpad::calc_oracle_inner_vector_optimized(const ObExpr &expr,
         } else {
           res_vec->set_string(idx, result_bufs[idx], result_size);
         }
-      } else if (OB_UNLIKELY(pad_width == 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid pad display width", K(ret), K(pad_width), K(str_pad));
-      } else if (OB_UNLIKELY(str_text.length() > text_width * mbmaxlen)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("text size exceeds display width bound", K(ret), K(str_text), K(text_width), K(mbmaxlen));
+      } else if (OB_UNLIKELY(pad_width == 0)
+                 || OB_UNLIKELY(str_text.length() > text_width * mbmaxlen)) {
+        // Invalid encodings may exceed the fixed cache's byte bound.
+        int64_t result_limit = max_result_size;
+        if (OB_FAIL(calc_oracle_inner_vector<ResVec>(pad_type, expr, ctx, len_int,
+                result_limit, str_text, str_pad, pad_width == 0 ? -1 : pad_width,
+                res_vec, idx, IsAscii))) {
+          LOG_WARN("Failed to evaluate generic lrpad", K(ret), K(str_text), K(str_pad));
+        }
       } else {
         bool pad_space = false;
         int64_t text_size = str_text.length();
