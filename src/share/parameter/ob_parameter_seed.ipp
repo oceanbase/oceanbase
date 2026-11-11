@@ -3710,3 +3710,11 @@ DEF_BOOL(_enable_trigger_precise_batch_exec, OB_TENANT_PARAMETER, "False",
          " after-row triggers have actual write-read/write conflicts across four domains"
          " (SQL data, package variable, sequence, external state).",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_search_index_seek_factor, OB_TENANT_PARAMETER, "6", "[0,)",
+        "DOC_ID distance factor for adaptive search index ROR advance_to, 0 disables adaptive seek",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_search_index_lookup_cost_ratio, OB_TENANT_PARAMETER, "600", "[0,)",
+        "Cost ratio between one final table lookup row and one search index posting row for "
+        "SQL-to-DSL deferred lookup filters. 0 disables the optimization",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

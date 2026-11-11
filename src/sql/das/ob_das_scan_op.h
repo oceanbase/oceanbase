@@ -152,7 +152,11 @@ public:
       push_down_topn_(),
       semantic_index_info_(),
       cache_aware_row_num_(0),
-      external_file_pattern_type_(static_cast<int64_t>(share::schema::REGEXP_EXTERNAL_FILE_PATTERN))
+      external_file_pattern_type_(static_cast<int64_t>(share::schema::REGEXP_EXTERNAL_FILE_PATTERN)),
+      deferred_lookup_table_filters_(alloc),
+      deferred_lookup_table_output_exprs_(alloc),
+      deferred_lookup_base_access_count_(OB_INVALID_INDEX),
+      deferred_filter_candidates_profile_()
   { }
   //in das scan op, column described with column expr
   virtual bool has_expr() const override { return true; }
@@ -228,7 +232,11 @@ public:
                        K_(is_index_merge),
                        K_(pre_range_graph),
                        K_(push_down_topn),
-                       K_(cache_aware_row_num));
+                       K_(cache_aware_row_num),
+                       K_(deferred_lookup_table_filters),
+                       K_(deferred_lookup_table_output_exprs),
+                       K_(deferred_lookup_base_access_count),
+                       K_(deferred_filter_candidates_profile));
   common::ObTableID ref_table_id_;
   UIntFixedArray access_column_ids_;
   int64_t schema_version_;
@@ -283,6 +291,10 @@ public:
   share::ObDasSemanticIndexInfo semantic_index_info_;
   int64_t cache_aware_row_num_;
   int64_t external_file_pattern_type_;
+  ExprFixedArray deferred_lookup_table_filters_;
+  ExprFixedArray deferred_lookup_table_output_exprs_;
+  int64_t deferred_lookup_base_access_count_;
+  common::ObString deferred_filter_candidates_profile_;
 };
 
 enum class ObDASScanTaskType
@@ -593,7 +605,8 @@ public:
                        K_(ssstore_read_bytes),
                        K_(base_read_row_cnt),
                        K_(delta_read_row_cnt),
-                       K_(das_execute_remote_info));
+                       K_(das_execute_remote_info),
+                       K_(deferred_table_filter_sel_mask));
 private:
   ObChunkDatumStore datum_store_;
   ObChunkDatumStore::Iterator result_iter_;
@@ -609,6 +622,7 @@ private:
   int64_t base_read_row_cnt_;
   int64_t delta_read_row_cnt_;
   ObDasExecuteRemoteInfo das_execute_remote_info_;
+  common::ObSEArray<bool, 8> deferred_table_filter_sel_mask_;
 };
 
 class ObLocalIndexLookupOp : public common::ObNewRowIterator, public ObIndexLookupOpImpl

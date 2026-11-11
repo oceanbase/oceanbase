@@ -32,7 +32,8 @@ OB_SERIALIZE_MEMBER((ObDASScalarScanCtDef, ObIDASSearchCtDef),
                     table_scan_opt_,
                     pre_query_range_,
                     pre_range_graph_,
-                    flags_);
+                    flags_,
+                    seek_factor_hint_);
 
 OB_DEF_SERIALIZE(ObDASScalarScanRtDef)
 {

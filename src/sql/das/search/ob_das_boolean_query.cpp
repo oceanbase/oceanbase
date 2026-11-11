@@ -41,12 +41,32 @@ OB_SERIALIZE_MEMBER((ObDASBooleanQueryCtDef, ObIDASSearchCtDef),
                     min_should_match_expr_,
                     is_msm_unresolved_expr_,
                     merged_probe_,
-                    primary_get_ratio_);
+                    primary_get_ratio_,
+                    is_sql_to_dsl_,
+                    deferrable_lookup_filters_,
+                    deferrable_lookup_access_exprs_,
+                    deferrable_lookup_access_column_ids_,
+                    deferrable_clauses_,
+                    deferrable_table_filters_,
+                    deferrable_table_access_exprs_,
+                    deferrable_table_access_column_ids_,
+                    lookup_cost_ratio_hint_);
 
 OB_SERIALIZE_MEMBER(ObDASBooleanQueryCtDef::SubClauseInfo,
                     exist_,
                     offset_,
                     count_);
+
+OB_SERIALIZE_MEMBER(ObDASBooleanQueryCtDef::DeferrableClauseInfo,
+                    clause_idx_,
+                    lookup_filter_offset_,
+                    lookup_filter_count_,
+                    lookup_access_offset_,
+                    lookup_access_count_,
+                    table_filter_offset_,
+                    table_filter_count_,
+                    table_access_offset_,
+                    table_access_count_);
 
 OB_SERIALIZE_MEMBER((ObDASBooleanQueryRtDef, ObIDASSearchRtDef));
 

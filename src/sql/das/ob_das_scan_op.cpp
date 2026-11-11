@@ -79,7 +79,11 @@ OB_SERIALIZE_MEMBER(ObDASScanCtDef, // FARM COMPAT WHITELIST
                     push_down_topn_,
                     semantic_index_info_,
                     cache_aware_row_num_,
-                    external_file_pattern_type_);
+                    external_file_pattern_type_,
+                    deferred_lookup_table_filters_,
+                    deferred_lookup_table_output_exprs_,
+                    deferred_lookup_base_access_count_,
+                    deferred_filter_candidates_profile_);
 
 OB_DEF_SERIALIZE(ObBatchRescanFilterParam)
 {
@@ -2007,7 +2011,8 @@ ObDASScanResult::ObDASScanResult()
     ssstore_read_bytes_(0),
     base_read_row_cnt_(0),
     delta_read_row_cnt_(0),
-    das_execute_remote_info_()
+    das_execute_remote_info_(),
+    deferred_table_filter_sel_mask_()
 {
 }
 
@@ -2080,6 +2085,7 @@ void ObDASScanResult::reset()
   output_exprs_ = nullptr;
   eval_ctx_ = nullptr;
   enable_rich_format_ = false;
+  deferred_table_filter_sel_mask_.reuse();
 }
 
 int ObDASScanResult::init_result_iter(const ExprFixedArray *output_exprs, ObEvalCtx *eval_ctx)
@@ -2105,6 +2111,7 @@ int ObDASScanResult::init(const ObIDASTaskOp &op, common::ObIAllocator &alloc)
 {
   UNUSED(alloc);
   int ret = OB_SUCCESS;
+  deferred_table_filter_sel_mask_.reuse();
   const ObDASScanOp &scan_op = static_cast<const ObDASScanOp&>(op);
   uint64_t tenant_id = MTL_ID();
   need_check_output_datum_ = scan_op.need_check_output_datum();
@@ -2144,6 +2151,7 @@ int ObDASScanResult::reuse()
   datum_store_.reset();
   vec_result_iter_.reset();
   vec_row_store_.reset();
+  deferred_table_filter_sel_mask_.reuse();
   return ret;
 }
 
@@ -2166,7 +2174,8 @@ OB_SERIALIZE_MEMBER((ObDASScanResult, ObIDASTaskResult),
                     ssstore_read_bytes_,
                     base_read_row_cnt_,  // FARM COMPAT WHITELIST
                     delta_read_row_cnt_, // FARM COMPAT WHITELIST
-                    das_execute_remote_info_);
+                    das_execute_remote_info_,
+                    deferred_table_filter_sel_mask_);
 
 ObLocalIndexLookupOp::~ObLocalIndexLookupOp()
 {

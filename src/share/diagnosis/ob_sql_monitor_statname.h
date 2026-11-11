@@ -262,6 +262,20 @@ SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_ICEBERG_DELETE_APPLY_INPUT_ROW_COUNT, metric
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_ICEBERG_DELETE_APPLY_ROW_COUNT, metric::Unit::INT, "iceberg delete applied row count", "rows removed while applying Iceberg delete bitmaps", M_SUM | E_MIN | E_MAX, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_ICEBERG_DELETE_APPLY_TIME, metric::Unit::TIME_NS, "iceberg delete apply time", "elapsed time applying Iceberg delete bitmaps", M_SUM | E_MIN | E_MAX, metric::Level::CRITICAL)
 
+// Adaptive Index-Merge Predicate Deferral and ROR advance path selection metrics.
+SQL_MONITOR_STATNAME_DEF(
+    HS_ROR_ADVANCE_BATCH_COUNT, metric::Unit::INT,
+    "advance batch count", "advance_to decisions using sequential batch reads",
+    M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(
+    HS_ROR_ADVANCE_SEEK_COUNT, metric::Unit::INT,
+    "advance seek count", "advance_to decisions using storage seek",
+    M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(
+    HS_ROR_AVG_BATCH_SPAN, metric::Unit::INT,
+    "average batch span", "final sampled average batch rowid span",
+    M_AVG | E_MIN | E_MAX, metric::Level::STANDARD)
+
 //end
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, metric::Unit::INVALID, "monitor end", "monitor stat name end", E_MIN | E_MAX, metric::Level::AD_HOC)
 #endif

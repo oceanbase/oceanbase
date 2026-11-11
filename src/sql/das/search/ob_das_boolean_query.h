@@ -45,6 +45,59 @@ struct ObDASBooleanQueryCtDef : ObIDASSearchCtDef {
   OB_UNIS_VERSION(1);
 
 public:
+  struct DeferrableClauseInfo
+  {
+    OB_UNIS_VERSION(1);
+  public:
+    DeferrableClauseInfo()
+        : clause_idx_(OB_INVALID_INDEX),
+          lookup_filter_offset_(0),
+          lookup_filter_count_(0),
+          lookup_access_offset_(0),
+          lookup_access_count_(0),
+          table_filter_offset_(0),
+          table_filter_count_(0),
+          table_access_offset_(0),
+          table_access_count_(0) {}
+    DeferrableClauseInfo(const int64_t clause_idx,
+                         const int64_t lookup_filter_offset,
+                         const int64_t lookup_filter_count,
+                         const int64_t lookup_access_offset,
+                         const int64_t lookup_access_count,
+                         const int64_t table_filter_offset,
+                         const int64_t table_filter_count,
+                         const int64_t table_access_offset,
+                         const int64_t table_access_count)
+        : clause_idx_(clause_idx),
+          lookup_filter_offset_(lookup_filter_offset),
+          lookup_filter_count_(lookup_filter_count),
+          lookup_access_offset_(lookup_access_offset),
+          lookup_access_count_(lookup_access_count),
+          table_filter_offset_(table_filter_offset),
+          table_filter_count_(table_filter_count),
+          table_access_offset_(table_access_offset),
+          table_access_count_(table_access_count) {}
+    ~DeferrableClauseInfo() {}
+    TO_STRING_KV(K_(clause_idx),
+                 K_(lookup_filter_offset),
+                 K_(lookup_filter_count),
+                 K_(lookup_access_offset),
+                 K_(lookup_access_count),
+                 K_(table_filter_offset),
+                 K_(table_filter_count),
+                 K_(table_access_offset),
+                 K_(table_access_count));
+    int64_t clause_idx_;
+    int64_t lookup_filter_offset_;
+    int64_t lookup_filter_count_;
+    int64_t lookup_access_offset_;
+    int64_t lookup_access_count_;
+    int64_t table_filter_offset_;
+    int64_t table_filter_count_;
+    int64_t table_access_offset_;
+    int64_t table_access_count_;
+  };
+
   ObDASBooleanQueryCtDef(common::ObIAllocator &alloc)
       : ObIDASSearchCtDef(alloc, DAS_OP_BOOLEAN_QUERY),
         min_should_match_expr_(nullptr),
@@ -55,7 +108,16 @@ public:
         must_not_(),
         min_should_match_(0),
         merged_probe_(),
-        primary_get_ratio_(0) {}
+        primary_get_ratio_(0),
+        is_sql_to_dsl_(false),
+        deferrable_lookup_filters_(alloc),
+        deferrable_lookup_access_exprs_(alloc),
+        deferrable_lookup_access_column_ids_(alloc),
+        deferrable_clauses_(alloc),
+        deferrable_table_filters_(alloc),
+        deferrable_table_access_exprs_(alloc),
+        deferrable_table_access_column_ids_(alloc),
+        lookup_cost_ratio_hint_(-1) {}
   virtual ~ObDASBooleanQueryCtDef() {}
   int must(ObBooleanSubClause<ObIDASSearchCtDef> &clause) const;
   int filter(ObBooleanSubClause<ObIDASSearchCtDef> &clause) const;
@@ -67,6 +129,17 @@ public:
   void set_should(int64_t offset, int64_t count) { should_ = SubClauseInfo(true, offset, count); }
   void set_must_not(int64_t offset, int64_t count) { must_not_ = SubClauseInfo(true, offset, count); }
   void set_min_should_match(int64_t val) { min_should_match_ = val; }
+
+  INHERIT_TO_STRING_KV("ObIDASSearchCtDef", ObIDASSearchCtDef,
+                       K_(is_sql_to_dsl),
+                       K_(deferrable_lookup_filters),
+                       K_(deferrable_lookup_access_exprs),
+                       K_(deferrable_lookup_access_column_ids),
+                       K_(deferrable_clauses),
+                       K_(deferrable_table_filters),
+                       K_(deferrable_table_access_exprs),
+                       K_(deferrable_table_access_column_ids),
+                       K_(lookup_cost_ratio_hint));
 
   ObExpr *min_should_match_expr_;
   bool is_msm_unresolved_expr_;
@@ -98,6 +171,15 @@ private:
   // DSL search option (same as scalar). Used by prefer_primary_probe to decide whether this
   // clause's filter (extracted into the merged probe) can replace its own scan.
   int64_t primary_get_ratio_;
+  bool is_sql_to_dsl_;
+  ExprFixedArray deferrable_lookup_filters_;
+  ExprFixedArray deferrable_lookup_access_exprs_;
+  UIntFixedArray deferrable_lookup_access_column_ids_;
+  common::ObFixedArray<DeferrableClauseInfo, common::ObIAllocator> deferrable_clauses_;
+  ExprFixedArray deferrable_table_filters_;
+  ExprFixedArray deferrable_table_access_exprs_;
+  UIntFixedArray deferrable_table_access_column_ids_;
+  int64_t lookup_cost_ratio_hint_;
 };
 
 struct ObDASBooleanQueryRtDef : ObIDASSearchRtDef {

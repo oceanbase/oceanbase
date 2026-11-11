@@ -75,7 +75,8 @@ public:
       table_scan_opt_(),
       pre_query_range_(alloc),
       pre_range_graph_(alloc),
-      flags_(0)
+      flags_(0),
+      seek_factor_hint_(-1)
   { }
   virtual ~ObDASScalarScanCtDef() {}
 
@@ -96,7 +97,8 @@ public:
                        K_(table_scan_opt),
                        K_(pre_query_range),
                        K_(pre_range_graph),
-                       K_(flags));
+                       K_(flags),
+                       K_(seek_factor_hint));
 
   common::ObTableID ref_table_id_;
   UIntFixedArray access_column_ids_;
@@ -118,9 +120,11 @@ public:
       uint64_t is_rowkey_order_scan_         : 1;
       uint64_t need_rowkey_order_            : 1;
       uint64_t is_search_index_              : 1;
-      uint64_t reserved_                     : 57;
+      uint64_t is_sql_to_dsl_                : 1;
+      uint64_t reserved_                     : 56;
     };
   };
+  int64_t seek_factor_hint_;
 };
 
 struct ObDASScalarScanRtDef : ObIDASSearchRtDef
