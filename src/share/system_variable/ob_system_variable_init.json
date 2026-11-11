@@ -12056,5 +12056,26 @@
     "info_cn": "控制分布式查询仅访问虚拟表时，是否忽略分布式任务的调度和执行错误。开启后，查询可能返回不完整结果，并通过 warning 提示被忽略的错误；关闭后，错误按正常流程处理。",
     "background_cn": "",
     "ref_url": ""
+  },
+  "ob_query_memory_limit": {
+    "id": 10771,
+    "name": "ob_query_memory_limit",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "int",
+    "info": "Maximum memory usage per statement execution, in bytes, MB or GB. 0 means no limit",
+    "flags": "SESSION | GLOBAL",
+    "min_val": "0",
+    "max_val": "281474976710656",
+    "base_class": "ObBasicSysVar",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_query_memory_limit",
+    "get_meta_type_func": "ObSysVarGetMetaTypeFuncs::get_meta_type_varchar",
+    "to_select_obj_func": "ObSysVarToObjFuncs::to_obj_query_memory_limit",
+    "to_show_str_func": "ObSysVarToStrFuncs::to_str_query_memory_limit",
+    "publish_version": "",
+    "info_cn": "语句执行时的内存使用上限，单位为字节、MB 或 GB，0 表示没有限制",
+    "background_cn": "",
+    "ref_url": "",
+    "placeholder": true
   }
 }

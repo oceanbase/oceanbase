@@ -3120,6 +3120,7 @@ T_FUN_SYS_SEARCH_INDEX_INNER_PATH = 1943,
   T_PASSWORD_EXPIRE = 4999,
   T_TABLE_EXPIRATION_TIMESTAMP = 5000,
   T_REMOVE_TABLE_EXPIRATION = 5001,
+  T_QUERY_MEMORY_LIMIT = 5002, // placeholder for query_memory_limit hint
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
