@@ -7,6 +7,7 @@
 
 #include "ob_call_procedure_resolver.h"
 #include "ob_call_procedure_stmt.h"
+#include "common/ob_smart_call.h"
 #include "src/sql/resolver/dml/ob_dml_resolver.h"
 #include "pl/ob_pl_package.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
@@ -17,6 +18,26 @@ using namespace common;
 using namespace share::schema;
 namespace sql
 {
+namespace
+{
+int check_param_expr_cacheable(const ObRawExpr *expr, bool &can_cache)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null call parameter expression", K(ret));
+  } else if (lib::is_mysql_mode() && T_OP_GET_USER_VAR == expr->get_expr_type()) {
+    // User variables are not in the original bind metadata checked by CALLSTMT.
+    can_cache = false;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && can_cache && i < expr->get_param_count(); ++i) {
+      OZ (SMART_CALL(check_param_expr_cacheable(expr->get_param_expr(i), can_cache)));
+    }
+  }
+  return ret;
+}
+} // namespace
+
 int ObCallProcedureResolver::check_param_expr_legal(ObRawExpr *param)
 {
   int ret = OB_SUCCESS;
@@ -440,6 +461,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
       }
     }
     ObSEArray<ObRawExpr*, 16> params;
+    bool can_cache = params_.is_execute_call_stmt_;
     OZ (resolve_cparams(params_node, proc_info, call_proc_info, params, deps));
     OZ (call_proc_info->init_dependency_table_store(deps.count()));
     OZ (call_proc_info->get_dependency_table().assign(deps));
@@ -471,6 +493,12 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
                                                     pl_type,
                                                     NULL,
                                                     &params_.package_guard_->dblink_guard_));
+        // Scalar bind precision and scale are checked by the CALL cache.
+        // Expressions reading user variables still need separate metadata tracking.
+        if (OB_SUCC(ret) && can_cache
+            && !call_proc_info->can_direct_use_param()) {
+          OZ (check_param_expr_cacheable(param_expr, can_cache));
+        }
         if (OB_SUCC(ret)) {
           const ObRawExpr* param = params.at(i);
           CK (OB_NOT_NULL(param));
@@ -577,7 +605,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
     OZ (call_proc_info->final_expression(params, session_info_, schema_checker_->get_schema_mgr()));
     OX (stmt->set_call_proc_info(call_proc_info));
     int64_t compile_end = ObTimeUtility::current_time();
-    if (params_.is_execute_call_stmt_
+    if (can_cache && params_.is_execute_call_stmt_
         && 0 != params_.cur_sql_.length()
         && NULL == stmt->get_dblink_routine_info()) {
       if (NULL != params_.param_list_) {

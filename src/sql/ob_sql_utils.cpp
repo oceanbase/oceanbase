@@ -8019,7 +8019,7 @@ int ObSQLUtils::construct_mixed_param_store(const ObFastParserResult &fp_result,
             compat_type,
             enable_mysql_compatible_dates,
             session.get_min_const_integer_precision(),
-            true,
+            session.get_exec_min_cluster_version(),
             false,
             false,
             charset_compat_type))) {
