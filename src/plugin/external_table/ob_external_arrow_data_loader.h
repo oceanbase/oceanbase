@@ -14,6 +14,7 @@
 
 #include "plugin/external_table/ob_external_arrow_status.h"
 #include "lib/utility/ob_print_utils.h"
+#include "sql/engine/expr/ob_expr.h"
 
 namespace oceanbase {
 
@@ -101,6 +102,12 @@ private:
       int (*)(sql::ObExpr *expr, sql::ObEvalCtx &eval_ctx, const ObString &in_str, common::ObDatum &datum);
 
   DatumSetter datum_setter_ = nullptr;
+  // Text setters convert through common_string_text, which reads the source type from
+  // args_[0]; file-column exprs have no args, so keep a shadow cast expr per column.
+  bool setter_needs_cast_expr_ = false;
+  bool cast_expr_ready_ = false;
+  common::ObCollationType in_cs_type_ = common::CS_TYPE_INVALID;
+  sql::ObExpr cast_expr_;
 };
 
 /**

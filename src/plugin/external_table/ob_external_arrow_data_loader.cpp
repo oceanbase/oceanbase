@@ -16,6 +16,8 @@
 
 #include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/expr/ob_datum_cast.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/table/ob_odps_table_utils.h"
 #include "sql/engine/ob_exec_context.h"
 #include "lib/alloc/alloc_struct.h"
 #include "lib/string/ob_sql_string.h"
@@ -490,28 +492,36 @@ int set_datum_plain(sql::ObExpr *expr, sql::ObEvalCtx &eval_ctx, const ObString 
 }
 int set_datum_string(sql::ObExpr *expr, sql::ObEvalCtx &eval_ctx, const ObString &in_str, ObDatum &datum)
 {
-  int ret = OB_SUCCESS;
   bool has_set_res = false;
-  ret = ObOdpsDataTypeCastUtil::common_string_string_wrap(
-            *expr, expr->obj_meta_.get_type()/*in_type*/, CS_TYPE_UTF8MB4_BIN/*in_cs_type*/,
-            expr->obj_meta_.get_type()/*out_type*/, expr->datum_meta_.cs_type_/*out_cs_type*/,
-            in_str, eval_ctx, datum, has_set_res);
-  return ret;
+  return ObDataTypeCastUtil::common_string_string(
+      *expr, ObVarcharType, CS_TYPE_UTF8MB4_BIN,
+      expr->obj_meta_.get_type(), expr->datum_meta_.cs_type_,
+      in_str, eval_ctx, datum, has_set_res);
 }
 
 int set_datum_text_utf8(sql::ObExpr *expr, sql::ObEvalCtx &eval_ctx, const ObString &in_str, ObDatum &datum)
 {
-  int ret = OB_SUCCESS;
-  ret = ObOdpsDataTypeCastUtil::common_string_text_wrap(
-      *expr, in_str, eval_ctx, nullptr, datum, ObVarcharType/*in_type*/, CS_TYPE_UTF8MB4_BIN);
-  return ret;
+  return ObDataTypeCastUtil::common_string_text(*expr, in_str, eval_ctx, nullptr, datum);
 }
 
 int set_datum_text_binary(sql::ObExpr *expr, sql::ObEvalCtx &eval_ctx, const ObString &in_str, ObDatum &datum)
 {
+  return ObDataTypeCastUtil::common_string_text(*expr, in_str, eval_ctx, nullptr, datum);
+}
+
+// Json/geometry values are already in storage format; pack them into a lob datum
+// directly instead of going through string-to-text cast semantics.
+static int set_datum_lob_storage(sql::ObExpr *expr, sql::ObEvalCtx &eval_ctx, const ObString &in_str, ObDatum &datum)
+{
   int ret = OB_SUCCESS;
-  ret = ObOdpsDataTypeCastUtil::common_string_text_wrap(
-      *expr, in_str, eval_ctx, nullptr, datum, ObVarcharType/*in_type*/, CS_TYPE_BINARY);
+  ObTextStringDatumResult str_result(expr->datum_meta_.type_, expr, &eval_ctx, &datum);
+  if (OB_FAIL(str_result.init(in_str.length()))) {
+    LOG_WARN("Lob: init lob result failed", K(ret));
+  } else if (OB_FAIL(str_result.append(in_str.ptr(), in_str.length()))) {
+    LOG_WARN("Lob: append lob result failed", K(ret));
+  } else {
+    str_result.set_result();
+  }
   return ret;
 }
 
@@ -537,9 +547,8 @@ int set_datum_json(sql::ObExpr *expr, sql::ObEvalCtx &eval_ctx, const ObString &
     LOG_WARN("parse json success but got null", KP(json_tree));
   } else if (OB_FAIL(serializer.serialize(json_tree, json_bin_string))) {
     LOG_WARN("failed to serialize json tree to json bin string", K(ret));
-  } else if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_text_wrap(
-      *expr, json_bin_string, eval_ctx, nullptr, datum, ObVarcharType/*in_type*/, CS_TYPE_UTF8MB4_BIN))) {
-    LOG_WARN("failed to set string", K(ret));
+  } else if (OB_FAIL(set_datum_lob_storage(expr, eval_ctx, json_bin_string, datum))) {
+    LOG_WARN("failed to set json datum", K(ret));
   }
 
   return ret;
@@ -560,6 +569,11 @@ int ObStringToStringArrowDataLoader<ArrowType>::init(const DataType &arrow_type,
     } else {
       datum_setter_ = set_datum_string; // need charset convertion
     }
+    if (set_datum_string == datum_setter_) {
+      // common_string_string may fall into the binary branch and read args_[0].
+      setter_needs_cast_expr_ = true;
+      in_cs_type_ = CS_TYPE_UTF8MB4_BIN;
+    }
   } else if (out_type >= ObTinyTextType && out_type <= ObLongTextType) {
     // text field is treat as lob
     if (ArrowType::is_utf8) {
@@ -567,6 +581,8 @@ int ObStringToStringArrowDataLoader<ArrowType>::init(const DataType &arrow_type,
     } else {
       datum_setter_ = set_datum_text_binary;
     }
+    setter_needs_cast_expr_ = true;
+    in_cs_type_ = ArrowType::is_utf8 ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_BINARY;
   } else if (ObRawType == out_type) {
     datum_setter_ = set_datum_raw;
   } else if (ObJsonType == out_type) {
@@ -593,7 +609,13 @@ int ObStringToStringArrowDataLoader<ArrowType>::load(
   if (OB_ISNULL(datum_setter_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObStringToStringArrowDataLoader: loader is not set");
+  } else if (setter_needs_cast_expr_ && !cast_expr_ready_) {
+    // common_string_* cast helpers read the source type from args_[0]; file-column
+    // exprs have no args, so build the shadow cast expr once per column.
+    ObODPSTableUtils::prepare_cast_expr(*expr, ObVarcharType, in_cs_type_, cast_expr_);
+    cast_expr_ready_ = true;
   }
+  ObExpr *setter_expr = setter_needs_cast_expr_ ? &cast_expr_ : expr;
 
   // 字符串的长度应该按照字节来计算，还是字符个数来计算
   bool is_byte_length = !ArrowType::is_utf8 ||
@@ -603,7 +625,7 @@ int ObStringToStringArrowDataLoader<ArrowType>::load(
   ObString in_str;
   // use BatchInfoScopeGuard to control the batch index or row index.
   // ObExpr::get_str_res_mem return the same memory buffer for the same row.
-  // ObTextStringVectorResult::init which is used by ObOdpsDataTypeCastUtil::common_string_text_wrap
+  // ObTextStringDatumResult::init which is used by ObDataTypeCastUtil::common_string_text
   // uses get_str_res_mem to allocate memory.
   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx);
   for (int64_t i = 0; OB_SUCC(ret) && i < binary_array.length(); i++) {
@@ -621,7 +643,7 @@ int ObStringToStringArrowDataLoader<ArrowType>::load(
       ret = OB_ERR_DATA_TOO_LONG;
       LOG_WARN("value is too long", K(item_length), K(expr->max_length_), K(ret));
     } else if (FALSE_IT(in_str.assign_ptr((const char *)item_bytes, item_length))) {
-    } else if (OB_FAIL(datum_setter_(expr, eval_ctx, in_str, datum))) {
+    } else if (OB_FAIL(datum_setter_(setter_expr, eval_ctx, in_str, datum))) {
       LOG_WARN("failed to set datum value", K(ret));
     } else {
       out_vector->set_string(i, datum.get_string());
@@ -927,8 +949,7 @@ int ObBinaryToGisArrowDataLoader<ArrowType>::load(const Array &arrow_array, sql:
     } else if (FALSE_IT(str_value.assign_ptr((const char *)item_bytes, item_length))) {
     } else if (OB_FAIL(ObGeoTypeUtil::add_geo_version(tmp_alloc_guard.get_allocator(), str_value, gis_value))) {
       LOG_WARN("failed to add geo version", K(ret), K(str_value.length()));
-    } else if (OB_FAIL(ret = ObOdpsDataTypeCastUtil::common_string_text_wrap(
-        *expr, gis_value, eval_ctx, nullptr, gis_datum, ObVarcharType/*in_type*/, CS_TYPE_UTF8MB4_BIN))) {
+    } else if (OB_FAIL(set_datum_lob_storage(expr, eval_ctx, gis_value, gis_datum))) {
       LOG_WARN("failed to set geo value", K(ret));
     } else {
       out_vector->set_payload_shallow(i, static_cast<const void *>(gis_datum.ptr().ptr_), gis_datum.get_int_bytes());
