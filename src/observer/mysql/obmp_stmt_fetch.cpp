@@ -51,21 +51,29 @@ int ObMPStmtFetch::before_process()
     LOG_ERROR("invalid request", K(ret), K_(*req));
   } else {
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
-    const char* pos = pkt.get_cdata();
-    uint32_t cursor_id = -1; //OB_INVALID_ID;
-    ObMySQLUtil::get_uint4(pos, cursor_id);
-    cursor_id_ = cursor_id;
-    int32_t fetch_rows = 0;
-    ObMySQLUtil::get_int4(pos, fetch_rows);
-    fetch_rows_ = fetch_rows;
-    if (pkt.get_clen() > FETCH_PACKET_SIZE_WITHOUT_OFFSET) {
-      if (lib::is_mysql_mode()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support offset type in mysql mode.", K(ret), K(cursor_id));
-      } else {
+    const int64_t packet_len = pkt.get_clen();
+    const bool has_offset = packet_len > FETCH_PACKET_SIZE_WITHOUT_OFFSET;
+    // Length includes the command byte; optional fixed fields must be complete.
+    if (packet_len < FETCH_PACKET_SIZE_WITH_OFFSET_OK
+        && packet_len != FETCH_PACKET_SIZE_WITHOUT_OFFSET
+        && packet_len != FETCH_PACKET_SIZE_WITH_OFFSET) {
+      ret = OB_ERR_MALFORMED_PS_PACKET;
+      LOG_WARN("invalid stmt fetch packet length", K(ret), K(packet_len));
+    } else if (has_offset && lib::is_mysql_mode()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support offset type in mysql mode.", K(ret), K(packet_len));
+    } else {
+      const char* pos = pkt.get_cdata();
+      uint32_t cursor_id = -1; //OB_INVALID_ID;
+      ObMySQLUtil::get_uint4(pos, cursor_id);
+      cursor_id_ = cursor_id;
+      int32_t fetch_rows = 0;
+      ObMySQLUtil::get_int4(pos, fetch_rows);
+      fetch_rows_ = fetch_rows;
+      if (has_offset) {
         ObMySQLUtil::get_int2(pos, offset_type_);
         ObMySQLUtil::get_int4(pos, offset_);
-        if (pkt.get_clen() > FETCH_PACKET_SIZE_WITH_OFFSET) {
+        if (packet_len > FETCH_PACKET_SIZE_WITH_OFFSET) {
           ObMySQLUtil::get_int4(pos, extend_flag_);
           if (has_long_data()) {
             ObSQLSessionInfo *session = NULL;
@@ -80,12 +88,20 @@ int ObMPStmtFetch::before_process()
               if (OB_FAIL(session->get_cursor(cursor_id_)->get_field_count(column_count))) {
                 LOG_WARN("get field columns failed", K(ret));
               } else {
-                int64_t len = (column_count + 7) / 8;
-                column_flag_ = static_cast<char*>(THIS_WORKER.get_sql_arena_allocator()
-                                                              .alloc(len + 1));
-                MEMSET(column_flag_, 0, len+1);
-                MEMCPY(column_flag_, pos, len);
-                pos += len;
+                const int64_t len = (column_count + 7) / 8;
+                // The fixed header includes the command byte skipped by get_cdata().
+                const int64_t remain_len = packet_len - FETCH_PACKET_SIZE_WITH_OFFSET_OK;
+                if (len > remain_len) {
+                  ret = OB_ERR_MALFORMED_PS_PACKET;
+                  LOG_WARN("stmt fetch column bitmap is too short", K(ret), K(cursor_id),
+                           K(column_count), K(len), K(remain_len));
+                } else {
+                  column_flag_ = static_cast<char*>(THIS_WORKER.get_sql_arena_allocator()
+                                                                .alloc(len + 1));
+                  MEMSET(column_flag_, 0, len+1);
+                  MEMCPY(column_flag_, pos, len);
+                  pos += len;
+                }
               }
             } else {
               ret = OB_ERR_FETCH_OUT_SEQUENCE;
@@ -98,10 +114,10 @@ int ObMPStmtFetch::before_process()
         } else {
           extend_flag_ = 0;
         }
+      } else {
+        offset_type_ = OB_OCI_DEFAULT;
+        offset_ = 0;
       }
-    } else {
-      offset_type_ = OB_OCI_DEFAULT;
-      offset_ = 0;
     }
   }
   if (OB_FAIL(ret)) {
