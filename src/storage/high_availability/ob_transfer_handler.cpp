@@ -491,6 +491,7 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   common::ObMemberList member_list;
   common::GlobalLearnerList learner_list;
   ObArray<ObAddr> addr_list;
+  share::ObTransferTaskInfo unused_table_task_info;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -521,7 +522,7 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       }
     }
 #endif
-    if (FAILEDx(lock_transfer_task_(task_info, trans))) {
+    if (FAILEDx(lock_transfer_task_(task_info, unused_table_task_info, trans))) {
       LOG_WARN("failed to lock transfer task", K(ret), K(task_info));
     } else {
 #ifdef ERRSIM
@@ -1393,11 +1394,11 @@ int ObTransferHandler::get_abort_trans_timeout_(
 
 int ObTransferHandler::lock_transfer_task_(
     const share::ObTransferTaskInfo &task_info,
+    share::ObTransferTaskInfo &table_task_info,
     common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   const bool for_update = true;
-  ObTransferTaskInfo table_task_info;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2092,6 +2093,7 @@ int ObTransferHandler::update_transfer_status_aborted_(
   bool is_leader = true;
   const int64_t stmt_timeout = 10_s;
   const int32_t group_id = share::OBCG_STORAGE;
+  share::ObTransferTaskInfo unused_table_task_info;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2103,7 +2105,7 @@ int ObTransferHandler::update_transfer_status_aborted_(
     LOG_WARN("failed to start trans", K(ret), K(task_info));
   } else {
     const SCN scn = task_info.start_scn_;
-    if (OB_FAIL(lock_transfer_task_(task_info, trans))) {
+    if (OB_FAIL(lock_transfer_task_(task_info, unused_table_task_info, trans))) {
       LOG_WARN("failed to lock transfer task", K(ret), K(task_info));
     }
     // There is still a possibility of the old leader change task status to ABORT
@@ -3091,6 +3093,10 @@ int ObTransferHandler::do_trans_transfer_aborted_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("conn_ is NULL", KR(ret));
   } else {
+#ifdef ERRSIM
+    // Pause with the task row locked, before enlisting the destination LS.
+    DEBUG_SYNC(BEFORE_TRANSFER_ABORT_REGISTER_MDS);
+#endif
     transfer_in_aborted_info.dest_ls_id_ = task_info.dest_ls_id_;
     transfer_in_aborted_info.data_version_ = task_info.data_version_;
     if (OB_FAIL(transfer_in_aborted_info.tablet_list_.assign(task_info.tablet_list_))) {
@@ -3432,6 +3438,7 @@ int ObTransferHandler::inner_do_with_abort_status_(
   const SCN scn = task_info.start_scn_;
   const int32_t result = task_info.result_;
   const ObTransferLockStatus status(ObTransferLockStatus::ABORTED);
+  share::ObTransferTaskInfo table_task_info;
   diag_ctx_.set_cost_item(ObStorageHACostItemName::TRANSFER_ABORT_BEGIN);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -3449,8 +3456,15 @@ int ObTransferHandler::inner_do_with_abort_status_(
   } else {
     // lock transfer task first to avoid failing to unlock member list during re-entrant situation
     // only one tx can lock the transfer task and then lock member list
-    if (OB_FAIL(lock_transfer_task_(task_info, trans))) {
-      LOG_WARN("failed to lock transfer task", K(ret), K(task_info));
+    if (OB_FAIL(lock_transfer_task_(task_info, table_task_info, trans))) {
+      if (table_task_info.status_ == next_status) {
+        // Another trans has handled the task and set the status to failed.
+        // just skip for idempotency.
+        ret = OB_SUCCESS;
+        LOG_INFO("transfer abort already finished", K(task_info), K(table_task_info));
+      } else {
+        LOG_WARN("failed to lock transfer task", K(ret), K(task_info));
+      }
     } else if (OB_FAIL(get_local_ls_member_list_and_learner_list_(member_list, learner_list))) {
       LOG_WARN("failed to get ls member list", K(ret), K(task_info));
     } else if (OB_FAIL(do_trans_transfer_aborted_(task_info, timeout_ctx, trans))) {
@@ -3529,6 +3543,7 @@ int ObTransferHandler::inner_do_with_abort_status_before_4230_(
   ObTimeoutCtx timeout_ctx;
   ObMySQLTransaction trans;
   const int64_t tmp_round = round_;
+  share::ObTransferTaskInfo table_task_info;
   diag_ctx_.set_cost_item(ObStorageHACostItemName::TRANSFER_ABORT_BEGIN);
   const int32_t group_id = share::OBCG_STORAGE;
   int64_t stmt_timeout = 10_s;
@@ -3546,8 +3561,15 @@ int ObTransferHandler::inner_do_with_abort_status_before_4230_(
     } else {
       const SCN scn = task_info.start_scn_;
       const int32_t result = task_info.result_;
-      if (OB_FAIL(lock_transfer_task_(task_info, trans))) {
-        LOG_WARN("failed to lock transfer task", K(ret), K(task_info));
+      if (OB_FAIL(lock_transfer_task_(task_info, table_task_info, trans))) {
+        if (table_task_info.status_ == next_status) {
+          // Another trans has handled the task and set the status to failed.
+          // just skip for idempotency.
+          ret = OB_SUCCESS;
+          LOG_INFO("transfer abort already finished", K(task_info), K(table_task_info));
+        } else {
+          LOG_WARN("failed to lock transfer task", K(ret), K(task_info));
+        }
       } else if (OB_FAIL(update_transfer_status_(task_info, next_status, scn, result, trans))) {
         LOG_WARN("failed to update transfer status", K(ret), K(task_info), K(next_status));
       } else if (OB_FAIL(unlock_src_and_dest_ls_member_and_learner_list_(task_info, false/*need_check_palf_leader*/, task_info.dest_ls_id_))) {
