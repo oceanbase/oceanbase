@@ -47,7 +47,7 @@ yum install git wget rpm* cpio make glibc-devel glibc-headers binutils m4 libtoo
 This includes Debian, Ubuntu, etc.
 
 ```shell
-apt-get install git wget rpm rpm2cpio cpio make build-essential binutils m4
+apt-get install git wget rpm rpm2cpio cpio make build-essential binutils libncurses5 m4
 ```
 
 ### SUSE based
