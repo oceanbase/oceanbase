@@ -264,8 +264,6 @@ void ObPartTransCtx::destroy()
     if (NULL == ls_tx_ctx_mgr_) {
       TRANS_LOG(ERROR, "ls_tx_ctx_mgr_ is null, unexpected error", KP(ls_tx_ctx_mgr_), "context",
                 *this);
-    } else {
-      ls_tx_ctx_mgr_->dec_total_tx_ctx_count();
     }
     // Defensive Check 3 : missing to callback scheduler
     if (!is_follower_() && need_callback_scheduler_()) {
@@ -299,6 +297,31 @@ void ObPartTransCtx::destroy()
     big_segment_info_.reset();
 
     hotspot_redo_cache_.reset();
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+    // destroy() exclusively owns the ctx. Cache cleanup is complete above, so
+    // directly close any remaining active count without running unlock hooks.
+    if (is_primary_tx_aggregating(redo_flush_status_)) {
+      TRANS_LOG(ERROR, "destroy ctx with unfinished hotspot aggregation",
+                K(redo_flush_status_), KPC(this));
+      redo_flush_status_ = TxRedoFlushStatus::PRIMARY_AGGR_FAILED;
+      if (OB_ISNULL(ls_tx_ctx_mgr_)) {
+        TRANS_LOG(ERROR, "missing ls manager during final hotspot cleanup", KPC(this));
+      } else {
+        const int tmp_ret = ls_tx_ctx_mgr_->release_hotspot_aggregation();
+        if (OB_SUCCESS != tmp_ret) {
+          TRANS_LOG(ERROR, "release hotspot count during destroy failed",
+                    K(tmp_ret), KPC(this));
+        }
+      }
+    }
+#endif
+    // Keep a destroying ctx in the total until it returns any aggregation count.
+    // If the total is decremented first, a scan may treat the ctx map as complete
+    // and clear the aggregation count early. The fallback release would then
+    // underflow.
+    if (OB_NOT_NULL(ls_tx_ctx_mgr_)) {
+      ls_tx_ctx_mgr_->dec_total_tx_ctx_count();
+    }
     reset_log_cbs_();
 
     if (NULL != tlog_) {
@@ -2025,7 +2048,7 @@ int ObPartTransCtx::check_can_submit_redo_()
   // Secondary hotspot tx should NEVER submit redo log because its redo is submitted by primary.
   // Use is_secondary_status() instead of is_secondary_hotspot_tx_() because:
   // - is_secondary_hotspot_tx_() only checks active aggregation states (PREPARING, MIGRATING)
-  // - All secondary states (PREPARING, MIGRATING, SYNCED, FAILED, SUCCEEDED) cannot submit redo
+  // - All secondary states (PREPARING, MIGRATING, SUBMITTED, SYNCED, FAILED, SUCCEEDED) cannot submit redo
   if (is_tx_committing
       || final_log_submitting
       || is_force_abort_logging_()
@@ -2111,14 +2134,28 @@ int ObPartTransCtx::compensate_abort_log_()
     // do nothing
   } else if(OB_FALSE_IT(sub_state_.set_force_abort())) {
 
-  } else if (OB_FAIL(submit_log_impl_(ObTxLogType::TX_ABORT_LOG))) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(restart_2pc_trans_timer_())) {
-      TRANS_LOG(WARN, "restart_2pc_trans_timer_ for submit abort log fail",
-        KR(ret), KR(tmp_ret), KPC(this));
-    }
-    TRANS_LOG(WARN, "submit abort log failed", KR(ret), K(*this));
   } else {
+    // Aggregation ends when its CBs/cache are drained, independently of ABORT
+    // persistence. Until then keep its state/count and reject non-hotspot logs.
+    if (is_primary_tx_aggregating(redo_flush_status_)) {
+      if (hotspot_redo_cache_.get_hotspot_cache_count() > 0
+          && OB_FAIL(hotspot_redo_cache_.abort_secondary_txs(ObTxAbortCause::PRIMARY_TX_ABORTED))) {
+        TRANS_LOG(WARN, "abort secondary txs before aggregation cleanup failed", K(ret), KPC(this));
+      } else if (OB_FAIL(clean_hotspot_redo_cache())) {
+        TRANS_LOG(WARN, "hotspot aggregation cleanup before abort log not ready", K(ret), KPC(this));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ret = submit_log_impl_(ObTxLogType::TX_ABORT_LOG);
+    }
+    if (OB_FAIL(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(restart_2pc_trans_timer_())) {
+        TRANS_LOG(WARN, "restart abort retry timer failed",
+          KR(ret), KR(tmp_ret), KPC(this));
+      }
+      TRANS_LOG(WARN, "compensate abort log failed", KR(ret), K(*this));
+    }
   }
   TRANS_LOG(INFO, "compensate abort log", K(ret), KPC(this));
   return ret;
@@ -3231,6 +3268,9 @@ int ObPartTransCtx::publish_mvcc_prepare_barrier_(const SCN &version)
     // finite prepare version may the primary publish its own barrier and let a
     // reader sample max_read_ts for the final version floor.
     if (OB_FAIL(hotspot_redo_cache_.before_prepare_secondaries(version))) {
+      if (OB_TRANS_NEED_ROLLBACK == ret && !sub_state_.is_state_log_submitted()) {
+        sub_state_.set_force_abort();
+      }
       TRANS_LOG(WARN, "publish prepare version to hotspot secondaries failed",
                 KR(ret), K(version), K(trans_id_), K(ls_id_),
                 "redo_flush_status", to_cstr(redo_flush_status_));
@@ -3274,9 +3314,21 @@ SCN ObPartTransCtx::get_gts_refresh_target_() const
 int ObPartTransCtx::before_prepare_for_hotspot(const SCN &version)
 {
   int ret = OB_SUCCESS;
+  ObTxState exit_state = ObTxState::INIT;
+  bool has_redo = false;
   CtxLockGuard guard(lock_);
 
-  if (!can_publish_secondary_prepare_barrier(redo_flush_status_)) {
+  if (OB_FAIL(check_tx_persisted_status_(exit_state, has_redo))) {
+    TRANS_LOG(WARN, "check hotspot secondary state before prepare failed", KR(ret));
+  } else if (is_exiting_ || sub_state_.is_force_abort() || ObTxState::ABORT == exit_state) {
+    ret = OB_TRANS_NEED_ROLLBACK;
+    const char *reason = is_exiting_ ? "secondary_exiting"
+        : (sub_state_.is_force_abort() ? "secondary_force_abort" : "secondary_aborted");
+    TRANS_LOG(WARN, "secondary rollback request blocks hotspot prepare", KR(ret), K(reason),
+              K(version), K(exit_state), K(redo_flush_status_), K(sub_state_), K(is_exiting_),
+              K(trans_id_), K(ls_id_));
+  } else if (ObTxState::INIT != exit_state
+             || !can_publish_secondary_prepare_barrier(redo_flush_status_)) {
     ret = OB_STATE_NOT_MATCH;
     TRANS_LOG(ERROR, "invalid secondary status when publishing prepare version",
               KR(ret), K(version), K(trans_id_), K(ls_id_),
@@ -3815,7 +3867,9 @@ int ObPartTransCtx::submit_commit_log_()
   LogBarrierType barrier_type = LogBarrierType::NO_NEED_BARRIER;
   const int64_t mds_durable_count = exec_info_.multi_data_source_.count();
   const int64_t total_mds_count = mds_cache_.count() + mds_durable_count;
-  if (need_force_abort_() || is_force_abort_logging_()
+  if (need_force_abort_()
+      || (hotspot_redo_cache_.need_rollback_primary_tx() && !sub_state_.is_state_log_submitted())
+      || is_force_abort_logging_()
       || get_downstream_state() == ObTxState::ABORT) {
     ret = OB_TRANS_KILLED;
     TRANS_LOG(WARN, "tx has been aborting, can not submit prepare log", K(ret));
@@ -4420,6 +4474,9 @@ int ObPartTransCtx::submit_log_block_out_(ObTxLogBlock &log_block,
     // It is safe to merge the intermediate_participants because we will block
     // the persistent state machine with is_2pc_blocking. The detailed design
     // can be found in the implementation of the merge_intermediate_participants.
+    // Only P's aggregation redo generator marks hotspot blocks; S data is
+    // submitted in P's logs. Ordinary P/S blocks still obey the status gate,
+    // and hotspot redo remains subject to 2pc and other submission checks.
   } else if (can_not_submit_log_for_hotspot_() && !log_block.is_hotspot_redo()) {
     ret = OB_NEED_RETRY;
     TRANS_LOG(WARN, "waiting hotspot redo flushed", K(ret), "redo_flush_status",
@@ -6321,6 +6378,13 @@ int ObPartTransCtx::replay_abort(const ObTxAbortLog &abort_log,
       TRANS_LOG(WARN, "notify data source failed", KR(ret), K(abort_log));
     } else if (OB_FAIL(TX_REPLAY_ABORT_FAIL_AFTER_NOTIFY_ON_ABORT)) {
       TRANS_LOG(WARN, "errsim error", K(ret));
+    // PREPARING can own a count before cache initialization. If busy CBs or
+    // cache cleanup prevent completion, keep the original ctx in the map for
+    // retrying this log. Insert tx-data and set_exiting_() only after cleanup.
+    } else if ((hotspot_redo_cache_.get_hotspot_cache_count() > 0
+                || is_primary_tx_aggregating(redo_flush_status_))
+               && OB_FAIL(clean_hotspot_redo_cache())) {
+      TRANS_LOG(WARN, "hotspot cleanup before replay abort exit failed", K(ret), KPC(this));
     } else if (!ctx_tx_data_.is_read_only() && OB_FAIL(ctx_tx_data_.add_abort_op(timestamp))) {
       TRANS_LOG(WARN, "add tx data abort_op failed", K(ret), KPC(this));
     } else if ((!ctx_tx_data_.is_read_only()) && OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
@@ -6332,10 +6396,6 @@ int ObPartTransCtx::replay_abort(const ObTxAbortLog &abort_log,
   }
   if (OB_SUCC(ret)) {
     sub_state_.set_state_log_submitted();
-    if(hotspot_redo_cache_.get_hotspot_cache_count() > 0) {
-      clean_hotspot_redo_cache();
-      reset_hotspot_redo_status_();
-    }
   }
   const int64_t used_time = timeguard.get_diff();
   REC_TRANS_TRACE_EXT2(tlog_, replay_abort, OB_ID(ret), ret, OB_ID(used),
@@ -6719,7 +6779,7 @@ int ObPartTransCtx::switch_to_follower_forcedly(ObTxCommitCallback *&cb_list_hea
       }
 #ifdef OB_HOTSPOT_GROUP_COMMIT
       // Mark non-terminal secondary hotspot tx as FAILED when forced follower switch.
-      // Non-terminal secondary states: PREPARING, MIGRATING, SYNCED
+      // Non-terminal secondary states: PREPARING, MIGRATING, SUBMITTED, SYNCED
       // Terminal secondary states: FAILED, SUCCEEDED (no need to mark again)
       // Use explicit status check instead of is_secondary_hotspot_tx_() because:
       // - is_secondary_hotspot_tx_() only checks PREPARING and MIGRATING (via is_in_active_aggregation_)
@@ -6916,6 +6976,15 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObTxCommitCallback *&cb_list_h
         }
       }
     }
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+    // The member's redo is already owned and submitted by the primary. Log sync
+    // and callback removal may finish after commit_to_replay below; this does
+    // not grant permission to release the member or its callbacks early.
+    if (TxRedoFlushStatus::SECONDARY_MIGRATE_SUBMITTED == redo_flush_status_
+        || TxRedoFlushStatus::SECONDARY_MIGRATE_SYNCED == redo_flush_status_) {
+      need_submit_log = false;
+    }
+#endif
     timeguard.click();
     if (OB_SUCC(ret) && need_submit_log && !need_force_abort_()) {
       // We need merge all callbacklists before submitting active info
@@ -9297,7 +9366,7 @@ int ObPartTransCtx::force_abort_secondary_hotspot(const int reason)
   // Use is_secondary_status() instead of is_secondary_hotspot_tx_() because:
   // - abort_secondary_txs() sets status to SECONDARY_MIGRATE_FAILED before calling this function
   // - is_secondary_hotspot_tx_() relies on is_in_active_aggregation_() which excludes SECONDARY_MIGRATE_FAILED
-  // - We need to accept all secondary statuses (PREPARING, MIGRATING, SYNCED, FAILED, SUCCEEDED)
+  // - We need to accept all secondary statuses (PREPARING, MIGRATING, SUBMITTED, SYNCED, FAILED, SUCCEEDED)
   // - Secondary hotspot tx must have empty hotspot_redo_cache_ (only primary has non-empty cache)
   if (!is_secondary_status(redo_flush_status_) || hotspot_redo_cache_.get_hotspot_cache_count() > 0) {
     ret = OB_ERR_UNEXPECTED;
@@ -9575,7 +9644,9 @@ int ObPartTransCtx::do_local_abort_tx_()
 
   TRANS_LOG(WARN, "do_local_abort_tx_", KR(ret), K(*this));
 
-  if (is_in_active_aggregation_()) {
+  const bool primary_abort_cleanup = is_primary_tx_aggregating(redo_flush_status_)
+                                     && sub_state_.is_force_abort();
+  if (is_in_active_aggregation_() && !primary_abort_cleanup) {
     ret = OB_EAGAIN;
     sub_state_.set_force_abort();
     TRANS_LOG(WARN, "we can not abort a hotspot tx with a special redo_flush_status", K(ret),
@@ -9584,6 +9655,8 @@ int ObPartTransCtx::do_local_abort_tx_()
              && OB_FAIL(hotspot_redo_cache_.abort_secondary_txs(ObTxAbortCause::PRIMARY_TX_ABORTED))) {
     sub_state_.set_force_abort();
     TRANS_LOG(WARN, "abort secondary txs failed", K(ret), KPC(this));
+  } else if (primary_abort_cleanup && OB_FAIL(clean_hotspot_redo_cache())) {
+    TRANS_LOG(WARN, "hotspot aggregation cleanup before local abort not ready", K(ret), KPC(this));
   } else if (has_persisted_log_() || is_logging_()) {
     // part_trans_action_ = ObPartTransAction::ABORT;
     if (OB_FAIL(compensate_abort_log_())) {
@@ -9627,7 +9700,7 @@ int ObPartTransCtx::do_force_kill_tx_()
       TRANS_LOG(WARN, "unregister timer task error", KR(ret), "context", *this);
     }
     sub_state_.set_force_abort();
-    clean_hotspot_redo_cache();
+    (void)clean_hotspot_redo_cache();
     set_exiting_();
     TRANS_LOG(INFO, "transaction killed success", "context", *this);
   }
@@ -9718,6 +9791,14 @@ int ObPartTransCtx::on_local_abort_tx_()
     // run and then clean_hotspot_redo_cache to release child tx memory.
     if (hotspot_redo_cache_.get_hotspot_cache_count() > 0) {
         hotspot_redo_cache_.push_response_task(OB_TRANS_KILLED, share::SCN::invalid_scn());
+    } else if (is_primary_tx_aggregating(redo_flush_status_)
+               && !hotspot_redo_cache_.has_active_cache()) {
+      // PREPARING may be aborted before cache initialization. Finish its
+      // admitted aggregation only after the local abort cleanup above.
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(clean_hotspot_redo_cache())) {
+        TRANS_LOG(WARN, "clean preparing hotspot aggregation failed", K(tmp_ret), KPC(this));
+      }
     }
     set_exiting_();
   }

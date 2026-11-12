@@ -43,7 +43,13 @@ public:
   ObTenantTxDataOpAllocator *FAKE_ALLOCATOR2 = &__FAKE_ALLOCATOR_OBJ2;
 
 public:
-  ObFakeTxDataTable() : arena_allocator_(), map_(arena_allocator_, 1 << 20 /*2097152*/)
+  ObFakeTxDataTable()
+      : fake_recycled_scn_enabled_(false),
+        fake_recycled_scn_(SCN::min_scn()),
+        fake_read_error_tx_id_(),
+        fake_read_error_(OB_SUCCESS),
+        arena_allocator_(),
+        map_(arena_allocator_, 1 << 20 /*2097152*/)
   {
     IGNORE_RETURN map_.init();
     ObMemAttr mem_attr;
@@ -119,11 +125,21 @@ public:
                                  share::SCN &recycled_scn) override
   {
     int ret = OB_SUCCESS;
+    if (fake_recycled_scn_enabled_) {
+      recycled_scn = fake_recycled_scn_;
+    }
+    if (fake_read_error_tx_id_ == tx_id && OB_SUCCESS != fake_read_error_) {
+      ret = fake_read_error_;
+    }
     OZ (map_.get(tx_id, tx_data_guard));
     OZ (fn(*tx_data_guard.tx_data()));
     if (OB_ENTRY_NOT_EXIST == ret) { ret = OB_TRANS_CTX_NOT_EXIST; }
     return ret;
   }
+  bool fake_recycled_scn_enabled_;
+  share::SCN fake_recycled_scn_;
+  ObTransID fake_read_error_tx_id_;
+  int fake_read_error_;
   ObArenaAllocator arena_allocator_;
   ObTxDataHashMap map_;
 };
@@ -431,6 +447,7 @@ public:
   {
     int64_t replay_hint_;
     logservice::AppendCb *cb_;
+    share::ObTenantBase *tenant_;
   };
 
   struct ReplayCbTask : public common::ObLink
@@ -457,8 +474,17 @@ public:
             ObLink *task = apply_task_queue_arr[i].pop();
             if (task) {
               ++process_cnt;
-              static_cast<ApplyCbTask*>(task)->cb_->on_success();
-              delete task;
+              ApplyCbTask *apply_task = static_cast<ApplyCbTask*>(task);
+              {
+                share::ObTenantBase *old_tenant = share::ObTenantEnv::get_tenant();
+                share::ObTenantEnv::set_tenant(apply_task->tenant_);
+                DEFER(share::ObTenantEnv::set_tenant(old_tenant));
+                TRANS_LOG(DEBUG, "run fake log callback under submit tenant",
+                          KP(old_tenant), KP(apply_task->tenant_),
+                          KP(apply_task->cb_));
+                apply_task->cb_->on_success();
+              }
+              delete apply_task;
               ATOMIC_DEC(&inflight_cnt_);
             } else {
               break;
@@ -537,6 +563,7 @@ public:
         ApplyCbTask *apply_task = new ApplyCbTask();
         apply_task->replay_hint_ = replay_hint;
         apply_task->cb_ = cb;
+        apply_task->tenant_ = share::ObTenantEnv::get_tenant();
         max_submit_scn_ = share::SCN::max(max_submit_scn_, scn);
 
         apply_task_queue_arr[queue_idx].push(apply_task);

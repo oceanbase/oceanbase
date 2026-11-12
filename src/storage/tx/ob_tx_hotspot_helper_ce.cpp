@@ -23,12 +23,24 @@ namespace oceanbase
 namespace transaction
 {
 
-void ObPartTransCtx::clean_hotspot_redo_cache()
+// NOTE: no CE fallback for set_no_redo_secondary_synced(): its declaration
+// lives inside #ifdef OB_HOTSPOT_GROUP_COMMIT in ob_trans_part_ctx.h and it
+// has no CE callers.
+
+int ObPartTransCtx::clean_hotspot_redo_cache(const TxRedoFlushStatus primary_target)
 {
+  UNUSED(primary_target);
   int ret = OB_SUCCESS;
   if (OB_FAIL(hotspot_redo_cache_.reuse())) {
     TRANS_LOG(WARN, "CE hotspot cleanup failed", K(ret), K(trans_id_), K(ls_id_));
   }
+  return ret;
+}
+
+int ObPartTransCtx::accelerate_hotspot_aggregation_for_leader_switch(const int64_t deadline_us)
+{
+  UNUSED(deadline_us);
+  return OB_NOT_SUPPORTED;
 }
 
 void ObPartTransCtx::reset_hotspot_redo_status()

@@ -131,6 +131,11 @@ ObTxNode::ObTxNode(const int64_t ls_id,
                           this, std::placeholders::_1)),
   fake_lock_wait_mgr_(1001, &msg_bus, addr)
 {
+  // Bind the LS transaction table to the fake tx-data backing before any
+  // component can retain a reference. fake_tx_table_ precedes fake_ls_ and
+  // therefore keeps the backing table alive for the LS table's lifetime.
+  fake_ls_.tx_table_.~ObTxTable();
+  new (&fake_ls_.tx_table_) ObTxTable(fake_tx_table_.tx_data_table_);
   fake_lock_wait_mgr_.set_req_queue(&req_queue_);
   fake_lock_wait_mgr_.set_req_queue_cond(req_consumer_.get_cond());
   fake_lock_wait_mgr_.set_tenant_id(tenant_id_);
@@ -229,14 +234,10 @@ int ObTxNode::start() {
   }
   fake_lock_wait_mgr_.start();
   if (ls_tx_ctx_mgr) {
-    fake_tx_table_.tx_ctx_table_.ls_tx_ctx_mgr_ = ls_tx_ctx_mgr;
-    fake_tx_table_.is_inited_ = true;
-    fake_tx_table_.ls_ = &fake_ls_;
-    fake_tx_table_.online();
-    int tx_data_table_offset = offsetof(storage::ObTxTable, tx_data_table_);
-    void* ls_tx_data_table_ptr = (void*)((int64_t)&(fake_ls_.tx_table_) + tx_data_table_offset);
-    ls_tx_data_table_ptr = &fake_tx_table_.tx_data_table_;
+    fake_ls_.tx_table_.tx_ctx_table_.ls_tx_ctx_mgr_ = ls_tx_ctx_mgr;
     fake_ls_.tx_table_.is_inited_ = true;
+    fake_ls_.tx_table_.ls_ = &fake_ls_;
+    fake_ls_.tx_table_.ls_id_ = ls_id_;
     fake_ls_.tx_table_.online();
     fake_ls_.ls_meta_.clog_checkpoint_scn_ = share::SCN::max_scn();
   } else {
@@ -342,8 +343,8 @@ ObTxNode::~ObTxNode() __attribute__((optnone)) {
   int ret = OB_SUCCESS;
   TRANS_LOG(INFO, "destroy TxNode", KPC(this));
   ObTenantEnv::set_tenant(&tenant_);
-  OZ(txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(fake_tx_table_.tx_ctx_table_.ls_tx_ctx_mgr_));
-  fake_tx_table_.tx_ctx_table_.ls_tx_ctx_mgr_ = nullptr;
+  OZ(txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(fake_ls_.tx_table_.tx_ctx_table_.ls_tx_ctx_mgr_));
+  fake_ls_.tx_table_.tx_ctx_table_.ls_tx_ctx_mgr_ = nullptr;
   bool is_tx_clean = false;
   int retry_cnt = 0;
   do {
@@ -372,6 +373,10 @@ ObTxNode::~ObTxNode() __attribute__((optnone)) {
   dump_msg_queue_();
   //fake_tx_table_.is_inited_ = false;
   if (memtable_) {
+    // Drain the global B-tree retire queue before releasing this memtable's
+    // allocator, otherwise a later test can write through a retired node.
+    memtable_->pre_batch_destroy_keybtree();
+    memtable::ObMemtableKeyBtree::batch_destroy();
     delete memtable_;
   }
   if (role_ == Leader && fake_tx_log_adapter_) {
@@ -403,7 +408,7 @@ int ObTxNode::create_ls_(const ObLSID ls_id) {
   int ret = OB_SUCCESS;
   OZ(txs_.tx_ctx_mgr_.create_ls(tenant_id_,
                                 ls_id,
-                                &fake_tx_table_,
+                                &fake_ls_.tx_table_,
                                 &fake_lock_table_,
                                 *fake_ls_.get_tx_svr(),
                                 (ObITxLogParam*)0x01,
@@ -906,7 +911,7 @@ int ObTxNode::read(const ObTxReadSnapshot &snapshot,
   read_store_ctx.ls_id_ = ls_id_;
   OZ(txs_.get_read_store_ctx(snapshot, false, 5000ll * 1000, read_store_ctx));
   // HACK, refine: mock LS's each member in some way
-  read_store_ctx.mvcc_acc_ctx_.tx_table_guards_.tx_table_guard_.init(&fake_tx_table_);
+  read_store_ctx.mvcc_acc_ctx_.tx_table_guards_.tx_table_guard_.init(&fake_ls_.tx_table_);
   read_store_ctx.mvcc_acc_ctx_.abs_lock_timeout_ts_ = ObTimeUtility::current_time() + 5000ll * 1000;
   blocksstable::ObDatumRow row;
   {
@@ -1021,7 +1026,7 @@ int ObTxNode::write(ObTxDesc &tx,
                               snapshot,
                               write_flag,
                               write_store_ctx));
-  write_store_ctx.mvcc_acc_ctx_.tx_table_guards_.tx_table_guard_.init(&fake_tx_table_);
+  write_store_ctx.mvcc_acc_ctx_.tx_table_guards_.tx_table_guard_.init(&fake_ls_.tx_table_);
   ObArenaAllocator allocator;
   ObStoreRow row;
   ObObj cols[2] = {ObObj(key), ObObj(value)};
@@ -1094,7 +1099,7 @@ int ObTxNode::write(ObTxDesc &tx,
                               snapshot,
                               write_flag,
                               write_store_ctx));
-  write_store_ctx.mvcc_acc_ctx_.tx_table_guards_.tx_table_guard_.init(&fake_tx_table_);
+  write_store_ctx.mvcc_acc_ctx_.tx_table_guards_.tx_table_guard_.init(&fake_ls_.tx_table_);
   ObArenaAllocator allocator;
   ObStoreRow row;
   ObObj cols[2];
@@ -1432,6 +1437,10 @@ int ObTxNode::single_atomic_write_request(ObTxDesc &tx,
 int ObTxNode::commit_with_retry_ctrl(ObTxDesc &tx, const int64_t expire_ts)
 {
   int ret = OB_SUCCESS;
+  // align with DELEGATE_TENANT_WITH_RET: fake log adapter captures the
+  // submitting thread's tenant for the apply callback, so the tenant env
+  // must point to this node before commit_tx submits the commit log.
+  ObTenantEnv::set_tenant(&tenant_);
   if (OB_FAIL(txs_.commit_tx(tx, expire_ts, NULL))) {
     LOG_WARN("commit tx error", K(ret), K(tx), K(expire_ts));
   } else if (tx_retry_control_map_.find(&tx) != tx_retry_control_map_.end()) {

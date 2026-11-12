@@ -1197,12 +1197,36 @@ int ObResultSet::set_async_cb_ok_packet_param(const ObPhysicalPlan &plan, rpc::O
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("has no primary tx part", K(ret), K(primary_tx_parts.count()), KPC(primary_tx_desc));
           } else if (OB_UNLIKELY(primary_tx_parts.at(0).addr_ != GCONF.self_addr_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("primary tx is not on this server", K(ret), K(primary_tx_parts.at(0)), K(GCONF.self_addr_));
+            // The partial rollback range lives only in the old primary ctx's
+            // in-memory hotspot cache; the new leader cannot rebuild it. Per
+            // the leader-not-local decision: roll back the whole aggregation
+            // group explicitly. This error routes the async close into the
+            // synchronous end-trans rollback path, so every member is rolled
+            // back instead of relying on generic error propagation.
+            ret = OB_TRANS_ROLLBACKED;
+            LOG_WARN("hotspot primary moved off this server before partial rollback, "
+                     "roll back the whole aggregation group",
+                     K(ret), K(primary_tx_id), K(primary_tx_parts.at(0)), K(GCONF.self_addr_),
+                     K(need_rollback_tx_ids), K(need_rollback_stmt_cnt), K(sub_req_cnt));
           } else if (OB_FAIL(MTL(transaction::ObTransService*)->hotspot_rollback_to(
               primary_tx_parts.at(0), primary_tx_id, need_rollback_tx_ids))) {
             LOG_WARN("hotspot rollback to failed", K(ret), K(primary_tx_id), K(need_rollback_tx_ids));
           } else {
+            // Publish qualification only after the required partial rollback succeeds.
+            // implicit_end_group_commit_trans copies it to each started S descriptor
+            // before ending P can release agg_info.
+            ObGroupCommitSubRequest *mark_cur = agg_info->get_head_sub_request();
+            while (OB_NOT_NULL(mark_cur)) {
+              if (mark_cur->is_trans_started_ && OB_NOT_NULL(mark_cur->sess_)) {
+                for (int64_t i = 0; i < need_rollback_tx_ids.count(); ++i) {
+                  if (mark_cur->sess_->get_tx_id() == need_rollback_tx_ids.at(i)) {
+                    mark_cur->rollback_on_no_affected_rows_ = true;
+                    break;
+                  }
+                }
+              }
+              mark_cur = reinterpret_cast<ObGroupCommitSubRequest *>(mark_cur->next_);
+            }
             LOG_WARN("partial rollback on no affected rows", K(ret), K(primary_tx_parts.at(0)), K(primary_tx_id),
               K(need_rollback_stmt_cnt), K(sub_req_cnt), K(need_rollback_tx_ids.count()), K(need_rollback_tx_ids));
           }

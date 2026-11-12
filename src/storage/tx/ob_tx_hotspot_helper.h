@@ -30,7 +30,8 @@ namespace transaction
 // State alignment (logical, not numeric):
 //   PRIMARY_PREPARING (110)    <-> SECONDARY_PREPARING (510)
 //   PRIMARY_COLLECTING (120)   <-> SECONDARY_MIGRATING (520)
-//   PRIMARY_AGGR_SUCCEEDED (150) <-> SECONDARY_MIGRATE_SYNCED (530)
+//   PRIMARY_AGGR_SUCCEEDED (150) follows all SECONDARY_MIGRATE_SUBMITTED (525)
+//   SECONDARY_MIGRATE_SYNCED (530) additionally requires sync and callback removal
 //   PRIMARY_AGGR_FAILED (160)  <-> SECONDARY_MIGRATE_FAILED (540)
 //   (no primary equivalent)   <-> SECONDARY_MIGRATE_SUCCEEDED (550) - scheduler response sent
 //
@@ -53,6 +54,7 @@ static inline bool is_valid_status(TxRedoFlushStatus s)
       || s == TxRedoFlushStatus::PRIMARY_COMPLETED      // 180
       || s == TxRedoFlushStatus::SECONDARY_PREPARING    // 510
       || s == TxRedoFlushStatus::SECONDARY_MIGRATING    // 520
+      || s == TxRedoFlushStatus::SECONDARY_MIGRATE_SUBMITTED // 525
       || s == TxRedoFlushStatus::SECONDARY_MIGRATE_SYNCED // 530
       || s == TxRedoFlushStatus::SECONDARY_MIGRATE_FAILED // 540
       || s == TxRedoFlushStatus::SECONDARY_MIGRATE_SUCCEEDED) { // 550
@@ -85,6 +87,7 @@ static inline bool is_secondary_status(TxRedoFlushStatus s)
   bool is_secondary = false;
   if (s == TxRedoFlushStatus::SECONDARY_PREPARING      // 510
       || s == TxRedoFlushStatus::SECONDARY_MIGRATING   // 520
+      || s == TxRedoFlushStatus::SECONDARY_MIGRATE_SUBMITTED // 525
       || s == TxRedoFlushStatus::SECONDARY_MIGRATE_SYNCED // 530
       || s == TxRedoFlushStatus::SECONDARY_MIGRATE_FAILED // 540
       || s == TxRedoFlushStatus::SECONDARY_MIGRATE_SUCCEEDED) { // 550
@@ -164,6 +167,7 @@ static inline bool can_publish_secondary_prepare_barrier(TxRedoFlushStatus s)
 {
   return s == TxRedoFlushStatus::SECONDARY_PREPARING
       || s == TxRedoFlushStatus::SECONDARY_MIGRATING
+      || s == TxRedoFlushStatus::SECONDARY_MIGRATE_SUBMITTED
       || s == TxRedoFlushStatus::SECONDARY_MIGRATE_SYNCED;
 }
 
@@ -227,12 +231,21 @@ static inline int is_valid_transition(TxRedoFlushStatus from, TxRedoFlushStatus 
     // -------------------------------------------------------
     else if (from == TxRedoFlushStatus::SECONDARY_PREPARING) {
       if (to == TxRedoFlushStatus::SECONDARY_MIGRATING
+          || to == TxRedoFlushStatus::SECONDARY_MIGRATE_SUBMITTED
           || to == TxRedoFlushStatus::SECONDARY_MIGRATE_FAILED) {
         ret = OB_SUCCESS;
       } else {
         ret = OB_STATE_NOT_MATCH;
       }
     } else if (from == TxRedoFlushStatus::SECONDARY_MIGRATING) {
+      if (to == TxRedoFlushStatus::SECONDARY_MIGRATE_SUBMITTED
+          || to == TxRedoFlushStatus::SECONDARY_MIGRATE_SYNCED
+          || to == TxRedoFlushStatus::SECONDARY_MIGRATE_FAILED) {
+        ret = OB_SUCCESS;
+      } else {
+        ret = OB_STATE_NOT_MATCH;
+      }
+    } else if (from == TxRedoFlushStatus::SECONDARY_MIGRATE_SUBMITTED) {
       if (to == TxRedoFlushStatus::SECONDARY_MIGRATE_SYNCED
           || to == TxRedoFlushStatus::SECONDARY_MIGRATE_FAILED) {
         ret = OB_SUCCESS;

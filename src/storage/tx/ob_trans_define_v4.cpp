@@ -481,6 +481,8 @@ ObTxDesc::ObTxDesc()
     rpc_cond_(),
     commit_task_(),
     xa_ctx_(NULL),
+    hotspot_primary_tx_id_(),
+    rollback_on_no_affected_rows_(false),
     continuous_lock_conflict_cnt_(0)
 #ifdef ENABLE_DEBUG_LOG
   , alloc_link_()
@@ -524,6 +526,8 @@ int ObTxDesc::switch_to_idle()
   cb_tid_ = -1;
   exec_info_reap_ts_ = 0;
   commit_task_.reset();
+  hotspot_primary_tx_id_.reset();
+  rollback_on_no_affected_rows_ = false;
   modified_tables_.reset();
   state_ = State::IDLE;
   op_sn_ = 0;
@@ -577,6 +581,8 @@ void ObTxDesc::reset()
   }
 #endif
   tenant_id_ = 0;
+  hotspot_primary_tx_id_.reset();
+  rollback_on_no_affected_rows_ = false;
   cluster_id_ = -1;
   trace_info_.reset();
   cluster_version_ = 0;

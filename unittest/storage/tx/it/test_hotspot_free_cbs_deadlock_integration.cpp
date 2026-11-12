@@ -179,24 +179,9 @@ TEST_F(ObTestHotspotFreeCbsDeadlockIntegration,
   ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->traverse_tx_to_submit_redo_log(fail_tx_id, UINT32_MAX));
   n1->wait_all_msg_consumed();
 
-  // Shrink retry timeout to make graceful revoke timeout deterministic and fast.
-  set_errsim_retry_timeout(20 * 1000);  // 20ms
-
-  ASSERT_EQ(OB_LS_NEED_REVOKE, ls_tx_ctx_mgr->switch_to_follower_gracefully());
-  // Wait for resume to finish before forced revoke.
-  {
-    const int64_t start_ts = ObTimeUtility::fast_current_time();
-    const int64_t timeout_us = 3 * 1000 * 1000;
-    while (!ls_tx_ctx_mgr->is_master()
-           && ObTimeUtility::fast_current_time() - start_ts < timeout_us) {
-      n1->wait_all_redolog_applied();
-      n1->wait_all_msg_consumed();
-      usleep(10 * 1000);
-    }
-    ASSERT_TRUE(ls_tx_ctx_mgr->is_master());
-  }
-
-  // Force revoke should succeed.
+  // This test targets forced-abort free-CB cleanup, not graceful timeout.
+  // The aggregation protocol may legally complete graceful switch before this
+  // point, so drive forced switch directly and always exercise the abort path.
   ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->switch_to_follower_forcedly());
   ASSERT_FALSE(ls_tx_ctx_mgr->is_master());
 

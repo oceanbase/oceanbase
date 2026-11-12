@@ -13,6 +13,7 @@
 #include "common/ob_clock_generator.h"
 #include "lib/ob_errno.h"
 #include "share/rc/ob_tenant_base.h"
+#include "share/ob_debug_sync.h"
 #define USING_LOG_PREFIX SQL_EXE
 
 #include "share/ob_schema_status_proxy.h"   // ObSchemaStatusProxy
@@ -264,14 +265,28 @@ int ObSqlTransControl::implicit_end_group_commit_trans(const ObGroupCommitAggInf
   ObSEArray<ObSQLSessionInfo *, 32> sub_sessions;
   ObGroupCommitSubRequest *cur = reinterpret_cast<ObGroupCommitSubRequest *>(agg_info.get_head_sub_request()->next_);
   bool need_reset_diagnostic_info = false;
+  ObTxDesc *primary_tx_desc = exec_ctx.get_my_session()->get_tx_desc();
+  const ObTransID primary_tx_id = OB_NOT_NULL(primary_tx_desc)
+      ? primary_tx_desc->get_tx_id() : ObTransID();
 
+  if (OB_ISNULL(primary_tx_desc) || !primary_tx_id.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid primary transaction for group commit", K(ret), KP(primary_tx_desc), K(primary_tx_id));
+  }
   while (OB_SUCC(ret) && cur != nullptr) {
     if (!cur->is_trans_started_) {
       // skip end trans for sub tx which is not started
       cur = reinterpret_cast<ObGroupCommitSubRequest *>(cur->next_);
+    } else if (OB_ISNULL(cur->sess_) || OB_ISNULL(cur->sess_->get_tx_desc())
+               || !cur->sess_->get_tx_desc()->get_tx_id().is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid started sub transaction for group commit", K(ret), KPC(cur));
     } else if (OB_FAIL(sub_sessions.push_back(cur->sess_))) {
       LOG_WARN("fail to push back sub session", K(ret), KPC(cur));
     } else {
+      // Capture P provenance before ending P: its synchronous callback may release agg_info.
+      cur->sess_->get_tx_desc()->set_hotspot_group_commit_info(
+          primary_tx_id, !is_rollback && cur->rollback_on_no_affected_rows_);
       // primary request's diagnostic info will be seted in do_end_trans_() from thread-local,
       // sub request's diagnostic info are setted from connection.
       ObDiagnosticInfo *di = reinterpret_cast<observer::ObSMConnection *>(SQL_REQ_OP.get_sql_session(cur->req_))->get_diagnostic_info();
@@ -286,6 +301,9 @@ int ObSqlTransControl::implicit_end_group_commit_trans(const ObGroupCommitAggInf
     }
   }
   if (OB_FAIL(ret)) {
+    need_reset_diagnostic_info = true;
+  } else if (OB_FAIL(DEBUG_SYNC(BEFORE_GROUP_COMMIT_PRIMARY_END_TRANS))) {
+    LOG_WARN("group commit primary end trans debug sync failed", K(ret));
     need_reset_diagnostic_info = true;
   } else if (OB_FAIL(end_trans(exec_ctx.get_my_session(),
                                exec_ctx.get_need_disconnect_for_update(),

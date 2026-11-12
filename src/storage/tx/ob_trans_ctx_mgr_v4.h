@@ -373,6 +373,15 @@ public:
   // check this ObLSTxCtxMgr is in leader serving state
   bool in_leader_serving_state();
 
+  // Hotspot aggregation admission is one seq-cst CAS domain: bit 63 blocks
+  // new groups and the low 63 bits count admitted P groups in PREPARING/COLLECTING.
+  // A group leaves the count after aggregation succeeds or failure cleanup finishes;
+  // P commit and S result delivery are not part of this wait. Never serialized.
+  int acquire_hotspot_aggregation();
+  int release_hotspot_aggregation();
+  uint64_t get_hotspot_aggregation_count() const;
+  bool is_hotspot_aggregation_blocked() const;
+
   // dump a single tx data to text
   // @param [in] tx_id
   // @param [in] fd
@@ -591,6 +600,9 @@ public:
                State::state_str(state_),
                K_(total_tx_ctx_count),
                K_(active_tx_count),
+               "aggregation_count", get_hotspot_aggregation_count(),
+               "aggregation_blocked", is_hotspot_aggregation_blocked(),
+               "aggregation_state", ATOMIC_LOAD(&tx_aggregation_state_.value_),
                K_(ls_retain_ctx_mgr),
                K_(aggre_rec_scn),
                K_(prev_aggre_rec_scn),
@@ -829,6 +841,15 @@ private:
   { return ATOMIC_LOAD(&state_); }
 
 private:
+  void block_hotspot_aggregation_();
+  // Clear the admission block without resetting the count.
+  void unblock_hotspot_aggregation_();
+  int reopen_hotspot_aggregation_();
+  int accelerate_hotspot_aggregations_(const int64_t deadline_us);
+  int calibrate_hotspot_aggregation_count_(
+      const uint64_t expected_state_value, const int64_t total_before_scan,
+      const int64_t visited_count, const int64_t primary_count, const int64_t deadline_us);
+
   // Identifies this ObLSTxCtxMgr is inited or not;
   bool is_inited_;
 
@@ -878,6 +899,25 @@ private:
   // gts must be refreshed to the newest before the leader provides services
   MonotonicTs leader_takeover_ts_;
   bool is_leader_serving_;
+
+  // Shared and local state use the same representation. Access shared state only
+  // through value_ with whole-word atomic operations, never through its bitfields.
+  union HotspotAggregationState
+  {
+    explicit HotspotAggregationState(const uint64_t value = 0) : value_(value) {}
+    uint64_t value_;
+    struct
+    {
+      uint64_t count_ : 63;
+      uint64_t blocked_ : 1;
+    };
+  };
+  static_assert(sizeof(HotspotAggregationState) == sizeof(uint64_t),
+                "hotspot aggregation state must fit one CAS word");
+  static constexpr uint64_t HOTSPOT_AGGREGATION_MAX_COUNT = (1ULL << 63) - 1;
+  // Gate and count share one CAS word: admission must not increment after prepare
+  // closes the gate, or prepare could observe zero while a new group enters.
+  HotspotAggregationState tx_aggregation_state_;
 
   // Transaction service which hold the ObTxCtxMgr;
   ObTransService *txs_;

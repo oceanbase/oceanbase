@@ -214,7 +214,8 @@ namespace transaction
       ObTxCommitMsg() :
           ObTxMsg(TX_COMMIT),
           expire_ts_(OB_INVALID_TIMESTAMP),
-          parts_()
+          parts_(),
+          hotspot_primary_tx_id_()
       { commit_start_scn_.set_max(); }
       int64_t expire_ts_;
       share::SCN commit_start_scn_;
@@ -222,9 +223,12 @@ namespace transaction
       common::ObString app_trace_info_;
       common::ObString app_trace_id_;
       ObTxCommitParts commit_parts_;
+      // Optional scheduler provenance for a hotspot secondary transaction.
+      // Keep this field last for extensible-message compatibility.
+      ObTransID hotspot_primary_tx_id_;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(expire_ts), K_(commit_start_scn), K_(parts),
-          K_(app_trace_info), K_(commit_parts), K_(app_trace_id));
+          K_(app_trace_info), K_(commit_parts), K_(app_trace_id), K_(hotspot_primary_tx_id));
       OB_UNIS_VERSION(1);
     };
     struct ObTxCommitRespMsg : public ObTxMsg {

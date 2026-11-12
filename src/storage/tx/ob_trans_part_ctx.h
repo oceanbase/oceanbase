@@ -155,9 +155,11 @@ class ObPartTransCtx : public ObTransCtx,
   friend class IterateTxStatFunctor;
   friend class IterateTransStatForKeyFunctor;
   friend class StandbyCleanUpFunctor;
+  friend class AccelerateHotspotAggregationFunctor;
   friend class MockObTxCtx;
   friend class ObTxELRHandler;
   friend class ObIRetainCtxCheckFunctor;
+  friend class ObHotspotSchedulerResponseTask;
   friend class memtable::ObRedoLogGenerator;
   using LogBarrierType = logservice::ObReplayBarrierType;
 public:
@@ -475,13 +477,24 @@ public:
                                     int64_t &remove_succ_cnt);
   int set_redo_migrating();
   int set_redo_migrated();
+  int set_no_redo_secondary_synced();
   int set_secondary_hotspot_redo_status(const TxRedoFlushStatus &redo_status);
-  int set_secondary_hotspot_redo_status_by_exit_state(const TxRedoFlushStatus &redo_status);
+  int set_secondary_hotspot_redo_status_by_exit_state(const TxRedoFlushStatus &requested_status);
+  // Caller has removed the member's redo callbacks; this method only takes the S lock.
+  int finish_secondary_hotspot_response(const TxRedoFlushStatus &requested_status,
+                                        const bool no_response_needed,
+                                        bool &need_scheduler_check);
   int post_secondary_tx_commit_resp(
       const int status,
       const share::SCN commit_version,
-      int64_t &out_part_trans_action);
-  int response_scheduler_for_secondary_tx(const int ret_code, const share::SCN commit_version);
+      int64_t &out_part_trans_action,
+      const bool replay_supplement = false,
+      const bool no_response_needed = false,
+      bool *response_not_needed = nullptr);
+  int response_scheduler_for_secondary_tx(const int ret_code,
+                                          const share::SCN commit_version,
+                                          const bool replay_supplement = false);
+  void supplement_hotspot_response_after_replay_commit();
   int hotspot_rollback_to_for_secondary(const ObTransID &secondary_tx_id,
                                        const int64_t stmt_timeout_us = INT64_MAX);
   int hotspot_rollback_to_for_non_hotspot(const int64_t stmt_timeout_us = INT64_MAX);
@@ -631,7 +644,8 @@ private:
   // newly added for 4.0
 
   // Hotspot helpers used by generic transaction paths in CE and non-CE builds.
-  void clean_hotspot_redo_cache();
+  int clean_hotspot_redo_cache(
+      const TxRedoFlushStatus primary_target = TxRedoFlushStatus::PRIMARY_AGGR_FAILED);
   void reset_hotspot_redo_status_();
   int transit_redo_status_as_normal_(TxRedoFlushStatus to);
   int apply_others_hotspot_redo_(ObTxLogCb *invoke_log_cb, const bool sync_result);
@@ -641,7 +655,18 @@ private:
   int handle_primary_aggregation_for_forcedly_(bool &secondaries_aborted);
   int wait_for_primary_aggregation_gracefully_();
 
+  int accelerate_hotspot_aggregation_for_leader_switch(const int64_t deadline_us);
+
 #ifdef OB_HOTSPOT_GROUP_COMMIT
+  // Per-invocation setup stage for hotspot aggregation. This temporary stage
+  // is local to the current setup call, never persisted, and does not replace
+  // TxRedoFlushStatus. It only monotonically advances: INIT -> ADMITTED -> COLLECTING.
+  enum class HotspotCallStage : int64_t {
+    INIT = 0,       // This call does not own aggregation admission.
+    ADMITTED = 1,   // This call acquired admission and published PREPARING.
+    COLLECTING = 2, // This call confirmed COLLECTING; the group owns member ranges.
+  };
+
   // Hotspot aggregation implementation helpers. These are closed-source only.
   int sync_hotspot_legality_validation(
       const ObTransID primary_tx_id,
@@ -649,8 +674,11 @@ private:
       const int64_t stmt_timeout);
   int hotspot_legality_validation_(const bool is_primary);
   int transit_redo_status_as_primary_(TxRedoFlushStatus to);
+  void release_hotspot_aggregation_on_state_exit_(const TxRedoFlushStatus from,
+                                                  const TxRedoFlushStatus to);
+  int try_finish_hotspot_aggregation_(bool &aggregation_finished);
   int transit_redo_status_as_secondary_(TxRedoFlushStatus to);
-  int set_primary_hotspot_migrating_status_();
+  int set_primary_hotspot_migrating_status_(HotspotCallStage &call_stage);
   int check_primary_hotspot_migrating_status_(const char *func_name);
   int submit_redo_log_generated_by_others();
   int fill_and_submit_hotspot_redo_(ObTxLogCb *log_cb, const bool in_apply);

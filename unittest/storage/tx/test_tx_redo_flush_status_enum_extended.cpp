@@ -67,7 +67,11 @@ TEST_F(ObTestTxRedoFlushStatusEnumExtended, test_all_enum_gap_values)
   // Secondary组空洞 (510-580之间)
   EXPECT_FALSE(is_valid_status(static_cast<TxRedoFlushStatus>(505)));
   EXPECT_FALSE(is_valid_status(static_cast<TxRedoFlushStatus>(515)));
-  EXPECT_FALSE(is_valid_status(static_cast<TxRedoFlushStatus>(525)));
+  // SECONDARY_MIGRATE_SUBMITTED (525) is a valid enum entry; only the values
+  // around it are gaps.
+  EXPECT_TRUE(is_valid_status(TxRedoFlushStatus::SECONDARY_MIGRATE_SUBMITTED));
+  EXPECT_FALSE(is_valid_status(static_cast<TxRedoFlushStatus>(524)));
+  EXPECT_FALSE(is_valid_status(static_cast<TxRedoFlushStatus>(526)));
   EXPECT_FALSE(is_valid_status(static_cast<TxRedoFlushStatus>(535)));
   EXPECT_FALSE(is_valid_status(static_cast<TxRedoFlushStatus>(545)));
   EXPECT_FALSE(is_valid_status(static_cast<TxRedoFlushStatus>(555)));

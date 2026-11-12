@@ -22,6 +22,8 @@
 // 5. Concurrent aggregation + leader switch race
 
 #include <gtest/gtest.h>
+#include <cstdio>
+#include <unistd.h>
 #define USING_LOG_PREFIX TRANS
 #define private public
 #define protected public
@@ -83,6 +85,45 @@ public:
   }
   virtual void TearDown() override {}
 };
+
+
+TEST_F(ObTestHotspotTxLeaderSwitchExtended, secondary_submitted_state_matrix)
+{
+  const TxRedoFlushStatus submitted = TxRedoFlushStatus::SECONDARY_MIGRATE_SUBMITTED;
+  EXPECT_TRUE(is_valid_status(submitted));
+  EXPECT_TRUE(is_secondary_status(submitted));
+  EXPECT_FALSE(is_primary_status(submitted));
+  EXPECT_FALSE(is_normal_status(submitted));
+  EXPECT_FALSE(has_completed_lifecycle(submitted));
+  EXPECT_FALSE(is_eligible_for_aggregation_entry(submitted));
+  EXPECT_FALSE(has_primary_aggregation_succeeded(submitted));
+  EXPECT_TRUE(can_publish_secondary_prepare_barrier(submitted));
+  EXPECT_STREQ("SECONDARY_MIGRATE_SUBMITTED", to_cstr(submitted));
+
+  const TxRedoFlushStatus statuses[] = {
+      TxRedoFlushStatus::NORMAL_START, TxRedoFlushStatus::NORMAL_FLUSHED,
+      TxRedoFlushStatus::PRIMARY_PREPARING, TxRedoFlushStatus::PRIMARY_COLLECTING,
+      TxRedoFlushStatus::PRIMARY_AGGR_SUCCEEDED, TxRedoFlushStatus::PRIMARY_AGGR_FAILED,
+      TxRedoFlushStatus::PRIMARY_COMPLETED, TxRedoFlushStatus::SECONDARY_PREPARING,
+      TxRedoFlushStatus::SECONDARY_MIGRATING, submitted,
+      TxRedoFlushStatus::SECONDARY_MIGRATE_SYNCED,
+      TxRedoFlushStatus::SECONDARY_MIGRATE_FAILED,
+      TxRedoFlushStatus::SECONDARY_MIGRATE_SUCCEEDED};
+  for (TxRedoFlushStatus status : statuses) {
+    const bool allowed_entry = status == TxRedoFlushStatus::SECONDARY_PREPARING
+        || status == TxRedoFlushStatus::SECONDARY_MIGRATING || status == submitted;
+    const bool allowed_exit = status == submitted
+        || status == TxRedoFlushStatus::SECONDARY_MIGRATE_SYNCED
+        || status == TxRedoFlushStatus::SECONDARY_MIGRATE_FAILED;
+    EXPECT_EQ(allowed_entry ? OB_SUCCESS : OB_STATE_NOT_MATCH,
+              is_valid_transition(status, submitted)) << to_cstr(status);
+    EXPECT_EQ(allowed_exit ? OB_SUCCESS : OB_STATE_NOT_MATCH,
+              is_valid_transition(submitted, status)) << to_cstr(status);
+  }
+  EXPECT_EQ(OB_SUCCESS, is_valid_transition(
+      TxRedoFlushStatus::SECONDARY_MIGRATING, TxRedoFlushStatus::SECONDARY_MIGRATE_SYNCED));
+  EXPECT_EQ(OB_ERR_UNEXPECTED, is_valid_transition(static_cast<TxRedoFlushStatus>(526), submitted));
+}
 
 TEST_F(ObTestHotspotTxLeaderSwitchExtended, test_force_switch_during_preparing_no_hang)
 {
@@ -373,12 +414,11 @@ TEST_F(ObTestHotspotTxLeaderSwitchExtended, test_errsim_timeout_configurability)
 
 int main(int argc, char **argv)
 {
-  system("rm -rf test_hotspot_tx_leader_switch_extended.log*");
+  char log_path[256];
+  snprintf(log_path, sizeof(log_path), "test_hotspot_tx_leader_switch_extended_%d.log",
+           static_cast<int>(getpid()));
   ObLogger &logger = ObLogger::get_logger();
-  logger.set_file_name("test_hotspot_tx_leader_switch_extended.log", true, false,
-                       "test_hotspot_tx_leader_switch_extended.log",
-                       "test_hotspot_tx_leader_switch_extended.log",
-                       "test_hotspot_tx_leader_switch_extended.log");
+  logger.set_file_name(log_path, true, false, log_path, log_path, log_path);
   logger.set_log_level(OB_LOG_LEVEL_DEBUG);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

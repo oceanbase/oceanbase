@@ -28,6 +28,7 @@
 #include "observer/ob_srv_network_frame.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/rc/ob_tenant_module_init_ctx.h"
+#include "share/ob_debug_sync.h"
 #include "sql/session/ob_basic_session_info.h"
 #include "storage/memtable/ob_memtable.h"
 #include "storage/memtable/ob_memtable_context.h"
@@ -562,33 +563,28 @@ void ObTransService::handle(void *task)
       }
     }
 #ifdef OB_HOTSPOT_GROUP_COMMIT
-    else if (ObTransRetryTaskType::SECONDARY_TX_RESP_SCHEDULER == trans_task->get_task_type()) {
+    else if (ObTransRetryTaskType::SECONDARY_TX_RESP_SCHEDULER == trans_task->get_task_type()
+             || ObTransRetryTaskType::SECONDARY_TX_REPLAY_RESP_SCHEDULER
+                    == trans_task->get_task_type()) {
       ObHotspotSchedulerResponseTask *resp_task =
           static_cast<ObHotspotSchedulerResponseTask *>(trans_task);
-      if (OB_FAIL(resp_task->handle())) {
-        TRANS_LOG(WARN, "handle hotspot resp task failed", K(ret), KPC(resp_task));
+      if (OB_FAIL(DEBUG_SYNC(BEFORE_SECONDARY_TX_RESPONSE_TASK_HANDLE))) {
+        TRANS_LOG(WARN, "hotspot response task debug sync failed", K(ret), KP(resp_task));
+      } else if (OB_FAIL(resp_task->handle())) {
+        TRANS_LOG(WARN, "handle hotspot resp task failed", K(ret), KP(resp_task));
       } else {
-        TRANS_LOG(DEBUG, "response all secondary schedulers", K(ret), KPC(resp_task));
+        TRANS_LOG(DEBUG, "response all secondary schedulers", K(ret), KP(resp_task));
       }
 
       if (OB_EAGAIN == ret) {
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(push(resp_task))) {
-          int reset_ret = OB_SUCCESS;
-          if (OB_TMP_FAIL(resp_task->set_in_queue(false))) {
-            TRANS_LOG(ERROR, "clear hotspot resp task in_queue failed", K(reset_ret),
-                      K(tmp_ret), K(ret), KPC(resp_task));
-          }
           TRANS_LOG(ERROR, "retry to push hotspot resp task failed", K(tmp_ret), K(ret),
-                    KPC(resp_task));
+                    KP(resp_task));
+          resp_task->finish();
         }
       } else {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(resp_task->set_in_queue(false))) {
-          TRANS_LOG(ERROR, "clear hotspot resp task in_queue failed", K(tmp_ret),
-                    K(ret), KPC(resp_task));
-        }
-        resp_task->reset();
+        resp_task->finish();
       }
     } else if (ObTransRetryTaskType::HOTSPOT_FREEZE_ACCELERATE == trans_task->get_task_type()) {
       ObHotspotFreezeAccelerateTask *freeze_task =
@@ -1202,7 +1198,15 @@ int ObTransService::hotspot_rollback_to(const ObTxPart &participant,
     TRANS_LOG(INFO, "[HOTSPOT_TX] empty rollback tx set", KR(ret), K(primary_tx_id), K(ls_id),
               K(rollback_tx_ids));
   } else if (OB_FAIL(get_tx_ctx_(ls_id, primary_tx_id, ctx))) {
-    TRANS_LOG(WARN, "[HOTSPOT_TX] get primary tx ctx failed", KR(ret), K(primary_tx_id), K(ls_id));
+    // Participant address is local but the primary ctx is gone (e.g. the
+    // leader moved and the old primary exited). Same decision as the SQL-layer
+    // address mismatch: roll back the whole aggregation group explicitly and
+    // let the error propagate into the synchronous end-trans rollback.
+    const int get_ctx_ret = ret;
+    ret = OB_TRANS_ROLLBACKED;
+    TRANS_LOG(WARN, "[HOTSPOT_TX] primary ctx missing before partial rollback, "
+              "roll back the whole aggregation group",
+              KR(get_ctx_ret), KR(ret), K(primary_tx_id), K(ls_id), K(rollback_tx_ids));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < rollback_tx_ids.count(); ++i) {
       const ObTransID &tx_id = rollback_tx_ids.at(i);

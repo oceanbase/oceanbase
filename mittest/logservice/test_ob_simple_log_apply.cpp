@@ -14,11 +14,16 @@
  */
 
 #include <gtest/gtest.h>
+#include <atomic>
+#include <thread>
+#include <unistd.h>
 #define private public
 #include "env/ob_simple_log_cluster_env.h"
+#include "logservice/rcservice/ob_role_change_service.h"
+#include "storage/ls/ob_ls.h"
 #undef private
 
-const std::string TEST_NAME = "apply_func";
+const std::string TEST_NAME = "apply_func_" + std::to_string(getpid());
 using namespace oceanbase::common;
 using namespace oceanbase;
 
@@ -64,6 +69,7 @@ class TestObSimpleLogApplyFunc : public ObSimpleLogClusterTestEnv
 public:
   TestObSimpleLogApplyFunc() :  ObSimpleLogClusterTestEnv()
   {}
+  void check_graceful_drain(const int callback_ret);
 };
 
 class MockAppendCb : public AppendCb
@@ -94,6 +100,158 @@ public:
   int64_t log_id_;
   MockLSAdapter *ls_adapter_;
 };
+
+
+// Hold a real apply worker inside on_success, after it has popped the callback.
+// Queue emptiness alone must not let graceful role change finish.
+class BlockingDrainAppendCb : public AppendCb
+{
+public:
+  explicit BlockingDrainAppendCb(const int callback_ret)
+      : entered_(false), release_(false), returned_(false), failure_count_(0),
+        callback_ret_(callback_ret) {}
+  int on_success() override
+  {
+    entered_.store(true);
+    const int64_t deadline = ObTimeUtility::current_monotonic_time() + 30 * 1000 * 1000;
+    while (!release_.load() && ObTimeUtility::current_monotonic_time() < deadline) {
+      ob_usleep(1000);
+    }
+    returned_.store(true);
+    return release_.load() ? callback_ret_ : OB_TIMEOUT;
+  }
+  int on_failure() override
+  {
+    failure_count_.fetch_add(1);
+    return OB_SUCCESS;
+  }
+  const char *get_cb_name() const override { return "BlockingDrainAppendCb"; }
+  std::atomic<bool> entered_;
+  std::atomic<bool> release_;
+  std::atomic<bool> returned_;
+  std::atomic<int> failure_count_;
+  const int callback_ret_;
+};
+
+void TestObSimpleLogApplyFunc::check_graceful_drain(const int callback_ret)
+{
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  const ObLSID ls_id(id);
+  int64_t leader_idx = 0;
+  PalfHandleImplGuard leader;
+  ASSERT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+  ObTenantEnv::set_tenant(get_cluster()[leader_idx]->get_tenant_base());
+
+  PalfEnv *palf_env = NULL;
+  ASSERT_EQ(OB_SUCCESS, get_palf_env(leader_idx, palf_env));
+  MockLSAdapter ls_adapter;
+  ASSERT_EQ(OB_SUCCESS, ls_adapter.init(reinterpret_cast<ObLSService *>(0x1)));
+  ObLogApplyService apply;
+  ObLogReplayService replay;
+  ObRoleChangeService role_change;
+  BlockingDrainAppendCb cb(callback_ret);
+  ASSERT_EQ(OB_SUCCESS, apply.init(palf_env, &ls_adapter));
+  DEFER(cb.release_.store(true); apply.stop(); apply.wait(); apply.destroy());
+  ASSERT_EQ(OB_SUCCESS, apply.start());
+  ASSERT_EQ(OB_SUCCESS, apply.add_ls(ls_id));
+  ASSERT_EQ(OB_SUCCESS, replay.init(
+      palf_env, &ls_adapter, get_cluster()[leader_idx]->get_allocator()));
+  DEFER(replay.destroy());
+  ASSERT_EQ(OB_SUCCESS, replay.add_ls(ls_id));
+
+  // Real PALF, log handler, apply and replay services. Transaction participants
+  // are exercised separately by the test-tx secondary_submitted_* cases.
+  std::unique_ptr<ObLS> ls(new ObLS());
+  ls->ls_meta_.ls_id_ = ls_id;
+  ObLogHandler *handler = ls->get_log_handler();
+  MockLocCB location;
+  location.leader_ = get_cluster()[leader_idx]->get_addr();
+  obrpc::ObLogServiceRpcProxy proxy;
+  role_change.apply_service_ = &apply;
+  role_change.replay_service_ = &replay;
+  ASSERT_EQ(OB_SUCCESS, handler->init(
+      id, location.leader_, &apply, &replay, &role_change, palf_env,
+      &location, &proxy, get_cluster()[leader_idx]->get_allocator()));
+  DEFER(handler->destroy());
+  ObRole palf_role;
+  int64_t proposal_id = -1;
+  bool pending = false;
+  ASSERT_EQ(OB_SUCCESS, handler->palf_handle_.get_role(palf_role, proposal_id, pending));
+  ASSERT_EQ(LEADER, palf_role);
+  ASSERT_FALSE(pending);
+  ASSERT_EQ(OB_SUCCESS, apply.switch_to_leader(ls_id, proposal_id));
+  ASSERT_EQ(OB_SUCCESS, replay.switch_to_leader(ls_id));
+  handler->switch_role(LEADER, proposal_id);
+
+  LSN lsn;
+  SCN scn;
+  SCN ref_scn;
+  ref_scn.convert_for_logservice(1);
+  ASSERT_EQ(OB_SUCCESS, submit_log(leader, ref_scn, lsn, scn));
+  cb.__set_lsn(lsn);
+  cb.__set_scn(scn);
+  ObApplyStatusGuard apply_guard;
+  ASSERT_EQ(OB_SUCCESS, apply.get_apply_status(ls_id, apply_guard));
+  ASSERT_NE(nullptr, apply_guard.get_apply_status());
+  ASSERT_EQ(OB_SUCCESS, apply_guard.get_apply_status()->push_append_cb(&cb));
+  const int64_t entered_deadline = ObTimeUtility::current_monotonic_time() + 10 * 1000 * 1000;
+  while (!cb.entered_.load() && ObTimeUtility::current_monotonic_time() < entered_deadline) {
+    ob_usleep(1000);
+  }
+  ASSERT_TRUE(cb.entered_.load());
+  bool done = true;
+  LSN end_lsn;
+  ASSERT_EQ(OB_SUCCESS, apply.is_apply_done(ls_id, done, end_lsn));
+  ASSERT_FALSE(done);
+
+  std::atomic<bool> finished(false);
+  int role_ret = OB_ERR_UNEXPECTED;
+  const ObAddr target = get_cluster()[(leader_idx + 1) % get_node_cnt()]->get_addr();
+  std::thread switcher([&]() {
+    ObTenantEnv::set_tenant(get_cluster()[leader_idx]->get_tenant_base());
+    role_ret = role_change.switch_leader_to_follower_gracefully_(
+        proposal_id, proposal_id, target, ls.get());
+    finished.store(true);
+  });
+  // Every exit releases the apply callback before joining the role-change task.
+  DEFER(cb.release_.store(true); switcher.join());
+  ObRole handler_role = LEADER;
+  int64_t unused_proposal = -1;
+  const int64_t role_deadline = ObTimeUtility::current_monotonic_time() + 10 * 1000 * 1000;
+  while (LEADER == handler_role && !finished.load()
+         && ObTimeUtility::current_monotonic_time() < role_deadline) {
+    ASSERT_EQ(OB_SUCCESS, handler->get_role(handler_role, unused_proposal));
+    ob_usleep(1000);
+  }
+  ASSERT_EQ(FOLLOWER, handler_role);
+  ASSERT_FALSE(finished.load());
+  ASSERT_FALSE(cb.returned_.load());
+  ASSERT_EQ(OB_SUCCESS, apply.is_apply_done(ls_id, done, end_lsn));
+  ASSERT_FALSE(done);
+  cb.release_.store(true);
+  const int64_t finish_deadline = ObTimeUtility::current_monotonic_time() + 10 * 1000 * 1000;
+  while (!finished.load() && ObTimeUtility::current_monotonic_time() < finish_deadline) {
+    ob_usleep(1000);
+  }
+  ASSERT_TRUE(finished.load());
+  EXPECT_EQ(OB_SUCCESS, role_ret);
+  EXPECT_TRUE(cb.returned_.load());
+  EXPECT_EQ(0, cb.failure_count_.load());
+  EXPECT_EQ(OB_SUCCESS, apply.is_apply_done(ls_id, done, end_lsn));
+  EXPECT_TRUE(done);
+  // A completed drain proves the callback returned, including an error return.
+  // It does not turn a transaction's failed callback into a successful COMMIT.
+}
+
+TEST_F(TestObSimpleLogApplyFunc, graceful_drain_waits_for_success_callback)
+{
+  check_graceful_drain(OB_SUCCESS);
+}
+
+TEST_F(TestObSimpleLogApplyFunc, graceful_drain_counts_failed_callback_return)
+{
+  check_graceful_drain(OB_ERR_UNEXPECTED);
+}
 
 int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 3;

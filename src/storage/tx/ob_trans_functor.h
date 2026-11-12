@@ -17,6 +17,7 @@
 #include "ob_trans_ctx.h"
 #include "ob_trans_part_ctx.h"
 #include "ob_trans_stat.h"
+#include "storage/tx/ob_tx_hotspot_helper.h"
 
 #include "storage/tx/ob_ls_tx_ctx_mgr_stat.h"
 #include "ob_trans_version_mgr.h"
@@ -1315,6 +1316,56 @@ public:
   }
 private:
   const memtable::ObMemtableSet *memtable_set_;
+};
+
+class AccelerateHotspotAggregationFunctor
+{
+public:
+  explicit AccelerateHotspotAggregationFunctor(const int64_t deadline_us)
+      : deadline_us_(deadline_us), ret_(OB_SUCCESS), visited_count_(0),
+        primary_count_(0), secondary_count_(0), skipped_count_(0)
+  {}
+  bool operator()(ObTransCtx *base_ctx)
+  {
+    bool continue_scan = true;
+    ObPartTransCtx *ctx = static_cast<ObPartTransCtx *>(base_ctx);
+    ++visited_count_;
+    if (ObTimeUtility::current_monotonic_time() >= deadline_us_) {
+      ret_ = OB_TIMEOUT;
+      continue_scan = false;
+    } else if (OB_SUCCESS != ctx->lock_.try_lock()) {
+      ++skipped_count_;
+      TRANS_LOG(INFO, "skip hotspot acceleration scan because ctx lock is busy",
+                "tx_id", ctx->get_trans_id(), "ls_id", ctx->get_ls_id());
+    } else {
+      const TxRedoFlushStatus status = ctx->get_redo_flush_status();
+      const bool is_primary = is_primary_tx_aggregating(status);
+      primary_count_ += is_primary;
+      secondary_count_ += is_secondary_status(status);
+      ctx->lock_.unlock();
+      if (is_primary) {
+        const int ret = ctx->accelerate_hotspot_aggregation_for_leader_switch(deadline_us_);
+        if (OB_SUCCESS != ret && OB_EAGAIN != ret && OB_TIMEOUT != ret) {
+          TRANS_LOG(WARN, "accelerate hotspot aggregation failed",
+                    K(ret), "tx_id", ctx->get_trans_id(), "ls_id", ctx->get_ls_id());
+        }
+      }
+    }
+    return continue_scan;
+  }
+  int get_ret() const { return ret_; }
+  int64_t get_visited_count() const { return visited_count_; }
+  int64_t get_primary_count() const { return primary_count_; }
+  int64_t get_secondary_count() const { return secondary_count_; }
+  int64_t get_skipped_count() const { return skipped_count_; }
+
+private:
+  int64_t deadline_us_;
+  int ret_;
+  int64_t visited_count_;
+  int64_t primary_count_;
+  int64_t secondary_count_;
+  int64_t skipped_count_;
 };
 
 class ObTxSubmitLogFunctor

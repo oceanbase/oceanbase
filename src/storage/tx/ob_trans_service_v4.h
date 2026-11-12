@@ -328,7 +328,11 @@ int local_ls_commit_tx_(const ObTransID &tx_id,
                         const int64_t epoch,
                         share::SCN &commit_version,
                         const common::ObAddr &caller,
-                        const common::ObString &app_trace_id);
+                        const common::ObString &app_trace_id,
+                        const ObTransID &hotspot_primary_tx_id);
+int get_hotspot_primary_commit_result_(const share::ObLSID &ls_id,
+                                       const ObTransID &primary_tx_id,
+                                       share::SCN &commit_version);
 int get_tx_state_from_tx_table_(const share::ObLSID &lsid,
                                 const ObTransID &tx_id,
                                 int64_t &state,

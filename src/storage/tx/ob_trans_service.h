@@ -250,6 +250,13 @@ public:
                            const int64_t request_id = 0,
                            const ObRegisterMdsFlag &register_flag = ObRegisterMdsFlag());
 
+  // Only for previously registered, local ordinary hotspot secondaries with the given P.
+  // A missing desc means no local waiter only under this caller-established contract.
+  // Call without ctx/cache locks; all desc locks and refs are released before return.
+  // true ends response responsibility, not the transaction's business outcome.
+  int check_hotspot_response_not_needed(const ObTransID &secondary_tx_id,
+                                        const ObTransID &primary_tx_id,
+                                        bool &no_response_needed);
   int sync_hotspot_legality_validation(const ObTxPart &participant,
                                        const ObTransID primary_tx_id,
                                        const ObAggregatedTxIDArray &aggre_members,

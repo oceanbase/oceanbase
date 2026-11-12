@@ -571,22 +571,25 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
     * completed by current thread from other cases
     */
     bool committed = tx.state_ == ObTxDesc::State::COMMITTED;
-    // if tx committed, we should callback immediately
+    bool zero_row_rollback = tx.state_ == ObTxDesc::State::ROLLED_BACK
+        && OB_ROLLBACK_ON_NO_AFFECTED_ROWS == tx.commit_out_;
+    // Callback when this call finishes synchronously. A successful group
+    // result also finishes a SQL-rolled-back member with its rollback result.
     //
     // NOTE: this must defer to final current function
     // in order to assure there is no access to tx, because
     // after calling the commit_cb, the tx object may be
     // released or reused
-    if (OB_SUCC(ret) && committed) {
+    if (OB_SUCC(ret) && (committed || zero_row_rollback)) {
       need_cb = true;
     }
   #ifndef NDEBUG
     TRANS_LOG(INFO, "submit commit tx", K(ret),
-              K(committed), KPC(this), K(tx), K(expire_ts), KP(&cb));
+              K(committed), K(zero_row_rollback), KPC(this), K(tx), K(expire_ts), KP(&cb));
   #else
     if (OB_FAIL(ret)) {
       TRANS_LOG(INFO, "submit commit tx fail", K(ret),
-                K(committed), KPC(this), K(tx), K(expire_ts), KP(&cb));
+                K(committed), K(zero_row_rollback), KPC(this), K(tx), K(expire_ts), KP(&cb));
     }
   #endif
     ObTransTraceLog &tlog = tx.get_tlog();

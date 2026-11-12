@@ -38,6 +38,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/ls/ob_ls.h"
+#include "share/ob_debug_sync.h"
 #include "ob_xa_service.h"
 #include "storage/memtable/ob_row_conflict_info.h"
 
@@ -215,8 +216,16 @@ int ObTransService::do_commit_tx_(ObTxDesc &tx,
                                          tx.get_coord_epoch(),
                                          commit_version,
                                          self_,
-                                         tx.trace_info_.get_app_trace_id()))
+                                         tx.trace_info_.get_app_trace_id(),
+                                         tx.hotspot_primary_tx_id_))
              || !commit_need_retry_(ret))) {
+    if (OB_TRANS_COMMITED == ret && tx.hotspot_primary_tx_id_.is_valid()
+        && tx.hotspot_primary_tx_id_ != tx.tx_id_) {
+      // A local P lookup has already decided this S. Keep its callback registered;
+      // submit_commit_tx will deliver the member's result after releasing tx.lock_.
+      handle_tx_commit_result_(tx, ret, commit_version);
+      ret = OB_SUCCESS;
+    }
     if (OB_FAIL(ret)) {
       TRANS_LOG(WARN, "local ls commit tx fail", K(ret), K_(tx.coord_id), K(tx));
     } else {
@@ -360,13 +369,17 @@ int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
   int32_t ref_cnt = 0;
   ObTransID tx_id;
   bool cb_executed = false;
+  if (OB_FAIL(DEBUG_SYNC(BEFORE_TX_COMMIT_RETRY_HANDLE))) {
+    TRANS_LOG(WARN, "tx commit retry debug sync failed", K(ret), K(tx));
+  }
   {
     // remember tx_id because tx maybe cleanout and reused
     // in this function's following steps.
     ObSpinLockGuard guard(tx.lock_);
     tx_id = tx.tx_id_;
     int64_t now = ObClockGenerator::getClock();
-    if (!tx.commit_task_.is_registered()){
+    if (OB_FAIL(ret)) {
+    } else if (!tx.commit_task_.is_registered()){
       TRANS_LOG(INFO, "task canceled", K(tx));
     } else if (OB_FAIL(unregister_commit_retry_task_(tx))) {
       TRANS_LOG(ERROR, "deregister timeout task fail", K(tx), K(ret));
@@ -397,6 +410,67 @@ int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
                       OB_ID(arg), delay,
                       OB_ID(ref), tx.get_ref());
   TRANS_LOG(INFO, "handle tx commit timeout", K(ret), K(tx_id), K(ref_cnt), K(cb_executed));
+  return ret;
+}
+
+int ObTransService::check_hotspot_response_not_needed(const ObTransID &secondary_tx_id,
+                                                       const ObTransID &primary_tx_id,
+                                                       bool &no_response_needed)
+{
+  int ret = OB_SUCCESS;
+  ObTxDesc *tx = nullptr;
+  no_response_needed = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!is_running_)) {
+    ret = OB_NOT_RUNNING;
+  } else if (!secondary_tx_id.is_valid() || !primary_tx_id.is_valid()
+             || secondary_tx_id == primary_tx_id) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (tx_desc_mgr_.stoped_) {
+    ret = OB_IN_STOP_STATE;
+  } else if (OB_FAIL(tx_desc_mgr_.get(secondary_tx_id, tx))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      // The caller has established local ordinary hotspot membership. This only
+      // proves that the registered scheduler waiter is gone, not a commit result.
+      no_response_needed = true;
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_ISNULL(tx)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    // Only the desc pin is held here; never carry it into a ctx/cache lock.
+    if (OB_FAIL(DEBUG_SYNC(AFTER_HOTSPOT_RESPONSE_DESC_GET))) {
+      TRANS_LOG(WARN, "hotspot response desc query debug sync failed", K(ret),
+                K(secondary_tx_id), K(primary_tx_id));
+    } else {
+      ObSpinLockGuard guard(tx->lock_);
+      // get() protects lifetime, not identity: start_epoch/reuse may have changed it.
+      if (tx->tx_id_ == secondary_tx_id
+          && tx->hotspot_primary_tx_id_ == primary_tx_id
+          && tx->tenant_id_ == tenant_id_
+          && tx->addr_ == self_
+          && !tx->flags_.SHADOW_
+          && !tx->flags_.REPLICA_
+          && !tx->is_xa_trans()
+          && nullptr == tx->xa_ctx_
+          && ObGlobalTxType::PLAIN == tx->global_tx_type_) {
+        switch (tx->state_) {
+        case ObTxDesc::State::COMMITTED:
+        case ObTxDesc::State::ROLLED_BACK:
+        case ObTxDesc::State::ABORTED:
+        case ObTxDesc::State::COMMIT_TIMEOUT:
+        case ObTxDesc::State::COMMIT_UNKNOWN:
+          no_response_needed = true;
+          break;
+        default:
+          break;
+        }
+      }
+    }
+    // Unlock first: revert may free tx, and reuse may be waiting for this pin.
+    tx_desc_mgr_.revert(*tx);
+  }
   return ret;
 }
 
@@ -495,13 +569,24 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
     break;
   case OB_TRANS_COMMITED:
   case OB_SUCCESS:
-    state = ObTxDesc::State::COMMITTED;
-    tx.commit_version_ = commit_version;
-    commit_out = OB_SUCCESS;
+    // SQL has successfully rolled back this member's data. Restore its existing
+    // zero-row result convention (ROLLED_BACK + invalid version), even when the
+    // P lookup returns group COMMIT. This does not abort P or submit an S abort log.
+    if (tx.rollback_on_no_affected_rows_) {
+      state = ObTxDesc::State::ROLLED_BACK;
+      tx.commit_version_.reset();
+      commit_out = OB_ROLLBACK_ON_NO_AFFECTED_ROWS;
+    } else {
+      state = ObTxDesc::State::COMMITTED;
+      tx.commit_version_ = commit_version;
+      commit_out = OB_SUCCESS;
+    }
     break;
+  case OB_ROLLBACK_ON_NO_AFFECTED_ROWS:
+    tx.commit_version_.reset();
+    // fall through
   case OB_TRANS_KILLED:
   case OB_TRANS_ROLLBACKED:
-  case OB_ROLLBACK_ON_NO_AFFECTED_ROWS:
     state = ObTxDesc::State::ROLLED_BACK;
     commit_out = result;
     break;
@@ -1713,6 +1798,7 @@ int ObTransService::build_tx_commit_msg_(const ObTxDesc &tx, ObTxCommitMsg &msg)
   msg.epoch_ = tx.get_coord_epoch();
   msg.commit_start_scn_ = tx.commit_start_scn_;
   msg.app_trace_id_ = tx.trace_info_.get_app_trace_id();
+  msg.hotspot_primary_tx_id_ = tx.hotspot_primary_tx_id_;
   CONVERT_COMMIT_PARTS_TO_PARTS(tx.commit_parts_, msg.parts_);
   if (FAILEDx(msg.commit_parts_.assign(tx.commit_parts_))) {
     TRANS_LOG(WARN, "assign part epochs fail", K(ret), K(tx));
@@ -2051,7 +2137,8 @@ int ObTransService::handle_trans_commit_request(ObTxCommitMsg &msg,
                               msg.epoch_,
                               commit_version,
                               msg.sender_addr_,
-                              msg.app_trace_id_);
+                              msg.app_trace_id_,
+                              msg.hotspot_primary_tx_id_);
   }
   result.reset();
   result.init(ret, msg.get_timestamp());
@@ -2087,14 +2174,22 @@ int ObTransService::local_ls_commit_tx_(const ObTransID &tx_id,
                                         const int64_t epoch,
                                         SCN &commit_version,
                                         const common::ObAddr &caller,
-                                        const common::ObString &app_trace_id)
+                                        const common::ObString &app_trace_id,
+                                        const ObTransID &hotspot_primary_tx_id)
 {
   int ret = OB_SUCCESS;
   MonotonicTs commit_time = get_req_receive_mts_();
   ObPartTransCtx *ctx = NULL;
   if (OB_FAIL(get_tx_ctx_(coord, tx_id, ctx))) {
     TRANS_LOG(WARN, "get coordinator tx context fail", K(ret), K(tx_id), K(coord));
-    if (OB_TRANS_CTX_NOT_EXIST == ret) {
+    if (OB_TRANS_CTX_NOT_EXIST == ret
+        && hotspot_primary_tx_id.is_valid()
+        && hotspot_primary_tx_id != tx_id) {
+      TRANS_LOG(INFO, "query hotspot primary for missing secondary",
+                K(tx_id), K(hotspot_primary_tx_id), K(coord));
+      ret = get_hotspot_primary_commit_result_(
+          coord, hotspot_primary_tx_id, commit_version);
+    } else if (OB_TRANS_CTX_NOT_EXIST == ret) {
       int64_t tx_state = ObTxData::RUNNING;
       share::SCN recycle_scn;
       if (OB_FAIL(get_tx_state_from_tx_table_(coord, tx_id, tx_state, commit_version, recycle_scn))) {
@@ -2148,6 +2243,61 @@ int ObTransService::local_ls_commit_tx_(const ObTransID &tx_id,
   }
   if (OB_NOT_NULL(ctx)) {
     revert_tx_ctx_(ctx);
+  }
+  return ret;
+}
+
+int ObTransService::get_hotspot_primary_commit_result_(const share::ObLSID &ls_id,
+                                                       const ObTransID &primary_tx_id,
+                                                       SCN &commit_version)
+{
+  int ret = OB_SUCCESS;
+  int64_t tx_state = ObTxData::RUNNING;
+  ObLSTxCtxMgr *ls_tx_mgr = NULL;
+  if (OB_FAIL(tx_ctx_mgr_.get_ls_tx_ctx_mgr(ls_id, ls_tx_mgr))) {
+    TRANS_LOG(WARN, "can not get ls_tx_mgr", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls_tx_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "ls_tx_mgr is NULL", K(ret), K(ls_id));
+  } else {
+    storage::GetTxStateWithSCNFunctor fn(SCN::max_scn(), tx_state, commit_version);
+    // Despite its name, this manager API checks only the active P ctx. It can
+    // report RUNNING before a final tx-data record exists. Only a missing ctx
+    // falls back to the existing table query; neither query starts P's commit.
+    ret = ls_tx_mgr->check_with_tx_data(primary_tx_id, fn);
+    if (OB_TRANS_CTX_NOT_EXIST == ret) {
+      ret = get_tx_state_from_tx_table_(
+          ls_id, primary_tx_id, tx_state, commit_version);
+    }
+    if ((OB_SUCC(ret) || OB_TRANS_CTX_NOT_EXIST == ret)
+        && !ls_tx_mgr->in_leader_serving_state()) {
+      ret = OB_NOT_MASTER;
+    } else if (OB_TRANS_CTX_NOT_EXIST == ret) {
+      // P's result may have been recycled. S's commit-start SCN cannot prove
+      // that P never committed, so missing P ctx and table leave it unknown.
+      ret = OB_TRANS_UNKNOWN;
+    } else if (OB_FAIL(ret)) {
+      TRANS_LOG(WARN, "get hotspot primary state failed", K(ret), K(ls_id), K(primary_tx_id));
+    } else {
+      switch (tx_state) {
+      case ObTxData::COMMIT:
+        ret = OB_TRANS_COMMITED;
+        break;
+      case ObTxData::ABORT:
+        ret = OB_TRANS_KILLED;
+        break;
+      case ObTxData::RUNNING:
+        ret = OB_EAGAIN;
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "unexpected hotspot primary state",
+                  K(ret), K(tx_state), K(ls_id), K(primary_tx_id));
+      }
+    }
+  }
+  if (OB_NOT_NULL(ls_tx_mgr)) {
+    tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_mgr);
   }
   return ret;
 }

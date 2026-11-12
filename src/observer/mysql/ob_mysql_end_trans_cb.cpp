@@ -154,7 +154,8 @@ void ObSqlEndTransCb::callback(int cb_param)
     session_info->set_session_sleep();
 
 #ifdef OB_HOTSPOT_GROUP_COMMIT
-    handle_sub_tx_callback(ret, need_disconnect_);
+    const int sub_tx_result = OB_SUCCESS == ret ? cb_param : ret;
+    handle_sub_tx_callback(sub_tx_result, need_disconnect_);
 #endif
 
     if (OB_SUCCESS == ret) {
@@ -207,10 +208,9 @@ void ObSqlEndTransCb::handle_sub_tx_callback(int cb_param, bool need_disconnect)
         if (!cur->is_trans_started_) {
           LOG_INFO("sub tx not start, need to callback in primary tx", KPC(cur));
           cur->sess_->get_mysql_end_trans_cb().set_need_disconnect(need_disconnect);
-          if (cur->rollback_on_no_affected_rows_ && cb_param == OB_SUCCESS) {
-            cb_param = OB_ROLLBACK_ON_NO_AFFECTED_ROWS;
-          }
-          cur->sess_->get_mysql_end_trans_cb().callback(cb_param);
+          const int member_result = cur->rollback_on_no_affected_rows_ && cb_param == OB_SUCCESS
+              ? OB_ROLLBACK_ON_NO_AFFECTED_ROWS : cb_param;
+          cur->sess_->get_mysql_end_trans_cb().callback(member_result);
         }
         cur = reinterpret_cast<ObGroupCommitSubRequest *>(cur->next_);
       }

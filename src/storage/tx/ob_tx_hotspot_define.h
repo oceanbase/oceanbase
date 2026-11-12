@@ -40,6 +40,8 @@ enum class TxRedoFlushStatus : int64_t
 
   SECONDARY_PREPARING = 510,
   SECONDARY_MIGRATING = 520,
+  // All member redo submissions and ownership registration are complete; sync is pending.
+  SECONDARY_MIGRATE_SUBMITTED = 525,
   SECONDARY_MIGRATE_SYNCED = 530,
   SECONDARY_MIGRATE_FAILED = 540,
   SECONDARY_MIGRATE_SUCCEEDED = 550,
@@ -51,6 +53,8 @@ enum class TxSecondaryRespStatus : int64_t
   RESP_COMMITTED = 1,
   RESP_ABORTED_BY_SESSION = 2,
   RESP_SKIPPED_BY_PRIMARY = 3,
+  // The local scheduler no longer needs this response; not a transaction result.
+  RESP_NO_RESPONSE_NEEDED = 4,
 };
 
 const char *to_cstr(const TxRedoFlushStatus &status);
@@ -75,16 +79,26 @@ public:
   void reset();
   void destroy();
   int init(ObPartTransCtx *tx_ctx);
-  int enable(const int ret_code, const share::SCN commit_version);
+  int enable(const int ret_code,
+             const share::SCN commit_version,
+             const bool replay_supplement = false);
   int handle();
+  // Called when the worker is done. The owning ctx and this embedded task may
+  // be destroyed before finish() returns.
+  void finish();
+  // Caller must exclude concurrent task mutation; the handle uses hotspot_lock_.
+  // Returns the held ctx reference without reverting it. Revert outside locks.
+  ObPartTransCtx *detach();
   bool is_in_queue() const;
+  int64_t get_retry_cnt() const { return ATOMIC_LOAD(&retry_cnt_); }
 
   bool is_valid() const { return OB_NOT_NULL(primary_tx_ctx_); }
   bool is_enabled() const { return tx_result_ != OB_INVALID_ARGUMENT; }
 
   int set_in_queue(const bool in_queue_status);
 
-  TO_STRING_KV(KP(this), K(tx_result_), K(commit_version_), K(retry_cnt_), KP(primary_tx_ctx_),
+  TO_STRING_KV(KP(this), K(tx_result_), K(commit_version_), "retry_cnt", get_retry_cnt(),
+               KP(primary_tx_ctx_),
                K_(in_queue))
 public:
   ObPartTransCtx *primary_tx_ctx_;
@@ -155,6 +169,7 @@ public:
                           ObTxLogCb *&hotspot_log_cb,
                           bool &is_hotspot_larger);
   int check_status(const int64_t index, bool &need_fill_redo_buf, bool &need_submit_log);
+  int set_no_redo_secondaries_synced();
   int after_flush_hotspot_redo(const int64_t cache_index,
                                const share::SCN log_scn,
                                const int submit_ret_code);
@@ -162,7 +177,12 @@ public:
                               const bool sync_res,
                               const share::SCN log_scn);
   int remove_synced_hotspot_redo(const int64_t cache_index, int64_t &need_remove_count);
-  void push_response_task(const int ret_code, const share::SCN commit_version);
+  int push_response_task(const int ret_code,
+                         const share::SCN commit_version,
+                         const bool replay_supplement = false);
+  // only_if_not_queued preserves a task still owned by a queued worker.
+  // Detaching and reverting the task reference may destroy this handle.
+  void finish_response_task(const bool only_if_not_queued = false);
   bool all_redo_flushed() const;
   bool all_redo_synced() const;
   bool all_redo_frozen_flushed() const;
@@ -182,7 +202,11 @@ public:
   int abort_secondary_txs(const int reason);
   int cleanup_hotspot_cache_and_revert_secondary_ctxs();
   int before_prepare_secondaries(const share::SCN &version);
-  int response_scheduler(const int ret_code, const share::SCN commit_version);
+  // Caller keeps the owning ctx alive and holds no ctx lock. Descriptor checks
+  // run outside hotspot_lock_ and never retain a descriptor pin across phases.
+  int response_scheduler(const int ret_code,
+                         const share::SCN commit_version,
+                         const bool replay_supplement = false);
   void record_on_success_ctx_lock_wait(const int64_t wait_us);
   void record_aggr_start_ts();
   void record_dispatch_start_ts();

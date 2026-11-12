@@ -51,6 +51,9 @@ const char *to_cstr(const TxRedoFlushStatus &status)
   case TxRedoFlushStatus::SECONDARY_MIGRATING:
     cstr = "SECONDARY_MIGRATING";
     break;
+  case TxRedoFlushStatus::SECONDARY_MIGRATE_SUBMITTED:
+    cstr = "SECONDARY_MIGRATE_SUBMITTED";
+    break;
   case TxRedoFlushStatus::SECONDARY_MIGRATE_SYNCED:
     cstr = "SECONDARY_MIGRATE_SYNCED";
     break;
@@ -83,6 +86,9 @@ const char *to_cstr(const TxSecondaryRespStatus &status)
   case TxSecondaryRespStatus::RESP_SKIPPED_BY_PRIMARY:
     cstr = "RESP_SKIPPED_BY_PRIMARY";
     break;
+  case TxSecondaryRespStatus::RESP_NO_RESPONSE_NEEDED:
+    cstr = "RESP_NO_RESPONSE_NEEDED";
+    break;
   default:
     cstr = "INVALID_RESP_STATUS";
     break;
@@ -100,8 +106,9 @@ void ObHotspotSchedulerResponseTask::reset()
   primary_tx_ctx_ = nullptr;
   tx_result_ = OB_INVALID_ARGUMENT;
   commit_version_.reset();
-  retry_cnt_ = 0;
+  ATOMIC_STORE(&retry_cnt_, 0);
   ATOMIC_STORE(&in_queue_, 0);
+  ATOMIC_STORE(&task_type_, ObTransRetryTaskType::SECONDARY_TX_RESP_SCHEDULER);
 }
 
 void ObHotspotSchedulerResponseTask::destroy()
@@ -109,12 +116,18 @@ void ObHotspotSchedulerResponseTask::destroy()
   reset();
 }
 
+ObPartTransCtx *ObHotspotSchedulerResponseTask::detach()
+{
+  reset();
+  return nullptr;
+}
+
 int ObHotspotSchedulerResponseTask::init(ObPartTransCtx *)
 {
   return OB_NOT_SUPPORTED;
 }
 
-int ObHotspotSchedulerResponseTask::enable(const int, const share::SCN)
+int ObHotspotSchedulerResponseTask::enable(const int, const share::SCN, const bool)
 {
   return OB_NOT_SUPPORTED;
 }
@@ -122,6 +135,10 @@ int ObHotspotSchedulerResponseTask::enable(const int, const share::SCN)
 int ObHotspotSchedulerResponseTask::handle()
 {
   return OB_NOT_SUPPORTED;
+}
+
+void ObHotspotSchedulerResponseTask::finish()
+{
 }
 
 bool ObHotspotSchedulerResponseTask::is_in_queue() const
@@ -288,6 +305,11 @@ int ObTxHotspotRedoCacheHandle::check_status(const int64_t, bool &, bool &)
   return OB_NOT_SUPPORTED;
 }
 
+int ObTxHotspotRedoCacheHandle::set_no_redo_secondaries_synced()
+{
+  return OB_NOT_SUPPORTED;
+}
+
 int ObTxHotspotRedoCacheHandle::after_flush_hotspot_redo(const int64_t, const share::SCN, const int)
 {
   return OB_NOT_SUPPORTED;
@@ -303,7 +325,12 @@ int ObTxHotspotRedoCacheHandle::remove_synced_hotspot_redo(const int64_t, int64_
   return OB_NOT_SUPPORTED;
 }
 
-void ObTxHotspotRedoCacheHandle::push_response_task(const int, const share::SCN)
+int ObTxHotspotRedoCacheHandle::push_response_task(const int, const share::SCN, const bool)
+{
+  return OB_NOT_SUPPORTED;
+}
+
+void ObTxHotspotRedoCacheHandle::finish_response_task(const bool)
 {
 }
 
@@ -390,7 +417,7 @@ int ObTxHotspotRedoCacheHandle::cleanup_hotspot_cache_and_revert_secondary_ctxs(
   return OB_SUCCESS;
 }
 
-int ObTxHotspotRedoCacheHandle::response_scheduler(const int, const share::SCN)
+int ObTxHotspotRedoCacheHandle::response_scheduler(const int, const share::SCN, const bool)
 {
   return OB_NOT_SUPPORTED;
 }

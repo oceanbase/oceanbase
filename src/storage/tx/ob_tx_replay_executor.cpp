@@ -534,6 +534,13 @@ int ObTxReplayExecutor::replay_commit_()
                                          tx_part_log_no_,
                                          replay_compact_version))) {
     TRANS_LOG(WARN, "[Replay Tx] replay commit in tx_ctx error", K(ret), KPC(this));
+  } else {
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+    // replay_commit() has released the participant lock. The replay executor
+    // still owns its map reference, so the helper can safely attempt the
+    // supplementary response without adding a general retry budget.
+    ctx_->supplement_hotspot_response_after_replay_commit();
+#endif
   }
 
   return ret;
@@ -895,4 +902,3 @@ void ObTxReplayExecutor::rewrite_replay_retry_code_(int &ret_code)
 
 }
 } // namespace oceanbase
-

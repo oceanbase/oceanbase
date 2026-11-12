@@ -1132,7 +1132,8 @@ public:
   static const int64_t DUP_TABLE_TX_REDO_SYNC_RETRY_TASK = 3;
   static const int64_t SECONDARY_TX_RESP_SCHEDULER = 4;
   static const int64_t HOTSPOT_FREEZE_ACCELERATE = 5;
-  static const int64_t MAX = 6;
+  static const int64_t SECONDARY_TX_REPLAY_RESP_SCHEDULER = 6;
+  static const int64_t MAX = 7;
 public:
   static bool is_valid(const int64_t task_type)
   { return task_type > UNKNOWN && task_type < MAX; }
@@ -1235,9 +1236,9 @@ public:
   void destroy() { reset(); }
   int make(const int64_t task_type);
   int set_retry_interval_us(const int64_t start_interval_us, const int64_t retry_interval_us);
-  int64_t get_task_type() const { return task_type_; }
+  int64_t get_task_type() const { return ATOMIC_LOAD(&task_type_); }
   bool ready_to_handle();
-  TO_STRING_KV(K_(task_type), K_(retry_interval_us), K_(next_handle_ts));
+  TO_STRING_KV("task_type", get_task_type(), K_(retry_interval_us), K_(next_handle_ts));
 public:
   static const int64_t RP_TOTAL_NUM = 512;
   static const int64_t RP_RESERVE_NUM = 64;

@@ -42,6 +42,8 @@ namespace transaction
 
 ERRSIM_POINT_DEF(ERRSIM_SWITCH_TO_FOLLOWER_GRACEFULLY_RETRY_TIMEOUT_US);
 
+constexpr uint64_t ObLSTxCtxMgr::HOTSPOT_AGGREGATION_MAX_COUNT;
+
 void ObLSTxCtxIterator::reset() {
   is_ready_ = false;
   current_bucket_pos_ = -1;
@@ -189,6 +191,9 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
   } else {
     is_inited_ = true;
     is_leader_serving_ = false;
+    HotspotAggregationState aggregation_state;
+    aggregation_state.blocked_ = true;
+    ATOMIC_STORE(&tx_aggregation_state_.value_, aggregation_state.value_);
     state_ = State::F_WORKING;
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
@@ -227,6 +232,9 @@ void ObLSTxCtxMgr::reset()
   active_tx_count_ = 0;
   total_active_readonly_request_count_ = 0;
   total_request_by_transfer_dest_ = 0;
+  HotspotAggregationState aggregation_state;
+  aggregation_state.blocked_ = true;
+  tx_aggregation_state_.value_ = aggregation_state.value_;
   leader_takeover_ts_.reset();
   max_replay_commit_version_.reset();
   aggre_rec_scn_.reset();
@@ -837,6 +845,7 @@ int ObLSTxCtxMgr::try_wait_gts_and_inc_max_commit_ts_()
         ret = OB_NOT_MASTER;
       } else {
         is_leader_serving_ = true;
+        unblock_hotspot_aggregation_();
         txs_->get_tx_version_mgr().update_max_commit_ts(gts, false);
         TRANS_LOG(INFO, "skip waiting gts when takeover",
             K(ls_id_), K(tenant_id_), K(max_replay_commit_version_), K(gts));
@@ -882,7 +891,6 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObTimeGuard timeguard("switch_to_follower_gracefully");
-  StateHelper state_helper(ls_id_, state_);
   int64_t start_time = ObTimeUtility::current_time();
   int64_t process_count = 0;
   int64_t total_process_count = 0;
@@ -892,6 +900,16 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
   if (errsim_retry_timeout_us > 0) {
     retry_timeout_us = errsim_retry_timeout_us;
   }
+  // Allow 50ms for normal progress, then accelerate every 50ms. Cancel prepare
+  // after 500ms without entering formal revoke. Poll the count every 10ms.
+  // IT may shorten the budget with the existing ERRSIM; acceleration scales
+  // with that override. A monotonic deadline is unaffected by wall-clock changes.
+  const int64_t HOTSPOT_PREPARE_TIMEOUT_US = errsim_retry_timeout_us > 0
+      ? errsim_retry_timeout_us : 500 * 1000;
+  const int64_t HOTSPOT_ACCELERATE_AFTER_US = errsim_retry_timeout_us > 0
+      ? MAX(1, HOTSPOT_PREPARE_TIMEOUT_US / 10) : 50 * 1000;
+  const int64_t HOTSPOT_ACCELERATE_INTERVAL_US = HOTSPOT_ACCELERATE_AFTER_US;
+  const int64_t HOTSPOT_PREPARE_POLL_INTERVAL_US = MIN(10 * 1000, HOTSPOT_ACCELERATE_INTERVAL_US);
   while (OB_SUCC(ret) && is_pending_()) {
     if (ObTimeUtility::current_time() - start_time >= WAIT_SW_CB_TIMEOUT) {
       ret = OB_TIMEOUT;
@@ -902,9 +920,60 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
   }
   timeguard.click();
 
+  if (OB_SUCC(ret)) {
+    // The CAS word needs no rwlock. This short lock keeps the leader-state check
+    // and closing admission together; the wait below does not hold it.
+    WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+    } else if (!is_master_()) {
+      // No !is_leader_serving_ check: a not-yet-serving leader owns no
+      // in-flight aggregation and must stay revocable (farm 5046001390).
+      ret = OB_NOT_MASTER;
+    } else {
+      block_hotspot_aggregation_();
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    // Wait outside rwlock_: admitted groups still need the leader to advance.
+    // The gate rejects only new groups; formal revoke starts after count reaches zero.
+    const int64_t prepare_start_us = ObTimeUtility::current_monotonic_time();
+    const int64_t prepare_deadline_us = prepare_start_us + HOTSPOT_PREPARE_TIMEOUT_US;
+    int64_t next_accelerate_us = prepare_start_us + HOTSPOT_ACCELERATE_AFTER_US;
+    while (get_hotspot_aggregation_count() > 0) {
+      const int64_t now_us = ObTimeUtility::current_monotonic_time();
+      if (now_us >= prepare_deadline_us) {
+        break;
+      }
+      if (now_us >= next_accelerate_us) {
+        const int tmp_ret = accelerate_hotspot_aggregations_(prepare_deadline_us);
+        if (OB_SUCCESS != tmp_ret) {
+          TRANS_LOG(WARN, "accelerate hotspot aggregations during prepare failed",
+                    K(tmp_ret), K_(ls_id));
+        }
+        next_accelerate_us = now_us + HOTSPOT_ACCELERATE_INTERVAL_US;
+      }
+      if (get_hotspot_aggregation_count() > 0) {
+        ob_usleep(HOTSPOT_PREPARE_POLL_INTERVAL_US);
+      }
+    }
+    if (get_hotspot_aggregation_count() > 0) {
+      // Recheck the leader state before reopening admission after cancellation.
+      WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
+      const int reopen_ret = reopen_hotspot_aggregation_();
+      ret = OB_TIMEOUT;
+      TRANS_LOG(WARN, "hotspot aggregation prepare timed out and was cancelled",
+                K(ret), K(reopen_ret),
+                "aggregation_count", get_hotspot_aggregation_count(), K_(ls_id));
+    }
+  }
+  timeguard.click();
+
   ObTxCommitCallback *cb_list = NULL;
   {
     WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
+    StateHelper state_helper(ls_id_, state_);
     timeguard.click();
 
     if (OB_FAIL(ret)) {
@@ -912,9 +981,16 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
     } else if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       TRANS_LOG(WARN, "not init", KR(ret), K(ls_id_));
+    } else if (!is_master_()
+               || 0 != get_hotspot_aggregation_count()) {
+      ret = OB_STATE_NOT_MATCH;
+      TRANS_LOG(WARN, "hotspot aggregation prepare is not ready for formal revoke",
+                K(ret),
+                "aggregation_count", get_hotspot_aggregation_count(), K_(state), K_(ls_id));
     } else if (OB_FAIL(state_helper.switch_state(Ops::LEADER_REVOKE))) {
       TRANS_LOG(WARN, "switch state error", KR(ret), K(tenant_id_), K(ls_id_), K(state_));
     } else {
+      is_leader_serving_ = false;
       timeguard.click();
       const int64_t retry_start_time = ObTimeUtility::current_time();
       bool need_retry = false;
@@ -967,7 +1043,9 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
     }
   }
 
-  if (OB_TMP_FAIL(log_cb_pool_mgr_.clear_log_cb_pool(false /*for_replay*/))) {
+  // A failed prepare/revoke keeps or resumes the leader and must retain its pool.
+  if (OB_SUCC(ret)
+      && OB_TMP_FAIL(log_cb_pool_mgr_.clear_log_cb_pool(false /*for_replay*/))) {
     TRANS_LOG(WARN, "clear log cb pool failed", K(ret), K(ls_id_), K(log_cb_pool_mgr_));
   }
 
@@ -1001,8 +1079,7 @@ int ObLSTxCtxMgr::resume_leader()
       state_helper.restore_state();
       TRANS_LOG(WARN, "resume leader failed", KR(ret), K(*this));
     } else {
-      is_leader_serving_ = true;
-      TRANS_LOG(INFO, "resume leader success", K(*this));
+      TRANS_LOG(INFO, "resume leader start working log submitted", K(*this));
     }
   }
   TRANS_LOG(INFO, "[LsTxCtxMgr] resume_leader", K(ret), KPC(this));
@@ -1025,6 +1102,215 @@ bool ObLSTxCtxMgr::in_leader_serving_state()
     bool_ret = true;
   }
   return bool_ret;
+}
+
+int ObLSTxCtxMgr::acquire_hotspot_aggregation()
+{
+  int ret = OB_SUCCESS;
+  HotspotAggregationState old_state;
+  HotspotAggregationState new_state;
+  bool exchanged = false;
+  do {
+    old_state.value_ = ATOMIC_LOAD(&tx_aggregation_state_.value_);
+    if (old_state.blocked_) {
+      ret = OB_TX_NOT_SUPPORT_AGGREGATION;
+    } else if (HOTSPOT_AGGREGATION_MAX_COUNT == old_state.count_) {
+      ret = OB_SIZE_OVERFLOW;
+    } else {
+      new_state = old_state;
+      ++new_state.count_;
+      exchanged = ATOMIC_BCAS(&tx_aggregation_state_.value_, old_state.value_, new_state.value_);
+    }
+  } while (OB_SUCC(ret) && !exchanged);
+  return ret;
+}
+
+int ObLSTxCtxMgr::release_hotspot_aggregation()
+{
+  int ret = OB_SUCCESS;
+  HotspotAggregationState old_state;
+  HotspotAggregationState new_state;
+  bool exchanged = false;
+  do {
+    old_state.value_ = ATOMIC_LOAD(&tx_aggregation_state_.value_);
+    if (0 == old_state.count_) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "hotspot aggregation count underflow", K(ret), K(old_state.value_), KPC(this));
+    } else {
+      new_state = old_state;
+      --new_state.count_;
+      exchanged = ATOMIC_BCAS(&tx_aggregation_state_.value_, old_state.value_, new_state.value_);
+    }
+  } while (OB_SUCC(ret) && !exchanged);
+  return ret;
+}
+
+uint64_t ObLSTxCtxMgr::get_hotspot_aggregation_count() const
+{
+  const HotspotAggregationState state(ATOMIC_LOAD(&tx_aggregation_state_.value_));
+  return state.count_;
+}
+
+bool ObLSTxCtxMgr::is_hotspot_aggregation_blocked() const
+{
+  const HotspotAggregationState state(ATOMIC_LOAD(&tx_aggregation_state_.value_));
+  return state.blocked_;
+}
+
+void ObLSTxCtxMgr::block_hotspot_aggregation_()
+{
+  HotspotAggregationState old_state;
+  HotspotAggregationState new_state;
+  bool exchanged = false;
+  do {
+    old_state.value_ = ATOMIC_LOAD(&tx_aggregation_state_.value_);
+    new_state = old_state;
+    new_state.blocked_ = true;
+    exchanged = (old_state.value_ == new_state.value_)
+                || ATOMIC_BCAS(&tx_aggregation_state_.value_, old_state.value_, new_state.value_);
+  } while (!exchanged);
+}
+
+void ObLSTxCtxMgr::unblock_hotspot_aggregation_()
+{
+  // Groups from before revoke may still release their count after abort cleanup.
+  HotspotAggregationState old_state;
+  HotspotAggregationState new_state;
+  bool exchanged = false;
+  do {
+    old_state.value_ = ATOMIC_LOAD(&tx_aggregation_state_.value_);
+    new_state = old_state;
+    new_state.blocked_ = false;
+    exchanged = (old_state.value_ == new_state.value_)
+                || ATOMIC_BCAS(&tx_aggregation_state_.value_, old_state.value_, new_state.value_);
+  } while (!exchanged);
+}
+
+int ObLSTxCtxMgr::reopen_hotspot_aggregation_()
+{
+  int ret = OB_SUCCESS;
+  if (!is_master_() || !is_leader_serving_) {
+    ret = OB_STATE_NOT_MATCH;
+  } else {
+    unblock_hotspot_aggregation_();
+  }
+  return ret;
+}
+
+int ObLSTxCtxMgr::accelerate_hotspot_aggregations_(const int64_t deadline_us)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t state_before_scan = ATOMIC_LOAD(&tx_aggregation_state_.value_);
+  const HotspotAggregationState expected_state(state_before_scan);
+  const int64_t total_before_scan = ATOMIC_LOAD(&total_tx_ctx_count_);
+  // for_each pins each ctx and invokes the functor outside the bucket lock.
+  // Counts are observations during the scan, not an atomic manager snapshot.
+  AccelerateHotspotAggregationFunctor fn(deadline_us);
+  const int scan_ret = ls_tx_ctx_map_.for_each(fn);
+  if (OB_SUCCESS != scan_ret) {
+    if (OB_TIMEOUT == fn.get_ret()) {
+      // The functor stops at the shared deadline; prepare handles timeout.
+      ret = OB_SUCCESS;
+    } else if (OB_SUCCESS != fn.get_ret()) {
+      ret = fn.get_ret();
+    } else {
+      ret = scan_ret;
+      TRANS_LOG(WARN, "scan hotspot aggregation ctx failed", K(ret), K_(ls_id));
+    }
+  }
+  const uint64_t state_after_scan = ATOMIC_LOAD(&tx_aggregation_state_.value_);
+  const HotspotAggregationState observed_state(state_after_scan);
+  const bool map_scan_complete = OB_SUCCESS == scan_ret && OB_SUCCESS == fn.get_ret();
+  const bool scan_complete = map_scan_complete && 0 == fn.get_skipped_count();
+  // Acceleration may finish a scanned P. Busy locks or the deadline may also
+  // omit active P ctxs, so these observations cannot safely replace the count.
+  const bool gate_remained_blocked = expected_state.blocked_ && observed_state.blocked_;
+  const bool count_increased_while_blocked =
+      gate_remained_blocked && observed_state.count_ > expected_state.count_;
+  const bool complete_scan_mismatch =
+      scan_complete && gate_remained_blocked
+      && (fn.get_primary_count() > expected_state.count_
+          || fn.get_primary_count() < observed_state.count_);
+  if (count_increased_while_blocked || complete_scan_mismatch) {
+    TRANS_LOG(ERROR, "hotspot aggregation count disagrees with a closed admission scan",
+              "count_before_scan", static_cast<uint64_t>(expected_state.count_),
+              "count_after_scan", static_cast<uint64_t>(observed_state.count_),
+              "primary_count", fn.get_primary_count(),
+              K(scan_complete), K(count_increased_while_blocked), KPC(this));
+    // A closed gate makes a positive count monotonic: active groups can only
+    // finish. P admission publishes its count and state under the same ctx
+    // lock, as does P exit with count release; the scan samples status under
+    // that lock. Any word change, skipped ctx, or failed final CAS gives up.
+    if (scan_complete && expected_state.blocked_ && expected_state.count_ > 0
+        && state_before_scan == state_after_scan
+        && ObTimeUtility::current_monotonic_time() < deadline_us) {
+      const int calibrate_ret = calibrate_hotspot_aggregation_count_(
+          state_before_scan, total_before_scan, fn.get_visited_count(),
+          fn.get_primary_count(), deadline_us);
+      if (OB_SUCCESS != calibrate_ret) {
+        TRANS_LOG(WARN, "hotspot aggregation count calibration was skipped",
+                  K(calibrate_ret), K(deadline_us), KPC(this));
+      }
+    }
+  }
+  TRANS_LOG(INFO, "hotspot acceleration scan", K(ret), "primary_count", fn.get_primary_count(),
+            "secondary_count", fn.get_secondary_count(), "skipped_count", fn.get_skipped_count(),
+            "count_before_scan", static_cast<uint64_t>(expected_state.count_),
+            "count_after_scan", static_cast<uint64_t>(observed_state.count_),
+            "visited_count", fn.get_visited_count(),
+            K(scan_complete), K(deadline_us), KPC(this));
+  return ret;
+}
+
+int ObLSTxCtxMgr::calibrate_hotspot_aggregation_count_(
+    const uint64_t expected_state_value, const int64_t total_before_scan,
+    const int64_t visited_count, const int64_t primary_count, const int64_t deadline_us)
+{
+  int ret = OB_SUCCESS;
+  const HotspotAggregationState expected_state(expected_state_value);
+  if (!expected_state.blocked_ || 0 == expected_state.count_) {
+    // A release at zero underflows and leaves the word unchanged, so stable
+    // scans cannot infer or repair a zero-count mismatch.
+    ret = OB_STATE_NOT_MATCH;
+  } else if (ObTimeUtility::current_monotonic_time() >= deadline_us) {
+    ret = OB_TIMEOUT;
+  } else if (!rwlock_.try_wrlock()) {
+    ret = OB_EAGAIN;
+  } else {
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+    } else if (!is_master_() || !is_leader_serving_) {
+      ret = OB_STATE_NOT_MATCH;
+    } else if (ObTimeUtility::current_monotonic_time() >= deadline_us) {
+      ret = OB_TIMEOUT;
+    // This best-effort completeness check rejects map-external live ctxs.
+    // Manager W excludes creation and role changes; map deletion is not frozen.
+    } else if (total_before_scan != ATOMIC_LOAD(&total_tx_ctx_count_)
+               || total_before_scan != ls_tx_ctx_map_.count()
+               || total_before_scan != visited_count) {
+      ret = OB_EAGAIN;
+      TRANS_LOG(WARN, "hotspot aggregation calibration scan is incomplete",
+                K(ret), K(total_before_scan), "total_now", ATOMIC_LOAD(&total_tx_ctx_count_),
+                "map_count", ls_tx_ctx_map_.count(), K(visited_count), K(primary_count), KPC(this));
+    } else {
+      HotspotAggregationState new_state(expected_state);
+      new_state.count_ = primary_count;
+      uint64_t expected_value = expected_state_value;
+      if (!ATOMIC_BCAS(&tx_aggregation_state_.value_, expected_value, new_state.value_)) {
+        // The fixed expected word catches any scan-to-CAS state change. Never
+        // reload and retry with observations from the old scan.
+        ret = OB_EAGAIN;
+      } else {
+        TRANS_LOG(ERROR, "calibrated hotspot aggregation count from stable ctx scan",
+                  "old_count", static_cast<uint64_t>(expected_state.count_),
+                  "new_count", static_cast<uint64_t>(new_state.count_),
+                  "blocked", static_cast<uint64_t>(new_state.blocked_),
+                  K(total_before_scan), K(visited_count), KPC(this));
+      }
+    }
+    rwlock_.wrunlock();
+  }
+  return ret;
 }
 
 int ObLSTxCtxMgr::stop(const bool graceful)

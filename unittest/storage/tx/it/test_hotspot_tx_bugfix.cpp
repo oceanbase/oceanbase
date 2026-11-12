@@ -1277,17 +1277,16 @@ TEST_F(ObTestHotspotTxBugfix, test_rollback_memtable_from_seq_exclusive_boundary
 // the secondary tx's callback range, then calls rollback and verifies
 // need_remove_cnt_ is cleared.
 // ============================================================================
-// BUG FIX TEST: while loop exits after redo_flush_status becomes PRIMARY_AGGR_FAILED
+// BUG FIX TEST: synchronous wait exits after forced revoke requests abort
 // ============================================================================
 //
 // PROBLEM:
-//   sync_hotspot_legality_validation has a while loop (line 332) that waits for
-//   all_redo_flushed(). When switch_to_follower_forcedly is called during this wait,
-//   it changes redo_flush_status_ to PRIMARY_AGGR_FAILED. The while loop did NOT
-//   check this status (before fix), causing infinite wait.
+//   sync_hotspot_legality_validation waits for all_redo_flushed(). Forced revoke
+//   requests abort, but retains PREPARING/COLLECTING until abort cleanup releases
+//   the count. Checking only PRIMARY_AGGR_FAILED leaves this wait running.
 //
 // FIX:
-//   Added check for PRIMARY_AGGR_FAILED status in while loop.
+//   Check the abort request under the ctx lock without releasing the count early.
 //
 // TEST APPROACH:
 //   1. Start sync_hotspot_legality_validation in async thread
@@ -1309,6 +1308,14 @@ TEST_F(ObTestHotspotTxBugfix, test_sync_loop_exits_after_forcedly_switch_during_
     item.cond_ = 0;
     (void)oceanbase::common::EventTable::set_event("ERRSIM_HOTSPOT_TARGET_LOG_CB_CNT", item);
   }
+  DEFER({
+    oceanbase::common::EventItem item;
+    item.error_code_ = 0;
+    item.occur_ = 0;
+    item.trigger_freq_ = 0;
+    item.cond_ = 0;
+    (void)oceanbase::common::EventTable::set_event("ERRSIM_HOTSPOT_TARGET_LOG_CB_CNT", item);
+  });
   GCONF._ob_trans_rpc_timeout = 50;
   GCONF._enable_parallel_redo_logging = false;
   GCONF._parallel_redo_logging_trigger = INT64_MAX;
@@ -1388,14 +1395,14 @@ TEST_F(ObTestHotspotTxBugfix, test_sync_loop_exits_after_forcedly_switch_during_
   usleep(100 * 1000);
 
   // NOW: sync_validation is in while loop, call forcedly switch
-  // This will set redo_flush_status_ = PRIMARY_AGGR_FAILED
+  // This requests abort; FAILED and count release follow successful cleanup.
   TRANS_LOG(INFO, "Calling switch_to_follower_forcedly while sync_validation in while loop");
   ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->switch_to_follower_forcedly());
   ASSERT_FALSE(ls_tx_ctx_mgr->is_master());
 
   // CRITICAL ASSERTION: sync_validation should exit within 1 second
   // BEFORE FIX: hangs indefinitely (timeout)
-  // AFTER FIX: exits quickly (< 1s) after detecting PRIMARY_AGGR_FAILED
+  // AFTER FIX: exits quickly (< 1s) after detecting the abort request.
   const int64_t exit_timeout_us = 1 * 1000 * 1000;  // 1 second
   const int64_t exit_start_ts = ObTimeUtility::fast_current_time();
   while (!sync_validation_async.is_evaled()
@@ -1416,7 +1423,7 @@ TEST_F(ObTestHotspotTxBugfix, test_sync_loop_exits_after_forcedly_switch_during_
 
   // MUST exit within 1 second
   ASSERT_TRUE(sync_validation_async.is_evaled())
-      << "BUG: sync_validation should exit after redo_flush_status becomes PRIMARY_AGGR_FAILED";
+      << "BUG: sync_validation should exit after forced revoke requests abort";
   ASSERT_LT(exit_elapsed_us, exit_timeout_us)
       << "sync_validation should exit within 1 second after forcedly switch";
 
@@ -1427,14 +1434,6 @@ TEST_F(ObTestHotspotTxBugfix, test_sync_loop_exits_after_forcedly_switch_during_
     ASSERT_EQ(OB_SUCCESS, sec_guards[i].release());
   }
   n1->wait_all_msg_consumed();
-  {
-    oceanbase::common::EventItem item;
-    item.error_code_ = 0;
-    item.occur_ = 0;
-    item.trigger_freq_ = 0;
-    item.cond_ = 0;
-    (void)oceanbase::common::EventTable::set_event("ERRSIM_HOTSPOT_TARGET_LOG_CB_CNT", item);
-  }
 }
 
 TEST_F(ObTestHotspotTxBugfix, test_rollback_secondary_memtable_and_mark_from_seq_boundary)

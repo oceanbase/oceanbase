@@ -703,6 +703,10 @@ private:
 
   ObTxTimeoutTask commit_task_;     // commit retry task
   ObXACtx *xa_ctx_;                 // xa context
+  // Runtime-only provenance for a secondary transaction in hotspot group commit.
+  // It deliberately does not participate in ObTxDesc serialization/free route state.
+  ObTransID hotspot_primary_tx_id_;
+  bool rollback_on_no_affected_rows_;
   // this is for deadlock detection, this count shows sql retry policy: wether waited in lock_wait_mgr queue or not
   // (deadlock detection in/out lock wait mgr is much different, must be telled through this count status,
   //  and sql layer's status like retry_type is can't be depended on,
@@ -850,6 +854,14 @@ public:
     return is_RR_or_SERIAL_isolevel() && snapshot_version_.is_valid();
   }
   const ObTransID &tid() const { return tx_id_; }
+  void set_hotspot_group_commit_info(const ObTransID &primary_tx_id,
+                                     const bool rollback_on_no_affected_rows)
+  {
+    hotspot_primary_tx_id_ = primary_tx_id;
+    rollback_on_no_affected_rows_ = rollback_on_no_affected_rows;
+  }
+  const ObTransID &get_hotspot_primary_tx_id() const { return hotspot_primary_tx_id_; }
+  bool need_rollback_on_no_affected_rows() const { return rollback_on_no_affected_rows_; }
   bool is_valid() const { return !is_in_tx() || tx_id_.is_valid(); }
   ObTxAccessMode get_tx_access_mode() const { return access_mode_; }
   bool is_rdonly() const { return access_mode_ == ObTxAccessMode::RD_ONLY || access_mode_ == ObTxAccessMode::STANDBY_RD_ONLY; }
