@@ -1760,7 +1760,9 @@ int ObDMLService::init_upd_rtdef(
   } else {
     upd_rtdef.dupd_rtdef_.related_ctdefs_ = &upd_ctdef.related_upd_ctdefs_;
     upd_rtdef.dupd_rtdef_.related_rtdefs_ = &upd_rtdef.related_upd_rtdefs_;
-    dml_rtctx.get_exec_ctx().set_update_columns(&upd_ctdef.assign_columns_);
+    if (upd_ctdef.is_primary_index_) {
+      dml_rtctx.get_exec_ctx().set_update_columns(&upd_ctdef.assign_columns_);
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < upd_rtdef.fk_checker_array_.count(); ++i) {
       if (OB_NOT_NULL(upd_rtdef.fk_checker_array_.at(i))) {
         fk_checkers.push_back(upd_rtdef.fk_checker_array_.at(i));
