@@ -57,6 +57,8 @@ public:
 
   static bool is_stats_job(const ObString &job_name);
 
+  static bool is_spm_stats_job(const ObString &job_name);
+
   static int get_time_zone_offset(
       const share::schema::ObSysVariableSchema &sys_variable,
       const uint64_t tenant_id,

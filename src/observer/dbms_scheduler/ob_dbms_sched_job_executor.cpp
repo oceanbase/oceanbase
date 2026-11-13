@@ -94,6 +94,16 @@ int ObDBMSSchedJobExecutor::init_session(
                                   ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT));
   OZ (session.update_sys_variable(share::SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT,
                                   ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT));
+  if (OB_SUCC(ret) && ObDbmsStatsMaintenanceWindow::is_spm_stats_job(job_info.get_job_name())) {
+    const int64_t TIMEOUT_US = job_info.get_max_run_duration() * 1000000L;
+    if (OB_FAIL(session.update_sys_variable(share::SYS_VAR_OB_QUERY_TIMEOUT, TIMEOUT_US))) {
+      LOG_WARN("failed to set spm job query timeout", KR(ret), K(job_info));
+    } else if (OB_FAIL(session.update_sys_variable(share::SYS_VAR_OB_TRX_TIMEOUT, TIMEOUT_US))) {
+      LOG_WARN("failed to set spm job transaction timeout", KR(ret), K(job_info));
+    } else if (OB_FAIL(session.update_sys_variable(share::SYS_VAR_OB_PL_BLOCK_TIMEOUT, TIMEOUT_US))) {
+      LOG_WARN("failed to set spm job pl block timeout", KR(ret), K(job_info));
+    }
+  }
   OZ (session.set_default_database(database_name));
   OZ (session.get_pc_mem_conf(pc_mem_conf));
   CK (OB_NOT_NULL(GCTX.sql_engine_));
