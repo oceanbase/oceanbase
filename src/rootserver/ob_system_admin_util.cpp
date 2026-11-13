@@ -1038,7 +1038,7 @@ int ObAdminSetConfig::update_config(obrpc::ObAdminSetConfigArg &arg, int64_t new
                 || OB_FAIL(dml.add_pk_column(K(svr_port)))
                 || OB_FAIL(dml.add_pk_column("name", item->name_.ptr()))
                 || OB_FAIL(dml.add_column("data_type", "varchar"))
-                || OB_FAIL(dml.add_column("value", item->value_.ptr()))
+                || OB_FAIL(dml.add_column("value", ObHexEscapeSqlStr(item->value_.str())))
                 || OB_FAIL(dml.add_column("info", item->comment_.ptr()))
                 || OB_FAIL(dml.add_column("config_version", new_version))) {
               LOG_WARN("add column failed", KR(ret));
@@ -1108,7 +1108,7 @@ int ObAdminSetConfig::update_config(obrpc::ObAdminSetConfigArg &arg, int64_t new
                   || OB_FAIL(dml.add_pk_column(K(svr_port)))
                   || OB_FAIL(dml.add_pk_column("name", item->name_.ptr()))
                   || OB_FAIL(dml.add_column("data_type", "varchar"))
-                  || OB_FAIL(dml.add_column("value", item->value_.ptr()))
+                  || OB_FAIL(dml.add_column("value", ObHexEscapeSqlStr(item->value_.str())))
                   || OB_FAIL(dml.add_column("info", item->comment_.ptr()))
                   || OB_FAIL(dml.add_column("config_version", new_version))) {
           LOG_WARN("add column failed", KR(ret));

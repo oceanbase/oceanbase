@@ -988,6 +988,16 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigZoneDeployModeChecker);
 };
+class ObConfigAuditLogFormatOptionsChecker : public ObConfigChecker
+{
+public:
+  ObConfigAuditLogFormatOptionsChecker() {}
+  virtual ~ObConfigAuditLogFormatOptionsChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigAuditLogFormatOptionsChecker);
+};
+
 typedef __ObConfigContainer<ObConfigStringKey,
                             ObConfigItem, OB_MAX_CONFIG_NUMBER> ObConfigContainer;
 } // namespace common

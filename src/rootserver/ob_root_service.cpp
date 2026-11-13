@@ -8021,9 +8021,20 @@ int ObRootService::admin_set_config(obrpc::ObAdminSetConfigArg &arg)
       }
     }
   }
-  // Add event one by one if more than one parameters are set
-  for (int i = 0; i < arg.items_.count(); i++) {
-    ROOTSERVICE_EVENT_ADD_TRUNCATE("root_service", "admin_set_config", K(ret), "arg", arg.items_.at(i), "is_inner", arg.is_inner_);
+  // ROOTSERVICE_EVENT_ADD_TRUNCATE bounded text but did not SQL-escape quotes or backslashes.
+  // Bound item text here and use ROOTSERVICE_EVENT_ADD with ObHexEscapeSqlStr to preserve
+  // arg bytes without truncating the escaped representation.
+  const int result = ret;
+  for (int64_t i = 0; i < arg.items_.count(); i++) {
+    int ret = OB_SUCCESS;
+    HEAP_VAR(char[MAX_ROOTSERVICE_EVENT_VALUE_LENGTH + 1], text) {
+      ret = ROOTSERVICE_EVENT_ADD("root_service", "admin_set_config", "ret", result,
+                                  "arg", ObHexEscapeSqlStr(ObString(arg.items_.at(i).to_string(text, sizeof(text)), text)),
+                                  "is_inner", arg.is_inner_);
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to add set config event", KR(ret), K(i));
+    }
   }
   return ret;
 }
