@@ -28,7 +28,8 @@ const char *VALID_PROVIDERS[] = {
   "SILICONFLOW",
   "COHERE",
   "HUNYUAN-OPENAI",
-  "OPENAI"
+  "OPENAI",
+  "VOYAGEAI"
 };
 
 #define EXTRACT_JSON_ELEM_STR(json_key, member) \

@@ -982,6 +982,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_ai/ob_expr_ai_complete.cpp
   engine/expr/ob_expr_ai/ob_expr_ai_embed.cpp
   engine/expr/ob_expr_ai/ob_expr_ai_rerank.cpp
+  engine/expr/ob_expr_ai/ob_voyage_utils.cpp
   engine/expr/ob_expr_local_dynamic_filter.cpp
   engine/expr/ob_expr_semantic_distance.cpp
   engine/expr/ob_expr_format_profile.cpp
