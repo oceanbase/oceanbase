@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_ai_func_utils.h"
+#include "ob_voyage_utils.h"
 #include "ob_ai_func_client.h"
 #include "lib/encode/ob_base64_encode.h"
 #include "lib/random/ob_random.h"
@@ -2215,6 +2216,9 @@ int ObAIFuncUtils::get_embed_provider(ObIAllocator &allocator, const ObString &p
       || ob_provider_check(provider, ObAIFuncProviderUtils::HUNYUAN)
       || ob_provider_check(provider, ObAIFuncProviderUtils::SILICONFLOW)) {
     embed_provider = OB_NEWx(ObOpenAIUtils::ObOpenAIEmbed, &allocator);
+  } else if (ob_provider_check(provider, ObAIFuncProviderUtils::VOYAGE)) {
+    // one provider for text, contextualized and multimodal models: the model name decides the request
+    embed_provider = OB_NEWx(ObVoyageUtils::ObVoyageEmbed, &allocator);
   } else if (ob_provider_check(provider, ObAIFuncProviderUtils::DASHSCOPE)) {
     if (is_multi_model) {
       embed_provider = OB_NEWx(ObDashscopeUtils::ObDashscopeVLEmbed, &allocator);
@@ -2243,12 +2247,14 @@ int ObAIFuncUtils::get_rerank_provider(ObIAllocator &allocator, const ObString &
   } else if (ob_provider_check(provider, ObAIFuncProviderUtils::SILICONFLOW)
           || ob_provider_check(provider, ObAIFuncProviderUtils::COHERE)) {
     rerank_provider = OB_NEWx(ObSiliconflowUtils::ObSiliconflowRerank, &allocator);
+  } else if (ob_provider_check(provider, ObAIFuncProviderUtils::VOYAGE)) {
+    rerank_provider = OB_NEWx(ObVoyageUtils::ObVoyageRerank, &allocator);
   } else if (ob_provider_check(provider, ObAIFuncProviderUtils::DASHSCOPE)) {
     rerank_provider = OB_NEWx(ObDashscopeUtils::ObDashscopeRerank, &allocator);
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("this provider current not support", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "rerank support siliconflow, cohere and ailiyun-dashscope, this provider current is");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "rerank support siliconflow, cohere, voyageai and ailiyun-dashscope, this provider current is");
   }
   if (OB_SUCC(ret) && OB_ISNULL(rerank_provider)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3702,6 +3708,8 @@ int ObAIModelConfigInfoManager::register_default_model_configs_()
     LOG_WARN("ObAIModelConfigInfoManager config map not created", K(ret));
   } else if (OB_FAIL(register_aliyun_model_configs_())) {
     LOG_WARN("failed to register aliyun model configs", K(ret));
+  } else if (OB_FAIL(register_voyage_model_configs_())) {
+    LOG_WARN("failed to register voyage model configs", K(ret));
   }
   return ret;
 }
@@ -3715,6 +3723,21 @@ int ObAIModelConfigInfoManager::register_aliyun_model_configs_()
   OB_AI_MODEL_CONFIG_REGISTER(ret, *this, ObAIFuncProviderUtils::DASHSCOPE, "tongyi-embedding-vision-plus", 16, 3 * MB);
   OB_AI_MODEL_CONFIG_REGISTER(ret, *this, ObAIFuncProviderUtils::DASHSCOPE, "tongyi-embedding-vision-flash", 16, 3 * MB);
   OB_AI_MODEL_CONFIG_REGISTER(ret, *this, ObAIFuncProviderUtils::DASHSCOPE, "multimodal-embedding-v1", 1, 3 * MB);
+  return ret;
+}
+
+int ObAIModelConfigInfoManager::register_voyage_model_configs_()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < ObVoyageUtils::get_model_count(); ++i) {
+    const ObVoyageUtils::ModelSpec &spec = ObVoyageUtils::get_model(i);
+    if (spec.kind_ != ObVoyageUtils::KIND_RERANK) {
+      const int64_t max_image_size =
+          spec.kind_ == ObVoyageUtils::KIND_MULTIMODAL ? ObVoyageUtils::MAX_IMAGE_SIZE : 0;
+      OB_AI_MODEL_CONFIG_REGISTER(ret, *this, ObAIFuncProviderUtils::VOYAGE, spec.name_,
+                                  spec.batch_size_, max_image_size);
+    }
+  }
   return ret;
 }
 

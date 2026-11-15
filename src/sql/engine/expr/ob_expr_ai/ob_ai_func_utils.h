@@ -418,6 +418,7 @@ public:
   static constexpr char COHERE[20] = "COHERE";
   static constexpr char HUNYUAN[20] = "HUNYUAN-OPENAI";
   static constexpr char DEEPSEEK[20] = "DEEPSEEK";
+  static constexpr char VOYAGE[20] = "VOYAGEAI";
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAIFuncProviderUtils);
@@ -699,6 +700,7 @@ private:
                 const bool overwrite = true);
   int register_default_model_configs_();
   int register_aliyun_model_configs_();
+  int register_voyage_model_configs_();
 private:
   mutable bool is_inited_;
   mutable ObArenaAllocator allocator_;
