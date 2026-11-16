@@ -53,3 +53,12 @@ TEST(easy_time, now)
     e /= 1000000;
     EXPECT_TRUE(s == t || e == t);
 }
+
+TEST(easy_time, fast_current_time)
+{
+    int64_t                 s = fast_current_time();
+    usleep(1000);
+    int64_t                 e = fast_current_time();
+    EXPECT_TRUE(s > 0);
+    EXPECT_TRUE(e > 0);
+}
