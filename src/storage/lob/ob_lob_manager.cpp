@@ -1017,6 +1017,12 @@ int ObLobManager::append(
     ObString data;
     if (OB_FAIL(lob.get_inrow_data(data))) {
       LOG_WARN("get inrow data int insert lob col failed", K(lob), K(data));
+    } else if (OB_UNLIKELY(data.ptr() < lob.ptr_
+                          || static_cast<uint64_t>(data.ptr() - lob.ptr_)
+                               + static_cast<uint64_t>(data.length())
+                             > static_cast<uint64_t>(lob.size_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("lob inrow data out of locator buffer range", K(lob), K(data));
     } else if (OB_FAIL(append(param, data))) {
       LOG_WARN("[STORAGE_LOB]lob append failed.", K(ret), K(param), K(data));
     }
