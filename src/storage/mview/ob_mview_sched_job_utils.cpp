@@ -366,6 +366,9 @@ int ObMViewSchedJobUtils::create_mlog_scheduler_job(
   } else if (OB_FAIL(get_owner_name_from_table_id_(trans, tenant_id, mlog_id, 
                                                    allocator, job_owner, job_owner_id))) {
     LOG_WARN("failed to get owner from mlog table, use default owner", KR(ret), K(mlog_id));
+    job_owner.reset();
+    job_owner_id = OB_INVALID_ID;
+    ret = OB_SUCCESS;
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(add_scheduler_job(trans, tenant_id, job_id, purge_job, job_action, start_date,
