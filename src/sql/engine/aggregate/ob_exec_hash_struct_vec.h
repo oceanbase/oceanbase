@@ -373,7 +373,7 @@ public:
             if (child_brs.skip_->at(i) || is_dumped[i]) {
               continue;
             }
-            if (vec->get_datums()[is_const ? i : 0].len_ > 1) {
+            if (vec->get_datums()[is_const ? 0 : i].len_ > 1) {
               set_invalid();
             }
           }
