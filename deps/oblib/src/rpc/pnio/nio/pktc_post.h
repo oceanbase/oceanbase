@@ -64,11 +64,16 @@ static int pktc_do_post(pktc_t* io, pktc_sk_t* sk, pktc_req_t* r) {
   int err = pktc_wq_push_pre(&sk->wq, r);
   if (err != PNIO_OK) {
     // drop req
+  } else if (cb && NULL == ihash_insert(&io->cb_map, &cb->hash_link)) {
+    err = -EEXIST;
+    // Registration failed before doing_cnt was incremented; skip socket accounting in the failure callback.
+    cb->sk = NULL;
+    rk_warn("duplicate packet id: reuse is not supported, fail the submitted rpc, "
+            "packet_id=%lu, sock=%p, err=%d", cb->id, sk, err);
   } else {
     if (cb) {
       sk->sk_diag_info.doing_cnt ++;
       dlink_insert(&sk->cb_head, &cb->sk_dlink);
-      ihash_insert(&io->cb_map, &cb->hash_link);
       tw_regist(&io->cb_tw, &cb->timer_dlink);
     }
     wq_push(&sk->wq, &r->link);
