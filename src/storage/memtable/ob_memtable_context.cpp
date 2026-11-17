@@ -846,6 +846,24 @@ uint64_t ObMemtableCtx::get_tenant_id() const
   return tenant_id;
 }
 
+bool ObMemtableCtx::redo_flushed_upto(const int64_t flushed_bound)
+{
+  return trans_mgr_.redo_flushed_upto(flushed_bound);
+}
+
+int ObMemtableCtx::checkpoint_callbacks_for_hotspot_rollback(
+    const int64_t max_count,
+    const int64_t deadline_mono_us,
+    bool &done,
+    int64_t &removed_count,
+    bool *callback_error)
+{
+  // Like apply-side fast commit, list traversal owns the required list latches.
+  // CtxLockGuard::MODE::ALL excludes concurrent transaction management/logging.
+  return trans_mgr_.checkpoint_callbacks_for_hotspot_rollback(
+      max_count, deadline_mono_us, done, removed_count, callback_error);
+}
+
 int ObMemtableCtx::rollback(const transaction::ObTxSEQ to_seq_no,
                             const transaction::ObTxSEQ from_seq_no,
                             const share::SCN replay_scn)

@@ -64,6 +64,21 @@ public:
                                         share::SCN &last_remove_scn,
                                         int64_t &remove_succ_cnt);
 
+  // Leader only; the caller holds the transaction's management/redo-flush lock.
+  // Contention and an unsynced prefix return SUCCESS with done=false. A callback
+  // error is not a retryable wait, even when its code is EAGAIN or TIMEOUT.
+  int checkpoint_callbacks_for_hotspot_rollback(const int64_t max_count,
+                                                const int64_t deadline_mono_us,
+                                                const share::SCN stop_scn,
+                                                bool &done,
+                                                int64_t &removed_count,
+                                                bool *callback_error = nullptr);
+  // flushed_bound: appended_ count sampled by the caller under the tx ctx lock.
+  // Compares monotonic progress (logged_ + unlog_removed_) against a constant,
+  // so no cross-domain snapshot is needed and the iterate latch alone suffices;
+  // contention conservatively means false.
+  bool redo_flushed_upto(const int64_t flushed_bound) const;
+
   // remove_callbacks_for_remove_memtable will remove all callbacks that is
   // belonged to the specified memtable sets. It will only remove callbacks
   // without removing data by calling checkpoint_callback. So user need to
@@ -192,7 +207,7 @@ public:
     return log_latch_.try_lock() ? &log_latch_ : NULL;
   }
   bool empty() const { return head_.get_next() == &head_; }
-  int64_t get_appended() const { return appended_; }
+  int64_t get_appended() const { return ATOMIC_LOAD(&appended_); }
   int64_t get_length() const { return length_; }
   int64_t get_logged() const { return logged_; }
   int64_t get_synced() const { return synced_; }

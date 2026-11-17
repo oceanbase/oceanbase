@@ -63,6 +63,83 @@ const char *to_cstr(const TxSecondaryRespStatus &status);
 class ObPartTransCtx;
 class ObTxHotspotRedoCache;
 
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+// One stack-local operation shared by all rollback members. Never retain callback pointers
+// here: redo sync/fast-commit may retire them between management-lock acquisitions.
+struct ObHotspotRollbackWork
+{
+  static const int64_t DEFAULT_BUDGET_US = 1000 * 1000;
+  static const int64_t PRIMARY_POLL_US = 1000;
+  static const int64_t CHECKPOINT_BATCH_COUNT = 1024;
+  enum class Phase { VALIDATE, LOCK, REDO_SUBMIT, WAIT_SYNC, CHECKPOINT, LOG_UNDO, TABLE_LOCK, FINISHED };
+  enum class WaitReason { NONE, CTX_LOCK, LOG_CB, REDO, SYNC, CHECKPOINT, SECONDARY_REDO };
+  enum class TimeoutSource { NONE, LOCAL, TX, LEGACY_CTX };
+
+  explicit ObHotspotRollbackWork(const int64_t budget_us = DEFAULT_BUDGET_US,
+                                const int64_t stmt_expire_wall_us = INT64_MAX);
+  void begin_member(const ObTransID &tx_id, const bool primary);
+  int check_deadline(int64_t &remaining_us);
+  // Explicit clock samples allow arithmetic tests without a production clock seam.
+  int check_deadline_at(const int64_t now_mono_us, const int64_t now_wall_us,
+                        int64_t &remaining_us);
+  void remember_cause(const int ret);
+  void finish(const int ret, const share::ObLSID &ls_id, const ObTransID &primary_tx_id);
+  const char *phase_name() const;
+  const char *wait_reason_name() const;
+  const char *timeout_source_name() const;
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+
+  const int64_t start_mono_us_;
+  const int64_t start_wall_us_;
+  const int64_t budget_us_;
+  const int64_t local_deadline_mono_us_;
+  const int64_t stmt_expire_wall_us_;
+  int64_t tx_expire_wall_us_;
+  Phase phase_;
+  WaitReason wait_reason_;
+  TimeoutSource timeout_source_;
+  int cause_ret_;
+  int cleanup_ret_;
+  int64_t elapsed_us_;
+  int64_t budget_overrun_us_;
+  int64_t redo_submit_us_;
+  int64_t redo_sync_wait_us_;
+  int64_t checkpoint_us_;
+  int64_t lock_wait_us_;
+  int64_t cb_wait_us_;
+  int64_t log_prepare_submit_us_;
+  int64_t table_lock_us_;
+  int64_t redo_out_block_cnt_;
+  int64_t checkpoint_batch_cnt_;
+  int64_t removed_cb_cnt_;
+  int64_t rollback_log_out_cnt_;
+  int64_t retry_cnt_;
+  int64_t member_cnt_;
+  int64_t finished_member_cnt_;
+  int64_t member_index_;
+  ObTransID member_tx_id_;
+  bool primary_;
+  bool snapshot_valid_;
+  bool range_checked_;
+  bool range_valid_;
+  bool done_;
+  int64_t epoch_;
+  int64_t last_op_sn_;
+  ObTxSEQ last_seq_;
+  int64_t redo_state_;
+  int64_t pending_write_;
+  int64_t busy_cb_count_;
+  // appended_ sampled under CtxLockGuard::MODE::ALL each rollback round.
+  // redo_flushed_upto compares monotonic progress (logged_ + unlog_removed_)
+  // against it; ctx-lock-free table-lock appends land above the bound and
+  // converge via the checkpoint recheck and next round's resample.
+  int64_t flush_bound_;
+  ObTxSEQ from_seq_;
+  ObTxSEQ to_seq_;
+  share::SCN last_redo_scn_;
+};
+#endif
+
 class ObHotspotSchedulerResponseTask : public ObTransTask
 {
 public:
@@ -196,6 +273,14 @@ public:
   void inc_pending_submit_other_redo_msg_cnt();
   void dec_pending_submit_other_redo_msg_cnt();
   int get_rollback_range(const ObTransID *secondary_tx_id, ObTxSEQ &from_seq, ObTxSEQ &to_seq) const;
+  // True if this secondary still has a filled-but-unsubmitted buf, or a submit in progress.
+  // Already-submitted redo (including unsynced) is not counted.
+  int has_unsubmitted_secondary_redo(const ObTransID &secondary_tx_id, bool &has_unsubmitted) const;
+  // data_rolled_back_ on this cache slot: RollbackToLog for this secondary has been submitted.
+  int is_secondary_data_rolled_back(const int64_t cache_index, bool &rolled_back) const;
+  // Discard a filled-but-unsubmitted buf and zero unsynced_node_cnt_ so all_redo_flushed can finish.
+  // Does not touch already-submitted redo.
+  int discard_unsubmitted_secondary_redo(const int64_t cache_index);
   int rollback_secondary_memtable_and_mark(const ObTransID &secondary_tx_id);
   int try_release_idle_log_cb(ObPartTransCtx *primary_tx_ctx, const bool force_release);
   bool need_rollback_primary_tx() const;

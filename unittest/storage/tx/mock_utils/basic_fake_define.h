@@ -13,6 +13,16 @@
 #ifndef OCEANBASE_TRANSACTION_TEST_BASIC_FAKE_DEFINE_
 #define OCEANBASE_TRANSACTION_TEST_BASIC_FAKE_DEFINE_
 
+#pragma push_macro("private")
+#pragma push_macro("protected")
+#undef private
+#undef protected
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
+#pragma pop_macro("protected")
+#pragma pop_macro("private")
+
 #define protected public
 #define private public
 
@@ -75,18 +85,36 @@ public:
   virtual void destroy() override {}
   virtual int alloc_tx_data(ObTxDataGuard &tx_data_guard,
                             const bool enable_throttle,
-                            const int64_t abs_expire_time)
+                            const int64_t abs_expire_time) override
   {
-    ObMemAttr attr;
-    void *ptr = ob_malloc(TX_DATA_SLICE_SIZE, attr);
-    ObTxData *tx_data = new (ptr) ObTxData();
-    tx_data->ref_cnt_ = 100;
-    tx_data->tx_data_allocator_ = FAKE_ALLOCATOR;
-    tx_data->flag_ = 269381;
-    tx_data->op_allocator_ = FAKE_ALLOCATOR2;
-    tx_data_guard.init(tx_data);
-    return OB_ISNULL(tx_data) ? OB_ALLOCATE_MEMORY_FAILED : OB_SUCCESS;
+    // Observe and honor the finite caller deadline. This fake does not model
+    // allocator throttling or prove the real throttle-info OOM retry bound.
+    ATOMIC_STORE(&last_alloc_expire_time_, abs_expire_time);
+    ATOMIC_INC(&alloc_tx_data_calls_);
+    int ret = ATOMIC_SET(&next_alloc_tx_data_ret_, OB_SUCCESS);
+    if (OB_SUCC(ret) && abs_expire_time > 0 && abs_expire_time != INT64_MAX
+        && ObTimeUtility::current_time() >= abs_expire_time) {
+      ret = OB_TIMEOUT;
+    }
+    if (OB_SUCC(ret)) {
+      ObMemAttr attr;
+      void *ptr = ob_malloc(TX_DATA_SLICE_SIZE, attr);
+      if (OB_ISNULL(ptr)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        ObTxData *tx_data = new (ptr) ObTxData();
+        tx_data->ref_cnt_ = 100;
+        tx_data->tx_data_allocator_ = FAKE_ALLOCATOR;
+        tx_data->flag_ = 269381;
+        tx_data->op_allocator_ = FAKE_ALLOCATOR2;
+        ret = tx_data_guard.init(tx_data);
+      }
+    }
+    return ret;
   }
+  int64_t last_alloc_expire_time_ = 0;
+  int64_t alloc_tx_data_calls_ = 0;
+  int next_alloc_tx_data_ret_ = OB_SUCCESS;
   virtual int deep_copy_tx_data(const ObTxDataGuard &from_guard, ObTxDataGuard &to_guard) override
   {
     int ret = OB_SUCCESS;
@@ -111,8 +139,17 @@ public:
   }
   virtual int free_undo_status_node(ObUndoStatusNode *&undo_status_node) override
   {
+    // Enable only around no-out bounded-prepare tests. The virtual fake above
+    // allocates this node with ob_malloc, so release it through the matching API.
+    if (free_bounded_attach_nodes_) {
+      ++freed_bounded_attach_nodes_;
+      ob_free(undo_status_node);
+      undo_status_node = nullptr;
+    }
     return OB_SUCCESS;
   }
+  bool free_bounded_attach_nodes_ = false;
+  int64_t freed_bounded_attach_nodes_ = 0;
   virtual int insert(ObTxData *&tx_data) override
   {
     int ret = OB_SUCCESS;
@@ -438,6 +475,8 @@ public:
 
   void stop() {
     stop_ = true;
+    clear_rollback_submit_hold();
+    clear_bounded_pause();
     cond_.signal();
     TRANS_LOG(INFO, "stop.FakeTxLogAdapter", KP(this));
     ObThreadPool::stop();
@@ -482,10 +521,16 @@ public:
                 TRANS_LOG(DEBUG, "run fake log callback under submit tenant",
                           KP(old_tenant), KP(apply_task->tenant_),
                           KP(apply_task->cb_));
+                // A bounded test-only gate at the actual on_success boundary.
+                wait_bounded_pause_();
                 apply_task->cb_->on_success();
               }
               delete apply_task;
-              ATOMIC_DEC(&inflight_cnt_);
+              {
+                std::lock_guard<std::mutex> guard(apply_mutex_);
+                ATOMIC_DEC(&inflight_cnt_);
+                apply_cond_.notify_all();
+              }
             } else {
               break;
             }
@@ -511,7 +556,7 @@ public:
         ReplayCbTask *task = static_cast<ReplayCbTask*>(replay_task_queue_arr[i].pop());
         if (task) {
           ret = fn(task->log_buf_, task->log_size_, task->lsn_, task->log_ts_);
-          delete task->log_buf_;
+          delete[] task->log_buf_;
           delete task;
           ATOMIC_DEC(&unreplay_cnt_);
         } else {
@@ -566,8 +611,17 @@ public:
         apply_task->tenant_ = share::ObTenantEnv::get_tenant();
         max_submit_scn_ = share::SCN::max(max_submit_scn_, scn);
 
-        apply_task_queue_arr[queue_idx].push(apply_task);
+        const bool observe_rollback = ATOMIC_LOAD(&observe_rollback_submit_)
+            && is_contain(tx_log_cb->cb_arg_array_, ObTxLogType::TX_ROLLBACK_TO_LOG);
+        const int64_t hold_until = observe_rollback
+            ? ATOMIC_SET(&rollback_submit_hold_until_mono_us_, 0) : 0;
+        if (hold_until > 0) {
+          // Gate only the target RollbackToLog, not the primary's preceding redo.
+          // Arm before enqueue so on_success cannot pass the gate unnoticed.
+          set_bounded_pause(5 * 1000 * 1000);
+        }
         ATOMIC_INC(&inflight_cnt_);
+        apply_task_queue_arr[queue_idx].push(apply_task);
         wakeup();
 
         ReplayCbTask *replay_task = new ReplayCbTask();
@@ -579,6 +633,10 @@ public:
         replay_task->log_ts_ = ts;
         replay_task_queue_arr[queue_idx].push(replay_task);
         ATOMIC_INC(&unreplay_cnt_);
+        if (observe_rollback) {
+          ATOMIC_INC(&accepted_rollback_log_cnt_);
+          hold_accepted_rollback_until_(hold_until);
+        }
 
         TRANS_LOG(INFO, "submit_log",
             K(replay_hint), K(inflight_cnt_), K(unreplay_cnt_), K(queue_idx), KP(cb));
@@ -663,6 +721,87 @@ public:
     return ATOMIC_LOAD(&unreplay_cnt_);
   }
 
+  // Model one indivisible RollbackToLog append crossing the caller's actual
+  // deadline. Acceptance still enqueues the ordinary apply/replay tasks; no
+  // production clock or return code is changed. Reject unbounded test waits.
+  int hold_next_rollback_submit_until(const int64_t deadline_mono_us)
+  {
+    const int64_t now = ObTimeUtility::current_monotonic_time();
+    if (deadline_mono_us <= now || deadline_mono_us - now > 2 * 1000 * 1000) {
+      return OB_INVALID_ARGUMENT;
+    }
+    ATOMIC_STORE(&accepted_rollback_log_cnt_, 0);
+    ATOMIC_STORE(&rollback_submit_hold_until_mono_us_, deadline_mono_us);
+    ATOMIC_STORE(&observe_rollback_submit_, true);
+    return OB_SUCCESS;
+  }
+  void clear_rollback_submit_hold()
+  {
+    std::lock_guard<std::mutex> guard(apply_mutex_);
+    ATOMIC_STORE(&observe_rollback_submit_, false);
+    ATOMIC_STORE(&rollback_submit_hold_until_mono_us_, 0);
+    apply_cond_.notify_all();
+  }
+  int64_t get_accepted_rollback_log_count() const
+  {
+    return ATOMIC_LOAD(&accepted_rollback_log_cnt_);
+  }
+  void hold_accepted_rollback_until_(const int64_t deadline_mono_us)
+  {
+    std::unique_lock<std::mutex> guard(apply_mutex_);
+    int64_t remaining = deadline_mono_us - ObTimeUtility::current_monotonic_time();
+    while (remaining > 0 && ATOMIC_LOAD(&observe_rollback_submit_)) {
+      apply_cond_.wait_for(guard, std::chrono::microseconds(remaining));
+      remaining = deadline_mono_us - ObTimeUtility::current_monotonic_time();
+    }
+  }
+
+  // Unlike legacy set_pause(), these waits have a fail-safe deadline and report
+  // a real apply hit. They model callback scheduling, not persistent log sync.
+  void set_bounded_pause(const int64_t timeout_us)
+  {
+    std::lock_guard<std::mutex> guard(apply_mutex_);
+    bounded_pause_ = true;
+    pause_hit_ = false;
+    pause_expired_ = false;
+    pause_deadline_ = std::chrono::steady_clock::now() + std::chrono::microseconds(timeout_us);
+  }
+  bool wait_pause_hit(const int64_t timeout_us)
+  {
+    std::unique_lock<std::mutex> guard(apply_mutex_);
+    return apply_cond_.wait_for(guard, std::chrono::microseconds(timeout_us),
+                               [this] { return pause_hit_; });
+  }
+  void clear_bounded_pause()
+  {
+    std::lock_guard<std::mutex> guard(apply_mutex_);
+    bounded_pause_ = false;
+    apply_cond_.notify_all();
+  }
+  bool pause_expired()
+  {
+    std::lock_guard<std::mutex> guard(apply_mutex_);
+    return pause_expired_;
+  }
+  bool wait_inflight_zero(const int64_t timeout_us)
+  {
+    std::unique_lock<std::mutex> guard(apply_mutex_);
+    return apply_cond_.wait_for(guard, std::chrono::microseconds(timeout_us),
+                               [this] { return 0 == ATOMIC_LOAD(&inflight_cnt_); });
+  }
+  void wait_bounded_pause_()
+  {
+    std::unique_lock<std::mutex> guard(apply_mutex_);
+    if (bounded_pause_) {
+      pause_hit_ = true;
+      apply_cond_.notify_all();
+      if (!apply_cond_.wait_until(guard, pause_deadline_, [this] { return !bounded_pause_; })) {
+        pause_expired_ = true;
+        bounded_pause_ = false;
+      }
+    }
+  }
+
   void set_pause() {
     ATOMIC_SET(&pause_, true);
   }
@@ -688,6 +827,15 @@ public:
     block_log_type_array_.clear();
   }
 
+  std::mutex apply_mutex_;
+  std::condition_variable apply_cond_;
+  std::chrono::steady_clock::time_point pause_deadline_;
+  bool bounded_pause_ = false;
+  bool pause_hit_ = false;
+  bool pause_expired_ = false;
+  bool observe_rollback_submit_ = false;
+  int64_t rollback_submit_hold_until_mono_us_ = 0;
+  int64_t accepted_rollback_log_cnt_ = 0;
   bool pause_ = false;
   bool log_drop_ = false;
   std::vector<ObTxLogType> block_log_type_array_;

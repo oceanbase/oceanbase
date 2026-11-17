@@ -104,8 +104,26 @@ void ObSqlEndTransCb::callback(int cb_param)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to update last packet pos");
     } else {
-      session_info->set_show_warnings_buf(cb_param);
-      if (OB_SUCCESS == cb_param) {
+      int packet_cb_param = cb_param;
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+      // 主请求因影响 0 行需要回滚时，聚合前已开启事务的历史数据已局部回滚，未开启则无历史数据。
+      // 聚合事务仍提交成功，这里只转换主请求自身的回包错误码。
+      // handle_sub_tx_callback 从 head->next_ 开始，不会处理主事务，
+      // 所以零行的主事务客户端在此处拿到 OB_ROLLBACK_ON_NO_AFFECTED_ROWS。
+      // 仅凭 head->rollback_on_no_affected_rows_ 不够（它可能因组内成员被置位而主请求
+      // 本身影响行数非零），必须同时满足本主请求语句影响 0 行才转换。
+      if (OB_SUCCESS == packet_cb_param && 0 == pkt_param_.get_affected_rows()) {
+        ObRequest *req = packet_sender_.get_req();
+        if (OB_NOT_NULL(req) && req->has_group_commit_agg_info()) {
+          ObGroupCommitSubRequest *head  = req->get_group_commit_agg_info()->get_head_sub_request();
+          if (OB_NOT_NULL(head) && head->req_ == req && head->rollback_on_no_affected_rows_) {
+            packet_cb_param = OB_ROLLBACK_ON_NO_AFFECTED_ROWS;
+          }
+        }
+      }
+#endif
+      session_info->set_show_warnings_buf(packet_cb_param);
+      if (OB_SUCCESS == packet_cb_param) {
         //ok pakcet
         ObOKPParam ok_param;
         ok_param.message_ = const_cast<char*>(pkt_param_.get_message());
@@ -119,7 +137,7 @@ void ObSqlEndTransCb::callback(int cb_param)
       } else {
         //error + possible ok packet
         const char *error_msg = session_info->get_warnings_buffer().get_err_msg();
-        if (OB_SUCCESS != (ret = packet_sender_.send_error_packet(cb_param, error_msg, pkt_param_.get_is_partition_hit()))) {
+        if (OB_SUCCESS != (ret = packet_sender_.send_error_packet(packet_cb_param, error_msg, pkt_param_.get_is_partition_hit()))) {
           SERVER_LOG(WARN, "encode error packet fail", "ret", ret);
         }
       }
@@ -206,10 +224,12 @@ void ObSqlEndTransCb::handle_sub_tx_callback(int cb_param, bool need_disconnect)
       while (cur != nullptr) {
         // If the subtransaction has not started, its callback needs to be executed within the primary transaction's callback.
         if (!cur->is_trans_started_) {
+          // 每个子事务单独决定回包错误码，避免前一个 0 行回滚把后面的成功子事务也打成失败。
+          int sub_cb_param = cb_param;
           LOG_INFO("sub tx not start, need to callback in primary tx", KPC(cur));
           cur->sess_->get_mysql_end_trans_cb().set_need_disconnect(need_disconnect);
-          const int member_result = cur->rollback_on_no_affected_rows_ && cb_param == OB_SUCCESS
-              ? OB_ROLLBACK_ON_NO_AFFECTED_ROWS : cb_param;
+          const int member_result = cur->rollback_on_no_affected_rows_ && sub_cb_param == OB_SUCCESS
+              ? OB_ROLLBACK_ON_NO_AFFECTED_ROWS : sub_cb_param;
           cur->sess_->get_mysql_end_trans_cb().callback(member_result);
         }
         cur = reinterpret_cast<ObGroupCommitSubRequest *>(cur->next_);

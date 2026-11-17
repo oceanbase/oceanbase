@@ -498,6 +498,11 @@ public:
   int hotspot_rollback_to_for_secondary(const ObTransID &secondary_tx_id,
                                        const int64_t stmt_timeout_us = INT64_MAX);
   int hotspot_rollback_to_for_non_hotspot(const int64_t stmt_timeout_us = INT64_MAX);
+  // Internal storage overloads share one local budget across every member. The caller
+  // serializes business writes and end-trans; errors must end the descriptor transaction.
+  int hotspot_rollback_to_for_secondary(const ObTransID &secondary_tx_id,
+                                        ObHotspotRollbackWork &work);
+  int hotspot_rollback_to_for_non_hotspot(ObHotspotRollbackWork &work);
   int hotspot_rollback_to_for_secondaries(const ObIArray<ObTransID> &tx_ids,
                                           const int64_t stmt_timeout_us = INT64_MAX);
   // Lightweight memtable-only rollback without writing undo action or rollback_to log.
@@ -696,8 +701,20 @@ private:
                                      int64_t &remove_succ_cnt);
   int set_secondary_hotspot_redo_status_(const TxRedoFlushStatus &redo_status);
   int hotspot_delay_rollback_tx_ctx_(const char *reason);
-  int hotspot_rollback_to_for_secondary_(const ObTransID &secondary_tx_id);
-  int hotspot_rollback_to_for_non_hotspot_();
+  int hotspot_rollback_to_(const ObTransID &member_tx_id, const bool primary,
+                            ObHotspotRollbackWork &work);
+  int check_hotspot_rollback_state_(ObHotspotRollbackWork &work);
+  int hotspot_rollback_to_for_secondary_(ObHotspotRollbackWork &work);
+  int hotspot_rollback_primary_non_hotspot_data_(ObHotspotRollbackWork &work,
+                                                 bool &made_progress);
+  int submit_hotspot_rollback_redo_(ObHotspotRollbackWork &work, bool &made_progress);
+  // Classifies a successful return: SUBMITTED means the RollbackToLog is out and
+  // the in-memory undo is attached (real completion); RETRY_WAIT is a pre-out
+  // retryable wait normalized to OB_SUCCESS so the shared-budget loop continues.
+  // Terminal failures return a non-SUCCESS ret and carry no classification.
+  enum class HotspotRollbackLogResult { SUBMITTED, RETRY_WAIT };
+  int submit_hotspot_rollback_log_(ObHotspotRollbackWork &work,
+                                   HotspotRollbackLogResult &result);
   int submit_primary_partial_log_for_freeze_(const uint32_t freeze_clock,
                                              bool &submitted_primary_log);
 #endif
@@ -1130,9 +1147,11 @@ private:
   int rollback_to_savepoint_(const ObTxSEQ from_scn,
                              const ObTxSEQ to_scn,
                              const share::SCN replay_scn = share::SCN::invalid_scn());
-int submit_rollback_to_log_(const ObTxSEQ from_scn,
-                               const ObTxSEQ to_scn,
-                               const ObTransID &secondary_tx_id = ObTransID());
+  // Success means the RollbackToLog is submitted and the in-memory undo is attached.
+  // A post-submit failure is never retryable and returns OB_TRANS_NEED_ROLLBACK.
+  int submit_rollback_to_log_(const ObTxSEQ from_scn,
+                              const ObTxSEQ to_scn,
+                              const ObTransID &secondary_tx_id = ObTransID());
   int set_state_info_array_();
   int update_state_info_array_(const ObStateInfo& state_info);
   int update_state_info_array_with_transfer_parts_(const ObTxCommitParts &parts, const ObLSID &ls_id);

@@ -1191,12 +1191,12 @@ int ObTransService::hotspot_rollback_to(const ObTxPart &participant,
 {
   int ret = OB_SUCCESS;
 #ifdef OB_HOTSPOT_GROUP_COMMIT
-  share::ObLSID ls_id = participant.id_;
-  ObPartTransCtx *ctx = NULL;
-  if (rollback_tx_ids.count() <= 0) {
-    // nothing to rollback
-    TRANS_LOG(INFO, "[HOTSPOT_TX] empty rollback tx set", KR(ret), K(primary_tx_id), K(ls_id),
-              K(rollback_tx_ids));
+  ObHotspotRollbackWork work;
+  work.member_cnt_ = rollback_tx_ids.count();
+  const share::ObLSID ls_id = participant.id_;
+  ObPartTransCtx *ctx = nullptr;
+  if (rollback_tx_ids.empty()) {
+    work.done_ = true;
   } else if (OB_FAIL(get_tx_ctx_(ls_id, primary_tx_id, ctx))) {
     // Participant address is local but the primary ctx is gone (e.g. the
     // leader moved and the old primary exited). Same decision as the SQL-layer
@@ -1209,23 +1209,23 @@ int ObTransService::hotspot_rollback_to(const ObTxPart &participant,
               KR(get_ctx_ret), KR(ret), K(primary_tx_id), K(ls_id), K(rollback_tx_ids));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < rollback_tx_ids.count(); ++i) {
+      work.member_index_ = i;
       const ObTransID &tx_id = rollback_tx_ids.at(i);
-      if (tx_id == primary_tx_id) {
-        if (OB_FAIL(ctx->hotspot_rollback_to_for_non_hotspot())) {
-          TRANS_LOG(WARN, "[HOTSPOT_TX] rollback_to for non-hotspot failed", KR(ret),
-                    K(primary_tx_id), K(ls_id));
-        }
-      } else {
-        if (OB_FAIL(ctx->hotspot_rollback_to_for_secondary(tx_id))) {
-          TRANS_LOG(WARN, "[HOTSPOT_TX] rollback_to for secondary failed", KR(ret),
-                    K(primary_tx_id), K(tx_id), K(ls_id));
-        }
-      }
+      ret = tx_id == primary_tx_id ? ctx->hotspot_rollback_to_for_non_hotspot(work)
+                                  : ctx->hotspot_rollback_to_for_secondary(tx_id, work);
     }
   }
   if (OB_NOT_NULL(ctx)) {
     revert_tx_ctx_(ctx);
   }
+  int64_t remaining_us = 0;
+  if (OB_SUCC(ret)) {
+    ret = work.check_deadline(remaining_us);
+  }
+  if (OB_SUCC(ret)) {
+    work.phase_ = ObHotspotRollbackWork::Phase::FINISHED;
+  }
+  work.finish(ret, ls_id, primary_tx_id);
 #else
   UNUSED(participant);
   UNUSED(primary_tx_id);

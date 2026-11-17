@@ -729,6 +729,46 @@ void ObTransCallbackMgr::reset_pdml_stat()
   force_merge_multi_callback_lists();
 }
 
+bool ObTransCallbackMgr::redo_flushed_upto(const int64_t flushed_bound)
+{
+  // The checkpoint entry rejects an unexpected multi-list layout before any
+  // RollbackToLog is submitted; the normal supported path has only this list.
+  return callback_list_.redo_flushed_upto(flushed_bound);
+}
+
+int ObTransCallbackMgr::checkpoint_callbacks_for_hotspot_rollback(
+    const int64_t max_count,
+    const int64_t deadline_mono_us,
+    bool &done,
+    int64_t &removed_count,
+    bool *callback_error)
+{
+  int ret = OB_SUCCESS;
+  done = false;
+  removed_count = 0;
+  if (callback_error != nullptr) {
+    *callback_error = false;
+  }
+  if (max_count <= 0 || deadline_mono_us <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (for_replay_) {
+    ret = OB_NOT_SUPPORTED;
+  } else if (OB_NOT_NULL(ATOMIC_LOAD(&callback_lists_))) {
+    // Aggregation rejects this layout at entry. Keep an unexpected violation
+    // local to this transaction instead of extending the rollback algorithm.
+    ret = OB_TRANS_NEED_ROLLBACK;
+    TRANS_LOG(WARN, "hotspot rollback does not support multiple callback lists",
+              K(ret), K(need_merge_), KPC(this));
+  } else if (ObTimeUtility::current_monotonic_time() >= deadline_mono_us) {
+    ret = OB_TIMEOUT;
+  } else {
+    ret = callback_list_.checkpoint_callbacks_for_hotspot_rollback(
+        max_count, deadline_mono_us, share::SCN::invalid_scn(),
+        done, removed_count, callback_error);
+  }
+  return ret;
+}
+
 int ObTransCallbackMgr::remove_callbacks_for_hotspot_redo(const share::SCN stop_scn,
                                                           share::SCN &last_remove_scn,
                                                           int64_t &remove_succ_cnt)

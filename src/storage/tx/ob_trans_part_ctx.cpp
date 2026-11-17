@@ -15,6 +15,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/utility.h"
 #include <cstdint>
+#include <functional>
 #define USING_LOG_PREFIX TRANS
 #include "ob_trans_part_ctx.h"
 
@@ -2279,6 +2280,10 @@ int ObPartTransCtx::on_dist_end_(const bool commit)
 
 #ifdef ENABLE_DEBUG_LOG
 ERRSIM_POINT_DEF(EN_TX_ON_SUCCESS_DELAY)
+ERRSIM_POINT_DEF(EN_ROLLBACK_TO_LOG_ATTACH_UNDO_FAIL)
+ERRSIM_POINT_DEF(EN_ROLLBACK_TO_LOG_ALLOC_ATTACH_NODE_FAIL)
+ERRSIM_POINT_DEF(EN_ROLLBACK_TO_LOG_GET_TX_DATA_FAIL)
+ERRSIM_POINT_DEF(EN_ROLLBACK_TO_LOG_INIT_TX_OP_FAIL)
 #endif
 
 int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
@@ -9231,18 +9236,9 @@ int ObPartTransCtx::rollback_to_savepoint_(const ObTxSEQ from_scn,
       TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
     }
   } else if (OB_UNLIKELY(exec_info_.max_submitted_seq_no_ > to_scn)) { /* Leader */
-    ObTxDataGuard tx_data_guard;
-    ObTxTable *tx_table = nullptr;
-    ctx_tx_data_.get_tx_table(tx_table);
-    ObUndoAction undo(from_scn, to_scn);
-    if (OB_FAIL(ctx_tx_data_.get_tx_data(tx_data_guard))) {
-      TRANS_LOG(WARN, "get tx data failed", KR(ret));
-    } else if (OB_FAIL(tx_data_guard.tx_data()->init_tx_op())) {
-      TRANS_LOG(WARN, "init tx op failed", KR(ret));
-    } else if (OB_FAIL(tx_data_guard.tx_data()->add_undo_action(ls_tx_ctx_mgr_->get_tx_table(),
-                                                                undo))) {
-      TRANS_LOG(WARN, "add undo action failed", KR(ret));
-    } else if (OB_FAIL(submit_rollback_to_log_(from_scn, to_scn))) {
+    // The shared submit pre-reserves the in-memory undo attach and orders it after the
+    // RollbackToLog, so the row-lock release signal never precedes the durable rollback.
+    if (OB_FAIL(submit_rollback_to_log_(from_scn, to_scn))) {
       TRANS_LOG(WARN, "submit undo redolog fail", K(ret), K(from_scn), K(to_scn), KPC(this));
     }
   }
@@ -9259,6 +9255,32 @@ int ObPartTransCtx::rollback_to_savepoint_(const ObTxSEQ from_scn,
   return ret;
 }
 
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+int ObPartTransCtx::submit_hotspot_rollback_redo_(ObHotspotRollbackWork &work,
+                                                 bool &made_progress)
+{
+  // Keep the submitter implementation in its existing translation unit: its
+  // header contains out-of-line definitions and is not safe in a second TU.
+  made_progress = false;
+  int64_t remaining_us = 0;
+  int ret = work.check_deadline(remaining_us);
+  if (OB_SUCC(ret)) {
+    // Do not start another redo unit after the operation budget expires.
+    const int64_t start = ObTimeUtility::current_monotonic_time();
+    ObTxRedoSubmitter submitter(*this, mt_ctx_);
+    ret = submitter.serial_submit(false /* is_final */);
+    const int submitted_cnt = submitter.get_submitted_cnt();
+    work.redo_out_block_cnt_ += submitted_cnt;
+    work.redo_submit_us_ += ObTimeUtility::current_monotonic_time() - start;
+    made_progress = submitted_cnt > 0;
+    if (made_progress) {
+      work.last_redo_scn_ = submitter.get_submitted_scn();
+    }
+  }
+  return ret;
+}
+#endif
+
 int ObPartTransCtx::submit_rollback_to_log_(const ObTxSEQ from_scn,
                                             const ObTxSEQ to_scn,
                                             const ObTransID &secondary_tx_id)
@@ -9268,18 +9290,31 @@ int ObPartTransCtx::submit_rollback_to_log_(const ObTxSEQ from_scn,
   ObTxRollbackToLog log(from_scn, to_scn, secondary_tx_id);
   ObTxLogCb *log_cb = NULL;
   ObUndoStatusNode *undo_node = NULL;
+  ObTxTable *tx_table = NULL;
+  ObTxDataTable *tx_data_table = NULL;
+  // Set only after submit_log_block_out_ succeeds. Callers rely on this phase
+  // boundary to retry pre-out failures without ever submitting a second log.
+  bool log_submitted = false;
+  bool has_attached_undo = false;
+  // Reserve both undo owners before out so the attach after submit is a pure memory operation.
+  ObTxDataGuard attach_tx_data_guard;
+  ObUndoStatusNode *attach_node = NULL;
   LogBarrierType barrier = LogBarrierType::NO_NEED_BARRIER;
   if (to_scn.support_branch() && is_parallel_logging_()) {
     const int16_t branch_id = to_scn.get_branch();
-    if (branch_id != 0 ) {
+    if (branch_id != 0) {
       ret = OB_NOT_SUPPORTED;
       TRANS_LOG(ERROR, "not support branch level savepoint", KR(ret), K(to_scn), K(from_scn), KPC(this));
     } else {
-      // the savepoint must pre-barrier to wating previouse redo replayed
       barrier = logservice::ObReplayBarrierType::PRE_BARRIER;
     }
   }
   if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(ls_tx_ctx_mgr_)
+             || OB_ISNULL(tx_table = ls_tx_ctx_mgr_->get_tx_table())
+             || OB_ISNULL(tx_data_table = tx_table->get_tx_data_table())) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "rollback tx data table is unavailable", KR(ret), K(trans_id_), K(ls_id_));
   } else if (OB_FAIL(init_log_block_(log_block, ObTxAdaptiveLogBuf::MIN_LOG_BUF_SIZE))) {
     TRANS_LOG(WARN, "init log block fail", K(ret), KPC(this));
   } else if (OB_FAIL(exec_info_.redo_lsns_.reserve(exec_info_.redo_lsns_.count() + 1))) {
@@ -9291,34 +9326,98 @@ int ObPartTransCtx::submit_rollback_to_log_(const ObTxSEQ from_scn,
   } else if (log_block.get_cb_arg_array().count() == 0) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(log_block));
-    return_log_cb_(log_cb);
-    log_cb = NULL;
-  } else if (OB_FAIL(ls_tx_ctx_mgr_->get_tx_table()->alloc_tx_data(log_cb->get_tx_data_guard(), true, INT64_MAX))) {
+  } else if (OB_FAIL(tx_table->alloc_tx_data(log_cb->get_tx_data_guard(), true, INT64_MAX))) {
     TRANS_LOG(WARN, "alloc_tx_data failed", KR(ret), KPC(this));
-    return_log_cb_(log_cb);
-    log_cb = NULL;
-  } else if (OB_ISNULL(undo_node = (ObUndoStatusNode*)MTL(ObSharedMemAllocMgr*)->tx_data_allocator().alloc(true, INT64_MAX))) {
+  } else if (OB_ISNULL(undo_node = static_cast<ObUndoStatusNode *>(
+                           MTL(ObSharedMemAllocMgr*)->tx_data_allocator().alloc(true, INT64_MAX)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "alloc_undo_status_node failed", KR(ret), KPC(this));
-    return_log_cb_(log_cb);
-    log_cb = NULL;
   } else if (FALSE_IT(new (undo_node) ObUndoStatusNode())) {
   } else if (FALSE_IT(log_cb->get_undo_node() = undo_node)) {
+#ifdef ENABLE_DEBUG_LOG
+  } else if (OB_FAIL(EN_ROLLBACK_TO_LOG_ALLOC_ATTACH_NODE_FAIL)) {
+    TRANS_LOG(WARN, "inject rollback attach node allocation failure", KR(ret));
+#endif
+  } else if (OB_FAIL(tx_data_table->alloc_undo_status_node(attach_node))) {
+    TRANS_LOG(WARN, "alloc attach undo status node failed", KR(ret), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
+  } else if (OB_FAIL(EN_ROLLBACK_TO_LOG_GET_TX_DATA_FAIL)) {
+    TRANS_LOG(WARN, "inject rollback tx data acquisition failure", KR(ret));
+#endif
+  } else if (OB_FAIL(ctx_tx_data_.get_tx_data(attach_tx_data_guard))) {
+    TRANS_LOG(WARN, "get tx data failed", KR(ret), KPC(this));
+  } else if (OB_ISNULL(attach_tx_data_guard.tx_data())) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "rollback attach tx data is null", KR(ret), K(trans_id_), K(ls_id_));
+#ifdef ENABLE_DEBUG_LOG
+  } else if (OB_FAIL(EN_ROLLBACK_TO_LOG_INIT_TX_OP_FAIL)) {
+    TRANS_LOG(WARN, "inject rollback tx op allocation failure", KR(ret));
+#endif
+  } else if (OB_FAIL(attach_tx_data_guard.tx_data()->init_tx_op())) {
+    TRANS_LOG(WARN, "init tx op failed", KR(ret), KPC(this));
   } else if (OB_FAIL(submit_log_block_out_(log_block, log_cb, share::SCN::min_scn(), barrier))) {
     TRANS_LOG(WARN, "submit log fail", K(ret), K(log_block), KPC(this));
-    return_log_cb_(log_cb);
-  } else if (OB_FAIL(acquire_ctx_ref())) {
-    // inc for log_cb calling back
-    TRANS_LOG(ERROR, "inc TxCtx ref fail", K(ret), KPC(this));
-  } else if (OB_FAIL(after_submit_log_(log_block, log_cb, NULL))) {
   } else {
+    // Out transfers callback ownership even when later bookkeeping or attach fails.
+    log_submitted = true;
     log_cb->set_undo_action(ObUndoAction(from_scn, to_scn));
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(acquire_ctx_ref())) {
+      TRANS_LOG(ERROR, "inc TxCtx ref fail after log submitted (best-effort)",
+                KR(tmp_ret), KPC(this));
+    } else if (OB_TMP_FAIL(after_submit_log_(log_block, log_cb, NULL))) {
+      TRANS_LOG(WARN, "after_submit_log failed after log submitted (best-effort)",
+                KR(tmp_ret), KPC(this));
+    }
+    // The pre-reserved undo must follow the submitted log.
+#ifdef ENABLE_DEBUG_LOG
+    ret = EN_ROLLBACK_TO_LOG_ATTACH_UNDO_FAIL;
+#endif
+    if (OB_SUCC(ret)) {
+      ObUndoAction attach_undo(from_scn, to_scn);
+      ret = attach_tx_data_guard.tx_data()->add_undo_action(tx_table, attach_undo, attach_node);
+    }
+    if (OB_FAIL(ret)) {
+      TRANS_LOG(ERROR, "attach undo action after RollbackToLog failed, force abort",
+                KR(ret), K(from_scn), K(to_scn), KPC(this));
+      sub_state_.set_force_abort();
+      int delay_ret = do_local_tx_end_(TxEndAction::DELAY_ABORT_TX);
+      if (OB_TMP_FAIL(delay_ret)) {
+        TRANS_LOG(ERROR, "delay abort failed after attach undo fail, force_abort retained, "
+                  "abort driven by commit/timer/freeze-scan", KR(delay_ret), KPC(this));
+      }
+      // The log is already out. Never expose a retryable attach error to callers.
+      ret = OB_TRANS_NEED_ROLLBACK;
+    } else {
+      has_attached_undo = true;
+    }
+  }
+  // The callback owns undo_node/tx_data once prepared, whether or not out succeeded.
+  if (!log_submitted && OB_NOT_NULL(log_cb)) {
+    return_log_cb_(log_cb);
+    log_cb = NULL;
+  }
+  // add_undo_action consumes attach_node by nulling it, or leaves it for this owner.
+  if (OB_NOT_NULL(attach_node)) {
+    (void)tx_data_table->free_undo_status_node(attach_node);
+    attach_node = NULL;
+  }
+  // Savepoint and hotspot callers retry these codes only as pre-out failures.
+  // Defend that contract here: if a future change leaks one after the log is
+  // out, do not let any caller submit a second RollbackToLog.
+  if (log_submitted
+      && (OB_EAGAIN == ret || OB_NEED_RETRY == ret || OB_TX_NOLOGCB == ret)) {
+    TRANS_LOG(ERROR, "RollbackToLog is already out but returned a retryable error, force rollback",
+              KR(ret), K(from_scn), K(to_scn), K(secondary_tx_id), K(trans_id_), K(ls_id_));
+    sub_state_.set_force_abort();
+    ret = OB_TRANS_NEED_ROLLBACK;
   }
   REC_TRANS_TRACE_EXT(tlog_, submit_rollback_log,
                       OB_ID(ret), ret,
                       OB_ID(from), from_scn.cast_to_int(),
                       OB_ID(to), to_scn.cast_to_int());
-  TRANS_LOG(INFO, "RollbackToLog submit", K(ret), K(from_scn), K(to_scn), K(secondary_tx_id), KP(log_cb), KPC(this));
+  TRANS_LOG(INFO, "RollbackToLog submit", K(ret), K(from_scn), K(to_scn), K(secondary_tx_id),
+            K(log_submitted), K(has_attached_undo), K(trans_id_), K(ls_id_));
   return ret;
 }
 

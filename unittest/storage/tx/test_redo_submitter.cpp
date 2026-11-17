@@ -13,6 +13,8 @@
 #include <gmock/gmock.h>
 #include <atomic>
 #include <thread>
+#include <cstdio>
+#include <unistd.h>
 #define private public
 #define protected public
 #include "storage/tx/ob_tx_redo_submitter.h"
@@ -83,6 +85,7 @@ public:
     tx_ctx.cluster_version_ = DATA_CURRENT_VERSION;
     ObLSID ls_id(1001); ObTransID tx_id(777);
     EXPECT_EQ(OB_SUCCESS,tx_ctx.init_log_cbs_(ls_id, tx_id));
+    mdo_.a_ = 0;
     mock_ptr = &mdo_;
   }
   virtual void TearDown() override
@@ -200,6 +203,9 @@ TEST_F(ObTestRedoSubmitter, serial_submit_by_writer_thread_BUF_NOT_ENOUGH)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
     EXPECT_EQ(OB_EAGAIN, submitter.serial_submit(false));
+    EXPECT_EQ(1, submitter.get_submitted_cnt());
+    EXPECT_TRUE(submitter.get_submitted_scn().is_valid());
+    EXPECT_FALSE(tx_ctx.is_parallel_logging());
   }
 }
 
@@ -221,6 +227,80 @@ TEST_F(ObTestRedoSubmitter, serial_submit_by_writer_thread_ALL_FILLED)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
     EXPECT_EQ(OB_SUCCESS, submitter.serial_submit(false));
+    EXPECT_EQ(1, submitter.get_submitted_cnt());
+    EXPECT_TRUE(submitter.get_submitted_scn().is_valid());
+    EXPECT_FALSE(tx_ctx.is_parallel_logging());
+  }
+}
+
+// Only the submitter is real here: fill_redo_log and submit_redo_log_out are
+// stubs. These assertions do not claim real append, list cursor or durability.
+TEST_F(ObTestRedoSubmitter, serial_single_block_parallel_lists_preserves_progress)
+{
+  set_parallel_logging();
+  const SCN serial_final_before = tx_ctx.exec_info_.serial_final_scn_;
+  const int fill_results[] = {OB_EAGAIN, OB_ITER_END, OB_SUCCESS};
+  for (int list_idx = 0; list_idx < 3; ++list_idx) {
+    SCOPED_TRACE(list_idx);
+    const int64_t scn_value = 2000 + list_idx;
+    InSequence sequence;
+    EXPECT_CALL(mdo_, fill_redo_log(_))
+        .Times(1)
+        .WillOnce(Invoke([&, list_idx](ObTxFillRedoCtx &ctx) {
+          EXPECT_EQ(-1, ctx.list_idx_); // management traversal, not a writer list
+          ctx.list_idx_ = list_idx;
+          ctx.fill_count_ = 1;
+          ctx.buf_pos_ = 200;
+          return fill_results[list_idx];
+        }));
+    EXPECT_CALL(mdo_, submit_redo_log_out(_, _, _, _, false, _))
+        .Times(1)
+        .WillOnce(Invoke([scn_value](ObTxLogBlock &block, ObTxLogCb *&cb,
+                                    ObRedoLogSubmitHelper &helper, const int64_t hint,
+                                    const bool parallel, SCN &submitted) {
+          const int ret = succ_submit_redo_log_out(block, cb, helper, hint, parallel, submitted);
+          submitted.convert_for_tx(scn_value);
+          return ret;
+        }));
+    ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
+    EXPECT_EQ(fill_results[list_idx], submitter.serial_submit(false));
+    EXPECT_EQ(1, submitter.get_submitted_cnt());
+    SCN expected_scn;
+    expected_scn.convert_for_tx(scn_value);
+    EXPECT_TRUE(expected_scn == submitter.get_submitted_scn());
+    EXPECT_TRUE(tx_ctx.is_parallel_logging());
+    EXPECT_TRUE(serial_final_before == tx_ctx.exec_info_.serial_final_scn_);
+    ASSERT_TRUE(Mock::VerifyAndClearExpectations(&mdo_));
+  }
+}
+
+TEST_F(ObTestRedoSubmitter, serial_empty_fill_has_no_out_or_progress)
+{
+  set_parallel_logging();
+  // A successful empty fill is not evidence that the manager's other lists
+  // are done. Likewise ITER_END must be interpreted by the hotspot caller.
+  const int fill_results[] = {OB_SUCCESS, OB_ITER_END, OB_EAGAIN, OB_TX_NOLOGCB};
+  for (const int fill_ret : fill_results) {
+    SCOPED_TRACE(fill_ret);
+    const int64_t free_before = tx_ctx.free_cbs_.get_size();
+    EXPECT_CALL(mdo_, fill_redo_log(_))
+        .Times(1)
+        .WillOnce(Invoke([fill_ret](ObTxFillRedoCtx &ctx) {
+          ctx.fill_count_ = 0;
+          ctx.buf_pos_ = 0;
+          return fill_ret;
+        }));
+    EXPECT_CALL(mdo_, submit_redo_log_out(_, _, _, _, _, _)).Times(0);
+    {
+      ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
+      EXPECT_EQ(fill_ret, submitter.serial_submit(false));
+      EXPECT_EQ(0, submitter.get_submitted_cnt());
+      EXPECT_FALSE(submitter.get_submitted_scn().is_valid());
+    }
+    EXPECT_EQ(free_before, tx_ctx.free_cbs_.get_size());
+    EXPECT_EQ(0, tx_ctx.busy_cbs_.get_size());
+    EXPECT_TRUE(tx_ctx.is_parallel_logging());
+    ASSERT_TRUE(Mock::VerifyAndClearExpectations(&mdo_));
   }
 }
 
@@ -835,8 +915,8 @@ TEST_F(ObTestRedoSubmitter, prepare_log_cb_normal_cb_busy_in_free_list_keeps_lis
 
 int main(int argc, char **argv)
 {
-  const char *log_name = "test_redo_submitter.log";
-  system("rm -rf test_redo_submitter.log*");
+  char log_name[128];
+  snprintf(log_name, sizeof(log_name), "test_redo_submitter_%d.log", static_cast<int>(getpid()));
   ObLogger &logger = ObLogger::get_logger();
   logger.set_file_name(log_name, true, false,
                        log_name,

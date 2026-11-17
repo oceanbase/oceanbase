@@ -258,6 +258,17 @@ public:
                                         int64_t &remove_succ_cnt);
   int remove_callbacks_for_fast_commit(const int16_t callback_list_idx, const share::SCN stop_scn);
   int remove_callbacks_for_fast_commit(const ObCallbackScopeArray &callbacks_arr);
+  // The caller holds CtxLockGuard::MODE::ALL and serializes business writes/end-trans.
+  // done reports whether the main list is empty; removed_count includes progress on errors.
+  // callback_error distinguishes a real modification error from a safe deadline stop.
+  int checkpoint_callbacks_for_hotspot_rollback(const int64_t max_count,
+                                                const int64_t deadline_mono_us,
+                                                bool &done,
+                                                int64_t &removed_count,
+                                                bool *callback_error = nullptr);
+  bool redo_flushed_upto(const int64_t flushed_bound);
+  // appended_ of the main list; sampled by hotspot rollback under the ctx lock.
+  int64_t get_appended_count() const { return callback_list_.get_appended(); }
   int remove_all_callbacks_for_replay();
   int remove_callback_for_uncommited_txn(const memtable::ObMemtableSet *memtable_set);
   int get_memtable_key_arr(transaction::ObMemtableKeyArray &memtable_key_arr);

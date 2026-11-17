@@ -11,6 +11,8 @@
  */
 
 #include <gtest/gtest.h>
+#include <cstdio>
+#include <unistd.h>
 #define private public
 #define protected public
 #define USING_LOG_PREFIX TRANS
@@ -2877,12 +2879,14 @@ int main(int argc, char **argv)
   uint64_t checksum2 = ob_crc64(c, (void*)&checksum, sizeof(uint64_t));
   int64_t tx_id = 21533427;
   uint64_t h = murmurhash(&tx_id, sizeof(tx_id), 0);
-  system("rm -rf test_tx.log*");
+  char log_name[128];
+  snprintf(log_name, sizeof(log_name), "test_tx_%lld_%d.log",
+           static_cast<long long>(ObTimeUtility::current_time()), static_cast<int>(getpid()));
   ObLogger &logger = ObLogger::get_logger();
-  logger.set_file_name("test_tx.log", true, false,
-                       "test_tx.log", // rs
-                       "test_tx.log", // election
-                       "test_tx.log"); // audit
+  logger.set_file_name(log_name, true, false,
+                       log_name, // rs
+                       log_name, // election
+                       log_name); // audit
   logger.set_log_level(OB_LOG_LEVEL_DEBUG);
   ::testing::InitGoogleTest(&argc, argv);
   TRANS_LOG(INFO, "mmhash:", K(h), K(checksum1), K(checksum2));

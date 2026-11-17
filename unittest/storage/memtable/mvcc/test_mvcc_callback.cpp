@@ -11,6 +11,10 @@
  */
 
 #include <gtest/gtest.h>
+#include <cstdio>
+#include <new>
+#include <vector>
+#include <unistd.h>
 
 #define private public
 #define protected public
@@ -1284,6 +1288,318 @@ TEST_F(TestTxCallbackList, parallel_replay_and_replay_fail_parallel_start_pos) {
   ASSERT_EQ(callback_list_.head_.prev_, cb9);
 }
 
+// These tests call the new production batch entry, not the legacy fast-commit
+// method redefined below. Keep callbacks alive so assertions can inspect failures.
+class ObHotspotCheckpointCallback final : public ObMockTxCallback
+{
+public:
+  ObHotspotCheckpointCallback(const share::SCN scn, const transaction::ObTxSEQ seq)
+    : ObMockTxCallback(nullptr, false, false, scn, seq),
+      checkpoint_ret_(OB_SUCCESS), del_ret_(OB_SUCCESS), wait_until_mono_us_(0) {}
+  bool is_need_free() const override { return false; }
+  int checkpoint_callback() override
+  {
+    ++TestTxCallbackList::checkpoint_cnt_;
+    while (wait_until_mono_us_ > ObTimeUtility::current_monotonic_time()) {
+      ob_usleep(100);
+    }
+    return checkpoint_ret_;
+  }
+  int del() override
+  {
+    return del_ret_ == OB_SUCCESS ? ObITransCallback::del() : del_ret_;
+  }
+  int checkpoint_ret_;
+  int del_ret_;
+  int64_t wait_until_mono_us_;
+};
+
+class TestHotspotCheckpointBatch : public TestTxCallbackList
+{
+public:
+  TestHotspotCheckpointBatch() : extra_lists_(nullptr) {}
+  void SetUp() override
+  {
+    TestTxCallbackList::SetUp();
+    // The mock appends already-synced callbacks without running on_success.
+    mgr_.serial_sync_scn_ = share::SCN::max_scn();
+  }
+  void TearDown() override
+  {
+    reset_test_list(mgr_.callback_list_);
+    if (extra_lists_ != nullptr) {
+      mgr_.callback_lists_ = nullptr;
+      for (int i = 0; i < ObTransCallbackMgr::MAX_CALLBACK_LIST_COUNT - 1; ++i) {
+        reset_test_list(extra_lists_[i]);
+        extra_lists_[i].~ObTxCallbackList();
+      }
+      ::operator delete(extra_lists_);
+      extra_lists_ = nullptr;
+    }
+    TestTxCallbackList::TearDown();
+    for (auto callback : callbacks_) {
+      delete callback;
+    }
+    callbacks_.clear();
+  }
+  static share::SCN scn(const uint64_t value)
+  {
+    share::SCN result;
+    EXPECT_EQ(OB_SUCCESS, result.convert_for_tx(value));
+    return result;
+  }
+  static int64_t deadline()
+  {
+    return ObTimeUtility::current_monotonic_time() + 10 * 1000 * 1000;
+  }
+  ObHotspotCheckpointCallback *append_synced(ObTxCallbackList &list, const share::SCN scn)
+  {
+    auto callback = new ObHotspotCheckpointCallback(scn, ++seq_counter_);
+    callbacks_.push_back(callback);
+    EXPECT_EQ(OB_SUCCESS, list.append_callback(callback, true /*for_replay*/));
+    list.sync_scn_ = scn;
+    return callback;
+  }
+  void add_lists()
+  {
+    // Only the test owns this placement array; do not route its allocation or
+    // release through the uninitialized callback allocator in this fixture.
+    const int count = ObTransCallbackMgr::MAX_CALLBACK_LIST_COUNT - 1;
+    extra_lists_ = static_cast<ObTxCallbackList *>(::operator new(sizeof(ObTxCallbackList) * count));
+    for (int i = 0; i < count; ++i) {
+      new (extra_lists_ + i) ObTxCallbackList(mgr_, i + 1);
+    }
+    mgr_.callback_lists_ = extra_lists_;
+  }
+  static void reset_test_list(ObTxCallbackList &list)
+  {
+    list.appended_ = list.logged_ = list.synced_ = list.removed_ = 0;
+    list.length_ = list.unlog_removed_ = 0;
+    list.reset();
+  }
+  std::vector<ObHotspotCheckpointCallback *> callbacks_;
+  ObTxCallbackList *extra_lists_;
+};
+
+TEST_F(TestHotspotCheckpointBatch, complete_scn_group_without_reserved_tail)
+{
+  const auto first_scn = scn(100);
+  const auto second_scn = scn(200);
+  for (int i = 0; i < 3; ++i) {
+    append_synced(callback_list_, first_scn);
+  }
+  for (int i = 0; i < 2; ++i) {
+    append_synced(callback_list_, second_scn);
+  }
+  bool done = true;
+  bool callback_error = true;
+  int64_t removed = -1;
+  ASSERT_EQ(OB_SUCCESS, callback_list_.checkpoint_callbacks_for_hotspot_rollback(
+      1, deadline(), share::SCN::invalid_scn(), done, removed, &callback_error));
+  EXPECT_FALSE(done);
+  EXPECT_FALSE(callback_error);
+  EXPECT_EQ(3, removed);
+  EXPECT_EQ(2, callback_list_.get_length());
+  EXPECT_EQ(share::SCN::plus(first_scn, 1), callback_list_.get_checksum_scn());
+  EXPECT_TRUE(is_checksum_equal(3, checksum_));
+  ASSERT_EQ(OB_SUCCESS, callback_list_.checkpoint_callbacks_for_hotspot_rollback(
+      1, deadline(), share::SCN::invalid_scn(), done, removed, &callback_error));
+  EXPECT_TRUE(done);
+  EXPECT_EQ(2, removed);
+  EXPECT_EQ(5, checkpoint_cnt_);
+  EXPECT_EQ(5, mgr_.get_callback_remove_for_fast_commit_count());
+  EXPECT_EQ(share::SCN::plus(second_scn, 1), callback_list_.get_checksum_scn());
+  EXPECT_TRUE(is_checksum_equal(5, checksum_));
+}
+
+TEST_F(TestHotspotCheckpointBatch, expired_and_invalid_requests_do_not_modify)
+{
+  append_synced(callback_list_, scn(100));
+  bool done = true;
+  bool callback_error = true;
+  int64_t removed = -1;
+  EXPECT_EQ(OB_INVALID_ARGUMENT, callback_list_.checkpoint_callbacks_for_hotspot_rollback(
+      0, deadline(), share::SCN::invalid_scn(), done, removed, &callback_error));
+  EXPECT_FALSE(done);
+  EXPECT_FALSE(callback_error);
+  EXPECT_EQ(0, removed);
+  EXPECT_EQ(OB_TIMEOUT, callback_list_.checkpoint_callbacks_for_hotspot_rollback(
+      1, ObTimeUtility::current_monotonic_time() - 1, share::SCN::invalid_scn(),
+      done, removed, &callback_error));
+  EXPECT_FALSE(done);
+  EXPECT_FALSE(callback_error);
+  EXPECT_EQ(0, removed);
+  EXPECT_EQ(0, checkpoint_cnt_);
+  EXPECT_EQ(1, callback_list_.get_length());
+}
+
+TEST_F(TestHotspotCheckpointBatch, deadline_finishes_started_scn_before_stopping)
+{
+  auto first = append_synced(callback_list_, scn(100));
+  append_synced(callback_list_, scn(100));
+  append_synced(callback_list_, scn(200));
+  const int64_t expire = ObTimeUtility::current_monotonic_time() + 100 * 1000;
+  first->wait_until_mono_us_ = expire;
+  bool done = true;
+  bool callback_error = true;
+  int64_t removed = -1;
+  EXPECT_EQ(OB_TIMEOUT, callback_list_.checkpoint_callbacks_for_hotspot_rollback(
+      10, expire, share::SCN::invalid_scn(), done, removed, &callback_error));
+  EXPECT_FALSE(done);
+  EXPECT_FALSE(callback_error);
+  EXPECT_EQ(2, removed);
+  EXPECT_EQ(2, checkpoint_cnt_);
+  EXPECT_EQ(1, callback_list_.get_length());
+  EXPECT_EQ(share::SCN::plus(scn(100), 1), callback_list_.get_checksum_scn());
+  EXPECT_TRUE(is_checksum_equal(2, checksum_));
+}
+
+TEST_F(TestHotspotCheckpointBatch, try_latches_do_not_report_done_or_hold_partial_lock)
+{
+  append_synced(callback_list_, scn(100));
+  bool done = true;
+  bool callback_error = true;
+  int64_t removed = -1;
+  // Iterate-latch contention means "not flushed" and no mutation.
+  callback_list_.iter_synced_latch_.lock();
+  EXPECT_FALSE(callback_list_.redo_flushed_upto(callback_list_.get_appended()));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.checkpoint_callbacks_for_hotspot_rollback(
+      10, deadline(), share::SCN::invalid_scn(), done, removed, &callback_error));
+  EXPECT_FALSE(done);
+  EXPECT_FALSE(callback_error);
+  EXPECT_EQ(0, removed);
+  const bool released_append = callback_list_.append_latch_.try_lock();
+  EXPECT_TRUE(released_append);
+  if (released_append) {
+    callback_list_.append_latch_.unlock();
+  }
+  callback_list_.iter_synced_latch_.unlock();
+  // Append-latch contention no longer blocks the probe: a concurrent
+  // ctx-lock-free table-lock append cannot stall the flush check. The batch
+  // itself is not run here because its tail del may wait for the append
+  // latch, exactly like fast commit.
+  callback_list_.append_latch_.lock();
+  EXPECT_TRUE(callback_list_.redo_flushed_upto(callback_list_.get_appended()));
+  callback_list_.append_latch_.unlock();
+  EXPECT_TRUE(callback_list_.redo_flushed_upto(callback_list_.get_appended()));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.checkpoint_callbacks_for_hotspot_rollback(
+      10, deadline(), share::SCN::invalid_scn(), done, removed, &callback_error));
+  EXPECT_TRUE(done);
+  EXPECT_EQ(1, removed);
+}
+
+TEST_F(TestHotspotCheckpointBatch, submitted_is_not_synced_or_checkpointed)
+{
+  append_synced(callback_list_, scn(100));
+  auto pending = append_synced(callback_list_, scn(200));
+  pending->need_fill_redo_ = true;
+  EXPECT_TRUE(callback_list_.redo_flushed_upto(callback_list_.get_appended()));
+  bool done = true;
+  bool callback_error = true;
+  int64_t removed = -1;
+  EXPECT_EQ(OB_SUCCESS, callback_list_.checkpoint_callbacks_for_hotspot_rollback(
+      10, deadline(), share::SCN::invalid_scn(), done, removed, &callback_error));
+  EXPECT_FALSE(done);
+  EXPECT_FALSE(callback_error);
+  EXPECT_EQ(1, removed);
+  EXPECT_EQ(1, callback_list_.get_length());
+  pending->need_fill_redo_ = false;
+  EXPECT_EQ(OB_SUCCESS, callback_list_.checkpoint_callbacks_for_hotspot_rollback(
+      10, deadline(), share::SCN::invalid_scn(), done, removed, &callback_error));
+  EXPECT_TRUE(done);
+  EXPECT_EQ(1, removed);
+  EXPECT_TRUE(is_checksum_equal(2, checksum_));
+}
+
+TEST_F(TestHotspotCheckpointBatch, submission_query_counts_zero_byte_callbacks)
+{
+  auto callback = new ObHotspotCheckpointCallback(scn(100), ++seq_counter_);
+  callbacks_.push_back(callback);
+  callback->need_submit_log_ = true;
+  callback->need_fill_redo_ = true;
+  ASSERT_EQ(OB_SUCCESS, callback_list_.append_callback(callback, false /*for_replay*/));
+  EXPECT_EQ(0, callback_list_.get_pending_log_size());
+  EXPECT_FALSE(callback_list_.redo_flushed_upto(callback_list_.get_appended()));
+  callback->need_submit_log_ = false;
+  callback_list_.logged_ = 1;
+  callback_list_.set_log_cursor_(callback_list_.get_guard());
+  EXPECT_TRUE(callback_list_.redo_flushed_upto(callback_list_.get_appended()));
+}
+
+TEST_F(TestHotspotCheckpointBatch, mutation_eagain_preserves_progress_and_error_kind)
+{
+  append_synced(callback_list_, scn(100));
+  auto failing = append_synced(callback_list_, scn(200));
+  append_synced(callback_list_, scn(300));
+  failing->checkpoint_ret_ = OB_EAGAIN;
+  bool done = true;
+  bool callback_error = false;
+  int64_t removed = -1;
+  EXPECT_EQ(OB_EAGAIN, callback_list_.checkpoint_callbacks_for_hotspot_rollback(
+      10, deadline(), share::SCN::invalid_scn(), done, removed, &callback_error));
+  EXPECT_TRUE(callback_error);
+  EXPECT_FALSE(done);
+  EXPECT_EQ(1, removed);
+  EXPECT_EQ(2, callback_list_.get_length());
+  EXPECT_EQ(2, checkpoint_cnt_);
+  EXPECT_EQ(1, mgr_.get_callback_remove_for_fast_commit_count());
+  EXPECT_EQ(share::SCN::min_scn(), callback_list_.get_checksum_scn());
+  EXPECT_TRUE(is_checksum_equal(2, checksum_));
+}
+
+TEST_F(TestHotspotCheckpointBatch, mutation_timeout_is_not_a_safe_deadline_stop)
+{
+  append_synced(callback_list_, scn(100));
+  auto failing = append_synced(callback_list_, scn(200));
+  failing->del_ret_ = OB_TIMEOUT;
+  bool done = true;
+  bool callback_error = false;
+  int64_t removed = -1;
+  EXPECT_EQ(OB_TIMEOUT, callback_list_.checkpoint_callbacks_for_hotspot_rollback(
+      10, deadline(), share::SCN::invalid_scn(), done, removed, &callback_error));
+  EXPECT_TRUE(callback_error);
+  EXPECT_FALSE(done);
+  EXPECT_EQ(1, removed);
+  EXPECT_EQ(1, callback_list_.get_length());
+  EXPECT_EQ(share::SCN::min_scn(), callback_list_.get_checksum_scn());
+  EXPECT_TRUE(is_checksum_equal(2, checksum_));
+}
+
+TEST_F(TestHotspotCheckpointBatch, manager_rejects_multiple_lists_for_tx_rollback)
+{
+  add_lists();
+  append_synced(mgr_.callback_list_, scn(100));
+  append_synced(extra_lists_[0], scn(200));
+  bool done = true;
+  bool callback_error = true;
+  int64_t removed = -1;
+  EXPECT_EQ(OB_TRANS_NEED_ROLLBACK, mgr_.checkpoint_callbacks_for_hotspot_rollback(
+      10, deadline(), done, removed, &callback_error));
+  EXPECT_FALSE(done);
+  EXPECT_FALSE(callback_error);
+  EXPECT_EQ(0, removed);
+  EXPECT_EQ(0, checkpoint_cnt_);
+  EXPECT_EQ(1, mgr_.callback_list_.get_length());
+  EXPECT_EQ(1, extra_lists_[0].get_length());
+}
+
+TEST_F(TestHotspotCheckpointBatch, manager_stops_on_true_error_and_keeps_cause)
+{
+  append_synced(mgr_.callback_list_, scn(100));
+  auto failing = append_synced(mgr_.callback_list_, scn(200));
+  failing->checkpoint_ret_ = OB_EAGAIN;
+  bool done = true;
+  bool callback_error = false;
+  int64_t removed = -1;
+  EXPECT_EQ(OB_EAGAIN, mgr_.checkpoint_callbacks_for_hotspot_rollback(
+      10, deadline(), done, removed, &callback_error));
+  EXPECT_FALSE(done);
+  EXPECT_TRUE(callback_error);
+  EXPECT_EQ(1, removed);
+  EXPECT_EQ(2, checkpoint_cnt_);
+  EXPECT_TRUE(is_checksum_equal(2, checksum_));
+}
+
 } // namespace unittest
 
 namespace memtable
@@ -1376,8 +1692,9 @@ int ObTxCallbackList::remove_callbacks_for_remove_memtable(
 
 int main(int argc, char **argv)
 {
-  system("rm -rf test_tx_callback_list.log*");
-  oceanbase::common::ObLogger::get_logger().set_file_name("test_tx_callback_list.log", true);
+  char log_path[256];
+  std::snprintf(log_path, sizeof(log_path), "test_tx_callback_list_%d.log", static_cast<int>(getpid()));
+  oceanbase::common::ObLogger::get_logger().set_file_name(log_path, true);
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

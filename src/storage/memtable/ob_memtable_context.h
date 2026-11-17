@@ -386,6 +386,16 @@ public:
     return trans_mgr_.is_logging_blocked(has_pending_log);
   }
   void check_all_redo_flushed();
+  // Leader hotspot rollback probes submission, not log synchronization.
+  // The caller holds CtxLockGuard::MODE::ALL and admits no new business
+  // writes/end-trans; flushed_bound is appended_ sampled under that lock.
+  bool redo_flushed_upto(const int64_t flushed_bound);
+  int64_t get_appended_count() const { return trans_mgr_.get_appended_count(); }
+  int checkpoint_callbacks_for_hotspot_rollback(const int64_t max_count,
+                                                const int64_t deadline_mono_us,
+                                                bool &done,
+                                                int64_t &removed_count,
+                                                bool *callback_error = nullptr);
   int get_log_guard(const transaction::ObTxSEQ &write_seq,
                     ObCallbackListLogGuard &log_guard,
                     int &cb_list_idx);

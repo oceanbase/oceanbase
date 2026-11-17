@@ -392,6 +392,21 @@ int ObTxHotspotRedoCacheHandle::get_rollback_range(const ObTransID *, ObTxSEQ &,
   return OB_NOT_SUPPORTED;
 }
 
+int ObTxHotspotRedoCacheHandle::has_unsubmitted_secondary_redo(const ObTransID &, bool &) const
+{
+  return OB_NOT_SUPPORTED;
+}
+
+int ObTxHotspotRedoCacheHandle::is_secondary_data_rolled_back(const int64_t, bool &) const
+{
+  return OB_NOT_SUPPORTED;
+}
+
+int ObTxHotspotRedoCacheHandle::discard_unsubmitted_secondary_redo(const int64_t)
+{
+  return OB_NOT_SUPPORTED;
+}
+
 int ObTxHotspotRedoCacheHandle::rollback_secondary_memtable_and_mark(const ObTransID &)
 {
   return OB_NOT_SUPPORTED;

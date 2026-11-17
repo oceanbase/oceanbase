@@ -1152,10 +1152,16 @@ int ObResultSet::set_async_cb_ok_packet_param(const ObPhysicalPlan &plan, rpc::O
         } else {
           if (need_rollback_on_no_affected_rows && curr_affected_row == 0) {
             need_rollback_stmt_cnt++;
-            if (!sess_info->is_in_transaction()) {
-              // 子事务未开启，用这个标记通知子事务在handle_sub_tx_callback中进行回滚。
+            // 用聚合前记下的 is_trans_started_ 判断，不能用执行后的
+            // is_in_transaction()，因为执行会开启事务。
+            if (!cur->is_trans_started_) {
+              // 子事务未开启：没有需要局部回滚的数据，直接标记，
+              // handle_sub_tx_callback 据此返回本请求的错误码。
               cur->rollback_on_no_affected_rows_ = true;
             } else {
+              // 子事务已开启：标志只能在局部回滚成功后由发布阶段
+              // （下方 mark_cur 循环）按 tx_id 标记；失败路径（如主迁移
+              // 导致整组回滚）不得预标，成员结果由整组回滚错误码决定。
               const ObTransID &tx_id = sess_info->get_tx_id();
               if (OB_UNLIKELY(!tx_id.is_valid())) {
                 ret = OB_ERR_UNEXPECTED;

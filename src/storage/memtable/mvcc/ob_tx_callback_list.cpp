@@ -18,6 +18,7 @@
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_tx_stat.h"
+#include "lib/time/ob_time_utility.h"
 
 namespace oceanbase
 {
@@ -512,6 +513,94 @@ int ObTxCallbackList::remove_callbacks_for_fast_commit(const share::SCN stop_scn
       } else {
         callback_mgr_.add_fast_commit_callback_remove_cnt(functor.get_remove_cnt());
         ensure_checksum_(functor.get_checksum_last_scn());
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObTxCallbackList::redo_flushed_upto(const int64_t flushed_bound) const
+{
+  // flushed_bound is appended_ sampled by the caller under the tx ctx lock, so
+  // business appends cannot move it. Table-lock appends skip the ctx lock (see
+  // the sync_log_fail comment) and may raise appended_ above the bound; they
+  // are intentionally excluded: a false "flushed" is caught by the checkpoint
+  // batch's guarded empty() recheck and the retry loop resamples the bound.
+  // Under the iterate latch, unlog_removed_ (removal domain) is serialized and
+  // logged_ is a monotonic atomic (submit_log_succ), so comparing them with a
+  // constant needs no multi-variable snapshot; a stale read can only report
+  // "not flushed" and retry.
+  LockGuard guard(*this, LOCK_MODE::TRY_LOCK_ITERATE);
+  return guard.is_locked()
+      && (ATOMIC_LOAD(&logged_) + unlog_removed_ >= flushed_bound);
+}
+
+int ObTxCallbackList::checkpoint_callbacks_for_hotspot_rollback(
+    const int64_t max_count,
+    const int64_t deadline_mono_us,
+    const share::SCN stop_scn,
+    bool &done,
+    int64_t &removed_count,
+    bool *callback_error)
+{
+  int ret = OB_SUCCESS;
+  done = false;
+  removed_count = 0;
+  if (callback_error != nullptr) {
+    *callback_error = false;
+  }
+  if (max_count <= 0 || deadline_mono_us <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (ObTimeUtility::current_monotonic_time() >= deadline_mono_us) {
+    ret = OB_TIMEOUT;
+  } else {
+    // Same locking as fast commit: the removal range is bounded by
+    // [head_.next, log_cursor_) and the tail-node del serializes with append
+    // inside callback_ (the iter_end branch), so no append latch is needed.
+    LockGuard guard(*this, LOCK_MODE::TRY_LOCK_ITERATE);
+    if (!guard.is_locked()) {
+      // No mutation: the caller can retry within the same operation budget.
+    } else {
+      share::SCN right_bound = sync_scn_;
+      if (stop_scn.is_valid()) {
+        right_bound = sync_scn_.is_min() ? stop_scn : SCN::min(stop_scn, sync_scn_);
+      }
+      struct Functor final : public ObRemoveCallbacksForFastCommitFunctor {
+        Functor(const int64_t count, const SCN bound, const int64_t deadline)
+          : ObRemoveCallbacksForFastCommitFunctor(count, bound), deadline_(deadline) {}
+        bool is_iter_end(ObITransCallback *callback) const override
+        {
+          bool stop = ObRemoveCallbacksForFastCommitFunctor::is_iter_end(callback);
+          if (!stop && callback->get_scn() != get_checksum_last_scn()
+              && ObTimeUtility::current_monotonic_time() >= deadline_) {
+            // Finish an SCN once started: its checksum progress cannot be split.
+            stop = true;
+          }
+          return stop;
+        }
+        const int64_t deadline_;
+      } functor(max_count, right_bound, deadline_mono_us);
+      if (!is_skip_checksum_()) {
+        functor.set_checksumer(checksum_scn_, &batch_checksum_);
+      }
+      ret = callback_(functor, get_guard()->get_next(), get_log_cursor(), false, guard.state_);
+      // callback_ settles actual deletions even when a later callback fails.
+      removed_count = functor.get_remove_cnt();
+      callback_mgr_.add_fast_commit_callback_remove_cnt(removed_count);
+      if (OB_FAIL(ret)) {
+        if (callback_error != nullptr) {
+          *callback_error = true;
+        }
+        // CRC may already include the failed callback. Do not advance its SCN
+        // or let the caller retry this as an ordinary resource/synchronization wait.
+        TRANS_LOG(ERROR, "checkpoint for hotspot rollback failed", K(ret), K(functor));
+      } else {
+        ensure_checksum_(functor.get_checksum_last_scn());
+        done = empty();
+        if (ObTimeUtility::current_monotonic_time() >= deadline_mono_us) {
+          ret = OB_TIMEOUT;
+          done = false;
+        }
       }
     }
   }
