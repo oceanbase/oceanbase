@@ -293,6 +293,7 @@ int ObMPChangeUser::process()
     }
 
     // 2 ps cursor
+    session->reset_all_package_state();
     if (OB_SUCC(ret) && session->get_cursor_cache().is_inited()) {
       if (OB_FAIL(session->get_cursor_cache().close_all(*session))) {
         LOG_WARN("failed to close all cursor", K(ret));
