@@ -61,7 +61,7 @@ protected:
   share::ObBackupStorageInfo storage_info_;
   ObSchemaInfo schema_info_;
   ObArray<int64_t> column_ids_;
-  common::hash::ObHashMap<int64_t, int64_t> lob_macro_block_idx_map_;
+  common::hash::ObHashMap<ObBackupLogicMacroBlockId, int64_t> lob_macro_block_idx_map_;
   char *buf_;
   char *lob_buf_;
   ObArray<char *> lob_col_buf_;
