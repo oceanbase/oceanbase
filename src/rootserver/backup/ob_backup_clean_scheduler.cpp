@@ -1385,21 +1385,194 @@ int ObUserTenantBackupDeleteMgr::get_all_dest_backup_piece_infos_(
         LOG_WARN("fail to set backup dest", K(ret), K(backup_dest_str)); 
       } else if (OB_FAIL(backup_dest.get_backup_path_str(backup_path_str.ptr(), backup_path_str.capacity()))) {
         LOG_WARN("fail to get backup path str", K(ret), K(backup_dest));
-      } else if (OB_FAIL(archive_table_op.get_candidate_obsolete_backup_pieces(*sql_proxy_, clog_data_clean_point.start_replay_scn_, backup_path_str.ptr(), backup_piece_infos))) {
-        LOG_WARN("failed to get candidate obsolete backup sets", K(ret)); 
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < backup_piece_infos.count(); j++) {
-          const ObTenantArchivePieceAttr &backup_piece_info = backup_piece_infos.at(j);
-          if (backup_piece_info.end_scn_ > clog_data_clean_point.start_replay_scn_) {
-            ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
-            LOG_WARN("backup piece can not be deleted, because end_scn is greater than clog_data_clean_point.start_replay_scn_",
-                K(ret), K(backup_piece_info), K(clog_data_clean_point));
-          }
-        }
+      } else if (OB_FAIL(get_one_dest_deletable_backup_piece_infos_(clog_data_clean_point.start_replay_scn_,
+          backup_path_str.ptr(), archive_dest.second/*dest_id*/, archive_table_op, backup_piece_infos))) {
+        // only pick the pieces whose log is really not needed by the retained backup set chain any more,
+        // an un-deletable piece is skipped instead of failing the job.
+        LOG_WARN("failed to get deletable backup piece infos of one dest", K(ret),
+            K(clog_data_clean_point), K(backup_path_str));
       }
     }
   }
 
+  return ret;
+}
+
+// Pick the deletable pieces of one archive dest. Pieces are checked in ascending order of piece id,
+// and once a piece can not be deleted, all the pieces after it are kept too, so that the remaining
+// pieces are always a continuous suffix which covers the log from start_replay_scn onwards.
+// Note that an un-deletable piece only means "nothing more can be reclaimed for this dest in this
+// round", it MUST NOT fail the whole backup clean job, otherwise the obsolete backup sets which have
+// already been figured out can not be deleted either, and the job would keep failing forever.
+//
+// The candidate pieces are selected by PATH while the pieces used to judge whether start_replay_scn
+// is still covered are selected by DEST_ID(see check_scn_covered_by_other_piece_), so the two must be
+// verified to belong to the same dest before they are compared: the caller reads the path and the
+// dest_id of one dest_no with two separate unlocked reads of __all_log_archive_dest_parameter, and an
+// "alter system set log_archive_dest_n" in between(allowed while archive is stopped) can repoint the
+// dest_no from dest A to dest B, leaving the caller with the path of B and the dest_id of A. A
+// candidate piece of another dest is therefore treated as un-deletable, which keeps it and all the
+// pieces after it; the next round of clean reads a consistent path/dest_id pair and moves on.
+int ObUserTenantBackupDeleteMgr::get_one_dest_deletable_backup_piece_infos_(
+    const SCN &start_replay_scn,
+    const char *backup_path_str,
+    const int64_t dest_id,
+    const ObArchivePersistHelper &archive_table_op,
+    ObIArray<ObTenantArchivePieceAttr> &backup_piece_infos)
+{
+  int ret = OB_SUCCESS;
+  CompareBackupPieceInfo backup_piece_info_cmp;
+  ObArray<ObTenantArchivePieceAttr> candidate_piece_infos;
+  ObArray<ObTenantArchivePieceAttr> all_piece_infos;
+  if (OB_ISNULL(backup_path_str) || dest_id <= 0 || !start_replay_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(backup_path_str), K(dest_id), K(start_replay_scn));
+  } else if (OB_FAIL(archive_table_op.get_candidate_obsolete_backup_pieces(*sql_proxy_, start_replay_scn,
+      backup_path_str, candidate_piece_infos, true/*use_checkpoint_scn*/))) {
+    LOG_WARN("failed to get candidate obsolete backup pieces", K(ret), K(start_replay_scn), K(dest_id));
+  } else if (candidate_piece_infos.empty()) {
+    // do nothing
+  } else if (OB_FAIL(archive_table_op.get_pieces(*sql_proxy_, dest_id, all_piece_infos))) {
+    // Get all the pieces of the dest once here and pass it down to check_piece_can_be_deleted_, so
+    // that check_scn_covered_by_other_piece_ does not query and sort the pieces again for every
+    // candidate piece.
+    LOG_WARN("failed to get pieces of dest", K(ret), K(dest_id));
+  } else if (FALSE_IT(lib::ob_sort(candidate_piece_infos.begin(), candidate_piece_infos.end(), backup_piece_info_cmp))) {
+  } else if (FALSE_IT(lib::ob_sort(all_piece_infos.begin(), all_piece_infos.end(), backup_piece_info_cmp))) {
+  } else {
+    bool can_be_deleted = true;
+    for (int64_t i = 0; OB_SUCC(ret) && can_be_deleted && i < candidate_piece_infos.count(); i++) {
+      const ObTenantArchivePieceAttr &backup_piece_info = candidate_piece_infos.at(i);
+      if (OB_UNLIKELY(backup_piece_info.key_.dest_id_ != dest_id)) {
+        // The piece is not archived at `dest_id`, so `all_piece_infos` says nothing about it, see the
+        // comment above. Keep it and the pieces after it.
+        can_be_deleted = false;
+        LOG_WARN("[BACKUP_CLEAN]dest id of the candidate piece does not match the dest id of the path,"
+            " the archive dest may have just been changed, keep the piece", K(dest_id),
+            K(backup_piece_info));
+      } else if (OB_FAIL(check_piece_can_be_deleted_(backup_piece_info, start_replay_scn, all_piece_infos,
+          can_be_deleted))) {
+        LOG_WARN("failed to check piece can be deleted", K(ret), K(backup_piece_info));
+      } else if (!can_be_deleted) {
+        LOG_INFO("[BACKUP_CLEAN]backup piece can not be deleted, skip it and the pieces after it",
+            K(backup_piece_info), K(start_replay_scn));
+      } else if (OB_FAIL(backup_piece_infos.push_back(backup_piece_info))) {
+        LOG_WARN("failed to push back piece", K(ret), K(backup_piece_info));
+      }
+    }
+  }
+  return ret;
+}
+
+// A piece can be deleted only if none of the log it really contains is needed by the retained backup
+// set chain, i.e. all the log in the piece is before start_replay_scn.
+//
+// Pay attention that piece.end_scn_ is only a nominal boundary calculated by
+// "round.start_scn + N * piece_switch_interval"(see ObTenantArchiveMgr::decide_piece_end_scn), it is
+// determined when the piece is created and never shrinks, even if archive is stopped in the middle
+// of the piece. So for a FROZEN piece whose archive was stopped(e.g. the user runs
+// "alter system noarchivelog" after every data backup), end_scn_ may be far greater than the scn of
+// the last log it really contains. Judging by end_scn_ would treat such piece as "still needed" by
+// mistake. Here we use checkpoint_scn_/max_scn_(the real upper bound of the log in a frozen piece)
+// instead, and additionally require that start_replay_scn is still nominally covered by another kept
+// AVAILABLE piece(see check_scn_covered_by_other_piece_), so that the retained backup set is still
+// restorable.
+int ObUserTenantBackupDeleteMgr::check_piece_can_be_deleted_(
+    const ObTenantArchivePieceAttr &backup_piece_info,
+    const SCN &start_replay_scn,
+    const ObIArray<ObTenantArchivePieceAttr> &sorted_all_piece_infos,
+    bool &can_be_deleted)
+{
+  int ret = OB_SUCCESS;
+  can_be_deleted = false;
+  if (!backup_piece_info.is_valid() || !start_replay_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(backup_piece_info), K(start_replay_scn));
+  } else if (!can_backup_pieces_be_deleted(backup_piece_info.status_)) {
+    // The piece may still be written, do not delete it.
+    can_be_deleted = false;
+    LOG_INFO("[BACKUP_CLEAN]piece is not frozen or inactive, can not be deleted", K(backup_piece_info));
+  } else if (backup_piece_info.end_scn_ <= start_replay_scn) {
+    // The whole nominal range of the piece is before start_replay_scn.
+    can_be_deleted = true;
+  } else if (backup_piece_info.max_scn_ > start_replay_scn
+      || backup_piece_info.checkpoint_scn_ > start_replay_scn) {
+    // The piece really contains the log which is needed by clog_data_clean_point.
+    can_be_deleted = false;
+    LOG_INFO("[BACKUP_CLEAN]piece contains the log needed by clog_data_clean_point, can not be deleted",
+        K(backup_piece_info), K(start_replay_scn));
+  } else {
+    // The nominal range of the piece covers start_replay_scn, but the piece does not contain any log
+    // after start_replay_scn. It can be deleted only if start_replay_scn is still nominally covered
+    // by another kept AVAILABLE piece, otherwise the restore path can not find the first piece.
+    bool is_scn_covered_by_other_kept_piece = false;
+    if (OB_FAIL(check_scn_covered_by_other_piece_(backup_piece_info, start_replay_scn,
+        sorted_all_piece_infos, is_scn_covered_by_other_kept_piece))) {
+      LOG_WARN("failed to check scn covered by other piece", K(ret), K(backup_piece_info),
+          K(start_replay_scn));
+    } else {
+      can_be_deleted = is_scn_covered_by_other_kept_piece;
+      LOG_INFO("[BACKUP_CLEAN]the nominal range of piece covers start_replay_scn but the piece does "
+          "not contain any log after it", K(is_scn_covered_by_other_kept_piece), K(backup_piece_info),
+          K(start_replay_scn));
+    }
+  }
+  return ret;
+}
+
+// Return whether `scn`(start_replay_scn) is covered by another piece which is guaranteed to be kept
+// and visible to restore.
+//
+// It is NOT enough that the log BYTES at `scn` physically exist in some other piece. The restore path
+// additionally requires a piece whose NOMINAL range contains `scn`(see
+// ObArchiveStore::get_piece_paths_in_range and
+// ObArchivePersistHelper::check_piece_continuity_between_two_scn). So deleting the only piece whose
+// nominal range covers `scn` would make the retained backup set un-restorable.
+//
+// Therefore a piece `other` covers `scn` only if ALL the conditions below hold:
+//   0. other.key_.dest_id_ == piece_to_delete.key_.dest_id_, restore only ever uses the pieces of ONE dest;
+//   1. other.file_status_ is AVAILABLE, the restore path skips every piece which is not AVAILABLE;
+//   2. other.start_scn_ <= scn < other.end_scn_, the nominal range of `other` really contains scn. This
+//      can hold for a piece other than the one being judged when the scn ranges of two rounds overlap;
+//   3. other.checkpoint_scn_ > scn, strictly greater. A piece with checkpoint_scn_ <= scn is itself a
+//      deletion candidate of this very job, it may be deleted in the same round and must not be treated
+//      as a piece which will be kept.
+int ObUserTenantBackupDeleteMgr::check_scn_covered_by_other_piece_(
+    const ObTenantArchivePieceAttr &piece_to_delete,
+    const SCN &scn,
+    const ObIArray<ObTenantArchivePieceAttr> &sorted_all_piece_infos,
+    bool &is_scn_covered_by_other_kept_piece)
+{
+  int ret = OB_SUCCESS;
+  is_scn_covered_by_other_kept_piece = false;
+  if (!scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(scn));
+  } else {
+    for (int64_t i = 0; !is_scn_covered_by_other_kept_piece && i < sorted_all_piece_infos.count(); i++) {
+      const ObTenantArchivePieceAttr &other_piece_info = sorted_all_piece_infos.at(i);
+      if (other_piece_info.key_ == piece_to_delete.key_) {
+        // skip itself, a piece can not cover for its own deletion
+      } else if (other_piece_info.key_.dest_id_ != piece_to_delete.key_.dest_id_) {
+        // `other` is archived at another dest, it is invisible to a restore from the path of
+        // `piece_to_delete`.
+      } else if (ObBackupFileStatus::BACKUP_FILE_AVAILABLE != other_piece_info.file_status_) {
+        // `other` is invisible to restore.
+      } else if (other_piece_info.end_scn_ <= scn) {
+        // The nominal range of `other` ends at or before scn.
+      } else if (other_piece_info.start_scn_ > scn) {
+        // The nominal range of `other` starts after scn, restore still requires a piece with
+        // start_scn_ <= scn as its first piece.
+      } else if (other_piece_info.checkpoint_scn_ <= scn) {
+        // `other` nominally covers scn but has not really archived past it, and it is a deletion
+        // candidate of this job itself.
+      } else {
+        is_scn_covered_by_other_kept_piece = true;
+        LOG_INFO("[BACKUP_CLEAN]the log at scn is covered by another kept piece", K(scn),
+            K(piece_to_delete), K(other_piece_info));
+      }
+    }
+  }
   return ret;
 }
 
@@ -1417,8 +1590,9 @@ int ObUserTenantBackupDeleteMgr::get_delete_obsolete_backup_piece_infos_(const O
       if (!backup_piece_info.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("backup piece info is invalid", K(ret));
-      } else if (!can_backup_pieces_be_deleted(backup_piece_info.status_)) {
-        ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
+      } else if (OB_UNLIKELY(!can_backup_pieces_be_deleted(backup_piece_info.status_))) {
+        // defense, get_one_dest_deletable_backup_piece_infos_ has filtered out these pieces already.
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("piece can not be deleted", K(ret), K(backup_piece_info));
       } else if (OB_FAIL(piece_list.push_back(backup_piece_info))) {
         LOG_WARN("failed to push back piece list", K(ret));
