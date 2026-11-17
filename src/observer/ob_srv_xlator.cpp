@@ -39,7 +39,9 @@
 #include "observer/mysql/obmp_process_info.h"
 #include "observer/mysql/obmp_debug.h"
 #include "observer/mysql/obmp_refresh.h"
+#include "lib/utility/ob_tracepoint.h"
 #ifdef OB_HOTSPOT_GROUP_COMMIT
+#include "observer/mysql/obmp_group_error.h"
 #include "observer/mysql/obmp_stmt_group_execute.h"
 #endif
 
@@ -54,6 +56,13 @@ using namespace oceanbase::common;
 using namespace oceanbase::transaction;
 using namespace oceanbase::obrpc;
 using namespace oceanbase::obmysql;
+
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+// External SET_TP hook for the allocation failure that occurs before the
+// group execute processor takes ownership of the aggregate request.
+ERRSIM_POINT_DEF(ERRSIM_HOTSPOT_GROUP_PROCESSOR_ALLOC_FAIL,
+                 "inject hotspot group execute processor allocation failure");
+#endif
 
 #define PROCESSOR_BEGIN(pcode)                  \
   switch (pcode) {
@@ -155,6 +164,10 @@ typedef union EP_RPCP_BUF {
   char ep_buffer_[sizeof (ObErrorP) + sizeof (ObMPError)];
   char obmp_query_buffer_[ObMPQuery::MAX_SELF_OBJ_SIZE];
 } EP_RPCP_BUF;
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+STATIC_ASSERT(sizeof(ObMPGroupError) <= sizeof(((EP_RPCP_BUF *)nullptr)->ep_buffer_),
+              "error processor buffer must accommodate failed group requests");
+#endif
 // Make sure election rpc processor allocated successfully when OOM occurs
 STATIC_ASSERT(RPCP_BUF_SIZE >= sizeof(oceanbase::palf::ElectionPrepareRequestMsgP), "RPCP_BUF_SIZE should be big enough to allocate election processer");
 STATIC_ASSERT(RPCP_BUF_SIZE >= sizeof(oceanbase::palf::ElectionPrepareResponseMsgP), "RPCP_BUF_SIZE should be big enough to allocate election processer");
@@ -258,7 +271,11 @@ int ObSrvMySQLXlator::translate(rpc::ObRequest &req, ObReqProcessor *&processor)
           case obmysql::COM_STMT_EXECUTE: {
 #ifdef OB_HOTSPOT_GROUP_COMMIT
             if (req.has_group_commit_agg_info()) {
-              NEW_MYSQL_PROCESSOR(ObMPStmtGroupExecute, gctx_);
+              if (OB_FAIL(ERRSIM_HOTSPOT_GROUP_PROCESSOR_ALLOC_FAIL)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+              } else {
+                NEW_MYSQL_PROCESSOR(ObMPStmtGroupExecute, gctx_);
+              }
             } else {
               NEW_MYSQL_PROCESSOR(ObMPStmtExecute, gctx_);
             }
@@ -413,8 +430,15 @@ ObReqProcessor *ObSrvXlator::get_processor(ObRequest &req)
     if (ObRequest::OB_RPC == req.get_type()) {
       processor = get_error_rpc_processor(ret);
     } else if (ObRequest::OB_MYSQL == req.get_type()) {
-      processor = get_error_mysql_processor(ret);
-      (static_cast<ObMPError*>(processor))->set_need_disconnect(true);
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+      if (req.has_group_commit_agg_info()) {
+        processor = get_error_mysql_group_processor(ret);
+      } else
+#endif
+      {
+        processor = get_error_mysql_processor(ret);
+        (static_cast<ObMPError*>(processor))->set_need_disconnect(true);
+      }
     }
   }
 
@@ -485,6 +509,15 @@ ObReqProcessor *ObSrvXlator::get_error_mysql_processor(const int ret)
   ObMPError *p = new (&epbuf[0]) ObMPError(ret);
   return p;
 }
+
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+ObReqProcessor *ObSrvXlator::get_error_mysql_group_processor(const int ret)
+{
+  char *epbuf = (&co_ep_rpcp_buf)->ep_buffer_;
+  ObMPGroupError *processor = new (&epbuf[0]) ObMPGroupError(ret);
+  return processor;
+}
+#endif
 
 int ObSrvMySQLXlator::get_mp_connect_processor(ObReqProcessor *&ret_proc)
 {

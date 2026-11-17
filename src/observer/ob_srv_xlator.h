@@ -187,6 +187,9 @@ private:
   // This method must return non-null processor
   ObReqProcessor *get_error_rpc_processor(const int ret);
   ObReqProcessor *get_error_mysql_processor(const int ret);
+#ifdef OB_HOTSPOT_GROUP_COMMIT
+  ObReqProcessor *get_error_mysql_group_processor(const int ret);
+#endif
 
 private:
   ObSrvRpcXlator rpc_xlator_;
