@@ -1679,6 +1679,14 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
           }
           if (OB_SUCC(ret) && OB_NOT_NULL(package_info)) {
             ObSchemaObjVersion obj_version;
+            if (OB_INVALID_INDEX == parent_id
+                && OB_INVALID_ID != db_id
+                && OB_SYS_TENANT_ID != tenant_id
+                && OB_SYS_TENANT_ID == package_info->get_tenant_id()) {
+              // An unqualified SYS package also depends on the absence of a
+              // package with the same name in the original lookup database.
+              obj_version.invoker_db_id_ = db_id;
+            }
             type = PKG_NS;
             parent_id = OB_INVALID_ID == db_id ? OB_SYS_DATABASE_ID : db_id;
             var_idx = static_cast<int64_t>(package_info->get_package_id());
@@ -4917,7 +4925,9 @@ int ObPLCompileUnitAST::add_dependency_object_impl(ObPLDependencyTable &dep_tbl,
   bool exists = false;
   for (ObPLDependencyTable::iterator it = dep_tbl.begin();
                                  it < dep_tbl.end(); it++) {
-    if (*it == obj_version) {
+    if (*it == obj_version
+        && it->invoker_db_id_ == obj_version.invoker_db_id_) {
+      // Dependencies resolved in different databases must be kept separately.
       exists = true;
       break;
     }
