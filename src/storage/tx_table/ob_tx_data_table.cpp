@@ -184,7 +184,10 @@ int ObTxDataTable::offline()
     STORAGE_LOG(WARN, "clean memtables cache failed", KR(ret), KPC(this));
   } else {
     is_started_ = false;
-    calc_upper_trans_version_cache_.reset();
+    {
+      TCWLockGuard lock_guard(calc_upper_trans_version_cache_.lock_);
+      calc_upper_trans_version_cache_.reset();
+    }
   }
 
   return ret;
