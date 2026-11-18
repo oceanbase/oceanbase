@@ -608,22 +608,25 @@ int ForeignKeyHandle::is_self_ref_row(ObEvalCtx &eval_ctx,
 {
   int ret = OB_SUCCESS;
   is_self_ref = fk_arg.is_self_ref_;
-  ObDatum *name_col = NULL;
-  ObDatum *val_col = NULL;
-  for (int64_t i = 0; is_self_ref && i < fk_arg.columns_.count(); i++) {
+  for (int64_t i = 0; OB_SUCC(ret) && is_self_ref && i < fk_arg.columns_.count(); i++) {
     const int32_t name_idx = fk_arg.columns_.at(i).name_idx_;
     const int32_t val_idx = fk_arg.columns_.at(i).idx_;
     ObExprCmpFuncType cmp_func = row.at(name_idx)->basic_funcs_->null_first_cmp_;
     // TODO qubin.qb: uncomment below block revert the defensive check
     //OZ((cmp_func = (row.at(name_idx)->basic_funcs_->null_first_cmp_))
     //   != row.at(val_idx)->basic_funcs_->null_first_cmp_);
+    // name_col/val_col must be init in each loop to avoid stale datum from previous iteration.
+    ObDatum *name_col = NULL;
+    ObDatum *val_col = NULL;
     OZ(row.at(name_idx)->eval(eval_ctx, name_col));
     OZ(row.at(val_idx)->eval(eval_ctx, val_col));
     int cmp_ret = 0;
-    if (OB_FAIL(cmp_func(*name_col, *val_col, cmp_ret))) {
-      LOG_WARN("cmp failed", K(ret), K(i));
-    } else {
-      is_self_ref = (0 == cmp_ret);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(cmp_func(*name_col, *val_col, cmp_ret))) {
+        LOG_WARN("cmp failed", K(ret), K(i));
+      } else {
+        is_self_ref = (0 == cmp_ret);
+      }
     }
   }
   return ret;
