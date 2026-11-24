@@ -1005,6 +1005,14 @@ public:
                                      uint64_t column_id,
                                      ObOptColumnStatHandle &column_stat);
 
+  static int estimate_prefix_leading_group_rows(const OptTableMetas &table_metas,
+                                                const OptSelectivityCtx &ctx,
+                                                const ObRawExpr *prefix_expr,
+                                                const ObOrderDirection direction,
+                                                const double total_rows,
+                                                const double avg_group_size,
+                                                double &leading_group_rows);
+
   static int get_compare_value(const OptSelectivityCtx &ctx,
                                const ObColumnRefRawExpr *col,
                                const ObRawExpr *calc_expr,

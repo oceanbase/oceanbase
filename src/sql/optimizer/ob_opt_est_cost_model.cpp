@@ -805,6 +805,23 @@ int ObOptEstCostModel::cost_prefix_sort(const ObSortCostInfo &cost_info,
         num_rows_per_group = rows / num_distinct_rows;
       }
       if (OB_SUCC(ret)) {
+        double leading_group_rows = num_rows_per_group;
+        if (prefix_ordering.count() > 0 && NULL != prefix_ordering.at(0) &&
+            cost_info.order_items_.count() > 0) {
+          ObOrderDirection dir = cost_info.order_items_.at(0).order_type_;
+          if (OB_FAIL(ObOptSelectivity::estimate_prefix_leading_group_rows(
+                  *cost_info.table_metas_,
+                  *cost_info.sel_ctx_,
+                  prefix_ordering.at(0),
+                  dir,
+                  rows,
+                  num_rows_per_group,
+                  leading_group_rows))) {
+            LOG_WARN("failed to estimate prefix leading group rows", K(ret));
+            ret = OB_SUCCESS;
+            leading_group_rows = num_rows_per_group;
+          }
+        }
         ObSortCostInfo cost_info_per_group(num_rows_per_group,
                                            width,
                                            prefix_pos,
@@ -812,16 +829,40 @@ int ObOptEstCostModel::cost_prefix_sort(const ObSortCostInfo &cost_info,
                                            false,
                                            cost_info.table_metas_,
                                            cost_info.sel_ctx_);
-        if (OB_FAIL(cost_sort(cost_info_per_group, cost_per_group))) {
-          LOG_WARN("failed to calc cost", K(ret));
-        } else if (topn_count >= 0 && num_rows_per_group > 0) {
-          // topn prefix sort
-          cost = cost_per_group * (topn_count / num_rows_per_group);
-          LOG_TRACE("OPT: [COST PREFIX TOPN SORT]", K(cost), K(cost_per_group), K(topn_count), K(num_rows_per_group));
+        ObSortCostInfo cost_info_leading(leading_group_rows,
+                                         width,
+                                         prefix_pos,
+                                         ordering_per_group,
+                                         false,
+                                         cost_info.table_metas_,
+                                         cost_info.sel_ctx_);
+        double cost_leading_group = 0.0;
+        if (OB_FAIL(cost_sort(cost_info_leading, cost_leading_group))) {
+          LOG_WARN("failed to calc leading group sort cost", K(ret));
+        } else if (std::fabs(leading_group_rows - num_rows_per_group) > OB_DOUBLE_EPSINON &&
+                   OB_FAIL(cost_sort(cost_info_per_group, cost_per_group))) {
+          LOG_WARN("failed to calc avg group sort cost", K(ret));
         } else {
-          // normal prefix sort
-          cost = cost_per_group * num_distinct_rows;
-          LOG_TRACE("OPT: [COST PREFIX SORT]", K(cost), K(cost_per_group), K(num_distinct_rows));
+          if (std::fabs(leading_group_rows - num_rows_per_group) <= OB_DOUBLE_EPSINON) {
+            cost_per_group = cost_leading_group;
+          }
+          if (topn_count >= 0) {
+            // topn prefix sort
+            if (topn_count <= leading_group_rows || num_rows_per_group <= 0) {
+              cost = cost_leading_group;
+            } else {
+              double remaining_topn = topn_count - leading_group_rows;
+              double additional_groups = std::ceil(remaining_topn / num_rows_per_group);
+              cost = cost_leading_group + cost_per_group * additional_groups;
+            }
+            LOG_TRACE("OPT: [COST PREFIX TOPN SORT]", K(cost), K(cost_leading_group),
+                      K(cost_per_group), K(topn_count), K(leading_group_rows), K(num_rows_per_group));
+          } else {
+            // normal prefix sort
+            cost = cost_leading_group + cost_per_group * std::max(0.0, num_distinct_rows - 1.0);
+            LOG_TRACE("OPT: [COST PREFIX SORT]", K(cost), K(cost_leading_group),
+                      K(cost_per_group), K(num_distinct_rows));
+          }
         }
       }
     }
