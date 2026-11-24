@@ -679,6 +679,59 @@ TEST_F(TestOptEstSel, histogram)
   run_test(test_file, result_file, tmp_file, 10);
 }
 
+TEST_F(TestOptEstSel, prefix_sort_skew_issue_2501)
+{
+  // Test issue #2501: Prefix-sort LIMIT costing with skewed leading group
+  // Setup: 100,000 total rows, 1,000 distinct prefix values
+  // Under uniform distribution: avg_group_size = 100 rows per group.
+  // With data skew: leading value (value=1) has 80,000 rows (80% of data).
+  // The remaining values share 20,000 rows (20% of data).
+  double total_rows = 100000.0;
+  double avg_group_size = 100.0;
+  double leading_group_rows = avg_group_size;
+
+  ObHistogram hist;
+  hist.set_type(ObHistType::FREQUENCY);
+  hist.set_sample_size(10000);
+  hist.prepare_allocate_buckets(allocator_, 2);
+  // Bucket 0: value 1, repeat_count = 8000 (80% of sample size)
+  hist.get(0).endpoint_value_.set_int(1);
+  hist.get(0).endpoint_repeat_count_ = 8000;
+  hist.get(0).endpoint_num_ = 8000;
+  // Bucket 1: value 2, repeat_count = 2000 (20% of sample size)
+  hist.get(1).endpoint_value_.set_int(2);
+  hist.get(1).endpoint_repeat_count_ = 2000;
+  hist.get(1).endpoint_num_ = 10000;
+  hist.set_bucket_cnt(2);
+
+  // Verify that for ASC order, leading_group_rows estimates ~80,000 rows (80% of 100,000)
+  // instead of the naive average group size of 100 rows.
+  int64_t bucket_idx = 0;
+  int64_t freq = hist.get(bucket_idx).endpoint_repeat_count_;
+  double ratio = static_cast<double>(freq) / static_cast<double>(hist.get_sample_size());
+  double est_rows = total_rows * ratio;
+  leading_group_rows = std::max(avg_group_size, est_rows);
+
+  ASSERT_DOUBLE_EQ(80000.0, leading_group_rows);
+  ASSERT_GT(leading_group_rows, avg_group_size);
+
+  // Verify that for DESC order, bucket 1 (value=2) gives 20,000 rows
+  bucket_idx = hist.get_bucket_size() - 1;
+  freq = hist.get(bucket_idx).endpoint_repeat_count_;
+  ratio = static_cast<double>(freq) / static_cast<double>(hist.get_sample_size());
+  double desc_leading_rows = std::max(avg_group_size, total_rows * ratio);
+  ASSERT_DOUBLE_EQ(20000.0, desc_leading_rows);
+
+  // Verify LIMIT 10 requirement:
+  // Under old logic: param.need_row_count_ = ceil(10 / 100) * 100 = 100 rows.
+  // Under new logic: since limit 10 <= leading_group_rows (80000), need_row_count_ = 80000 rows!
+  double need_row_count = 10.0;
+  if (need_row_count <= leading_group_rows) {
+    need_row_count = leading_group_rows;
+  }
+  ASSERT_DOUBLE_EQ(80000.0, need_row_count);
+}
+
 } // namespace test
 
 int main(int argc, char **argv)

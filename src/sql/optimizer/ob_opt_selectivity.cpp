@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_opt_selectivity.h"
+#include "sql/ob_sql_define.h"
 #include "sql/rewrite/ob_query_range_define.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "share/stat/ob_opt_stat_manager.h"
@@ -2864,6 +2865,59 @@ int ObOptSelectivity::get_histogram_by_column(const OptTableMetas &table_metas,
             column_id,
             column_stat))) {
     LOG_WARN("failed to get column stat", K(ret));
+  }
+  return ret;
+}
+
+int ObOptSelectivity::estimate_prefix_leading_group_rows(const OptTableMetas &table_metas,
+                                                        const OptSelectivityCtx &ctx,
+                                                        const ObRawExpr *prefix_expr,
+                                                        const ObOrderDirection direction,
+                                                        const double total_rows,
+                                                        const double avg_group_size,
+                                                        double &leading_group_rows)
+{
+  int ret = OB_SUCCESS;
+  leading_group_rows = avg_group_size;
+  if (OB_ISNULL(prefix_expr)) {
+    // do nothing
+  } else if (prefix_expr->is_column_ref_expr()) {
+    const ObColumnRefRawExpr *col_expr = static_cast<const ObColumnRefRawExpr*>(prefix_expr);
+    ObOptColumnStatHandle column_stat;
+    if (OB_FAIL(get_histogram_by_column(table_metas, ctx, col_expr->get_table_id(),
+                                        col_expr->get_column_id(), column_stat))) {
+      LOG_WARN("failed to get column stat for prefix leading group estimation", K(ret));
+      ret = OB_SUCCESS; // non-fatal, fallback to avg_group_size
+    } else if (column_stat.stat_ != NULL) {
+      const ObOptColumnStat *stat = column_stat.stat_;
+      double max_leading_rows = avg_group_size;
+      // 1. Check if NULL is the leading value
+      if (is_null_first(direction) && stat->get_num_null() > 0 && stat->get_num_rows() > 0) {
+        double null_ratio = static_cast<double>(stat->get_num_null()) / static_cast<double>(stat->get_num_rows());
+        max_leading_rows = std::max(max_leading_rows, total_rows * null_ratio);
+      }
+      // 2. Check histogram for leading bucket value frequency
+      const ObHistogram &hist = stat->get_histogram();
+      if (hist.is_valid() && hist.get_bucket_size() > 0 && hist.get_sample_size() > 0) {
+        int64_t bucket_idx = 0;
+        if (!is_ascending_direction(direction)) {
+          bucket_idx = hist.get_bucket_size() - 1;
+        }
+        int64_t freq = hist.get(bucket_idx).endpoint_repeat_count_;
+        if (freq <= 0) {
+          if (0 == bucket_idx) {
+            freq = hist.get(bucket_idx).endpoint_num_;
+          } else if (bucket_idx > 0) {
+            freq = hist.get(bucket_idx).endpoint_num_ - hist.get(bucket_idx - 1).endpoint_num_;
+          }
+        }
+        if (freq > 0) {
+          double ratio = static_cast<double>(freq) / static_cast<double>(hist.get_sample_size());
+          max_leading_rows = std::max(max_leading_rows, total_rows * ratio);
+        }
+      }
+      leading_group_rows = std::min(total_rows, max_leading_rows);
+    }
   }
   return ret;
 }

@@ -437,8 +437,29 @@ int ObLogSort::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_
         param.need_row_count_ = -1;
       } else {
         double num_rows_per_group = child->get_card() / prefix_ndv;
-        double num_groups = std::ceil(param.need_row_count_ / num_rows_per_group);
-        param.need_row_count_ = num_groups * num_rows_per_group;
+        double leading_group_rows = num_rows_per_group;
+        if (prefix_ordering.count() > 0 && NULL != prefix_ordering.at(0) && sort_keys_.count() > 0) {
+          ObOrderDirection dir = sort_keys_.at(0).order_type_;
+          if (OB_FAIL(ObOptSelectivity::estimate_prefix_leading_group_rows(
+                  get_plan()->get_update_table_metas(),
+                  get_plan()->get_selectivity_ctx(),
+                  prefix_ordering.at(0),
+                  dir,
+                  child->get_card(),
+                  num_rows_per_group,
+                  leading_group_rows))) {
+            LOG_WARN("failed to estimate prefix leading group rows", K(ret));
+            ret = OB_SUCCESS;
+            leading_group_rows = num_rows_per_group;
+          }
+        }
+        if (param.need_row_count_ <= leading_group_rows) {
+          param.need_row_count_ = leading_group_rows;
+        } else {
+          double remaining_rows = param.need_row_count_ - leading_group_rows;
+          double num_groups = std::ceil(remaining_rows / num_rows_per_group);
+          param.need_row_count_ = leading_group_rows + num_groups * num_rows_per_group;
+        }
         if (param.need_row_count_ >= child->get_card()) {
           param.need_row_count_ = -1;
         }
