@@ -238,6 +238,8 @@ int TriggerHandle::init_param_old_row(
         if (tmp_ret != OB_SUCCESS) {
           LOG_WARN("destruct obj failed", K(ret));
         }
+      } else if (result.is_pl_extend()) {
+        OZ (pl::ObUserDefinedType::deep_copy_obj(*trig_rtdef.old_record_->get_allocator(), result, cells[i]));
       } else {
         if (OB_FAIL(deep_copy_obj(*trig_rtdef.old_record_->get_allocator(), result, cells[i]))) {
           LOG_WARN("fail to deep copy obj", K(ret));
@@ -294,8 +296,7 @@ int TriggerHandle::init_param_new_row(
           trig_ctdef.new_row_exprs_.at(i)->obj_meta_))) {
         LOG_WARN("failed to datum to obj", K(ret));
       } else if (lib::is_oracle_mode()
-                 &&(is_udt = ob_is_geometry(trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type())
-                             || ob_is_extend(trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type()))) {
+                 &&(is_udt = ob_is_geometry(trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type()))) {
         if (OB_FAIL(OB_ISNULL(eval_ctx.exec_ctx_.get_sql_ctx()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("sql ctx is null", K(ret));
@@ -331,6 +332,8 @@ int TriggerHandle::init_param_new_row(
         if (tmp_ret != OB_SUCCESS) {
           LOG_WARN("destruct obj failed", K(ret));
         }
+      } else if (result.is_pl_extend()) {
+        OZ (pl::ObUserDefinedType::deep_copy_obj(*trig_rtdef.new_record_->get_allocator(), result, cells[i]));
       } else {
         OZ (deep_copy_obj(*trig_rtdef.new_record_->get_allocator(), result, cells[i]));
       }
