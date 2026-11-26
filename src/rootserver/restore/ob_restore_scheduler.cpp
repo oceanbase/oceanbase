@@ -671,6 +671,57 @@ int ObRestoreScheduler::restore_keystore(const share::ObPhysicalRestoreJob &job_
   return ret;
 }
 
+int ObRestoreScheduler::check_restore_key_(
+    const share::ObPhysicalRestoreJob &job_info,
+    const bool allow_table_not_exist)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_TDE_SECURITY
+  if (OB_UNLIKELY(!is_user_tenant(job_info.get_tenant_id()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid restore tenant id", KR(ret), K(job_info.get_tenant_id()));
+  } else if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else if (!job_info.get_kms_dest().empty()) {
+    // The restore job has loaded a key backup in restore_pre().
+  } else {
+    ObSqlString sql;
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql.assign_fmt(
+              "SELECT 1 FROM %s WHERE master_key_id > 0 LIMIT 1",
+              OB_ALL_TENANT_KEYSTORE_TNAME))) {
+        LOG_WARN("failed to build query for tenant keystore", KR(ret));
+      } else if (OB_FAIL(sql_proxy_->read(res, job_info.get_tenant_id(), sql.ptr()))) {
+        if (OB_TABLE_NOT_EXIST == ret && allow_table_not_exist) {
+          ret = OB_SUCCESS;
+          LOG_INFO("tenant keystore table is not ready before log restore, defer key check",
+                   K(job_info.get_tenant_id()));
+        } else {
+          LOG_WARN("failed to query tenant keystore", KR(ret), K(sql),
+                   K(job_info.get_tenant_id()));
+        }
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get tenant keystore row", KR(ret),
+                   K(job_info.get_tenant_id()));
+        }
+      } else {
+        LOG_ERROR("restored tenant contains master key, WITH KEY FROM is required for physical restore",
+          K(job_info.get_tenant_id()));
+      }
+    }
+  }
+#endif
+  return ret;
+}
+
 int ObRestoreScheduler::post_check(const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
@@ -735,6 +786,10 @@ int ObRestoreScheduler::post_check(const ObPhysicalRestoreJob &job_info)
     } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to_rs(*GCTX.rs_mgr_).broadcast_schema(arg))) {
       LOG_WARN("failed to broadcast schema", KR(ret), K(arg));
     }
+  }
+
+  if (FAILEDx(check_restore_key_(job_info, false/*allow_table_not_exist*/))) {
+    LOG_WARN("failed to check restore key", KR(ret), K(job_info));
   }
 
   if (OB_SUCC(ret)) {
@@ -1426,6 +1481,8 @@ int ObRestoreScheduler::restore_wait_to_consistent_scn(const share::ObPhysicalRe
       LOG_WARN("fail to check tenant replay to consistent scn", K(ret));
     } else if (!is_replay_finish) {
     } else if (FALSE_IT(DEBUG_SYNC(AFTER_WAIT_RESTORE_TO_CONSISTENT_SCN))) {
+    } else if (OB_FAIL(check_restore_key_(job_info, true/*allow_table_not_exist*/))) {
+      LOG_WARN("failed to check restore key", KR(ret), K(job_info));
     } else if (OB_FAIL(trans.start(sql_proxy_, exec_tenant_id))) {
       LOG_WARN("fail to start trans", K(ret));
     } else if (OB_FAIL(stat_restore_progress_(trans, job_info, true/*is_restore_stat_start*/, false/*is_restore_finish*/))) {
