@@ -275,9 +275,16 @@ int ObScheduledTriggerPartitionBalance::parse_repeat_interval(
           LOG_USER_ERROR(OB_INVALID_ARGUMENT, "FREQ. FREQ should be MINUTELY/HOURLY/DAILY/WEEKLY");
         }
         if (OB_SUCC(ret)) {
-          interval_ts = interval_val * freq_ts * USECS_PER_SEC;
-          LOG_INFO("parse_repeat_interval finished", KR(ret), K(interval_ts),
-              K(interval_val), K(freq_ts), K(repeat_interval_str), K(interval_str), K(freq_str));
+          const int64_t usecs_per_period = freq_ts * USECS_PER_SEC;
+          if (OB_UNLIKELY(interval_val > INT64_MAX / usecs_per_period)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("INTERVAL overflows in usec", KR(ret), K(interval_val), K(freq_ts));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "INTERVAL. The value is too large and overflows in usec");
+          } else {
+            interval_ts = interval_val * usecs_per_period;
+            LOG_INFO("parse_repeat_interval finished", KR(ret), K(interval_ts),
+                K(interval_val), K(freq_ts), K(repeat_interval_str), K(interval_str), K(freq_str));
+          }
         }
       }
     }
