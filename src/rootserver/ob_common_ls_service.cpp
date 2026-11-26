@@ -375,7 +375,7 @@ void ObCommonLSService::try_update_primary_ip_list()
     } else if (OB_FAIL(get_restore_source_value_(item, standby_source_value))) {
       LOG_WARN("fail to get log_restore_source value", K(item));
     } else if (OB_FAIL(service_attr.parse_service_attr_from_str(standby_source_value))) {
-      LOG_WARN("fail to parse service attr", K(item), K(standby_source_value));
+      LOG_WARN("fail to parse service attr", KR(ret), K(item));
     } else if (! service_attr.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("service attr is invalid", K(service_attr), K(user_tenant_id));
@@ -472,7 +472,7 @@ int ObCommonLSService::get_restore_source_value_(ObLogRestoreSourceItem &item, O
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log restore source item is invalid");
   } else if (OB_FAIL(standby_source_value.assign(item.value_))) {
-    LOG_WARN("fail to assign standby source value", K(item.value_));
+    LOG_WARN("fail to assign standby source value", KR(ret), K(item));
   }
   return ret;
 }
@@ -500,7 +500,7 @@ int ObCommonLSService::do_update_restore_source_(
   } else if (OB_FAIL(get_restore_source_value_(tmp_item, tmp_standby_source_value))) {
     LOG_WARN("fail to get service standby log restore source value", K(tmp_item));
   } else if (OB_FAIL(tmp_service_attr.parse_service_attr_from_str(tmp_standby_source_value))) {
-    LOG_WARN("fail to parse service attr", K(tmp_item), K(tmp_standby_source_value));
+    LOG_WARN("fail to parse service attr", KR(ret), K(tmp_item));
   } else if (!tmp_service_attr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("service attr is invalid", K(tmp_service_attr));

@@ -91,7 +91,7 @@ int ObBackupHelper::set_backup_dest(const share::ObBackupPathString &backup_dest
   } else if (OB_FAIL(init_backup_parameter_table_operator_(kv_table_operator))) {
     LOG_WARN("failed to init backup parameter table operator", K(ret), K(tenant_id_));
   } else if (OB_FAIL(kv_value.set_value(backup_dest.ptr()))) {
-    LOG_WARN("failed to set backup dest", K(ret), K(tenant_id_), K(backup_dest));
+    LOG_WARN("failed to set backup dest", K(ret), K(tenant_id_));
   } else if (OB_FAIL(item_with_tenant_id.set_tenant_id(tenant_id_))) {
     LOG_WARN("failed to set tenant id", K(ret), K(tenant_id_));
   } else if (OB_FAIL(item_with_tenant_id.set_kv_name(OB_STR_DATA_BACKUP_DEST))) {

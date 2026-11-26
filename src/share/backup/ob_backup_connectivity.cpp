@@ -732,7 +732,7 @@ int ObBackupDestCheck::check_backup_dest_connectivity(
   common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   bool is_exist = false;
   if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy, tenant_id, backup_path, backup_dest))) {
-    LOG_WARN("failed to get backup dest", K(ret), K(backup_path), K(tenant_id));
+    LOG_WARN("failed to get backup dest", K(ret), K(tenant_id));
   } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
     LOG_INFO("io prohibited, don't check connectivity");
   } else if (OB_FAIL(check_check_file_exist_(backup_dest, check_path, is_exist))) {
@@ -795,12 +795,12 @@ int ObBackupStorageInfoOperator::insert_backup_storage_info(
   } else if (OB_FAIL(dml.splice_insert_update_sql(OB_ALL_BACKUP_STORAGE_INFO_TNAME, sql))) {
     LOG_WARN("failed to splice insert update sql", K(ret));
   } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
-    LOG_WARN("fail to execute sql", K(ret), K(sql));
+    LOG_WARN("fail to execute sql", K(ret), K(tenant_id), K(backup_dest));
   } else if (1 != affected_rows && 2 != affected_rows) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, invalid affected rows", K(ret), K(affected_rows));
   } else {
-    LOG_INFO("success insert/update backup storage info", K(sql), K(tenant_id), K(backup_dest));
+    LOG_INFO("success insert/update backup storage info", K(tenant_id), K(backup_dest));
   }
 
   return ret;
@@ -835,12 +835,12 @@ int ObBackupStorageInfoOperator::insert_backup_storage_info(
   } else if (OB_FAIL(dml.splice_insert_update_sql(OB_ALL_BACKUP_STORAGE_INFO_TNAME, sql))) {
     LOG_WARN("failed to splice insert update sql", K(ret));
   } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
-    LOG_WARN("fail to execute sql", K(ret), K(sql));
+    LOG_WARN("fail to execute sql", K(ret), K(tenant_id), K(backup_dest));
   } else if (0 != affected_rows && 1 != affected_rows && 2 != affected_rows) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, invalid affected rows", K(ret), K(affected_rows));
   } else {
-    LOG_INFO("succ insert/update backup storage info", K(sql), K(tenant_id), K(backup_dest));
+    LOG_INFO("succ insert/update backup storage info", K(tenant_id), K(backup_dest));
   }
 
   return ret;
@@ -891,12 +891,12 @@ int ObBackupStorageInfoOperator::update_backup_dest_extension(
   } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_BACKUP_STORAGE_INFO_TNAME, sql))) {
     LOG_WARN("failed to splice insert update sql", K(ret));
   } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
-    LOG_WARN("fail to execute sql", K(ret), K(sql));
+    LOG_WARN("fail to execute sql", K(ret));
   } else if (1 != affected_rows) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid affected_rows", K(ret), K(affected_rows), K(sql), K(extension));
+    LOG_WARN("invalid affected_rows", K(ret), K(affected_rows));
   } else {
-    LOG_INFO("succ update backup storage info", K(sql), K(tenant_id), K(backup_dest));
+    LOG_INFO("succ update backup storage info", K(tenant_id), K(backup_dest));
   }
   return ret;
 }
@@ -924,12 +924,12 @@ int ObBackupStorageInfoOperator::update_backup_authorization(
   } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_BACKUP_STORAGE_INFO_TNAME, sql))) {
     LOG_WARN("failed to splice insert update sql", K(ret), K(backup_dest));
   } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
-    LOG_WARN("fail to execute sql", K(ret), K(sql));
+    LOG_WARN("fail to execute sql", K(ret), K(tenant_id), K(backup_dest));
   } else if (1 != affected_rows) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, invalid affected rows", K(ret), K(affected_rows));
   } else {
-    LOG_INFO("update backup authorization in storage info", K(sql), K(tenant_id), K(backup_dest));
+    LOG_INFO("update backup authorization in storage info", K(tenant_id), K(backup_dest));
   }
   return ret;
 }
@@ -1114,7 +1114,7 @@ int ObBackupStorageInfoOperator::parse_backup_path(
     if (pos >= path_len || left_count >= endpoint_len) {
       ret = OB_INVALID_BACKUP_DEST;
       LOG_ERROR("backup dest is too long, cannot work",
-          K(ret), K(pos), K(backup_path), K(left_count));
+          K(ret), K(pos), K(left_count));
     } else {
       MEMCPY(path, backup_path, pos);
       path[pos] = '\0';
@@ -1266,17 +1266,17 @@ int ObBackupStorageInfoOperator::get_backup_dest(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
   } else if (OB_FAIL(parse_backup_path(backup_path.ptr(), path, sizeof(path), endpoint, sizeof(endpoint)))) {
-    LOG_WARN("failed to parse backup path", K(ret), K(tenant_id), K(backup_path)); 
+    LOG_WARN("failed to parse backup path", K(ret), K(tenant_id));
   } else if (OB_FAIL(sql.assign_fmt(
       "SELECT %s,%s,%s FROM %s WHERE tenant_id = %lu AND path = '%s' AND endpoint = '%s'",
       OB_STR_BACKUP_DEST_ID, OB_STR_BACKUP_DEST_AUTHORIZATION,
       OB_STR_BACKUP_DEST_EXTENSION, OB_ALL_BACKUP_STORAGE_INFO_TNAME,
       tenant_id, path, endpoint))) {
-    LOG_WARN("fail to assign sql", K(ret), K(tenant_id), K(path), K(endpoint));
+    LOG_WARN("fail to assign sql", K(ret), K(tenant_id));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       if (OB_FAIL(proxy.read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
-        LOG_WARN("fail to execute sql", K(ret), K(sql));
+        LOG_WARN("fail to execute sql", K(ret), K(tenant_id));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("error unexpected, query result must not be NULL", K(ret));
@@ -1290,9 +1290,9 @@ int ObBackupStorageInfoOperator::get_backup_dest(
         UNUSED(tmp_real_str_len);
       } else if (OB_LIKELY(OB_ITER_END == ret)) {
         ret = OB_ENTRY_NOT_EXIST;
-        LOG_WARN("no exist row", K(ret), K(sql));
+        LOG_WARN("no exist row", K(ret), K(tenant_id));
       } else {
-        LOG_WARN("fail to get next row", K(ret), K(sql));
+        LOG_WARN("fail to get next row", K(ret), K(tenant_id));
       }
     }
   }
@@ -1301,7 +1301,7 @@ int ObBackupStorageInfoOperator::get_backup_dest(
   } else if (OB_FAIL(backup_dest.set(path, endpoint, encrypt_authorization, extension, dest_id))) {
     LOG_WARN("fail to set backup dest", K(ret), K(tenant_id)); 
   } else {
-    LOG_INFO("success get backup dest", K(sql), K(tenant_id), K(backup_dest)); 
+    LOG_INFO("success get backup dest", K(tenant_id));
   }
   return ret;
 }
@@ -2127,8 +2127,8 @@ int ObBackupChangeExternalStorageDestUtil::change_external_storage_dest(const ob
   } else {
     const uint64_t tenant_id = gen_user_tenant_id(arg.items_.at(0).exec_tenant_id_);
     const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &path = arg.items_.at(0).value_;
-    const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &access_info = arg.items_.at(1).value_;
-    const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &attribute = arg.items_.at(2).value_;
+    const common::ObSensitiveStringView access_info(arg.items_.at(1).value_.str());
+    const common::ObSensitiveStringView attribute(arg.items_.at(2).value_.str());
 
     ObChangeExternalStorageDestMgr change_mgr;
     const bool has_access_info = !access_info.is_empty();
@@ -2295,7 +2295,7 @@ int ObBackupDestIOPermissionMgr::delete_locality_info_in_backup_dest_str(char *b
     if (backup_dest_str[pos] != '\0' && OB_FAIL(separate_locality_info_from_dest_string(
                                                     backup_dest_str + pos, strlen(backup_dest_str + pos) + 1,
                                                     locality_info, OB_MAX_BACKUP_SRC_INFO_LENGTH))) {
-      LOG_WARN("fail to delete locality info in path info", K(ret), K(backup_dest_str + pos));
+      LOG_WARN("fail to delete locality info in path info", K(ret), K(pos));
     } else if(pos > 0 && '\0' == backup_dest_str[pos--] && '?' == backup_dest_str[pos]) {
       backup_dest_str[pos] = '\0';
     }
@@ -2321,7 +2321,7 @@ int ObBackupDestIOPermissionMgr::separate_locality_info_from_dest_string(
     char *token = NULL;
     char *saved_ptr = NULL;
     if (OB_FAIL(databuff_printf(tmp, sizeof(tmp), "%s", dest_string))) {
-        LOG_WARN("failed to copy storage info", K(ret), K(dest_string));
+        LOG_WARN("failed to copy storage info", K(ret), K(dest_string_length));
     } else {
       dest_string[0] = '\0';
       locality_info[0] = '\0';

@@ -648,9 +648,9 @@ int ObInnerTableOperator::do_insert_row_(ObISQLClient &proxy, const ObIInnerTabl
   } else if (OB_FAIL(dml.splice_insert_sql(tname, sql))) {
     LOG_WARN("failed to splice insert sql", K(ret), K(this), K(row));
   } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
-    LOG_WARN("fail to exec sql", K(ret), K(sql), K(exec_tenant_id));
+    LOG_WARN("fail to exec sql", K(ret), K(tname), K(exec_tenant_id));
   } else {
-    LOG_INFO("insert one row", K(row), K(affected_rows), K(sql));
+    LOG_INFO("insert one row", K(row), K(affected_rows), K(tname));
   }
 
   return ret;
@@ -671,9 +671,9 @@ int ObInnerTableOperator::do_update_row_(ObISQLClient &proxy, const ObIInnerTabl
   } else if (OB_FAIL(dml.splice_update_sql(tname, sql))) {
     LOG_WARN("failed to splice update sql", K(ret), K(this), K(row));
   } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
-    LOG_WARN("fail to exec sql", K(ret), K(sql), K(exec_tenant_id));
+    LOG_WARN("fail to exec sql", K(ret), K(tname), K(exec_tenant_id));
   } else {
-    LOG_INFO("update one row", K(row), K(affected_rows), K(sql));
+    LOG_INFO("update one row", K(row), K(affected_rows), K(tname));
   }
 
   return ret;
@@ -694,9 +694,9 @@ int ObInnerTableOperator::do_insert_or_update_row_(ObISQLClient &proxy, const Ob
   } else if (OB_FAIL(dml.splice_insert_update_sql(tname, sql))) {
     LOG_WARN("failed to splice insert update sql", K(ret), K(this), K(row));
   } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
-    LOG_WARN("fail to exec sql", K(ret), K(sql), K(exec_tenant_id));
+    LOG_WARN("fail to exec sql", K(ret), K(tname), K(exec_tenant_id));
   } else {
-    LOG_INFO("insert/update one row", K(row), K(affected_rows), K(sql));
+    LOG_INFO("insert/update one row", K(row), K(affected_rows), K(tname));
   }
 
   return ret;

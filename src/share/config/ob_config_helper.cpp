@@ -1455,7 +1455,7 @@ bool ObConfigArchiveLagTargetChecker::check(const uint64_t tenant_id, const ObAd
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "log_archive_dest has not been set, set archive_lag_target is");
       }
     } else if (OB_FAIL(archive_dest.set(archive_dest_str))) {
-      OB_LOG(WARN, "fail to set archive dest", K(ret), K(archive_dest_str));
+      OB_LOG(WARN, "fail to set archive dest", K(ret));
     } else if (archive_dest.is_storage_type_s3()) {
       is_valid = MIN_LAG_TARGET_FOR_S3 <= value;
       if (!is_valid) {

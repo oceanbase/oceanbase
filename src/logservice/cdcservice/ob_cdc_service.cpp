@@ -68,7 +68,7 @@ int UpdateCtxFunctor::init(const ObBackupPathString &dest_str, const int64_t ver
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(dest_.set(dest_str))) {
-    EXTLOG_LOG(WARN, "failed to set dest_str to dest", K(dest_str), K(version));
+    EXTLOG_LOG(WARN, "failed to set dest_str to dest", KR(ret), K(version));
   } else {
     dest_ver_ = version;
     is_inited_ = true;
@@ -198,12 +198,12 @@ void ObCdcService::run1()
           if (OB_FAIL(query_tenant_archive_info_(archive_dest_changed))) {
             EXTLOG_LOG(WARN, "query_tenant_archive_info_ failed", KR(ret));
           } else {
-            EXTLOG_LOG(INFO, "query dest_info_ succ", K_(dest_info), K(archive_dest_changed));
+            EXTLOG_LOG(INFO, "query dest_info_ succ", K(archive_dest_changed));
             if (archive_dest_changed) {
               if (OB_FAIL(update_archive_dest_for_ctx_())) {
-                EXTLOG_LOG(WARN, "failed to update archive dest", K(dest_info_), K(dest_info_version_));
+                EXTLOG_LOG(WARN, "failed to update archive dest", K(dest_info_version_));
               } else {
-                EXTLOG_LOG(INFO, "update archive dest succ", K(dest_info_), K(dest_info_version_));
+                EXTLOG_LOG(INFO, "update archive dest succ", K(dest_info_version_));
               }
             }
           }
@@ -400,9 +400,9 @@ int ObCdcService::get_archive_dest_snapshot(const ObLSID &ls_id, ObBackupDest &a
   } else {
     ObBackupPathString archive_dest_str;
     if (OB_FAIL(get_archive_dest_path_snapshot_(archive_dest_str))) {
-      EXTLOG_LOG(WARN, "failed to get archive dest path string", K(archive_dest_str), K(ls_id));
+      EXTLOG_LOG(WARN, "failed to get archive dest path string", KR(ret), K(ls_id));
     } else if (OB_FAIL(archive_dest.set(archive_dest_str))) {
-      EXTLOG_LOG(WARN, "failed to set archive_dest_str to archive dest", K(archive_dest_str), K(ls_id));
+      EXTLOG_LOG(WARN, "failed to set archive_dest_str to archive dest", KR(ret), K(ls_id));
     }
   }
 
@@ -616,8 +616,7 @@ int ObCdcService::init_archive_source_if_needed(const ObLSID &ls_id, ClientLSCtx
       ret = OB_ALREADY_IN_NOARCHIVE_MODE;
       EXTLOG_LOG(WARN, "archivelog is off yet", KR(ret), K(MTL_ID()));
     } else if (OB_FAIL(archive_dest.set(dest_info_.at(0).second))) {
-      EXTLOG_LOG(WARN, "failed to set backup dest info", KR(ret), K(archive_dest), "path",
-          dest_info_.at(0).second);
+      EXTLOG_LOG(WARN, "failed to set backup dest info", KR(ret), K(dest_info_version_));
     } else if (OB_FAIL(ctx.try_init_archive_source(ls_id, archive_dest, dest_info_version_))) {
       if (OB_INIT_TWICE != ret) {
         EXTLOG_LOG(WARN, "failed to init archive source", K(ls_id), K(archive_dest), K(dest_info_version_));
@@ -683,13 +682,12 @@ int ObCdcService::update_archive_dest_for_ctx_()
   UpdateCtxFunctor update_func;
   if (dest_info_.count() > 0) {
     if (OB_FAIL(update_func.init(dest_info_.at(0).second, dest_info_version_))) {
-      EXTLOG_LOG(WARN, "update functor failed to init", K(dest_info_), K(dest_info_version_));
+      EXTLOG_LOG(WARN, "update functor failed to init", K(dest_info_version_));
     } else if (OB_FAIL(ls_ctx_map_.for_each(update_func))) {
       EXTLOG_LOG(WARN, "failed to update ctx in ctx map");
     }
   } else {
-    EXTLOG_LOG(INFO, "don't update archive dest if no archive dest found", K(dest_info_),
-        K(dest_info_version_));
+    EXTLOG_LOG(INFO, "don't update archive dest if no archive dest found", K(dest_info_version_));
   }
 
   return ret;
@@ -702,9 +700,9 @@ int ObCdcService::get_archive_dest_path_snapshot_(ObBackupPathString &archive_de
   SpinRLockGuard dest_info_read_lock(dest_info_lock_);
   if (dest_info_.empty()) {
     ret = OB_ALREADY_IN_NOARCHIVE_MODE;
-    EXTLOG_LOG(INFO, "archive is not enabled yet", K(dest_info_));
+    EXTLOG_LOG(INFO, "archive is not enabled yet");
   } else if (OB_FAIL(archive_dest_str.assign(dest_info_.at(0).second))) {
-    EXTLOG_LOG(WARN, "failed to assign dest_info to archive_dest_str", K(dest_info_), K(dest_info_version_));
+    EXTLOG_LOG(WARN, "failed to assign dest_info to archive_dest_str", K(dest_info_version_));
   }
 
   return ret;

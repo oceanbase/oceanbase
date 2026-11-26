@@ -229,7 +229,7 @@ int ObRemoteLocationAdaptor::add_service_source_(const share::ObLogRestoreSource
   if (OB_FAIL(value.assign(item.value_))) {
     LOG_WARN("string assign failed", K(item));
   } else if (OB_FAIL(service_attr.parse_service_attr_from_str(value))) {
-    LOG_WARN("parse service attr failed", K(value));
+    LOG_WARN("parse service attr failed", K(ret), K(item));
   } else if (OB_UNLIKELY(!service_attr.is_valid())) {
     ret = OB_INVALID_DEST_ID;
   } else if (OB_FAIL(restore_handler.add_source(service_attr, item.until_scn_))) {
@@ -259,21 +259,21 @@ int ObRemoteLocationAdaptor::add_rawpath_source_(const share::ObLogRestoreSource
           if (nullptr == token) {
             break;
           } else if (OB_FAIL(dest.set(token))) {
-            LOG_WARN("fail to set dest", K(token));
+            LOG_WARN("fail to set dest", K(ret));
           } else if (OB_FALSE_IT(dir_info.first = dest.get_root_path())) {
           } else if (OB_FAIL(dest.get_storage_info()->get_storage_info_str(storage_info_str, sizeof(storage_info_str)))) {
             LOG_WARN("fail to get storage info str", K(dest));
           } else if (OB_FALSE_IT(dir_info.second = storage_info_str)) {
           } else if (OB_FAIL(dir_array.push_back(dir_info))) {
-            LOG_WARN("fail to push backup dir_array", K(ret), K(dir_array));
+            LOG_WARN("fail to push backup dir_array", K(ret), "path_count", dir_array.count());
           }
         }
       }
     }
     if ((OB_SUCC(ret)) && OB_FAIL(restore_handler.add_source(dir_array, item.until_scn_))) {
-      LOG_WARN("fail to add rawpath source", K(ret), K(item), K(dir_array));
+      LOG_WARN("fail to add rawpath source", K(ret), K(item), "path_count", dir_array.count());
     } else {
-      LOG_INFO("add rawpath source", K(ret), K(dir_array.count()), K(dir_array));
+      LOG_INFO("add rawpath source", K(ret), "path_count", dir_array.count());
     }
   }
   return ret;

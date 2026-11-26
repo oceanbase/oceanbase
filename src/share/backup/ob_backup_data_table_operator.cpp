@@ -384,7 +384,7 @@ int ObBackupSetFileOperator::do_parse_backup_set_(ObMySQLResult &result, ObBacku
   } else if (OB_FAIL(backup_set_desc.backup_path_.assign(backup_path))) {
     LOG_WARN("[DATA_BACKUP]failed to set backup path", K(ret), K(backup_path));
   } else if (OB_FAIL(backup_set_desc.passwd_.assign(passwd))) {
-    LOG_WARN("[DATA_BACKUP]failed to set passwd", K(ret), K(passwd));
+    LOG_WARN("[DATA_BACKUP]failed to set passwd", K(ret), KP(passwd));
   } else if (OB_FAIL(backup_set_desc.backup_type_.set_backup_type(backup_type_str))) {
     LOG_WARN("[DATA_BACKUP]failed to set backup_type", K(ret), K(backup_type_str));
   } else if (OB_FAIL(ObClusterVersion::get_version(tenant_version_str, backup_set_desc.tenant_compatible_))) {
@@ -944,7 +944,7 @@ int ObBackupJobOperator::do_parse_job_result_(
   } else if (OB_FAIL(job.status_.set_status(status_str))) {
     LOG_WARN("[DATA_BACKUP]failed to set status", K(ret), K(status_str));
   } else if (OB_FAIL(job.passwd_.assign(passwd))) {
-    LOG_WARN("[DATA_BACKUP]failed to set passwd", K(ret), K(passwd));
+    LOG_WARN("[DATA_BACKUP]failed to set passwd", K(ret), KP(passwd));
   } else if (OB_FAIL(job.backup_type_.set_backup_type(backup_type_str))) {
     LOG_WARN("[DATA_BACKUP]failed to set backup_type", K(ret), K(backup_type_str));
   } else if (OB_FAIL(job.set_plus_archivelog(plus_archivelog))) {
@@ -1392,7 +1392,7 @@ int ObBackupTaskOperator::get_backup_task(
         } else if (OB_FAIL(set_task_attr.status_.set_status(status_str))) {
           LOG_WARN("[DATA_BACKUP]failed to set status", K(ret), K(set_task_attr.status_), K(sql));
         } else if (OB_FAIL(set_task_attr.backup_path_.assign(backup_path_str))) {
-          LOG_WARN("[DATA_BACKUP]failed to assign backup path", K(backup_path_str));
+          LOG_WARN("[DATA_BACKUP]failed to assign backup path", K(ret));
         } else if (OB_FAIL(set_task_attr.start_scn_.convert_for_inner_table_field(start_scn))) {
           LOG_WARN("fail to set start scn", K(ret), K(start_scn));
         } else if (OB_FAIL(set_task_attr.end_scn_.convert_for_inner_table_field(end_scn))) {

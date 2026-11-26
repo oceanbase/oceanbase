@@ -1932,7 +1932,7 @@ int ObLogRawPathPieceContext::init(const ObLSID &id, const DirArray &array)
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(ret), K(id));
   } else if (OB_FAIL(array_.assign(array))) {
-    CLOG_LOG(WARN, "fail to assign array", K(id), K(array));
+    CLOG_LOG(WARN, "fail to assign array", K(ret), K(id), "path_count", array.count());
   } else {
     is_inited_ = true;
     id_ = id;

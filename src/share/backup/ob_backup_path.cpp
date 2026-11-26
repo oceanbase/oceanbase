@@ -1503,7 +1503,7 @@ int ObBackupPathUtil::construct_backup_set_dest(const share::ObBackupDest &backu
         storage_info_buf, OB_MAX_BACKUP_STORAGE_INFO_LENGTH))) {
     LOG_WARN("fail to get storage info", K(ret));
   } else if (OB_FAIL(backup_set_dest.set(path.get_ptr(), storage_info_buf))) {
-    LOG_WARN("fail to set backup set dest", K(ret), K(path), K(storage_info_buf));
+    LOG_WARN("fail to set backup set dest", K(ret), K(path));
   }
   return ret;
 }
@@ -1535,7 +1535,7 @@ int ObBackupPathUtil::construct_backup_complement_log_dest(const share::ObBackup
         storage_info_buf, OB_MAX_BACKUP_STORAGE_INFO_LENGTH))) {
     LOG_WARN("fail to get storage info", K(ret));
   } else if (OB_FAIL(backup_set_dest.set(path.get_ptr(), storage_info_buf))) {
-    LOG_WARN("fail to set backup set dest", K(ret), K(path), K(storage_info_buf));
+    LOG_WARN("fail to set backup set dest", K(ret), K(path));
   }
   return ret;
 }
@@ -1564,7 +1564,7 @@ int ObBackupPathUtil::construct_backup_complement_log_dest(const share::ObBackup
         storage_info_buf, OB_MAX_BACKUP_STORAGE_INFO_LENGTH))) {
     LOG_WARN("fail to get storage info", K(ret));
   } else if (OB_FAIL(backup_set_dest.set(path.get_ptr(), storage_info_buf))) {
-    LOG_WARN("fail to set backup set dest", K(ret), K(path), K(storage_info_buf));
+    LOG_WARN("fail to set backup set dest", K(ret), K(path));
   }
   return ret;
 }

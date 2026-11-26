@@ -65,7 +65,7 @@ int validate_uri_type(const common::ObString &uri)
       !uri.prefix_match(OB_FILE_PREFIX) &&
       !uri.prefix_match(OB_AZBLOB_PREFIX)) {
     ret = OB_INVALID_BACKUP_DEST;
-    STORAGE_LOG(ERROR, "invalid backup uri", KR(ret), KS(uri));
+    STORAGE_LOG(ERROR, "invalid backup uri", KR(ret), "uri_length", uri.length());
   }
   return ret;  
 }
@@ -87,7 +87,7 @@ int get_storage_type_from_path(const common::ObString &uri, ObStorageType &type)
     type = OB_STORAGE_AZBLOB;
   } else {
     ret = OB_INVALID_BACKUP_DEST;
-    STORAGE_LOG(ERROR, "invalid backup uri", KR(ret), KS(uri));
+    STORAGE_LOG(ERROR, "invalid backup uri", KR(ret), "uri_length", uri.length());
   }
   return ret;
 }

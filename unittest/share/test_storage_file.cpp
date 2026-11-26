@@ -19,10 +19,14 @@
 #include <gtest/gtest.h>
 #include "lib/utility/ob_test_util.h"
 #include "lib/thread/ob_dynamic_thread_pool.h"
+#include <fstream>
 #include "share/backup/ob_backup_io_adapter.h"
 #include "common/storage/ob_fd_simulator.h"
 #include "share/ob_device_manager.h"
 #include "share/backup/ob_backup_struct.h"
+#define private public
+#include "rootserver/restore/ob_restore_util.h"
+#undef private
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -63,6 +67,45 @@ protected:
   char test_dir_[OB_MAX_URI_LENGTH];
   char test_dir_uri_[OB_MAX_URI_LENGTH];
 };
+
+TEST_F(TestStorageFile, complement_log_collection_logs_count_without_paths)
+{
+  ObBackupIoAdapter util;
+  ObBackupStorageInfo storage_info;
+  storage_info.device_type_ = OB_STORAGE_FILE;
+  const std::string piece_dir = std::string(test_dir_uri_) + "/complement_log/pieces";
+  const std::string piece_start = piece_dir + "/piece_d1r1p3_start_20220601T120000.obarc";
+  ASSERT_EQ(OB_SUCCESS, util.mkdir(piece_dir.c_str(), &storage_info));
+  ASSERT_EQ(OB_SUCCESS, util.write_single_file(piece_start.c_str(), &storage_info, "1", 1));
+  ObRestoreBackupSetBriefInfo backup_set;
+  backup_set.backup_set_desc_.backup_set_id_ = 1;
+  ASSERT_EQ(OB_SUCCESS, backup_set.backup_set_path_.assign(test_dir_uri_));
+  ObArray<ObRestoreBackupSetBriefInfo> sets;
+  ASSERT_EQ(OB_SUCCESS, sets.push_back(backup_set));
+  ObArray<ObRestoreLogPieceBriefInfo> pieces;
+  ObArray<ObBackupPathString> paths;
+  const char *uri = "oss://example/piece?access_key=fake_complement_log_key";
+  ASSERT_EQ(OB_SUCCESS, paths.push_back(ObBackupPathString(uri)));
+  ASSERT_EQ(OB_SUCCESS, oceanbase::rootserver::ObRestoreUtil::get_restore_log_array_for_complement_log_(
+      sets, SCN::min_scn(), SCN::min_scn(), pieces, paths));
+  ASSERT_EQ(1, pieces.count());
+  EXPECT_EQ(3, pieces.at(0).piece_id_);
+  ASSERT_EQ(2, paths.count());
+  EXPECT_STREQ(uri, paths.at(0).ptr());
+  EXPECT_EQ(std::string(test_dir_uri_) + "/complement_log", paths.at(1).ptr());
+
+  std::ifstream log("test_storage_file.log");
+  std::string line;
+  bool found = false;
+  while (std::getline(log, line)) {
+    if (std::string::npos != line.find("get restore log path list")) {
+      found = true;
+      EXPECT_NE(std::string::npos, line.find("log_path_count"));
+      EXPECT_EQ(std::string::npos, line.find("fake_complement_log_key"));
+    }
+  }
+  EXPECT_TRUE(found);
+}
 
 TEST_F(TestStorageFile, test_util)
 {

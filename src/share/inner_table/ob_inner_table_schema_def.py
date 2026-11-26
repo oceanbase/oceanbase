@@ -12863,12 +12863,14 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12306',
   table_name = '__all_virtual_restore_job',
   keywords = all_def_keywords['__all_restore_job'],
+  iterator_class = 'ObAllVirtualRestoreJob',
   in_tenant_space = True))
 
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12307',
   table_name = '__all_virtual_restore_job_history',
   keywords = all_def_keywords['__all_restore_job_history'],
+  iterator_class = 'ObAllVirtualRestoreJob',
   in_tenant_space = True))
 
 def_table_schema(**gen_iterate_private_virtual_table_def(
@@ -14135,12 +14137,14 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12422',
   table_name = '__all_virtual_recover_table_job',
   keywords = all_def_keywords['__all_recover_table_job'],
+  iterator_class = 'ObAllVirtualRestoreJob',
   in_tenant_space = True))
 
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12423',
   table_name = '__all_virtual_recover_table_job_history',
   keywords = all_def_keywords['__all_recover_table_job_history'],
+  iterator_class = 'ObAllVirtualRestoreJob',
   in_tenant_space = True))
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12424',

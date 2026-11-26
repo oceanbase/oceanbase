@@ -179,7 +179,7 @@ public:
   bool is_valid() const override;
 
   INHERIT_TO_STRING_KV("ObExternArchiveDesc", ObExternArchiveDesc, K_(tenant_id), K_(dest_id), K_(round_id),
-    K_(piece_id), K_(incarnation), K_(dest_no), K_(start_scn), K_(end_scn), K_(compatible), K_(path), 
+    K_(piece_id), K_(incarnation), K_(dest_no), K_(start_scn), K_(end_scn), K_(compatible), K(path_.size()),
     K_(his_frozen_pieces));
 };
 

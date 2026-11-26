@@ -382,7 +382,7 @@ int ObTextStringIter::get_full_data(ObString &data_str)
   if (OB_SUCC(ret)) {
     state_ = TEXTSTRING_ITER_NEXT;
   }
-  COMMON_LOG(DEBUG, "Lob: get_full_data", K(ret), K(data_str), KP(data_str.ptr()), K(data_str.length()));
+  COMMON_LOG(DEBUG, "Lob: get_full_data", K(ret), KP(data_str.ptr()), K(data_str.length()));
   return ret;
 }
 

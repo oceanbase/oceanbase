@@ -61,12 +61,12 @@ int ObBackupTmpFile::write(const char *buf, const int64_t size)
     ret = OB_NOT_INIT;
     LOG_WARN("backup tmp file init twice", K(ret));
   } else if (OB_FAIL(get_io_info_(buf, size, io_info))) {
-    LOG_WARN("failed to get io info", K(ret), K(buf), K(size));
+    LOG_WARN("failed to get io info", K(ret), KP(buf), K(size));
   } else if (OB_FAIL(ObTmpFileManager::get_instance().write(io_info, timeout_ms))) {
     LOG_WARN("failed to write tmp file", K(ret), K(io_info), K(timeout_ms));
   } else {
     file_size_ += size;
-    LOG_INFO("backup tmp file write", K(buf), K(size));
+    LOG_INFO("backup tmp file write", KP(buf), K(size));
   }
   return ret;
 }

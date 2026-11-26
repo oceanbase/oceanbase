@@ -321,7 +321,7 @@ int ObDMLSqlSplicer::add_column(const char *col_name, const T &value)
     ret = common::OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid column name", K(ret), KP(col_name));
   } else if (OB_FAIL(add_column(is_pk, col_name, value))) {
-    SHARE_LOG(WARN, "add column failed", K(ret), K(is_pk), K(col_name), K(value));
+    SHARE_LOG(WARN, "add column failed", K(ret), K(is_pk), K(col_name));
   }
   return ret;
 }
@@ -335,7 +335,7 @@ int ObDMLSqlSplicer::add_pk_column(const char *col_name, const T &value)
     ret = common::OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid column name", K(ret), KP(col_name));
   } else if (OB_FAIL(add_column(is_pk, col_name, value))) {
-    SHARE_LOG(WARN, "add column failed", K(ret), K(is_pk), K(col_name), K(value));
+    SHARE_LOG(WARN, "add column failed", K(ret), K(is_pk), K(col_name));
   }
   return ret;
 }
@@ -350,7 +350,7 @@ int ObDMLSqlSplicer::add_column(
     ret = common::OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid column name", K(ret), KP(col_name));
   } else if (OB_FAIL(append_value(value, is_null))) {
-    SHARE_LOG(WARN, "append value failed", K(ret), K(value));
+    SHARE_LOG(WARN, "append value failed", K(ret), K(col_name));
   } else if (OB_FAIL(add_column(is_primary_key, is_null, col_name))) {
     SHARE_LOG(WARN, "add column failed", K(ret));
   }

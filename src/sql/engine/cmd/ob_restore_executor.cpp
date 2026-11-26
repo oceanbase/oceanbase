@@ -197,7 +197,7 @@ int ObPhysicalRestoreTenantExecutor::physical_restore_preview(
     backup_dest.value_.set_varchar(restore_tenant_arg.uri_.ptr(), restore_tenant_arg.uri_.length());
     backup_dest.meta_.set_meta(backup_dest.value_.meta_);
     if (OB_FAIL(session_info->replace_user_variable(OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR, backup_dest))) {
-      LOG_WARN("fail to set session variable", "name", OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR, "value", backup_dest);
+      LOG_WARN("fail to set session variable", "name", OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR, K(ret));
     } else {
       ObSessionVariable restore_scn;
       restore_scn.value_.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);

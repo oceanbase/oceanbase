@@ -2113,7 +2113,7 @@ int ObRestoreKeyP::process()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObMasterKeyUtil::restore_key(arg_.tenant_id_,
-                                           arg_.backup_dest_, arg_.encrypt_key_))) {
+                                           arg_.backup_dest_.str(), arg_.encrypt_key_.str()))) {
     LOG_WARN("failed to restore key", K(ret));
   }
   return ret;

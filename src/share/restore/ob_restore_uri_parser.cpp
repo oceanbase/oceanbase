@@ -40,10 +40,11 @@ int ObPhysicalRestoreOptionParser::ExtraArgsCb::match(const char *key, const cha
   int ret = OB_SUCCESS;
   // defined by the extra params after the question mark in oss uri
   bool found = false;
+  const int64_t value_length = nullptr == value ? 0 : STRLEN(value);
   for (int i = 0; i < ACTION_CNT && !found && OB_SUCC(ret); ++i) {
     if (0 == STRCASECMP(actions_[i].key, key)) {
       if (OB_FAIL(actions_[i].setter(job_, value))) {
-        LOG_WARN("fail set value", K(value), K(ret));
+        LOG_WARN("fail set value", "option", actions_[i].key, K(value_length), K(ret));
       } else {
         is_set_[i] = true;
         found = true;
@@ -51,7 +52,7 @@ int ObPhysicalRestoreOptionParser::ExtraArgsCb::match(const char *key, const cha
     }
   }
   if (!found) {
-    LOG_TRACE("KV pair ignored by common restore uri parser.", K(key), K(value), K(ret));
+    LOG_TRACE("KV pair ignored by common restore uri parser.", K(value_length), K(ret));
   }
   return ret;
 }
@@ -76,12 +77,12 @@ int ObPhysicalRestoreOptionParser::parse(
   char uri_buf[OB_MAX_URI_LENGTH];
   if (uri.length() >= OB_MAX_URI_LENGTH) {
     ret = OB_SIZE_OVERFLOW;
-    OB_LOG(WARN, "the uri too long", "len", uri.length(), K(uri), K(ret));
+    OB_LOG(WARN, "the uri too long", "len", uri.length(), K(ret));
   } else {
     MEMSET(uri_buf, 0, OB_MAX_URI_LENGTH);
     MEMCPY(uri_buf, uri.ptr(), uri.length());
     if (OB_FAIL(parse(uri_buf, job))) {
-      LOG_WARN("fail parse uri buf", K(uri_buf), K(ret));
+      LOG_WARN("fail parse uri buf", "uri_length", uri.length(), K(ret));
     }
   }
   return ret;
@@ -92,20 +93,20 @@ int ObPhysicalRestoreOptionParser::parse(
     ObPhysicalRestoreJob &job)
 {
   int ret = OB_SUCCESS;
-  char extra_args[OB_MAX_URI_LENGTH];
   ExtraArgsCb extra_arg_cb(job);
   ObKVParser kv_parser('=', '&');
   kv_parser.set_match_callback(extra_arg_cb);
   kv_parser.set_allow_space(false);
-  int64_t uri_len = STRLEN(uri);
+  int64_t uri_len = 0;
   if (OB_ISNULL(uri)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "the oss argument is invalid", K(ret));
+  } else if (FALSE_IT(uri_len = STRLEN(uri))) {
   } else if (uri_len >= OB_MAX_URI_LENGTH) {
     ret = OB_SIZE_OVERFLOW;
     OB_LOG(WARN, "the uri too long", K(uri_len), K(ret));
   } else if (OB_FAIL(kv_parser.parse(uri))) {
-    LOG_WARN("fail parse arg", K(extra_args), K(uri), K(ret));
+    LOG_WARN("fail parse arg", K(uri_len), K(ret));
   }
   return ret;
 }
@@ -121,7 +122,7 @@ int ObPhysicalRestoreOptionParser::ExtraArgsCb::set_pool_list(
   } else if (STRLEN(val) >= common::OB_INNER_TABLE_DEFAULT_VALUE_LENTH) {
     ret = OB_SIZE_OVERFLOW;
   } else if (OB_FAIL(job.set_pool_list(ObString(val)))) {
-    LOG_WARN("failed to set pool list", KR(ret), K(val));
+    LOG_WARN("failed to set pool list", KR(ret));
   }
   return ret;
 }
@@ -136,7 +137,7 @@ int ObPhysicalRestoreOptionParser::ExtraArgsCb::set_locality(
   } else if (STRLEN(val) >= common::MAX_LOCALITY_LENGTH) {
     ret = OB_SIZE_OVERFLOW;
   } else if (OB_FAIL(job.set_locality(ObString(val)))) {
-    LOG_WARN("failed to set locality", KR(ret), K(val));
+    LOG_WARN("failed to set locality", KR(ret));
   }
   return ret;
 }
@@ -151,7 +152,7 @@ int ObPhysicalRestoreOptionParser::ExtraArgsCb::set_primary_zone(
   } else if (STRLEN(val) >= common::MAX_ZONE_LIST_LENGTH) {
     ret = OB_SIZE_OVERFLOW;
   } else if (OB_FAIL(job.set_primary_zone(ObString(val)))) {
-    LOG_WARN("failed to set primary zone", KR(ret), K(val));
+    LOG_WARN("failed to set primary zone", KR(ret));
   }
   return ret;
 }
@@ -183,10 +184,14 @@ int ObPhysicalRestoreOptionParser::ExtraArgsCb::set_concurrency(
 {
   int ret = OB_SUCCESS;
   int64_t concurrency = 0;
+  char *endptr = nullptr;
   if (OB_ISNULL(val)) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(ob_atoll(val, concurrency))) {
-    LOG_WARN("failed to atoll", K(ret), K(val));
+  } else if (OB_FAIL(ob_strtoll(val, endptr, concurrency))) {
+    // ob_atoll logs the raw input on overflow; retain its checks without that log.
+    LOG_WARN("failed to parse concurrency", K(ret));
+  } else if (val == endptr || OB_ISNULL(endptr) || '\0' != *endptr) {
+    ret = OB_INVALID_ARGUMENT;
   } else if (concurrency < 0 || concurrency > 100) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("concurrency is not valid", K(ret), K(concurrency));
@@ -208,7 +213,7 @@ int ObPhysicalRestoreUriParser::parse(
   
   if (multi_uri.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", KR(ret), K(multi_uri));
+    LOG_WARN("get invalid argument", KR(ret), "uri_length", multi_uri.length());
   } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(multi_uri.length() + 1)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", KR(ret));
@@ -227,9 +232,9 @@ int ObPhysicalRestoreUriParser::parse(
       const ObString actual_path = path.trim();
       if (OB_FAIL(validate_uri_type(actual_path))) {
         LOG_WARN("invalid uri", KR(ret));
-        LOG_USER_ERROR(OB_INVALID_BACKUP_DEST, tok);
+        LOG_USER_ERROR(OB_INVALID_BACKUP_DEST, "restore source URI");
       } else if (OB_FAIL(find_repeat_(uri_list, actual_path, is_repeat))) {
-        LOG_WARN("failed to find repeat", KR(ret), K(uri_list));
+        LOG_WARN("failed to find repeat", KR(ret), "uri_count", uri_list.count(), "path_length", actual_path.length());
       } else if (is_repeat) {
         // skip repeat path
         LOG_INFO("skip repeat path");

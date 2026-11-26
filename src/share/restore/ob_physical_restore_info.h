@@ -14,6 +14,7 @@
 #define __OB_PHYSICAL_RESTORE_INFO_H__
 
 #include "share/backup/ob_backup_struct.h"
+#include "lib/string/ob_sensitive_string_view.h"
 #include "share/restore/ob_restore_type.h"//ObRestoreType
 #include "share/ob_tenant_info_proxy.h"//ObTenantRole
 #include "share/restore/ob_restore_persist_helper.h"//ObRestoreJobPersistKey
@@ -99,6 +100,15 @@ public:\
   { return deep_copy_ob_string(allocator_, str, variable_name##_);}\
 
 
+#define Property_declare_SensitiveString(variable_name)\
+private:\
+  common::ObSensitiveStringView variable_name##_;\
+public:\
+  const ObString &get_##variable_name() const\
+  { return variable_name##_.str(); }\
+  int set_##variable_name(const ObString &str)\
+  { return deep_copy_ob_string(allocator_, str, variable_name##_.str()); }
+
 struct ObPhysicalRestoreJob final
 {
 public:
@@ -129,6 +139,8 @@ public:
     return white_list_;
   }
   int init_restore_key(const uint64_t tenant_id, const int64_t job_id);
+  static int get_display_value(const common::ObString &name, const common::ObString &value,
+      common::ObArenaAllocator &allocator, common::ObString &display_value);
   const ObRestoreJobPersistKey& get_restore_key() const
   {
     return restore_key_;
@@ -167,8 +179,8 @@ public:
   Property_declare_int(uint64_t, source_cluster_version)
   Property_declare_int(uint64_t, source_data_version)
   //from cmd
-  Property_declare_ObString(restore_option)
-  Property_declare_ObString(backup_dest)
+  Property_declare_SensitiveString(restore_option)
+  Property_declare_SensitiveString(backup_dest)
   Property_declare_ObString(description)
 
   //for create tenant from cmd
@@ -180,17 +192,17 @@ public:
   Property_declare_int(int64_t, compatible)
 
   //for kms
-  Property_declare_ObString(kms_info)
+  Property_declare_SensitiveString(kms_info)
   Property_declare_int(bool, kms_encrypt)
-  Property_declare_ObString(encrypt_key)
-  Property_declare_ObString(kms_dest)
-  Property_declare_ObString(kms_encrypt_key)
-  Property_declare_ObString(passwd_array)
+  Property_declare_SensitiveString(encrypt_key)
+  Property_declare_SensitiveString(kms_dest)
+  Property_declare_SensitiveString(kms_encrypt_key)
+  Property_declare_SensitiveString(passwd_array)
   Property_declare_int(int64_t, concurrency)
   Property_declare_int(bool, recover_table)
 
   //for sts
-  Property_declare_ObString(sts_credential)
+  Property_declare_SensitiveString(sts_credential)
 private:
   //job_id and tenant_id in __all_restore_job primary_key
   ObRestoreJobPersistKey restore_key_;

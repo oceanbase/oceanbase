@@ -816,7 +816,7 @@ public:
       ret = OB_INVALID_ARGUMENT;
 	    COMMON_LOG(WARN, "invalid args", K(tenant_id), K(incremental), K(compl_log));
     } else if (OB_FAIL(backup_dest_.assign(backup_dest))) {
-      COMMON_LOG(WARN, "set backup dest failed", K(backup_dest));
+      COMMON_LOG(WARN, "set backup dest failed", "backup_dest", common::ObSensitiveStringView(backup_dest.str()));
     } else if (OB_FAIL(append(backup_tenant_ids_, backup_tenant_ids))) {
       COMMON_LOG(WARN, "append backup tenant ids failed", K(backup_tenant_ids));
     } else if (OB_FAIL(backup_description_.assign(backup_description))) {
@@ -829,7 +829,7 @@ public:
     return ret;
   }
 	TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id), K_(incremental), K_(backup_tenant_ids), 
-      K_(backup_description), K_(compl_log), K_(backup_dest));
+      K_(backup_description), K_(compl_log), "backup_dest", common::ObSensitiveStringView(backup_dest_.str()));
 
 
 private:
@@ -1174,7 +1174,7 @@ public:
       ret = OB_INVALID_ARGUMENT;
 	    COMMON_LOG(WARN, "invalid args", K(tenant_id));
     } else if (OB_FAIL(backup_dest_.assign(backup_dest))) {
-      COMMON_LOG(WARN, "set backup dest failed", K(backup_dest));
+      COMMON_LOG(WARN, "set backup dest failed", "backup_dest", common::ObSensitiveStringView(backup_dest.str()));
     } else {
       tenant_id_ = tenant_id;
       encrypt_key_ = encrypt_key;
@@ -1182,7 +1182,7 @@ public:
     return ret;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id), K_(backup_dest));
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id), "backup_dest", common::ObSensitiveStringView(backup_dest_.str()));
 
 private:
   uint64_t tenant_id_;
@@ -1202,12 +1202,12 @@ public:
   {
     int ret = common::OB_SUCCESS;
     if (OB_FAIL(backup_dest_.assign(backup_dest))) {
-      COMMON_LOG(WARN, "set backup dest failed", K(backup_dest));
+      COMMON_LOG(WARN, "set backup dest failed", "backup_dest", common::ObSensitiveStringView(backup_dest.str()));
     }
     return ret;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(backup_dest));
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), "backup_dest", common::ObSensitiveStringView(backup_dest_.str()));
 
 private:
   share::ObBackupPathString backup_dest_;
@@ -1261,14 +1261,14 @@ public:
   ObBackupSetEncryptionStmt();
   virtual ~ObBackupSetEncryptionStmt() {}
   share::ObBackupEncryptionMode::EncryptionMode get_mode() const { return mode_; }
-  const ObString get_passwd() const { return encrypted_passwd_; }
+  const ObString get_passwd() const { return encrypted_passwd_.str(); }
   int set_param(const int64_t mode, const common::ObString &passwd);
   TO_STRING_KV(N_STMT_TYPE,  ((int)stmt_type_),
       "mode", share::ObBackupEncryptionMode::to_str(mode_), K_(encrypted_passwd));
 private:
   share::ObBackupEncryptionMode::EncryptionMode mode_;
-  char passwd_buf_[OB_MAX_PASSWORD_LENGTH];
-  ObString encrypted_passwd_;
+  common::ObSensitiveFixedLengthString<OB_MAX_PASSWORD_LENGTH> passwd_buf_;
+  common::ObSensitiveStringView encrypted_passwd_;
 };
 
 class ObBackupSetDecryptionStmt : public ObSystemCmdStmt
@@ -1276,11 +1276,11 @@ class ObBackupSetDecryptionStmt : public ObSystemCmdStmt
 public:
   ObBackupSetDecryptionStmt();
   virtual ~ObBackupSetDecryptionStmt() {}
-  ObString get_passwd_array() const { return passwd_array_; }
+  ObString get_passwd_array() const { return passwd_array_.str(); }
   int add_passwd(const ObString &passwd);
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(pos), K_(passwd_array));
 private:
-  char passwd_array_[OB_MAX_PASSWORD_ARRAY_LENGTH];
+  common::ObSensitiveFixedLengthString<OB_MAX_PASSWORD_ARRAY_LENGTH> passwd_array_;
   int64_t pos_;
 };
 
@@ -1316,12 +1316,12 @@ class ObAddRestoreSourceStmt : public ObSystemCmdStmt
 public:
   ObAddRestoreSourceStmt();
   virtual ~ObAddRestoreSourceStmt() {}
-  const ObString get_restore_source_array() const { return restore_source_array_; }
+  const ObString get_restore_source_array() const { return restore_source_array_.str(); }
   int add_restore_source(const common::ObString &source);
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(restore_source_array));
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(restore_source_array), K_(pos));
 private:
   static const int64_t MAX_RESTORE_SOURCE_LENGTH = 365 * 10 * share::OB_MAX_BACKUP_DEST_LENGTH;
-  char restore_source_array_[MAX_RESTORE_SOURCE_LENGTH];
+  common::ObSensitiveFixedLengthString<MAX_RESTORE_SOURCE_LENGTH> restore_source_array_;
   int64_t pos_;
 };
 

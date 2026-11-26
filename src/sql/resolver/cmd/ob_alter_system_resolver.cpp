@@ -2248,7 +2248,7 @@ int ObSetConfigResolver::check_param_valid(int64_t tenant_id ,
 #else
       share::ObSSLClient client;
       if (OB_FAIL(client.init(value.ptr(), value.length()))) {
-        OB_LOG(WARN, "ssl client init", K(ret), K(value));
+        OB_LOG(WARN, "ssl client init", K(ret), K(value.length()));
       } else if (OB_FAIL(client.check_param_valid())) {
         OB_LOG(WARN, "ssl client param is not valid", K(ret));
       }
@@ -2264,7 +2264,7 @@ int ObSetConfigResolver::check_param_valid(int64_t tenant_id ,
 #else
         share::ObSSLClient client;
         if (OB_FAIL(client.init(ssl_config.ptr(), ssl_config.length()))) {
-          OB_LOG(WARN, "kms client init", K(ret), K(ssl_config));
+          OB_LOG(WARN, "kms client init", K(ret), K(ssl_config.length()));
         } else if (OB_FAIL(client.check_param_valid())) {
           OB_LOG(WARN, "kms client param is not valid", K(ret));
         }
@@ -3464,7 +3464,7 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
     stmt->set_is_preview(true);
     stmt->get_rpc_arg().initiator_tenant_id_ = OB_SYS_TENANT_ID;
     const ParseNode *time_node = parse_tree.children_[1];
-    if (OB_FAIL(Util::resolve_string(parse_tree.children_[0], stmt->get_rpc_arg().uri_))) {
+    if (OB_FAIL(Util::resolve_string(parse_tree.children_[0], stmt->get_rpc_arg().uri_.str()))) {
       LOG_WARN("resolve string failed", K(ret));
     } else if (OB_ISNULL(parse_tree.children_[1])) {
       stmt->get_rpc_arg().with_restore_scn_ = false;
@@ -3499,7 +3499,7 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
             LOG_WARN("invalid sql syntax", KR(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "have backup_dest and restore_source at the same time");
           } else if (OB_FAIL(Util::resolve_string(parse_tree.children_[1],
-                                          stmt->get_rpc_arg().uri_))) {
+                                          stmt->get_rpc_arg().uri_.str()))) {
             LOG_WARN("resolve string failed", K(ret));
           }
         }
@@ -3508,7 +3508,7 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
         // do nothing
       } else if (OB_NOT_NULL(parse_tree.children_[4])
           && OB_FAIL(Util::resolve_string(parse_tree.children_[4],
-                                          stmt->get_rpc_arg().encrypt_key_))) {
+                                          stmt->get_rpc_arg().encrypt_key_.str()))) {
         LOG_WARN("failed to resolve encrypt key", K(ret));
       } else if (OB_NOT_NULL(parse_tree.children_[5])
           && OB_FAIL(resolve_restore_with_config_item(parse_tree.children_[5], stmt->get_rpc_arg()))) {
@@ -3519,13 +3519,13 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (OB_FAIL(Util::resolve_string(parse_tree.children_[3],
-                                              stmt->get_rpc_arg().restore_option_))) {
+                                              stmt->get_rpc_arg().restore_option_.str()))) {
         LOG_WARN("resolve string failed", K(ret));
       } else if (OB_NOT_NULL(description_node) 
           && OB_FAIL(Util::resolve_string(description_node, stmt->get_rpc_arg().description_))) {
         LOG_WARN("fail to resolve description", K(ret));
 #ifdef OB_BUILD_TDE_SECURITY
-      } else if (OB_FAIL(resolve_kms_encrypt_info(stmt->get_rpc_arg().restore_option_))) {
+      } else if (OB_FAIL(resolve_kms_encrypt_info(stmt->get_rpc_arg().restore_option_.str()))) {
         LOG_WARN("fail to resolve encrypt info", K(ret));
 #endif
       } else if (OB_FAIL(resolve_decryption_passwd(stmt->get_rpc_arg()))) {
@@ -3580,18 +3580,18 @@ int ObPhysicalRestoreTenantResolver::resolve_restore_with_config_item(const Pars
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("kms uri should not be NULL", K(ret));
         } else if (OB_FAIL(Util::resolve_string(child_node->children_[0],
-                                                arg.kms_uri_))) {
+                                                arg.kms_uri_.str()))) {
           LOG_WARN("failed to resolve kms uri", K(ret));
         } else if (OB_NOT_NULL(child_node->children_[1])
             && OB_FAIL(Util::resolve_string(child_node->children_[1],
-                                            arg.kms_encrypt_key_))) {
+                                            arg.kms_encrypt_key_.str()))) {
           LOG_WARN("failed to resolve kms encrypt key", K(ret));
         }
       } else if (T_STS_CREDENTIAL == child_node->type_) {
         if (1 != child_node->num_child_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("num of children not match", K(ret), "child_num", child_node->num_child_);
-        } else if (OB_FAIL(Util::resolve_string(child_node->children_[0], arg.sts_credential_))) {
+        } else if (OB_FAIL(Util::resolve_string(child_node->children_[0], arg.sts_credential_.str()))) {
           LOG_WARN("fail to resolve string", K(ret));
         }
       }
@@ -3625,7 +3625,7 @@ int ObPhysicalRestoreTenantResolver::resolve_kms_encrypt_info(common::ObString s
       ObPhysicalRestoreTenantStmt *stmt = static_cast<ObPhysicalRestoreTenantStmt *>(stmt_);
       stmt->get_rpc_arg().kms_info_ = value.get_varchar(); //浅拷贝即可
       bool is_valid = false;
-      if (OB_FAIL(check_kms_info_valid(stmt->get_rpc_arg().kms_info_, is_valid))) {
+      if (OB_FAIL(check_kms_info_valid(stmt->get_rpc_arg().kms_info_.str(), is_valid))) {
         LOG_WARN("fail to check kms info valid", K(ret));
       } else if (!is_valid) {
         ret = OB_INVALID_ARGUMENT;
@@ -4901,7 +4901,8 @@ int ObBackupDatabaseResolver::resolve(const ParseNode &parse_tree)
     if (OB_FAIL(ret)) {
     } else if (!backup_dest.is_empty()) { // TODO(chognrong.th) support specify path in 4.1
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("backup do not support using specify path ", K(ret), K(backup_dest), K(backup_tenant_ids));
+      LOG_WARN("backup do not support using specify path ", K(ret),
+          "backup_dest", ObSensitiveStringView(backup_dest.str()), K(backup_tenant_ids));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup do not support using specify path");
     }
 
@@ -5516,13 +5517,13 @@ int ObBackupSetEncryptionResolver::resolve(const ParseNode &parse_tree)
     const ObString passwd(parse_tree.children_[1]->str_len_, parse_tree.children_[1]->str_value_);
     const uint64_t tenant_id = session_info_->get_login_tenant_id();
 
-    LOG_INFO("resolve set encryption", K(mode), K(passwd));
+    LOG_INFO("resolve set encryption", K(mode));
 
     if (NULL == (stmt = create_stmt<ObBackupSetEncryptionStmt>())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("create ObBackupSetEncryptionStmt failed", K(ret));
     } else if (OB_FAIL(stmt->set_param(mode, passwd))) {
-      LOG_WARN("Failed to set param", K(ret), K(mode), K(passwd), KP(session_info_));
+      LOG_WARN("Failed to set param", K(ret), K(mode), KP(session_info_));
     }
     stmt_ = stmt;
   }
@@ -5566,7 +5567,7 @@ int ObBackupSetDecryptionResolver::resolve(const ParseNode &parse_tree)
     ParseNode *node = passwd_list->children_[i];
     const ObString passwd(node->str_len_, node->str_value_);
     if (OB_FAIL(stmt->add_passwd(passwd))) {
-      LOG_WARN("failed to add passwd", K(ret), K(i), K(passwd));
+      LOG_WARN("failed to add passwd", K(ret), K(i));
     }
   }
 
@@ -5661,7 +5662,7 @@ int ObAddRestoreSourceResolver::resolve(const ParseNode &parse_tree)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("failed to create ObAddRestoreSourceStmt", K(ret));
     } else if (OB_FAIL(stmt->add_restore_source(source))) {
-      LOG_WARN("Failed to set param", K(ret), K(source));
+      LOG_WARN("Failed to set param", K(ret), "source_length", source.length());
     } else {
       stmt_ = stmt;
     }
@@ -5741,17 +5742,17 @@ int ObRecoverTableResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("failed to resolve tenant id", K(ret));
     } else if (OB_FAIL(ObRecoverTableUtil::check_compatible(stmt->get_rpc_arg().tenant_id_))) {
       LOG_WARN("check recover table compatible failed", K(ret));
-    } else if (OB_FAIL(Util::resolve_string(parse_tree.children_[1], stmt->get_rpc_arg().restore_tenant_arg_.uri_))) {
+    } else if (OB_FAIL(Util::resolve_string(parse_tree.children_[1], stmt->get_rpc_arg().restore_tenant_arg_.uri_.str()))) {
       LOG_WARN("failed to resolve backup dest", K(ret));
     } else if (OB_FAIL(resolve_scn_(parse_tree.children_[2], stmt->get_rpc_arg().restore_tenant_arg_))) {
       LOG_WARN("failed to resolve restore scn", K(ret));
-    } else if (OB_FAIL(Util::resolve_string(parse_tree.children_[3], stmt->get_rpc_arg().restore_tenant_arg_.restore_option_))) {
+    } else if (OB_FAIL(Util::resolve_string(parse_tree.children_[3], stmt->get_rpc_arg().restore_tenant_arg_.restore_option_.str()))) {
       LOG_WARN("failed to resolve restore option", K(ret));
     } else if (OB_FAIL(resolve_recover_tables_(
         parse_tree.children_[4], compat_mode, case_mode, stmt->get_rpc_arg().import_arg_.get_import_table_arg()))) {
       LOG_WARN("failed to resolve recover table list", K(ret));
     } else if (OB_NOT_NULL(parse_tree.children_[5])
-        && OB_FAIL(Util::resolve_string(parse_tree.children_[5], stmt->get_rpc_arg().restore_tenant_arg_.encrypt_key_))) {
+        && OB_FAIL(Util::resolve_string(parse_tree.children_[5], stmt->get_rpc_arg().restore_tenant_arg_.encrypt_key_.str()))) {
       LOG_WARN("failed to resolve encrypt key", K(ret));
     } else if (OB_NOT_NULL(parse_tree.children_[6])
        && OB_FAIL(resolve_restore_with_config_item_(parse_tree.children_[6], stmt->get_rpc_arg()))){
@@ -5767,12 +5768,12 @@ int ObRecoverTableResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("failed to resolve desc", K(ret));
 #ifdef OB_BUILD_TDE_SECURITY
     } else if (OB_FAIL(resolve_kms_info_(
-        stmt->get_rpc_arg().restore_tenant_arg_.restore_option_, stmt->get_rpc_arg().restore_tenant_arg_.kms_info_))) {
+        stmt->get_rpc_arg().restore_tenant_arg_.restore_option_.str(), stmt->get_rpc_arg().restore_tenant_arg_.kms_info_.str()))) {
       LOG_WARN("failed to resolve kms info", K(ret));
 #endif
-    } else if (OB_FAIL(resolve_backup_set_pwd_(stmt->get_rpc_arg().restore_tenant_arg_.passwd_array_))) {
+    } else if (OB_FAIL(resolve_backup_set_pwd_(stmt->get_rpc_arg().restore_tenant_arg_.passwd_array_.str()))) {
       LOG_WARN("failed to resolve backup set pwd", K(ret));
-    } else if (OB_FAIL(resolve_restore_source_(stmt->get_rpc_arg().restore_tenant_arg_.multi_uri_))) {
+    } else if (OB_FAIL(resolve_restore_source_(stmt->get_rpc_arg().restore_tenant_arg_.multi_uri_.str()))) {
       LOG_WARN("failed to resolve restore source", K(ret));
     }
 
@@ -5854,7 +5855,7 @@ int ObRecoverTableResolver::resolve_restore_source_(common::ObString &restore_so
       LOG_WARN("failed to get user variable value", K(ret));
     } else {
       restore_source = value.get_char();
-      LOG_INFO("succeed to resolve restore source", K(restore_source));
+      LOG_INFO("succeed to resolve restore source");
     }
   }
   return ret;
@@ -6098,7 +6099,7 @@ int ObRecoverTableResolver::resolve_backup_set_pwd_(common::ObString &pwd)
     LOG_WARN("fail to get user variable", K(ret));
   } else {
     pwd = value.get_varchar();
-    LOG_INFO("succeed to resolve_decryption_passwd", "passwd", pwd);
+    LOG_INFO("succeed to resolve_decryption_passwd");
   }
   return ret;
 }
@@ -6340,18 +6341,18 @@ int ObRecoverTableResolver::resolve_restore_with_config_item_(const ParseNode *n
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("kms uri should not be NULL", K(ret));
         } else if (OB_FAIL(Util::resolve_string(child_node->children_[0],
-                                                arg.restore_tenant_arg_.kms_uri_))) {
+                                                arg.restore_tenant_arg_.kms_uri_.str()))) {
           LOG_WARN("failed to resolve kms uri", K(ret));
         } else if (OB_NOT_NULL(child_node->children_[1])
             && OB_FAIL(Util::resolve_string(child_node->children_[1],
-                                            arg.restore_tenant_arg_.kms_encrypt_key_))) {
+                                            arg.restore_tenant_arg_.kms_encrypt_key_.str()))) {
           LOG_WARN("failed to resolve kms encrypt key", K(ret));
         }
       } else if (T_STS_CREDENTIAL == child_node->type_) {
         if (1 != child_node->num_child_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("num of children not match", K(ret), "child_num", child_node->num_child_);
-        } else if (OB_FAIL(Util::resolve_string(child_node->children_[0], arg.restore_tenant_arg_.sts_credential_))) {
+        } else if (OB_FAIL(Util::resolve_string(child_node->children_[0], arg.restore_tenant_arg_.sts_credential_.str()))) {
           LOG_WARN("fail to resolve string", K(ret));
         }
       }

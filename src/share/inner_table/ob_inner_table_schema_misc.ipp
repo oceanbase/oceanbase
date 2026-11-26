@@ -1465,13 +1465,13 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
     }
 
     case OB_ALL_VIRTUAL_RECOVER_TABLE_JOB_TID: {
-      ObIteratePrivateVirtualTable *iter = NULL;
+      ObAllVirtualRestoreJob *iter = NULL;
       const bool meta_record_in_sys = false;
-      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualRestoreJob, iter))) {
         SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
       } else if (OB_FAIL(iter->init(OB_ALL_RECOVER_TABLE_JOB_TID, meta_record_in_sys, index_schema, params))) {
         SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
-        iter->~ObIteratePrivateVirtualTable();
+        iter->~ObAllVirtualRestoreJob();
         allocator.free(iter);
         iter = NULL;
       } else {
@@ -1481,13 +1481,13 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
     }
 
     case OB_ALL_VIRTUAL_RECOVER_TABLE_JOB_HISTORY_TID: {
-      ObIteratePrivateVirtualTable *iter = NULL;
+      ObAllVirtualRestoreJob *iter = NULL;
       const bool meta_record_in_sys = false;
-      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualRestoreJob, iter))) {
         SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
       } else if (OB_FAIL(iter->init(OB_ALL_RECOVER_TABLE_JOB_HISTORY_TID, meta_record_in_sys, index_schema, params))) {
         SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
-        iter->~ObIteratePrivateVirtualTable();
+        iter->~ObAllVirtualRestoreJob();
         allocator.free(iter);
         iter = NULL;
       } else {
@@ -1497,13 +1497,13 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
     }
 
     case OB_ALL_VIRTUAL_RESTORE_JOB_TID: {
-      ObIteratePrivateVirtualTable *iter = NULL;
+      ObAllVirtualRestoreJob *iter = NULL;
       const bool meta_record_in_sys = false;
-      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualRestoreJob, iter))) {
         SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
       } else if (OB_FAIL(iter->init(OB_ALL_RESTORE_JOB_TID, meta_record_in_sys, index_schema, params))) {
         SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
-        iter->~ObIteratePrivateVirtualTable();
+        iter->~ObAllVirtualRestoreJob();
         allocator.free(iter);
         iter = NULL;
       } else {
@@ -1513,13 +1513,13 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
     }
 
     case OB_ALL_VIRTUAL_RESTORE_JOB_HISTORY_TID: {
-      ObIteratePrivateVirtualTable *iter = NULL;
+      ObAllVirtualRestoreJob *iter = NULL;
       const bool meta_record_in_sys = false;
-      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualRestoreJob, iter))) {
         SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
       } else if (OB_FAIL(iter->init(OB_ALL_RESTORE_JOB_HISTORY_TID, meta_record_in_sys, index_schema, params))) {
         SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
-        iter->~ObIteratePrivateVirtualTable();
+        iter->~ObAllVirtualRestoreJob();
         allocator.free(iter);
         iter = NULL;
       } else {

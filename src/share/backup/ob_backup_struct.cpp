@@ -95,7 +95,7 @@ int ObPhysicalRestoreBackupDestList::get_backup_set_brief_info_list(
   if (backup_set_desc_list_.count() != backup_set_path_list_.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("backup set desc list is mismatched with backup set path list", K(ret),
-        K(backup_set_desc_list_), K(backup_set_path_list_));
+        K(backup_set_desc_list_), "path_count", backup_set_path_list_.count());
   } else {
     share::ObRestoreBackupSetBriefInfo tmp_info;
     int64_t cnt = backup_set_desc_list_.count();
@@ -133,7 +133,7 @@ int ObPhysicalRestoreBackupDestList::get_backup_set_list_format_str(
       if (OB_FAIL(databuff_printf(str_buf, str_buf_len, pos, "%s%s",
                   0 == i ? "" : ",",
                   item.ptr()))) {
-        LOG_WARN("fail to append str", KR(ret), K(item), K(pos), K(str_buf));
+        LOG_WARN("fail to append str", KR(ret), K(pos), K(str_buf_len), KPC(this));
       }
     }
 
@@ -141,10 +141,10 @@ int ObPhysicalRestoreBackupDestList::get_backup_set_list_format_str(
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(str_buf) || str_buf_len <= 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected format str", KR(ret), K(str_buf), K(str_buf_len));
+    LOG_WARN("unexpected format str", KR(ret), K(str_buf_len));
   } else {
     str.assign_ptr(str_buf, static_cast<int32_t>(str_buf_len - 1));
-    LOG_DEBUG("get format backup set path list str", KR(ret), K(str));
+    LOG_DEBUG("get format backup set path list str", KR(ret), KPC(this), "result_length", str.length());
   }
   return ret;
 }
@@ -205,17 +205,17 @@ int ObPhysicalRestoreBackupDestList::get_backup_piece_list_format_str(
       const share::ObBackupPiecePath &item = backup_piece_path_list_.at(i);
       if (OB_FAIL(databuff_printf(str_buf, str_buf_len, pos, "%s%s",
                   0 == i ? "" : ",", item.ptr()))) {
-        LOG_WARN("fail to append str", KR(ret), K(item), K(pos), K(str_buf));
+        LOG_WARN("fail to append str", KR(ret), K(pos), K(str_buf_len), KPC(this));
       }
     }
   }
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(str_buf) || str_buf_len <= 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected format str", KR(ret), K(str_buf), K(str_buf_len));
+    LOG_WARN("unexpected format str", KR(ret), K(str_buf_len));
   } else {
     str.assign_ptr(str_buf, static_cast<int32_t>(str_buf_len - 1));
-    LOG_DEBUG("get format backup piece path list str", KR(ret), K(str));
+    LOG_DEBUG("get format backup piece path list str", KR(ret), KPC(this), "result_length", str.length());
   }
   return ret;
 }
@@ -240,17 +240,17 @@ int ObPhysicalRestoreBackupDestList::get_log_path_list_format_str(
       const share::ObBackupPathString &item = log_path_list_.at(i);
       if (OB_FAIL(databuff_printf(str_buf, str_buf_len, pos, "%s%s",
                   0 == i ? "" : ",", item.ptr()))) {
-        LOG_WARN("fail to append str", KR(ret), K(item), K(pos), K(str_buf));
+        LOG_WARN("fail to append str", KR(ret), K(pos), K(str_buf_len), KPC(this));
       }
     }
   }
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(str_buf) || str_buf_len <= 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected format str", KR(ret), K(str_buf), K(str_buf_len));
+    LOG_WARN("unexpected format str", KR(ret), K(str_buf_len));
   } else {
     str.assign_ptr(str_buf, static_cast<int32_t>(str_buf_len - 1));
-    LOG_DEBUG("get log path list str", KR(ret), K(str));
+    LOG_DEBUG("get log path list str", KR(ret), KPC(this), "result_length", str.length());
   }
   return ret;
 }
@@ -267,7 +267,7 @@ int ObPhysicalRestoreBackupDestList::backup_set_list_assign_with_format_str(cons
     LOG_ERROR("fail to alloc string", K(ret), "buf length", buf_len);
   } else if (OB_FALSE_IT(MEMSET(buf, 0, buf_len))) {
   } else if (OB_FAIL(databuff_printf(buf, buf_len, "%.*s", static_cast<int>(str.length()), str.ptr()))) {
-    LOG_WARN("fail to print str", K(ret), K(str), K(buf_len));
+    LOG_WARN("fail to print str", K(ret), K(buf_len));
   } else {
     char *token = nullptr;
     char *saveptr = nullptr;
@@ -280,7 +280,7 @@ int ObPhysicalRestoreBackupDestList::backup_set_list_assign_with_format_str(cons
       } else if (OB_FAIL(path.assign(token))) {
         LOG_WARN("fail to assign backup set path", K(ret));
       } else if (OB_FAIL(backup_set_path_list_.push_back(path))) {
-        LOG_WARN("fail to push back path", K(ret), K(path));
+        LOG_WARN("fail to push back path", K(ret), KPC(this), "path_length", path.size());
       }
     }
   }
@@ -336,7 +336,7 @@ int ObPhysicalRestoreBackupDestList::backup_piece_list_assign_with_format_str(co
     LOG_ERROR("fail to alloc string", K(ret), "buf length", buf_len);
   } else if (OB_FALSE_IT(MEMSET(buf, 0, buf_len))) {
   } else if (OB_FAIL(databuff_printf(buf, buf_len, "%.*s", static_cast<int>(str.length()), str.ptr()))) {
-    LOG_WARN("fail to print str", K(ret), K(str), K(buf_len));
+    LOG_WARN("fail to print str", K(ret), K(buf_len));
   } else {
     char *token = nullptr;
     char *saveptr = nullptr;
@@ -349,7 +349,7 @@ int ObPhysicalRestoreBackupDestList::backup_piece_list_assign_with_format_str(co
       } else if (OB_FAIL(path.assign(token))) {
         LOG_WARN("fail to assign backup set path", K(ret));
       } else if (OB_FAIL(backup_piece_path_list_.push_back(path))) {
-        LOG_WARN("fail to push back path", K(ret), K(path));
+        LOG_WARN("fail to push back path", K(ret), KPC(this), "path_length", path.size());
       }
     }
   }
@@ -369,7 +369,7 @@ int ObPhysicalRestoreBackupDestList::log_path_list_assign_with_format_str(const 
     LOG_ERROR("fail to alloc string", K(ret), "buf length", buf_len);
   } else if (OB_FALSE_IT(MEMSET(buf, 0, buf_len))) {
   } else if (OB_FAIL(databuff_printf(buf, buf_len, "%.*s", static_cast<int>(str.length()), str.ptr()))) {
-    LOG_WARN("fail to print str", K(ret), K(str), K(buf_len));
+    LOG_WARN("fail to print str", K(ret), K(buf_len));
   } else {
     char *token = nullptr;
     char *saveptr = nullptr;
@@ -382,7 +382,7 @@ int ObPhysicalRestoreBackupDestList::log_path_list_assign_with_format_str(const 
       } else if (OB_FAIL(path.assign(token))) {
         LOG_WARN("fail to assign log path", K(ret));
       } else if (OB_FAIL(log_path_list_.push_back(path))) {
-        LOG_WARN("fail to push log path", K(ret), K(path));
+        LOG_WARN("fail to push log path", K(ret), KPC(this), "path_length", path.size());
       }
     }
   }
@@ -403,15 +403,14 @@ int ObPhysicalRestoreBackupDestList::backup_set_list_assign_with_hex_str(const c
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", KR(ret), K(deserialize_size));
   } else if (OB_FAIL(hex_to_cstr(str.ptr(), str_size, deserialize_buf, deserialize_size))) {
-    LOG_WARN("fail to get cstr from hex", KR(ret), K(str_size), K(deserialize_size), K(str));
+    LOG_WARN("fail to get cstr from hex", KR(ret), K(str_size), K(deserialize_size));
   } else if (OB_FAIL(backup_set_path_list_.deserialize(deserialize_buf, deserialize_size, deserialize_pos))) {
-    LOG_WARN("fail to deserialize backup set path list", KR(ret), K(str),
-             "deserialize_buf", ObString(deserialize_size, deserialize_buf));
+    LOG_WARN("fail to deserialize backup set path list", KR(ret), K(deserialize_size));
   } else if (deserialize_pos > deserialize_size) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("deserialize error", KR(ret), K(deserialize_pos), K(deserialize_size));
   } else {
-    LOG_DEBUG("assign with hex str", KR(ret), K(str));
+    LOG_DEBUG("assign with hex str", KR(ret), K(str_size), KPC(this));
   }
   return ret;
 }
@@ -430,15 +429,14 @@ int ObPhysicalRestoreBackupDestList::backup_piece_list_assign_with_hex_str(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", KR(ret), K(deserialize_size));
   } else if (OB_FAIL(hex_to_cstr(str.ptr(), str_size, deserialize_buf, deserialize_size))) {
-    LOG_WARN("fail to get cstr from hex", KR(ret), K(str_size), K(deserialize_size), K(str));
+    LOG_WARN("fail to get cstr from hex", KR(ret), K(str_size), K(deserialize_size));
   } else if (OB_FAIL(backup_piece_path_list_.deserialize(deserialize_buf, deserialize_size, deserialize_pos))) {
-    LOG_WARN("fail to deserialize backup piece path list", KR(ret), K(str),
-             "deserialize_buf", ObString(deserialize_size, deserialize_buf));
+    LOG_WARN("fail to deserialize backup piece path list", KR(ret), K(deserialize_size));
   } else if (deserialize_pos > deserialize_size) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("deserialize error", KR(ret), K(deserialize_pos), K(deserialize_size));
   } else {
-    LOG_DEBUG("assign with hex str", KR(ret), K(str));
+    LOG_DEBUG("assign with hex str", KR(ret), K(str_size), KPC(this));
   }
   return ret;
 }
@@ -457,15 +455,14 @@ int ObPhysicalRestoreBackupDestList::log_path_list_assign_with_hex_str(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", KR(ret), K(deserialize_size));
   } else if (OB_FAIL(hex_to_cstr(str.ptr(), str_size, deserialize_buf, deserialize_size))) {
-    LOG_WARN("fail to get cstr from hex", KR(ret), K(str_size), K(deserialize_size), K(str));
+    LOG_WARN("fail to get cstr from hex", KR(ret), K(str_size), K(deserialize_size));
   } else if (OB_FAIL(log_path_list_.deserialize(deserialize_buf, deserialize_size, deserialize_pos))) {
-    LOG_WARN("fail to deserialize log path list", KR(ret), K(str),
-             "deserialize_buf", ObString(deserialize_size, deserialize_buf));
+    LOG_WARN("fail to deserialize log path list", KR(ret), K(deserialize_size));
   } else if (deserialize_pos > deserialize_size) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("deserialize error", KR(ret), K(deserialize_pos), K(deserialize_size));
   } else {
-    LOG_DEBUG("assign with hex str", KR(ret), K(str));
+    LOG_DEBUG("assign with hex str", KR(ret), K(str_size), KPC(this));
   }
   return ret;
 }
@@ -488,7 +485,7 @@ int ObPhysicalRestoreBackupDestList::get_backup_set_list_hex_str(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", KR(ret));
   } else if (OB_FAIL(backup_set_path_list_.serialize(serialize_buf, serialize_size, serialize_pos))) {
-    LOG_WARN("fail to serialize table_items", KR(ret), K_(backup_set_path_list));
+    LOG_WARN("fail to serialize table_items", KR(ret), K(serialize_size), KPC(this));
   } else if (serialize_pos > serialize_size) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("serialize error", KR(ret), K(serialize_pos), K(serialize_size));
@@ -502,7 +499,7 @@ int ObPhysicalRestoreBackupDestList::get_backup_set_list_hex_str(
     LOG_WARN("encode error", KR(ret), K(hex_pos), K(hex_size));
   } else {
     str.assign_ptr(hex_buf, static_cast<int32_t>(hex_size));
-    LOG_DEBUG("get hex backup set list str", KR(ret), K(str));
+    LOG_DEBUG("get hex backup set list str", KR(ret), KPC(this), "result_length", str.length());
   }
   return ret;
 }
@@ -525,7 +522,7 @@ int ObPhysicalRestoreBackupDestList::get_backup_piece_list_hex_str(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", KR(ret));
   } else if (OB_FAIL(backup_piece_path_list_.serialize(serialize_buf, serialize_size, serialize_pos))) {
-    LOG_WARN("fail to serialize table_items", KR(ret), K_(backup_piece_path_list));
+    LOG_WARN("fail to serialize table_items", KR(ret), K(serialize_size), KPC(this));
   } else if (serialize_pos > serialize_size) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("serialize error", KR(ret), K(serialize_pos), K(serialize_size));
@@ -539,7 +536,7 @@ int ObPhysicalRestoreBackupDestList::get_backup_piece_list_hex_str(
     LOG_WARN("encode error", KR(ret), K(hex_pos), K(hex_size));
   } else {
     str.assign_ptr(hex_buf, static_cast<int32_t>(hex_size));
-    LOG_DEBUG("get hex backup piece list str", KR(ret), K(str));
+    LOG_DEBUG("get hex backup piece list str", KR(ret), KPC(this), "result_length", str.length());
   }
   return ret;
 }
@@ -562,7 +559,7 @@ int ObPhysicalRestoreBackupDestList::get_log_path_list_hex_str(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", KR(ret));
   } else if (OB_FAIL(log_path_list_.serialize(serialize_buf, serialize_size, serialize_pos))) {
-    LOG_WARN("fail to serialize table_items", KR(ret), K_(log_path_list));
+    LOG_WARN("fail to serialize table_items", KR(ret), K(serialize_size), KPC(this));
   } else if (serialize_pos > serialize_size) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("serialize error", KR(ret), K(serialize_pos), K(serialize_size));
@@ -576,7 +573,7 @@ int ObPhysicalRestoreBackupDestList::get_log_path_list_hex_str(
     LOG_WARN("encode error", KR(ret), K(hex_pos), K(hex_size));
   } else {
     str.assign_ptr(hex_buf, static_cast<int32_t>(hex_size));
-    LOG_DEBUG("get hex log path list str", KR(ret), K(str));
+    LOG_DEBUG("get hex log path list str", KR(ret), KPC(this), "result_length", str.length());
   }
   return ret;
 }
@@ -1086,7 +1083,7 @@ int ObLogArchiveBackupInfo::get_backup_dest(ObBackupDest &backup_dest) const
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", KR(ret));
   } else if (OB_FAIL(backup_dest.set(backup_dest_))) {
-    LOG_WARN("failed to set backup dest", KR(ret), K(backup_dest_));
+    LOG_WARN("failed to set backup dest", KR(ret));
   }
   return ret;
 }
@@ -1155,7 +1152,7 @@ int ObBackupStorageInfo::get_authorization_info(char *authorization, const int64
     if (OB_FAIL(get_access_key_(access_key_buf, sizeof(access_key_buf)))) {
       LOG_WARN("failed to get access key", K(ret));
     } else if (OB_FAIL(databuff_printf(authorization, length, "%s&%s", access_id_, access_key_buf))) {
-      LOG_WARN("failed to set authorization", K(ret), K(length), K_(access_id), K(strlen(access_key_buf)));
+      LOG_WARN("failed to set authorization", K(ret), K(length), K(strlen(access_id_)), K(strlen(access_key_buf)));
     }
   } else {
     // access by assume role mode
@@ -1252,9 +1249,9 @@ int ObBackupStorageInfo::parse_storage_info_(const char *storage_info, bool &has
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("access_key has been set value", K(ret), K(strlen(access_key_)));
         } else if (OB_FAIL(set_storage_info_field_(token, serialize_key, sizeof(serialize_key)))) {
-          LOG_WARN("failed to set encrypted_key", K(ret), K(token));
+          LOG_WARN("failed to set encrypted_key", K(ret), KPC(this));
         } else if (OB_FAIL(decrypt_access_key_(serialize_key))) {
-          LOG_WARN("failed to decrypt access key", K(ret), K(token));
+          LOG_WARN("failed to decrypt access key", K(ret), KPC(this));
         }
 #endif
       } else if (0 == strncmp(BACKUP_ZONE, token, strlen(BACKUP_ZONE))) {
@@ -1330,13 +1327,13 @@ int ObBackupStorageInfo::encrypt_access_key_(char *encrypt_key, int64_t length) 
       encrypted_key, OB_MAX_BACKUP_ENCRYPTKEY_LENGTH, key_len))) {
     LOG_WARN("failed to encrypt authorization key", K(ret));
   } else if (OB_FAIL(hex_print(encrypted_key, key_len, serialize_buf, sizeof(serialize_buf), serialize_pos))) {
-    LOG_WARN("failed to serialize encrypted key", K(ret), K(encrypted_key));
+    LOG_WARN("failed to serialize encrypted key", K(ret), K(key_len), K(serialize_pos), KPC(this));
   } else if (serialize_pos >= sizeof(serialize_buf) || serialize_pos >= length) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("encode error", K(ret), K(serialize_pos), K(sizeof(serialize_buf)), K(length));
   } else if (FALSE_IT(serialize_buf[serialize_pos] = '\0')) {
   } else if (OB_FAIL(databuff_printf(encrypt_key, length, "%s%s", ENCRYPT_KEY, serialize_buf))) {
-    LOG_WARN("failed to get encrypted key", K(ret), K(serialize_buf));
+    LOG_WARN("failed to get encrypted key", K(ret), K(length), K(serialize_pos), KPC(this));
   }
 
   return ret;
@@ -1473,7 +1470,7 @@ int ObBackupDest::parse_backup_dest_str_(const char *backup_dest, const bool onl
   int64_t pos = 0;
   if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("backup_dest not init", K(ret), K(backup_dest));
+    LOG_WARN("backup_dest not init", K(ret), KPC(this), "input_length", bakup_dest_str.length());
   } else if (OB_FAIL(get_storage_type_from_path(bakup_dest_str, type))) {
     LOG_WARN("failed to get storage type", K(ret));
   } else {
@@ -1490,7 +1487,7 @@ int ObBackupDest::parse_backup_dest_str_(const char *backup_dest, const bool onl
 
     if (pos >= OB_MAX_BACKUP_PATH_LENGTH) {
       ret = OB_INVALID_BACKUP_DEST;
-      LOG_ERROR("backup dest is too long, cannot work", K(ret), K(pos), K(backup_dest));
+      LOG_ERROR("backup dest is too long, cannot work", K(ret), K(pos));
     } else {
       MEMCPY(root_path_, backup_dest, pos);
       root_path_[pos] = '\0';
@@ -1498,9 +1495,9 @@ int ObBackupDest::parse_backup_dest_str_(const char *backup_dest, const bool onl
         ++pos;
       }
       if (!only_parse_for_unique_path && OB_FAIL(storage_info_->set(type, backup_dest + pos))) {
-        LOG_WARN("failed to init storage_info", K(ret), K(type), K(pos), K(backup_dest));
+        LOG_WARN("failed to init storage_info", K(ret), K(type), K(pos), KPC(this));
       } else if (only_parse_for_unique_path && OB_FAIL(storage_info_->set_endpoint(type, backup_dest + pos))) {
-        LOG_WARN("failed to set endpoint", K(ret), K(type), K(pos), K(backup_dest));
+        LOG_WARN("failed to set endpoint", K(ret), K(type), K(pos), KPC(this));
       }
     }
   }
@@ -1520,7 +1517,7 @@ int ObBackupDest::set(const char *backup_dest)
   } else if (OB_FAIL(alloc_and_init())) {
     LOG_WARN("failed to alloc and init backup dest", K(ret));
   } else if (OB_FAIL(parse_backup_dest_str_(backup_dest, false/*parse all storage_info attr*/))) {
-    LOG_WARN("failed to parse backup dest str", K(ret), K(backup_dest));
+    LOG_WARN("failed to parse backup dest str", K(ret), KPC(this));
   } else {
     root_path_trim_();
   }
@@ -1539,7 +1536,7 @@ int ObBackupDest::set(const common::ObString &backup_dest)
     MEMCPY(backup_dest_str, backup_dest.ptr(), backup_dest.length());
     backup_dest_str[backup_dest.length()] = '\0';
     if (OB_FAIL(set(backup_dest_str))) {
-      LOG_WARN("failed to set backup dest", KR(ret), K(backup_dest));
+      LOG_WARN("failed to set backup dest", KR(ret), KPC(this));
     }
   }
   return ret;
@@ -1549,7 +1546,7 @@ int ObBackupDest::set(const ObBackupPathString &backup_dest_str)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(set(backup_dest_str.ptr()))) {
-    LOG_WARN("failed to set backup dest", KR(ret), K(backup_dest_str));
+    LOG_WARN("failed to set backup dest", KR(ret), KPC(this));
   }
   return ret;
 }
@@ -1576,9 +1573,9 @@ int ObBackupDest::set(
   } else if (OB_FAIL(get_storage_type_from_path(root_path_str, type))) {
     LOG_WARN("failed to get storage type", K(ret));
   } else if (OB_FAIL(databuff_printf(root_path_, OB_MAX_BACKUP_PATH_LENGTH, "%s", path))) {
-    LOG_WARN("failed to set root path", K(ret), K(path), K(strlen(path)));
+    LOG_WARN("failed to set root path", K(ret), K(strlen(path)));
   } else if (OB_FAIL(storage_info_->set(type, endpoint, authorization, extension, dest_id))) {
-    LOG_WARN("failed to set storage info", K(ret), K(endpoint), K(authorization), K(extension));
+    LOG_WARN("failed to set storage info", K(ret), KPC(this));
   } else {
     root_path_trim_();
   }
@@ -1602,7 +1599,7 @@ int ObBackupDest::set(const char *root_path, const char *storage_info)
   } else if (OB_FAIL(get_storage_type_from_path(root_path, type))) {
     LOG_WARN("failed to get storage type", K(ret));
   } else if (OB_FAIL(databuff_printf(root_path_, OB_MAX_BACKUP_PATH_LENGTH, "%s", root_path))) {
-    LOG_WARN("failed to set root path", K(ret), K(root_path));
+    LOG_WARN("failed to set root path", K(ret), K(strlen(root_path)));
   } else if (OB_FAIL(storage_info_->set(type, storage_info))) {
     LOG_WARN("failed to set storage info", K(ret));
   } else {
@@ -1620,11 +1617,11 @@ int ObBackupDest::set(const char *root_path, const ObBackupStorageInfo *storage_
     LOG_WARN("cannot init twice", K(ret), K(*this));
   } else if (OB_ISNULL(root_path) || OB_ISNULL(storage_info) || !storage_info->is_valid()) {
     ret = OB_INVALID_BACKUP_DEST;
-    LOG_WARN("invalid args", K(ret), K(root_path), K(storage_info));
+    LOG_WARN("invalid args", K(ret), KP(root_path), KP(storage_info));
   } else if (OB_FAIL(alloc_and_init())) {
     LOG_WARN("failed to alloc and init backup dest", K(ret));
   } else if (OB_FAIL(databuff_printf(root_path_, OB_MAX_BACKUP_PATH_LENGTH, "%s", root_path))) {
-    LOG_WARN("failed to set root path", K(ret), K(root_path));
+    LOG_WARN("failed to set root path", K(ret), K(strlen(root_path)));
   } else if (OB_FAIL(storage_info_->assign(*storage_info))) {
     LOG_WARN("failed to set storage info", K(ret));
   } else {
@@ -1647,7 +1644,7 @@ int ObBackupDest::set_without_decryption(const common::ObString &backup_dest) {
     backup_dest_str[backup_dest.length()] = '\0';
     if (OB_NOT_NULL(result = strstr(backup_dest_str, ENCRYPT_KEY))) {
       ret = OB_INVALID_BACKUP_DEST;
-      LOG_WARN("backup destination should not contain encrypt_key", K(ret), K(backup_dest_str));
+      LOG_WARN("backup destination should not contain encrypt_key", K(ret), "input_length", backup_dest.length(), KPC(this));
       LOG_USER_ERROR(OB_INVALID_BACKUP_DEST, "backup destination contains encrypt_key, which");
     } else if (OB_FAIL(set(backup_dest_str))) {
       LOG_WARN("fail to set backup dest", K(ret));
@@ -1679,7 +1676,7 @@ int ObBackupDest::set_storage_path(const common::ObString &storage_path_str)
     MEMCPY(backup_dest_str, storage_path_str.ptr(), storage_path_str.length());
     backup_dest_str[storage_path_str.length()] = '\0';
     if (OB_FAIL(parse_backup_dest_str_(backup_dest_str, true/*only parse for unique path*/))) {
-      LOG_WARN("failed to parse backup dest str", K(ret), K(backup_dest_str));
+      LOG_WARN("failed to parse backup dest str", K(ret), KPC(this));
     } else {
       root_path_trim_();
     }
@@ -1700,17 +1697,17 @@ int ObBackupDest::reset_access_id_and_access_key(
     LOG_WARN("storage info is null", K(ret));
   } else if (OB_FAIL(databuff_printf(new_authorization, OB_MAX_BACKUP_AUTHORIZATION_LENGTH, pos, "%s%s&%s%s",
                 ACCESS_ID, access_id, ACCESS_KEY, access_key))) {
-    LOG_WARN("failed to print authorization", K(ret), KCSTRING(access_id));
+    LOG_WARN("failed to print authorization", K(ret), KP(access_id));
   } else if (OB_FAIL(storage_info_->get_authorization_info(current_authorization, sizeof(current_authorization)))) {
     LOG_WARN("fail to set authorization", K(ret));
   } else if (OB_UNLIKELY(0 == strcmp(new_authorization, current_authorization))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("access id and access key is the same as current ak/sk", K(ret), KCSTRING(access_id));
+    LOG_WARN("access id and access key is the same as current ak/sk", K(ret), KP(access_id));
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "reset ak/sk, as the new ak/sk is the same as the current ak/sk.");
   } else if (OB_FAIL(storage_info_->reset_access_id_and_access_key(access_id, access_key))) {
-    LOG_WARN("failed to reset access id and access key", K(ret), KCSTRING(access_id));
+    LOG_WARN("failed to reset access id and access key", K(ret), KP(access_id));
   } else {
-    LOG_INFO("reset access id and access key", KCSTRING(access_id));
+    LOG_INFO("reset access id and access key", KP(access_id));
   }
   return ret;
 }
@@ -2389,7 +2386,7 @@ int ObBackupUtils::check_passwd(const char *passwd_array, const char *passwd)
     // empty password no need check
   } else if (OB_ISNULL(STRSTR(passwd_array, passwd))) {
     ret = OB_BACKUP_INVALID_PASSWORD;
-    LOG_WARN("no valid passwd found", K(ret), K(passwd_array), K(passwd));
+    LOG_WARN("no valid passwd found", K(ret), "password_array_length", strlen(passwd_array));
   }
   return ret;
 }
@@ -2862,7 +2859,7 @@ int ObBackupPieceInfo::get_backup_dest(ObBackupDest &backup_dest) const
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", KR(ret));
   } else if (OB_FAIL(backup_dest.set(backup_dest_.ptr()))) {
-    LOG_WARN("failed to set backup dest", KR(ret), K(backup_dest_));
+    LOG_WARN("failed to set backup dest", KR(ret));
   }
   return ret;
 }
@@ -3464,7 +3461,7 @@ int ObBackupJobAttr::assign(const ObBackupJobAttr &other)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(other));
   } else if (OB_FAIL(backup_path_.assign(other.backup_path_))) {
-    LOG_WARN("failed to assign backup path", K(ret), K(other.backup_path_));
+    LOG_WARN("failed to assign backup path", K(ret), K(other.backup_path_.size()));
   } else if (OB_FAIL(description_.assign(other.description_))) {
     LOG_WARN("failed to assign description", K(ret), K(other.description_));
   } else if (OB_FAIL(passwd_.assign(other.passwd_))) {
@@ -3712,7 +3709,7 @@ int ObBackupSetTaskAttr::assign(const ObBackupSetTaskAttr &other)
   } else if (OB_FAIL(passwd_.assign(other.passwd_))) {
     LOG_WARN("failed to assign passwd", K(ret));
   } else if (OB_FAIL(backup_path_.assign(other.backup_path_.ptr()))) {
-    LOG_WARN("failed to assign backup path", K(ret), K(other.backup_path_));
+    LOG_WARN("failed to assign backup path", K(ret), K(other.backup_path_.size()));
   } else if (OB_FAIL(comment_.assign(other.comment_))) {
     LOG_WARN("failed to assign comment", K(ret));
   } else {
@@ -4027,7 +4024,7 @@ int ObBackupSetFileDesc::check_passwd(const char *passwd_array) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObBackupUtils::check_passwd(passwd_array, passwd_.ptr()))) {
-    LOG_WARN("failed to check passwd", KR(ret), K(passwd_array), K(passwd_));
+    LOG_WARN("failed to check passwd", KR(ret), KPC(this));
   }
   return ret;
 }
@@ -4090,7 +4087,7 @@ int64_t ObBackupSetFileDesc::to_string(char *min_restore_scn_str_buf,  char *buf
     ObQuoteSzString cluster_version_display(cluster_version_str);
     J_KV(K_(backup_set_id), K_(incarnation), K_(tenant_id), K_(dest_id), K_(backup_type), K_(plus_archivelog),
       K_(date), K_(prev_full_backup_set_id), K_(prev_inc_backup_set_id), K_(stats), K_(start_time), K_(end_time),
-      K_(status), K_(result), K_(encryption_mode), K_(passwd), K_(file_status), K_(backup_path), K_(start_replay_scn),
+      K_(status), K_(result), K_(encryption_mode), K_(passwd), K_(file_status), K(backup_path_.size()), K_(start_replay_scn),
       K_(min_restore_scn), K(min_restore_scn_display), K(tenant_compatible_display), K_(backup_compatible), K_(data_turn_id), K_(meta_turn_id),
       K(cluster_version_display), K_(consistent_scn));
     J_OBJ_END();
@@ -4272,7 +4269,7 @@ int ObLogArchiveDestAtrr::set_piece_switch_interval(const char *buf)
   } else if (!is_valid || !is_piece_switch_interval_valid()) {
     ret = OB_INVALID_ARGUMENT;
     piece_switch_interval_ = 0;
-    LOG_WARN("invalid piece_switch_interval str", K(ret), K(buf));
+    LOG_WARN("invalid piece_switch_interval str", K(ret));
   }
   return ret;
 }
@@ -4310,7 +4307,7 @@ int ObLogArchiveDestAtrr::set_binding(const char *buf)
 
     if (i == size) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid binding type", K(ret), K(*buf));
+      LOG_WARN("invalid binding type", K(ret));
     }
   }
   return ret;
@@ -4772,7 +4769,7 @@ int ObBackupDestAttributeParser::ExtraArgsCb::match(const char *key, const char 
   for (int i = 0; i < ACTION_CNT && !found && OB_SUCC(ret); ++i) {
     if (0 == STRCASECMP(actions_[i].key_, key)) {
       if (OB_FAIL(actions_[i].setter_(value, option_))) {
-        LOG_WARN("fail set value", K(value), K(ret));
+        LOG_WARN("fail set value", K(ret), K(key), "value_length", nullptr == value ? 0 : strlen(value));
       } else {
         is_set_[i] = true;
         found = true;
@@ -4783,7 +4780,7 @@ int ObBackupDestAttributeParser::ExtraArgsCb::match(const char *key, const char 
     ObSqlString err_msg;
     int tmp_ret = OB_SUCCESS;
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("KV pair do not match any action", K(key), K(value), K(ret));
+    LOG_WARN("KV pair do not match any action", K(key), K(ret), "value_length", nullptr == value ? 0 : strlen(value));
     if (OB_SUCCESS != (tmp_ret = err_msg.append_fmt("key '%s' does not exist, changing '%s' is", key, key))) {
       LOG_WARN("fail append err msg", K(tmp_ret));
     } else {
@@ -4812,12 +4809,12 @@ int ObBackupDestAttributeParser::parse(
   char str_buf[OB_MAX_URI_LENGTH] = { 0 };
   if (str.length() >= OB_MAX_URI_LENGTH) {
     ret = OB_SIZE_OVERFLOW;
-    OB_LOG(WARN, "the str too long", "len", str.length(), K(str), K(ret));
+    OB_LOG(WARN, "the str too long", "len", str.length(), K(ret));
   } else {
     MEMSET(str_buf, 0, OB_MAX_URI_LENGTH);
     MEMCPY(str_buf, str.ptr(), str.length());
     if (OB_FAIL(parse_(str_buf, option))) {
-      LOG_WARN("fail parse str buf", K(str_buf), K(ret));
+      LOG_WARN("fail parse str buf", K(ret), "input_length", str.length());
     }
   }
   return ret;
@@ -4827,7 +4824,6 @@ int ObBackupDestAttributeParser::parse_(
     const char *str, ObBackupDestAttribute &option)
 {
   int ret = OB_SUCCESS;
-  char extra_args[OB_MAX_URI_LENGTH] = { 0 };
   ExtraArgsCb extra_arg_cb(option);
   ObKVParser kv_parser('=', '&');
   kv_parser.set_match_callback(extra_arg_cb);
@@ -4840,7 +4836,7 @@ int ObBackupDestAttributeParser::parse_(
     ret = OB_SIZE_OVERFLOW;
     OB_LOG(WARN, "the str too long", K(uri_len), K(ret));
   } else if (OB_FAIL(kv_parser.parse(str))) {
-    LOG_WARN("fail parse arg", K(extra_args), K(str), K(ret));
+    LOG_WARN("fail parse arg", K(ret), K(uri_len));
   }
   return ret;
 }
@@ -4854,7 +4850,7 @@ int ObBackupDestAttributeParser::parse_access_info(const ObString &str, ObBackup
     LOG_WARN("input str is empty", KR(ret));
   } else if (OB_UNLIKELY(str.length() >= OB_MAX_BACKUP_STORAGE_INFO_LENGTH)) {
     ret = OB_SIZE_OVERFLOW;
-    OB_LOG(WARN, "the str too long", "len", str.length(), K(str), KR(ret));
+    OB_LOG(WARN, "the str too long", "len", str.length(), KR(ret));
   } else {
     char tmp[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
     char *token = nullptr;
@@ -4870,11 +4866,11 @@ int ObBackupDestAttributeParser::parse_access_info(const ObString &str, ObBackup
         break;
       } else if (0 == strncmp(ACCESS_ID, token, strlen(ACCESS_ID))) {
         if (OB_FAIL(set_access_info_(ACCESS_ID, token, access_info.access_id_, OB_MAX_BACKUP_ACCESSID_LENGTH))) {
-          LOG_WARN("fail to set access id", KR(ret), K(token));
+          LOG_WARN("fail to set access id", KR(ret), "token_length", strlen(token));
         }
       } else if (0 == strncmp(ACCESS_KEY, token, strlen(ACCESS_KEY))) {
         if (OB_FAIL(set_access_info_(ACCESS_KEY, token, access_info.access_key_, OB_MAX_BACKUP_ACCESSKEY_LENGTH))) {
-          LOG_WARN("fail to set access key", KR(ret), KS(token));
+          LOG_WARN("fail to set access key", KR(ret), "token_length", strlen(token));
         }
       } else {
         ret = OB_INVALID_ARGUMENT;
@@ -4897,10 +4893,10 @@ int ObBackupDestAttributeParser::set_access_info_(const char *prefix, const char
   } else if (FALSE_IT(token_len = STRLEN(token))) {
   } else if (OB_UNLIKELY(prefix_len <= 0 || token_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("prefix or token is empty", KR(ret), K(prefix), K(token));
+    LOG_WARN("prefix or token is empty", KR(ret), K(prefix), K(token_len));
   } else if (0 != strncmp(prefix, token, prefix_len)) { // prefix not matches
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("prefix does not match", KR(ret), K(prefix), K(token));
+    LOG_WARN("prefix does not match", KR(ret), K(prefix), K(token_len));
   } else {
     const int64_t value_len = token_len - prefix_len;
     if (OB_UNLIKELY(value_len >= output_len)) {

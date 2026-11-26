@@ -340,7 +340,7 @@ int Parser::parse_pair(const char *&begin, const char *end, Pair *&pair)
         LOG_WARN("invalid pair", K(cur_token_.type_));
       } else if (OB_FAIL(SMART_CALL(parse_value(begin, end, pair->value_)))) {
         if (cur_token_.type_ != '}' && begin != end) {
-          LOG_WARN("lack of member value", K(ret), K(pair->name_), KCSTRING(begin));
+          LOG_WARN("lack of member value", K(ret), K(pair->name_), KP(begin), "remaining_length", end - begin);
         } else {}
       } else if (NULL != json_processor_) {
         json_processor_->process_value(pair->name_, pair->value_);

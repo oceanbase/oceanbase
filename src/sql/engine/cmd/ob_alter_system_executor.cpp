@@ -2474,7 +2474,7 @@ int ObBackupClusterParamExecutor::execute(ObExecContext &ctx, ObBackupClusterPar
     LOG_WARN("non-sys tenant backup cluster parameters not allowed", KR(ret), K(login_tenant_id));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "operation from regular user tenant");
   } else if (OB_FAIL(backup::ObBackupParamOperator::backup_cluster_parameters(backup_dest))) {
-    LOG_WARN("failed to backup cluster parameters", KR(ret), K(backup_dest));
+    LOG_WARN("failed to backup cluster parameters", KR(ret), "backup_dest", ObSensitiveStringView(backup_dest.str()));
   } else {
     LOG_INFO("backup cluster parameters", KR(ret), K(stmt));
   }
@@ -2585,9 +2585,9 @@ int ObBackupSetEncryptionExecutor::execute(ObExecContext &ctx, ObBackupSetEncryp
     if (OB_FAIL(session_info->replace_user_variable(OB_BACKUP_ENCRYPTION_MODE_SESSION_STR, encryption_mode))) {
       LOG_WARN("failed to set encryption mode", K(ret), K(encryption_mode));
     } else if (OB_FAIL(session_info->replace_user_variable(OB_BACKUP_ENCRYPTION_PASSWD_SESSION_STR, encryption_passwd))) {
-      LOG_WARN("failed to set encryption passwd", K(ret), K(encryption_passwd));
+      LOG_WARN("failed to set encryption passwd", K(ret), K(stmt));
     } else {
-      LOG_INFO("ObBackupSetEncryptionExecutor::execute", K(encryption_mode), K(encryption_passwd));
+      LOG_INFO("ObBackupSetEncryptionExecutor::execute", K(encryption_mode), K(stmt));
     }
   }
 
@@ -2609,9 +2609,9 @@ int ObBackupSetDecryptionExecutor::execute(ObExecContext &ctx, ObBackupSetDecryp
     decryption_passwd.meta_.set_meta(decryption_passwd.value_.meta_);
 
     if (OB_FAIL(session_info->replace_user_variable(OB_BACKUP_DECRYPTION_PASSWD_ARRAY_SESSION_STR, decryption_passwd))) {
-      LOG_WARN("failed to set decryption passwd", K(ret), K(decryption_passwd));
+      LOG_WARN("failed to set decryption passwd", K(ret), K(stmt));
     } else {
-      LOG_INFO("ObBackupSetDecryptionExecutor::execute", K(decryption_passwd));
+      LOG_INFO("ObBackupSetDecryptionExecutor::execute", K(ret), K(stmt));
     }
   }
 
@@ -2664,7 +2664,7 @@ int ObAddRestoreSourceExecutor::execute(ObExecContext &ctx, ObAddRestoreSourceSt
     if (OB_FAIL(session_info->get_user_variable_value(OB_RESTORE_SOURCE_NAME_SESSION_STR, value))) {
       LOG_WARN("failed to get user variable value", KR(ret));
     } else if (OB_FAIL(stmt.add_restore_source(value.get_char()))) {
-      LOG_WARN("failed to add restore source", KR(ret), K(value));
+      LOG_WARN("failed to add restore source", KR(ret), K(stmt));
     }
   }
 
@@ -2675,9 +2675,9 @@ int ObAddRestoreSourceExecutor::execute(ObExecContext &ctx, ObAddRestoreSourceSt
     new_value.meta_.set_meta(new_value.value_.meta_);
 
     if (OB_FAIL(session_info->replace_user_variable(OB_RESTORE_SOURCE_NAME_SESSION_STR, new_value))) {
-      LOG_WARN("failed to set user variable", K(ret), K(new_value));
+      LOG_WARN("failed to set user variable", K(ret), K(stmt));
     } else {
-      LOG_INFO("ObAddRestoreSourceExecutor::execute", K(stmt), K(new_value));
+      LOG_INFO("ObAddRestoreSourceExecutor::execute", K(stmt));
     }
   }
 

@@ -25296,7 +25296,7 @@ int ObDDLService::standby_create_root_key(
       obrpc::ObRootKeyArg root_key_arg;
       obrpc::ObRootKeyResult dummy_result;
       if (OB_FAIL(root_key_arg.init(tenant_id, key_type, root_key))) {
-        LOG_WARN("failed to init root key arg", KR(ret), K(tenant_id), K(key_type), K(root_key));
+        LOG_WARN("failed to init root key arg", KR(ret), K(tenant_id), K(key_type));
       } else if (OB_FAIL(notify_root_key(*rpc_proxy_, root_key_arg, addrs, dummy_result))) {
         LOG_WARN("fail to notify root key", K(ret), K(root_key_arg));
       }
@@ -25325,10 +25325,10 @@ int ObDDLService::get_root_key_from_primary(const obrpc::ObCreateTenantArg &arg,
     obrpc::ObRootKeyArg root_key_arg;
     obrpc::ObRootKeyResult result;
     if (OB_FAIL(value.assign(arg.log_restore_source_))) {
-      LOG_WARN("fail to assign value", KR(ret), K(log_restore_source));
+      LOG_WARN("fail to assign value", KR(ret));
     } else if (OB_FAIL(log_restore_source.get_primary_server_addr(
       value, primary_tenant_id, cluster_id, addr_list))) {
-      LOG_WARN("failed to get primary server addr", KR(ret), K(value));
+      LOG_WARN("failed to get primary server addr", KR(ret));
     } else if (OB_FAIL(root_key_arg.init_for_get(primary_tenant_id))) {
       LOG_WARN("failed to init for get", KR(ret), K(primary_tenant_id));
     }
@@ -25346,8 +25346,8 @@ int ObDDLService::get_root_key_from_primary(const obrpc::ObCreateTenantArg &arg,
     if (OB_INVALID_ROOT_KEY == ret) {
       LOG_USER_ERROR(OB_INVALID_ROOT_KEY, "Can not get root key from primary tenant");
     }
-    LOG_INFO("get root key from primary tenant", K(primary_tenant_id), K(tenant_id), K(value),
-        K(addr_list), K(key_type), K(key_value), K(cluster_id));
+    LOG_INFO("get root key from primary tenant", K(primary_tenant_id), K(tenant_id),
+        K(addr_list), K(key_type), K(cluster_id));
   }
   return ret;
 }
@@ -25471,14 +25471,14 @@ int ObDDLService::notify_root_key(
           }
         } else if (OB_UNLIKELY(0 != root_key.compare(rpc_result->root_key_))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("root key is conflict", KR(ret), K(root_key), KPC(rpc_result));
+          LOG_WARN("root key is conflict", KR(ret), KPC(rpc_result));
         }
       } // end for
       if (OB_SUCC(ret) && obrpc::RootKeyType::INVALID == key_type) {
         if (has_failed) {
           ret = OB_INVALID_ROOT_KEY;
           LOG_WARN("failed to get root key from obs", KR(ret), K(cluster_id),
-            K(addrs), K(key_type), K(root_key));
+            K(addrs), K(key_type));
         } else if (enable_default) {
           //If the root_key cannot be obtained from all current observers,
           //set default. This tenant may be an upgraded tenant.
@@ -25486,7 +25486,7 @@ int ObDDLService::notify_root_key(
           //it may not be all observers, ignore this situation
           key_type = obrpc::RootKeyType::DEFAULT;
           LOG_INFO("can not get root key from all observer, set default", K(cluster_id),
-                   K(addrs), K(key_type), K(root_key));
+                   K(addrs), K(key_type));
         }
       }
       if (OB_FAIL(ret)) {
@@ -25568,7 +25568,7 @@ int ObDDLService::create_normal_tenant(
              is_creating_standby, log_restore_source))) {
     LOG_WARN("fail to init tenant schema", KR(ret), K(tenant_role), K(recovery_until_scn),
              K(tenant_id), K(tenant_schema), K(sys_variable), K(init_configs),
-             K(is_creating_standby), K(log_restore_source));
+             K(is_creating_standby));
   } else if (is_user_tenant(tenant_id) && OB_FAIL(create_tenant_user_ls(tenant_id))) {
     //create user ls
     LOG_WARN("failed to create tenant user ls", KR(ret), K(tenant_id));
@@ -25990,7 +25990,7 @@ int ObDDLService::init_tenant_schema(
   } else if (OB_UNLIKELY(!recovery_until_scn.is_valid_and_not_min()
              || (is_creating_standby && log_restore_source.empty()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(recovery_until_scn), K(is_creating_standby), K(log_restore_source));
+    LOG_WARN("invalid argument", KR(ret), K(recovery_until_scn), K(is_creating_standby));
   } else if (OB_ISNULL(sql_proxy_)
              || OB_ISNULL(schema_service_)
              || OB_ISNULL(schema_service_->get_schema_service())
@@ -26084,7 +26084,7 @@ int ObDDLService::init_tenant_schema(
           0 /* service_name_epoch */))) {
         LOG_WARN("fail to init service epoch", KR(ret));
       } else if (is_creating_standby && OB_FAIL(set_log_restore_source(gen_user_tenant_id(tenant_id), log_restore_source, trans))) {
-        LOG_WARN("fail to set_log_restore_source", KR(ret), K(tenant_id), K(log_restore_source));
+        LOG_WARN("fail to set_log_restore_source", KR(ret), K(tenant_id));
       }
 
       if (trans.is_started()) {
@@ -26160,16 +26160,16 @@ int ObDDLService::set_log_restore_source(
     LOG_WARN("variable is not init", KR(ret));
   } else if (OB_UNLIKELY(!is_user_tenant(tenant_id) || log_restore_source.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(log_restore_source));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else if (OB_FAIL(name.assign("log_restore_source"))) {
     LOG_WARN("assign sql failed", KR(ret));
   } else if (OB_FAIL(value.assign(log_restore_source))) {
-    LOG_WARN("fail to assign value", KR(ret), K(log_restore_source));
+    LOG_WARN("fail to assign value", KR(ret));
   } else if (OB_FAIL(config_parser_mgr.init(name, value, gen_user_tenant_id(tenant_id)))) {
-    LOG_WARN("fail to init backup config parser mgr", KR(ret), K(name), K(value), K(tenant_id));
+    LOG_WARN("fail to init backup config parser mgr", KR(ret), K(name), K(tenant_id));
     // TODO use the interface without rpc_proxy_
   } else if (OB_FAIL(config_parser_mgr.update_inner_config_table(*rpc_proxy_, trans))) {
-    LOG_WARN("fail to update inner config table", KR(ret), K(name), K(value));
+    LOG_WARN("fail to update inner config table", KR(ret), K(name));
   }
   return ret;
 }

@@ -18,6 +18,7 @@
 #include "lib/compress/ob_compressor_pool.h"
 #include "lib/utility/utility.h"
 #include "lib/string/ob_fixed_length_string.h"
+#include "lib/string/ob_sensitive_fixed_length_string.h"
 #include "lib/worker.h"
 #include "common/ob_role.h"
 #include "common/ob_timeout_ctx.h"
@@ -615,7 +616,7 @@ public:
   bool is_valid() const { return !backup_set_path_.is_empty(); }
   int assign(const ObRestoreBackupSetBriefInfo &that);
   int get_restore_backup_set_brief_info_str(common::ObIAllocator &allocator, common::ObString &str) const;
-  TO_STRING_KV(K_(backup_set_path), K_(backup_set_desc));
+  TO_STRING_KV(K_(backup_set_desc));
   share::ObBackupSetPath backup_set_path_;
   share::ObBackupSetDesc backup_set_desc_;
 };
@@ -629,7 +630,7 @@ public:
   bool is_valid() const { return !piece_path_.is_empty(); }
   int get_restore_log_piece_brief_info_str(common::ObIAllocator &allocator, common::ObString &str) const;
   int assign(const ObRestoreLogPieceBriefInfo &that);
-  TO_STRING_KV(K_(piece_path), K_(piece_id), K_(start_scn), K_(checkpoint_scn));
+  TO_STRING_KV(K_(piece_id), K_(start_scn), K_(checkpoint_scn));
   share::ObBackupPiecePath piece_path_;
   int64_t piece_id_;
   share::SCN start_scn_;
@@ -693,7 +694,8 @@ public:
   const common::ObSArray<share::ObBackupPathString> &get_log_path_list() const { return log_path_list_; }
   bool is_compat_backup_path() const { return backup_set_path_list_.empty(); }
 
-  TO_STRING_KV(K_(backup_set_path_list), K_(backup_piece_path_list), K_(log_path_list));
+  TO_STRING_KV("backup_set_count", backup_set_path_list_.count(),
+               "backup_piece_count", backup_piece_path_list_.count(), "log_path_count", log_path_list_.count());
 
 private:
   int64_t get_backup_set_list_format_str_len() const;
@@ -826,7 +828,7 @@ struct ObLogArchiveBackupInfo final
   int get_piece_key(ObBackupPieceInfoKey &key) const;
   bool is_oss() const;
   int get_backup_dest(ObBackupDest &backup_dest) const;
-  TO_STRING_KV(K_(status), K_(backup_dest));
+  TO_STRING_KV(K_(status), "has_backup_dest", '\0' != backup_dest_[0]);
 };
 
 struct ObBackupPieceInfoKey
@@ -892,7 +894,7 @@ public:
   bool operator==(const ObBackupPieceInfo &o) const;
   bool operator!=(const ObBackupPieceInfo &o) const { return !(operator ==(o)); }
   TO_STRING_KV(K_(key), K_(create_date), K_(status), K_(file_status), K_(start_ts),
-      K_(checkpoint_ts), K_(max_ts), K_(backup_dest), "status_str", get_status_str(),
+      K_(checkpoint_ts), K_(max_ts), K(backup_dest_.size()), "status_str", get_status_str(),
       "file_status_str", get_file_status_str(), K_(compatible), K_(start_piece_id));
 };
 
@@ -1040,8 +1042,8 @@ public:
   ObBaseBackupInfoStruct &operator =(const ObBaseBackupInfoStruct &info);
   int check_backup_info_match(const ObBaseBackupInfoStruct &info) const;
 
-  TO_STRING_KV(K_(tenant_id), K_(backup_set_id), K_(incarnation), K_(backup_dest),
-      K_(backup_backup_dest), K_(backup_snapshot_version), K_(backup_schema_version),
+  TO_STRING_KV(K_(tenant_id), K_(backup_set_id), K_(incarnation), K(backup_dest_.size()),
+      K(backup_backup_dest_.size()), K_(backup_snapshot_version), K_(backup_schema_version),
       K_(backup_data_version), K_(detected_backup_region), K_(backup_type),
       K_(backup_status), K_(backup_task_id), K_(encryption_mode));
 
@@ -1058,7 +1060,7 @@ public:
   ObBackupInfoStatus backup_status_;
   int64_t backup_task_id_;
   share::ObBackupEncryptionMode::EncryptionMode encryption_mode_;
-  common::ObFixedLengthString<common::OB_MAX_PASSWORD_LENGTH> passwd_;
+  common::ObSensitiveFixedLengthString<common::OB_MAX_PASSWORD_LENGTH> passwd_;
 };
 
 class ObBackupPath;
@@ -1126,7 +1128,7 @@ public:
   bool is_valid() const;
   void set_array_label(const char *lable);
   int assign(const ObPhysicalRestoreInfo &other);
-  TO_STRING_KV(K_(backup_dest), K_(cluster_name), K_(cluster_id), K_(incarnation),
+  TO_STRING_KV("has_backup_dest", '\0' != backup_dest_[0], K_(cluster_name), K_(cluster_id), K_(incarnation),
                K_(tenant_id), K_(full_backup_set_id), K_(inc_backup_set_id),
                K_(log_archive_round), K_(restore_snapshot_version), K_(restore_start_ts),
                K_(compatible), K_(cluster_version), K_(backup_date), K_(multi_restore_path_list));
@@ -1434,7 +1436,7 @@ public:
   const char *get_plus_archivelog_str() const;
   TO_STRING_KV(K_(job_id), K_(tenant_id), K_(incarnation_id), K_(backup_set_id), K_(initiator_tenant_id), K_(initiator_job_id),
       K_(executor_tenant_id), K_(plus_archivelog), K_(backup_level), K_(backup_type), K_(encryption_mode),
-      K_(passwd), K_(backup_path), K_(description), K_(start_ts), K_(end_ts), K_(status), K_(result), K_(can_retry), K_(retry_count),
+      K_(passwd), K(backup_path_.size()), K_(description), K_(start_ts), K_(end_ts), K_(status), K_(result), K_(can_retry), K_(retry_count),
       K_(comment));
   int64_t job_id_;
   uint64_t tenant_id_;
@@ -1447,7 +1449,7 @@ public:
   ObBackupLevel backup_level_;
   ObBackupType backup_type_;
   ObBackupEncryptionMode::EncryptionMode encryption_mode_;
-  common::ObFixedLengthString<common::OB_MAX_PASSWORD_LENGTH> passwd_;
+  common::ObSensitiveFixedLengthString<common::OB_MAX_PASSWORD_LENGTH> passwd_;
   ObBackupPathString backup_path_;
   ObBackupDescription description_;
   int64_t start_ts_;
@@ -1469,7 +1471,7 @@ public:
   int assign(const ObBackupSetTaskAttr &other);
   TO_STRING_KV(K_(task_id), K_(tenant_id), K_(incarnation_id), K_(job_id), K_(backup_set_id), K_(start_ts), K_(end_ts),
       K_(start_scn), K_(end_scn), K_(user_ls_start_scn), K_(data_turn_id), K_(meta_turn_id), K_(minor_turn_id),
-      K_(major_turn_id), K_(status), K_(encryption_mode), K_(passwd), K_(stats), K_(backup_path), K_(retry_cnt), K_(result),
+      K_(major_turn_id), K_(status), K_(encryption_mode), K_(passwd), K_(stats), K(backup_path_.size()), K_(retry_cnt), K_(result),
       K_(comment));
   int64_t task_id_;
   uint64_t tenant_id_;
@@ -1487,7 +1489,7 @@ public:
   int64_t major_turn_id_;
   ObBackupStatus status_;
   ObBackupEncryptionMode::EncryptionMode encryption_mode_;
-  common::ObFixedLengthString<common::OB_MAX_PASSWORD_LENGTH> passwd_;
+  common::ObSensitiveFixedLengthString<common::OB_MAX_PASSWORD_LENGTH> passwd_;
   ObBackupStats stats_;
   ObBackupPathString backup_path_;
   int64_t retry_cnt_;
@@ -1602,7 +1604,7 @@ public:
 
   TO_STRING_KV(K_(backup_set_id), K_(incarnation), K_(tenant_id), K_(dest_id), K_(backup_type), K_(plus_archivelog),
       K_(date), K_(prev_full_backup_set_id), K_(prev_inc_backup_set_id), K_(stats), K_(start_time), K_(end_time),
-      K_(status), K_(result), K_(encryption_mode), K_(passwd), K_(file_status), K_(backup_path), K_(start_replay_scn),
+      K_(status), K_(result), K_(encryption_mode), K_(passwd), K_(file_status), K(backup_path_.size()), K_(start_replay_scn),
       K_(min_restore_scn), K_(tenant_compatible), K_(backup_compatible), K_(data_turn_id), K_(meta_turn_id),
       K_(cluster_version), K_(consistent_scn));
   int64_t to_string(char *min_restore_scn_display, char *buf, int64_t buf_len) const;
@@ -1622,7 +1624,8 @@ public:
   BackupSetStatus status_;
   int32_t result_;
   share::ObBackupEncryptionMode::EncryptionMode encryption_mode_;
-  common::ObFixedLengthString<OB_MAX_PASSWORD_LENGTH> passwd_;
+  // Serialization delegates to ObFixedLengthString without changing the wire format.
+  common::ObSensitiveFixedLengthString<OB_MAX_PASSWORD_LENGTH> passwd_; // FARM COMPAT WHITELIST
   ObBackupFileStatus::STATUS file_status_;
   common::ObFixedLengthString<OB_MAX_BACKUP_DEST_LENGTH> backup_path_;
   SCN start_replay_scn_;

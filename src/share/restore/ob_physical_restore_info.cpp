@@ -13,9 +13,51 @@
 #define USING_LOG_PREFIX SHARE
 #include "ob_physical_restore_info.h"
 #include "share/ob_rpc_struct.h"
+#include "share/restore/ob_restore_uri_parser.h"
 using namespace oceanbase;
 using namespace common;
 using namespace share;
+
+int ObPhysicalRestoreJob::get_display_value(const ObString &name, const ObString &value,
+    ObArenaAllocator &allocator, ObString &display_value)
+{
+  int ret = OB_SUCCESS;
+  display_value = value;
+  if (0 == name.case_compare("backup_dest") || 0 == name.case_compare("kms_dest")
+      || 0 == name.case_compare("backup_set_list") || 0 == name.case_compare("backup_piece_list")
+      || 0 == name.case_compare("log_path_list")) {
+    // Persist the original connection strings; monitoring only exposes URI paths.
+    display_value = ObString::make_string("<redacted>");
+    ObArray<ObString> uris;
+    ObSqlString paths;
+    if (value.empty()) {
+      display_value = value;
+    } else if (OB_FAIL(ObPhysicalRestoreUriParser::parse(value, allocator, uris))) {
+      LOG_WARN("parse restore display paths failed", KR(ret), K(name), "length", value.length());
+      if (OB_INVALID_BACKUP_DEST == ret) {
+        ret = OB_SUCCESS;
+      }
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < uris.count(); ++i) {
+        const ObString &uri = uris.at(i);
+        const char *query = static_cast<const char *>(MEMCHR(uri.ptr(), '?', uri.length()));
+        const int length = nullptr == query ? uri.length() : static_cast<int>(query - uri.ptr());
+        if (OB_FAIL(paths.append_fmt("%s%.*s", i == 0 ? "" : ",", length, uri.ptr()))) {
+          LOG_WARN("append restore display path failed", KR(ret), K(i));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(ob_write_string(allocator, paths.string(), display_value))) {
+        LOG_WARN("copy restore display paths failed", KR(ret));
+      }
+    }
+  } else if (0 == name.case_compare("kms_info") || 0 == name.case_compare("encrypt_key")
+      || 0 == name.case_compare("kms_encrypt_key") || 0 == name.case_compare("passwd_array")
+      || 0 == name.case_compare("sts_credential") || 0 == name.case_compare("backup_passwd")
+      || 0 == name.case_compare("external_kms_info") || 0 == name.case_compare("restore_option")) {
+    display_value = ObString::make_string("<redacted>");
+  }
+  return ret;
+}
 
 ObPhysicalRestoreWhiteList::ObPhysicalRestoreWhiteList()
   : allocator_("PhyReWhiteList"),
@@ -293,9 +335,9 @@ int ObPhysicalRestoreJob::assign(const ObPhysicalRestoreJob &other)
 
     if (FAILEDx(deep_copy_ob_string(allocator_, other.comment_, comment_))) {
       LOG_WARN("failed to copy string", KR(ret), K(other));
-    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.restore_option_, restore_option_))) {
+    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.restore_option_.str(), restore_option_.str()))) {
       LOG_WARN("failed to copy string", KR(ret), K(other));
-    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.backup_dest_, backup_dest_))) {
+    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.backup_dest_.str(), backup_dest_.str()))) {
       LOG_WARN("failed to copy string", KR(ret), K(other));
     } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.description_, description_))) {
       LOG_WARN("failed to copy string", KR(ret), K(other));
@@ -307,15 +349,15 @@ int ObPhysicalRestoreJob::assign(const ObPhysicalRestoreJob &other)
       LOG_WARN("failed to copy string", KR(ret), K(other));
     } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.primary_zone_, primary_zone_))) {
       LOG_WARN("failed to copy string", KR(ret), K(other));
-    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.kms_info_, kms_info_))) {
+    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.kms_info_.str(), kms_info_.str()))) {
       LOG_WARN("failed to copy string", KR(ret), K(other));
-    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.encrypt_key_, encrypt_key_))) {
+    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.encrypt_key_.str(), encrypt_key_.str()))) {
       LOG_WARN("failed to copy string", KR(ret), K(other));
-    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.kms_dest_, kms_dest_))) {
+    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.kms_dest_.str(), kms_dest_.str()))) {
       LOG_WARN("failed to copy string", KR(ret), K(other));
-    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.kms_encrypt_key_, kms_encrypt_key_))) {
+    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.kms_encrypt_key_.str(), kms_encrypt_key_.str()))) {
       LOG_WARN("failed to copy string", KR(ret), K(other));
-    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.passwd_array_, passwd_array_))) {
+    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.passwd_array_.str(), passwd_array_.str()))) {
       LOG_WARN("failed to copy string", KR(ret), K(other));
     } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.backup_tenant_name_, backup_tenant_name_))) {
       LOG_WARN("failed to copy string", KR(ret), K(other));
@@ -325,7 +367,7 @@ int ObPhysicalRestoreJob::assign(const ObPhysicalRestoreJob &other)
       LOG_WARN("failed to assign path list", KR(ret), K(other));
     } else if (OB_FAIL(white_list_.assign(other.white_list_))) {
       LOG_WARN("failed to assign white list", KR(ret), K(other));
-    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.sts_credential_, sts_credential_))) {
+    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.sts_credential_.str(), sts_credential_.str()))) {
       LOG_WARN("failed to copy string", KR(ret), K(other));
     }
 

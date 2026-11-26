@@ -104,7 +104,7 @@ public:
   int parse_oss_arg(const common::ObString &storage_info);
   void reset_account();
   int set_delete_mode(const char *parameter);
-  TO_STRING_KV(K_(oss_domain), K_(delete_mode), K_(oss_id), KP_(oss_key), K_(is_inited), K_(sts_token));
+  TO_STRING_KV(K_(oss_domain), K_(delete_mode), "has_access_id", '\0' != oss_id_[0], KP_(oss_key), K_(is_inited), K_(sts_token));
 
   char oss_domain_[MAX_OSS_ENDPOINT_LENGTH];
   char oss_id_[MAX_OSS_ID_LENGTH];

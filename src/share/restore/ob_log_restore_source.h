@@ -94,7 +94,7 @@ struct ObLogRestoreSourceItem
   int deep_copy(ObLogRestoreSourceItem &other);
   static ObLogRestoreSourceType get_source_type(const ObString &type);
   static const char *get_source_type_str(const ObLogRestoreSourceType &type);
-  TO_STRING_KV(K_(tenant_id), K_(id), K_(until_scn), K_(type), K_(value));
+  TO_STRING_KV(K_(tenant_id), K_(id), K_(until_scn), K_(type));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogRestoreSourceItem);
 };

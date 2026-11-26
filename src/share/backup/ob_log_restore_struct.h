@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_BACKUP_OB_LOG_RESTORE_STRUCT_H_
 
 #include "lib/container/ob_array.h"
+#include "lib/string/ob_sensitive_string_view.h"
 #include "share/scn.h"
 #include "ob_backup_struct.h"
 
@@ -104,7 +105,7 @@ struct ObRestoreSourceLocationPrimaryAttr final
   int set_location_cluster_id_(const char *cluster_id_str);
   int set_location_tenant_id_(const char *tenant_id_str);
   bool is_valid();
-  TO_STRING_KV(K_(tenant_id), K_(cluster_id), K_(location));
+  TO_STRING_KV(K_(tenant_id), K_(cluster_id), "location", common::ObSensitiveStringView(location_.string()));
 };
 
 }//share

@@ -330,7 +330,7 @@ int ObArchiveRoundHandler::prepare_new_dest_round_(const int64_t dest_no,
   } else if (OB_FAIL(archive_table_op_.get_archive_dest(trans, need_lock, dest_no, dest_str))) {
     LOG_WARN("failed to get archive path", K(ret));
   } else if (OB_FAIL(archive_dest.set(dest_str))) {
-    LOG_WARN("failed to set archive dest", K(ret), K(dest_str));
+    LOG_WARN("failed to set archive dest", K(ret));
   } else if (OB_FAIL(archive_dest.get_backup_path_str(dest_str.ptr(), dest_str.capacity()))) {
     LOG_WARN("failed to get backup path", K(ret), K(archive_dest));
   } else {

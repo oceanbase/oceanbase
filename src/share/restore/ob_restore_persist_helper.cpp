@@ -415,7 +415,7 @@ int ObHisRestoreJobPersistInfo::parse_from(common::sqlclient::ObMySQLResult &res
     ObString value;                                              \
     EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, #COLUMN_NAME, value, true, false, value);\
     if (FAILEDx(COLUMN_NAME##_.assign(value))) {               \
-      LOG_WARN("failed to set column value", KR(ret), K(value)); \
+      LOG_WARN("failed to set column value", KR(ret), "column_name", #COLUMN_NAME); \
     }                                                            \
   }
 
@@ -616,10 +616,9 @@ int ObHisRestoreJobPersistInfo::init_with_job(const share::ObPhysicalRestoreJob 
                    allocator, backup_piece_list))) {
       LOG_WARN("fail to get format str", KR(ret), K(dest_list));
     } else if (OB_FAIL(backup_piece_list_.assign(backup_piece_list))) {
-      LOG_WARN("failed to assign backup piece list", KR(ret),
-               K(backup_piece_list_));
+      LOG_WARN("failed to assign backup piece list", KR(ret), K(job));
     } else if (OB_FAIL(backup_set_list_.assign(backup_set_list))) {
-      LOG_WARN("failed to assign backup set list", KR(ret), K(backup_set_list));
+      LOG_WARN("failed to assign backup set list", KR(ret), K(job));
     }
   }
   

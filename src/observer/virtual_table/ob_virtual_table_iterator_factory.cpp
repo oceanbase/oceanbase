@@ -211,6 +211,7 @@
 #include "observer/virtual_table/ob_all_virtual_dup_ls_tablet_set.h"
 #include "observer/virtual_table/ob_all_virtual_px_p2p_datahub.h"
 #include "observer/virtual_table/ob_all_virtual_ls_log_restore_status.h"
+#include "observer/virtual_table/ob_all_virtual_restore_job.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_buffer_info.h"
 #include "observer/virtual_table/ob_all_virtual_cgroup_config.h"
 #include "observer/virtual_table/ob_virtual_flt_config.h"

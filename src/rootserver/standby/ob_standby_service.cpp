@@ -840,14 +840,14 @@ int ObStandbyService::check_can_create_standby_tenant(
   } else if (OB_FAIL(name.assign("log_restore_source"))) {
     LOG_WARN("assign sql failed", KR(ret));
   } else if (OB_FAIL(value.assign(log_restore_source))) {
-    LOG_WARN("fail to assign value", KR(ret), K(log_restore_source));
+    LOG_WARN("fail to assign value", KR(ret));
   } else if (OB_FAIL(config_parser_mgr.init(name, value, 1002 /* fake_user_tenant_id */))) {
-    LOG_WARN("fail to init backup config parser mgr", KR(ret), K(name), K(value));
+    LOG_WARN("fail to init backup config parser mgr", KR(ret), K(name));
   } else if (OB_FAIL(config_parser_mgr.only_check_before_update(compat_mode))) {
-    LOG_WARN("fail to only_check_before_update", KR(ret), K(name), K(value));
+    LOG_WARN("fail to only_check_before_update", KR(ret), K(name));
   }
 
-  LOG_INFO("[CREATE STANDBY TENANT] check can create standby tenant", KR(ret), K(log_restore_source),
+  LOG_INFO("[CREATE STANDBY TENANT] check can create standby tenant", KR(ret),
            K(compat_mode), "cost", ObTimeUtility::current_time() - start_ts);
   return ret;
 }

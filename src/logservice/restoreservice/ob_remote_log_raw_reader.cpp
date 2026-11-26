@@ -197,7 +197,7 @@ int ObRemoteLogRawReader::read_once_(char *buffer, const int64_t buffer_size, in
         ret = OB_SUCCESS;
         read_size = 0;
       } else {
-        CLOG_LOG(WARN, "read file failed", K(ret), K(uri), K(storage_info));
+        CLOG_LOG(WARN, "read file failed", K(ret), K(id_), K(file_id), K(file_offset));
       }
     }
 

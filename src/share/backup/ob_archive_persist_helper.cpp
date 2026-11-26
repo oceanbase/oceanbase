@@ -191,7 +191,7 @@ int ObArchivePersistHelper::get_archive_dest(
   } else if (OB_FAIL(get_string_value(proxy, dest_no, need_lock, str, value))) {
     LOG_WARN("fail to get string value", K(ret));
   } else if (OB_FAIL(path.assign(value.ptr()))) {
-    LOG_WARN("fail to assign string value", K(ret), K(value));
+    LOG_WARN("fail to assign string value", K(ret), K(value.length()));
   }
   return ret;
 }
@@ -319,13 +319,13 @@ int ObArchivePersistHelper::set_kv_item(common::ObISQLClient &proxy,
     LOG_WARN("ObArchivePersistHelper not init", K(ret));
   } else if (name.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument, name and value must not be empty", K(ret), K(name), K(value));
+    LOG_WARN("invalid argument, name and value must not be empty", K(ret), K(name), K(value.length()));
   } else if (OB_FAIL(kv_table_operator.init(OB_ALL_LOG_ARCHIVE_DEST_PARAMETER_TNAME, *this))) {
     LOG_WARN("failed to init kv parameter table operator", K(ret), K(tenant_id_), K(dest_no));
   } else if (OB_FAIL(item.set_dest_no(dest_no))) {
     LOG_WARN("failed to set dest no", K(ret), K(tenant_id_), K(dest_no));
   } else if (OB_FAIL(kv_value.set_value(value.ptr()))) {
-    LOG_WARN("failed to set backup dest", K(ret), K(tenant_id_), K(value));
+    LOG_WARN("failed to set backup dest", K(ret), K(tenant_id_), K(value.length()));
   } else if (OB_FAIL(item_with_tenant_id.set_tenant_id(tenant_id_))) {
     LOG_WARN("failed to set tenant id", K(ret), K(tenant_id_));
   } else if (OB_FAIL(item_with_tenant_id.set_kv_name(name.ptr()))) {
@@ -878,7 +878,7 @@ int ObArchivePersistHelper::get_candidate_obsolete_backup_pieces(common::ObISQLC
     LOG_WARN("ObArchivePersistHelper not init", K(ret));
   } else if (OB_ISNULL(backup_dest_str)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid backup_dest_str", K(ret), K(backup_dest_str));
+    LOG_WARN("invalid backup_dest_str", K(ret), KP(backup_dest_str));
   } else if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s<=%lu and %s='%s' and %s!='%s'",
       OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, upper_bound_column,
       end_scn.get_val_for_inner_table_field(), OB_STR_PATH, backup_dest_str, OB_STR_FILE_STATUS, OB_STR_DELETED))) {
@@ -887,14 +887,14 @@ int ObArchivePersistHelper::get_candidate_obsolete_backup_pieces(common::ObISQLC
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
       ObMySQLResult *result = NULL;
       if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
-        LOG_WARN("failed to exec sql", K(ret), K(sql));
+        LOG_WARN("failed to exec sql", K(ret), K(tenant_id_));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("result is null", K(ret), K(sql));
+        LOG_WARN("result is null", K(ret), K(tenant_id_));
       } else if (OB_FAIL(parse_piece_result_(*result, pieces))) {
         LOG_WARN("failed to do parse pieces", K(ret));
       } else {
-        FLOG_INFO("success get candidate obsolete pieces", K(sql), K(pieces));
+        FLOG_INFO("success get candidate obsolete pieces", K(tenant_id_), K(pieces.count()));
       }
     }
   }

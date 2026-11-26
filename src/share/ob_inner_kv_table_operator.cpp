@@ -97,7 +97,7 @@ int ObInnerKVItemStringValue::set_value(const char *value)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid value", K(ret), KP(value));
   } else if (OB_FAIL(set_value(str))) {
-    LOG_WARN("failed to set value", K(ret), K(str));
+    LOG_WARN("failed to set value", K(ret), K(str.length()));
   }
   return ret;
 }
@@ -106,7 +106,7 @@ int ObInnerKVItemStringValue::set_value(const ObString &value)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(value_.assign(value))) {
-    LOG_WARN("failed to assign value", K(ret), K(value));
+    LOG_WARN("failed to assign value", K(ret), K(value.length()));
   }
   return ret;
 }

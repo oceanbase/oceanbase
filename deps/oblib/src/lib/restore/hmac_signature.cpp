@@ -292,9 +292,9 @@ int sign_request(
     }
     // signature with HMAC-SHA1
     else if (OB_FAIL(hmac_sha1(sk, params_to_sign, sign_result, sizeof(sign_result), sign_result_len))) {
-      OB_LOG(WARN, "failed to hmac sha1", K(ret), KP(params_to_sign), K(sign_result), K(sign_result_len));
+      OB_LOG(WARN, "failed to hmac sha1", K(ret), KP(params_to_sign), K(sign_result_len));
     } else if (OB_FAIL(base64_encoded(sign_result, sign_result_len, encoded_result, sizeof(encoded_result)))) {
-      OB_LOG(WARN, "failed to base64 encode", K(ret), K(sign_result));
+      OB_LOG(WARN, "failed to base64 encode", K(ret), K(sign_result_len));
     }
     const int64_t len = strlen(encoded_result);
     if (OB_FAIL(ret)) {

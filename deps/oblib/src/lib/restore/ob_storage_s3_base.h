@@ -94,7 +94,7 @@ struct ObS3Account
   void reset();
   bool is_valid() const { return is_valid_; }
   int64_t hash() const;
-  TO_STRING_KV(K_(is_valid), K_(delete_mode), K_(region), K_(endpoint), K_(access_id), KP_(secret_key), K_(sts_token), K_(addressing_model));
+  TO_STRING_KV(K_(is_valid), K_(delete_mode), K_(region), K_(endpoint), "has_access_id", '\0' != access_id_[0], KP_(secret_key), K_(sts_token), K_(addressing_model));
 
   int parse_from(const char *storage_info_str, const int64_t size);
 

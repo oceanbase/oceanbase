@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_IMPORT_TABLE_STRUCT_H
 
 #include "lib/ob_define.h"
+#include "lib/string/ob_sensitive_string_view.h"
 #include "share/backup/ob_backup_struct.h"
 #include "share/ob_inner_table_operator.h"
 #include "share/restore/ob_import_arg.h"
@@ -418,8 +419,11 @@ public:
   int fill_dml(share::ObDMLSqlSplicer &dml) const override;
 
   TO_STRING_KV(K_(tenant_id), K_(job_id), K_(initiator_tenant_id), K_(initiator_job_id), K_(start_ts), K_(end_ts), K_(status),
-      K_(aux_tenant_name), K_(target_tenant_name), K_(target_tenant_id), K_(restore_scn), K_(restore_option),
-      K_(backup_dest), K_(backup_dest), K_(backup_passwd), K_(external_kms_info), K_(result),
+      K_(aux_tenant_name), K_(target_tenant_name), K_(target_tenant_id), K_(restore_scn),
+      "restore_option", common::ObSensitiveStringView(restore_option_),
+      "backup_dest", common::ObSensitiveStringView(backup_dest_),
+      "backup_passwd", common::ObSensitiveStringView(backup_passwd_),
+      "external_kms_info", common::ObSensitiveStringView(external_kms_info_), K_(result),
       K_(import_arg), K_(multi_restore_path_list));
 
   Property_declare_int(uint64_t, tenant_id)

@@ -932,7 +932,7 @@ def check_fileds(fields, keywords):
         raise IOError("no field {0} found in def_table_schema, table_name={1}".format(field, keywords["table_name"]))
 
   non_field_keywords = ('index', 'enable_column_def_enum', 'base_def_keywords',
-                        'self_tid', 'mapping_tid', 'real_vt', 'meta_record_in_sys')
+                        'self_tid', 'mapping_tid', 'real_vt', 'meta_record_in_sys', 'iterator_class')
   for kw in keywords:
     if not kw.startswith("base_table_name") and kw not in fields and not keywords.has_key('index_name') and kw not in non_field_keywords and keywords['table_type'] != 'AUX_LOB_META' and keywords['table_type'] != 'AUX_LOB_PIECE':
       raise IOError("unknown field {0} found in def_table_schema, table_name={1}".format(kw, keywords["table_name"]))
@@ -1478,7 +1478,7 @@ def def_agent_index_table(index_name, index_table_id, index_columns, index_using
   cpp_f.write(index_def)
 
 def gen_iterate_private_virtual_table_def(
-    table_id, table_name, keywords, in_tenant_space = False):
+    table_id, table_name, keywords, in_tenant_space = False, iterator_class = 'ObIteratePrivateVirtualTable'):
   global all_iterate_private_virtual_tables
   kw = copy_keywords(keywords)
   kw['table_id'] = table_id
@@ -1522,6 +1522,7 @@ def gen_iterate_private_virtual_table_def(
 
   kw['base_def_keywords'] = keywords
   kw['in_tenant_space'] = in_tenant_space
+  kw['iterator_class'] = iterator_class
   all_iterate_private_virtual_tables.append(kw)
   return kw
 
@@ -1549,23 +1550,24 @@ def generate_iterate_private_virtual_table_misc_data(f):
     tid = table_name2tid(kw['table_name'])
     base_kw = kw['base_def_keywords']
     base_tid = table_name2tid(base_kw['table_name'])
+    iterator_class = kw['iterator_class']
 
     iter_init += """
     case %s: {
-      ObIteratePrivateVirtualTable *iter = NULL;
+      %s *iter = NULL;
       const bool meta_record_in_sys = %s;
-      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(%s, iter))) {
         SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
       } else if (OB_FAIL(iter->init(%s, meta_record_in_sys, index_schema, params))) {
         SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
-        iter->~ObIteratePrivateVirtualTable();
+        iter->~%s();
         allocator.free(iter);
         iter = NULL;
       } else {
        vt_iter = iter;
       }
       break;
-    }\n""" % (tid, kw['meta_record_in_sys'] and 'true' or 'false', base_tid)
+    }\n""" % (tid, iterator_class, kw['meta_record_in_sys'] and 'true' or 'false', iterator_class, base_tid, iterator_class)
 
   iter_init += '  END_CREATE_VT_ITER_SWITCH_LAMBDA\n'
   f.write('\n\n#ifdef ITERATE_PRIVATE_VIRTUAL_TABLE_CREATE_ITER\n' + iter_init + '\n#endif // ITERATE_PRIVATE_VIRTUAL_TABLE_CREATE_ITER\n')

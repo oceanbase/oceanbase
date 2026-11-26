@@ -1113,7 +1113,7 @@ DEF_TO_STRING(ObCreateTenantArg)
        K_(recovery_until_scn),
        K_(compatible_version),
        K_(is_creating_standby),
-       K_(log_restore_source),
+       "log_restore_source", common::ObSensitiveStringView(log_restore_source_),
        K_(is_tmp_tenant_for_recover));
   return pos;
 }
@@ -8031,7 +8031,7 @@ int ObRootKeyArg::init(const uint64_t tenant_id, RootKeyType key_type,
   if (!(is_sys_tenant(tenant_id) || is_user_tenant(tenant_id))
       || RootKeyType::INVALID == key_type) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(key_type), K(root_key));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(key_type));
   } else {
     tenant_id_ = tenant_id;
     is_set_ = true;

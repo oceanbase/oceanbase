@@ -75,7 +75,7 @@ public:
   // Parse value from sql result, make sure the result has column of value.
   int parse_value_from(common::sqlclient::ObMySQLResult &result) override;
 
-  TO_STRING_KV(K_(value));
+  TO_STRING_KV(K(value_.length()));
 
 private:
   ValueType value_;

@@ -79,7 +79,7 @@ public:
     inc_id_ = OB_INVALID_ID;
     ps_sql_.reset();
   }
-  TO_STRING_KV(K_(flag), K_(db_id), K_(inc_id), K_(ps_sql));
+  TO_STRING_KV(K_(flag), K_(db_id), K_(inc_id), K(ps_sql_.length()));
 
 public:
   union
@@ -504,9 +504,9 @@ struct PsCacheInfoCtx
                K_(num_of_returning_into),
                K_(is_inner_sql),
                K_(is_sensitive_sql),
-               K_(normalized_sql),
-               K_(raw_sql),
-               K_(no_param_sql),
+               K(normalized_sql_.length()),
+               K(raw_sql_.length()),
+               K(no_param_sql_.length()),
                K_(stmt_type),
                K_(ps_need_parameterization),
                K_(is_group_commit), K_(is_update_join_group_commit));

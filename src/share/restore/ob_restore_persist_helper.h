@@ -22,6 +22,7 @@
 #include "share/restore/ob_restore_type.h"
 #include "share/scn.h"
 #include "share/backup/ob_backup_struct.h"
+#include "lib/string/ob_sensitive_string_view.h"
 
 namespace oceanbase
 {
@@ -392,9 +393,13 @@ struct ObHisRestoreJobPersistInfo final : public ObIInnerTableRow
   int fill_dml(share::ObDMLSqlSplicer &dml) const override;
 
   TO_STRING_KV(K_(key), K_(start_time), K_(finish_time), K_(restore_type), 
-    K_(restore_tenant_name), K_(restore_tenant_id), K_(backup_tenant_id), K_(backup_dest),
-    K_(restore_scn), K_(restore_option), K_(table_list), K_(remap_table_list), 
-    K_(database_list), K_(remap_database_list), K_(backup_piece_list), K_(backup_set_list), K_(backup_cluster_version),
+    K_(restore_tenant_name), K_(restore_tenant_id), K_(backup_tenant_id),
+    "backup_dest", common::ObSensitiveStringView(backup_dest_.string()),
+    K_(restore_scn), "restore_option", common::ObSensitiveStringView(restore_option_.string()),
+    K_(table_list), K_(remap_table_list),
+    K_(database_list), K_(remap_database_list),
+    "backup_piece_list", common::ObSensitiveStringView(backup_piece_list_.string()),
+    "backup_set_list", common::ObSensitiveStringView(backup_set_list_.string()), K_(backup_cluster_version),
     K_(ls_count), K_(finish_ls_count), K_(tablet_count), K_(finish_tablet_count), K_(total_bytes), 
     K_(finish_bytes), K_(status), K_(description), K_(comment), K_(initiator_job_id), K_(initiator_tenant_id));
 

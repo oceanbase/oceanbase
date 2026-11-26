@@ -43,6 +43,11 @@ public:
   virtual int inner_get_next_row(common::ObNewRow *&row) override;
   virtual int inner_close() override;
 
+protected:
+  virtual int try_convert_row(
+      const common::ObNewRow *input_row,
+      common::ObNewRow *&row);
+
 private:
   virtual int init_non_exist_map_item(
       MapItem &item, const share::schema::ObColumnSchemaV2 &col) override;

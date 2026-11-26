@@ -140,7 +140,7 @@ int ObBackupIndexCacheKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCach
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf) || buf_len < size()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(buf), K(buf_len));
+    LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len));
   } else {
     key = new (buf) ObBackupIndexCacheKey(mode_, tenant_id_, backup_set_id_, ls_id_, backup_data_type_, block_desc_);
   }

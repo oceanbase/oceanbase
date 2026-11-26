@@ -226,7 +226,7 @@ int ObLogRestoreHandler::add_source(logservice::DirArray &array, const SCN &end_
     // not leader, just skip
   } else if (OB_UNLIKELY(array.empty() || !end_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argument", K(ret), K(array), K(end_scn), KPC(this));
+    CLOG_LOG(WARN, "invalid argument", K(ret), "path_count", array.count(), K(end_scn), KPC(this));
   } else if (FALSE_IT(alloc_source(share::ObLogRestoreSourceType::RAWPATH))) {
   } else if (NULL == parent_) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -234,7 +234,7 @@ int ObLogRestoreHandler::add_source(logservice::DirArray &array, const SCN &end_
     ObRemoteRawPathParent *source = static_cast<ObRemoteRawPathParent *>(parent_);
     const bool source_exist = source->is_valid();
     if (OB_FAIL(source->set(array, end_scn))) {
-      CLOG_LOG(WARN, "ObRemoteRawPathParent set failed", K(ret), K(array), K(end_scn));
+      CLOG_LOG(WARN, "ObRemoteRawPathParent set failed", K(ret), "path_count", array.count(), K(end_scn));
       ObResSrcAlloctor::free(parent_);
       parent_ = NULL;
     } else if (! source_exist) {

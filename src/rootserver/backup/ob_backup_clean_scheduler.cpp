@@ -856,9 +856,9 @@ int ObUserTenantBackupDeleteMgr::check_data_backup_dest_validity_()
   } else if (backup_dest_str.is_empty()) {
     // do nothing
   } else if (OB_FAIL(dest_mgr.init(job_attr_->tenant_id_, ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA, backup_dest_str,  *sql_proxy_))) {
-    LOG_WARN("failed to init dest manager", K(ret), K(job_attr_), K(backup_dest_str));
+    LOG_WARN("failed to init dest manager", K(ret), K(job_attr_));
   } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/, false/*need_check_permission*/))) {
-    LOG_WARN("failed to check backup dest validity", K(ret), K(job_attr_), K(backup_dest_str));
+    LOG_WARN("failed to check backup dest validity", K(ret), K(job_attr_));
   }
   return ret;
 }
@@ -885,9 +885,9 @@ int ObUserTenantBackupDeleteMgr::check_log_archive_dest_validity_()
       if (OB_FAIL(helper.get_archive_dest(*sql_proxy_, need_lock, archive_dest.first, archive_dest_str))) {
         LOG_WARN("failed to get archive path", K(ret));
       } else if (OB_FAIL(dest_mgr.init(job_attr_->tenant_id_, ObBackupDestType::TYPE::DEST_TYPE_ARCHIVE_LOG, archive_dest_str,  *sql_proxy_))) {
-        LOG_WARN("failed to init dest manager", K(ret), K(job_attr_), K(archive_dest_str));
+        LOG_WARN("failed to init dest manager", K(ret), K(job_attr_));
       } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/, false/*need_check_permission*/))) {
-        LOG_WARN("failed to check archive dest validity", K(ret), K(job_attr_), K(archive_dest_str));
+        LOG_WARN("failed to check archive dest validity", K(ret), K(job_attr_));
       }
     }
   }
@@ -1299,7 +1299,7 @@ int ObUserTenantBackupDeleteMgr::get_delete_obsolete_backup_set_infos_(
   } else if (backup_dest_str.is_empty()) {
     // do nothing
   } else if (OB_FAIL(backup_dest.set(backup_dest_str))) {
-    LOG_WARN("fail to set backup dest", K(ret), K(backup_dest_str)); 
+    LOG_WARN("fail to set backup dest", K(ret));
   } else if (OB_FAIL(backup_dest.get_backup_path_str(backup_path_str.ptr(), backup_path_str.capacity()))) {
     LOG_WARN("fail to get backup path str", K(ret), K(backup_dest));
   } else if (OB_FAIL(ObBackupSetFileOperator::get_candidate_obsolete_backup_sets(*sql_proxy_, job_attr_->tenant_id_,
@@ -1382,7 +1382,7 @@ int ObUserTenantBackupDeleteMgr::get_all_dest_backup_piece_infos_(
       if (OB_FAIL(archive_table_op.get_archive_dest(*sql_proxy_, need_lock, archive_dest.first, backup_dest_str))) {
         LOG_WARN("failed to get archive path", K(ret));
       } else if (OB_FAIL(backup_dest.set(backup_dest_str))) {
-        LOG_WARN("fail to set backup dest", K(ret), K(backup_dest_str)); 
+        LOG_WARN("fail to set backup dest", K(ret));
       } else if (OB_FAIL(backup_dest.get_backup_path_str(backup_path_str.ptr(), backup_path_str.capacity()))) {
         LOG_WARN("fail to get backup path str", K(ret), K(backup_dest));
       } else if (OB_FAIL(get_one_dest_deletable_backup_piece_infos_(clog_data_clean_point.start_replay_scn_,
@@ -1390,7 +1390,7 @@ int ObUserTenantBackupDeleteMgr::get_all_dest_backup_piece_infos_(
         // only pick the pieces whose log is really not needed by the retained backup set chain any more,
         // an un-deletable piece is skipped instead of failing the job.
         LOG_WARN("failed to get deletable backup piece infos of one dest", K(ret),
-            K(clog_data_clean_point), K(backup_path_str));
+            K(clog_data_clean_point), K(archive_dest.second));
       }
     }
   }

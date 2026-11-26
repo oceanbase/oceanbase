@@ -198,7 +198,7 @@ ObImportTableTaskStatus ObImportTableTaskStatus::get_next_status(const int err_c
     ObString value;                          \
     EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, #COLUMN_NAME, value, true, false, value); \
     if (OB_FAIL(set_##COLUMN_NAME(value))) {                  \
-      LOG_WARN("failed to set column value", KR(ret), K(value));    \
+      LOG_WARN("failed to set column value", KR(ret), "column", #COLUMN_NAME);    \
     }                                                               \
   }
 
@@ -1198,7 +1198,7 @@ int ObRecoverTableJob::parse_from(common::sqlclient::ObMySQLResult &result)
     EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, OB_STR_BACKUP_SET_LIST, str);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(multi_restore_path_list_.backup_set_list_assign_with_format_str(str))) {
-      LOG_WARN("fail to assign backup set list", KR(ret), K(str));
+      LOG_WARN("fail to assign backup set list", KR(ret), "length", str.length());
     }
   }
 
@@ -1207,7 +1207,7 @@ int ObRecoverTableJob::parse_from(common::sqlclient::ObMySQLResult &result)
     EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, OB_STR_BACKUP_PIECE_LIST, str);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(multi_restore_path_list_.backup_piece_list_assign_with_format_str(str))) {
-      LOG_WARN("fail to assign backup set list", KR(ret), K(str));
+      LOG_WARN("fail to assign backup piece list", KR(ret), "length", str.length());
     }
   }
 

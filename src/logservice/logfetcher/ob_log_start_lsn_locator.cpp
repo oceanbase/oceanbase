@@ -91,7 +91,7 @@ int ObLogStartLSNLocator::init(
 
     if (OB_SUCC(ret)) {
       if (is_direct_fetching_mode(fetching_mode) && OB_FAIL(archive_dest_.set(archive_dest_str))) {
-        LOG_ERROR("set archive dest failed", KR(ret), K(archive_dest_str));
+        LOG_ERROR("set archive dest failed", KR(ret));
       }
     }
 

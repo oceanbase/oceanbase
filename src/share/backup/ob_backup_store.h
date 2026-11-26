@@ -69,7 +69,7 @@ public:
   }
   bool is_format_equal(const ObBackupFormatDesc &desc) const;
 
-  TO_STRING_KV(K_(cluster_name), K_(tenant_name), K_(path), K_(cluster_id), 
+  TO_STRING_KV(K_(cluster_name), K_(tenant_name), K(path_.size()), K_(cluster_id),
     K_(tenant_id), K_(incarnation), K_(dest_id), K_(dest_type));
 };
 
@@ -96,7 +96,7 @@ public:
     return ObCompressorType::NONE_COMPRESSOR;
   }
 
-  TO_STRING_KV(K_(cluster_name), K_(tenant_name), K_(path), K_(cluster_id), 
+  TO_STRING_KV(K_(cluster_name), K_(tenant_name), K(path_.size()), K_(cluster_id),
     K_(tenant_id), K_(incarnation));
 };
 

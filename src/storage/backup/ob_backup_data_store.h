@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_SHARE_OB_BACKUP_DATA_STORE_H_
 #define OCEANBASE_SHARE_OB_BACKUP_DATA_STORE_H_
 
+#include "share/ob_config_log_util.h"
 #include "share/ls/ob_ls_operator.h"
 #include "share/backup/ob_backup_path.h"
 #include "storage/backup/ob_backup_extern_info_mgr.h"
@@ -188,7 +189,7 @@ public:
   bool is_valid() const;
   int assign(const ObBackupParam &other);
   int deep_copy(common::ObIAllocator &allocator, ObBackupParam &target) const;
-  TO_STRING_KV(K_(name), K_(value));
+  TO_STRING_KV(K_(name), "value", share::get_config_value_for_log(name_.str(), value_));
   ConfigName  name_;
   ConfigValue value_;
 };

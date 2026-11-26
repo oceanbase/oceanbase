@@ -411,7 +411,7 @@ public:
   int update_min_lsn(const palf::LSN &lsn);
   int get_max_archive_log(palf::LSN &lsn, share::SCN &scn);
 
-  TO_STRING_KV(K_(is_inited), K_(id), K_(array), K_(index), K_(file_id),
+  TO_STRING_KV(K_(is_inited), K_(id), "path_count", array_.count(), K_(index), K_(file_id),
       K_(min_file_id), K_(max_file_id), K_(min_lsn), K_(max_lsn), K_(file_offset));
 
 private:

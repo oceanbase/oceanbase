@@ -348,7 +348,7 @@ int ObPsStmtInfo::assign_no_param_sql(const common::ObString &no_param_sql)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is invalid", K(ret));
   } else if (OB_FAIL(ObPsSqlUtils::deep_copy_str(*allocator_, no_param_sql, no_param_sql_))) {
-    LOG_WARN("deep copy no param sql failed", K(no_param_sql), K(ret));
+    LOG_WARN("deep copy no param sql failed", K(no_param_sql.length()), K(ret));
   }
   return ret;
 }
@@ -360,7 +360,7 @@ int ObPsStmtInfo::assign_raw_sql(const common::ObString &raw_sql)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is invalid", K(ret));
   } else if (OB_FAIL(ObPsSqlUtils::deep_copy_str(*allocator_, raw_sql, raw_sql_))) {
-    LOG_WARN("deep copy raw sql failed", K(raw_sql), K(ret));
+    LOG_WARN("deep copy raw sql failed", K(raw_sql.length()), K(ret));
   }
   return ret;
 }
@@ -656,7 +656,7 @@ int64_t ObPsStmtInfo::to_string(char *buf, const int64_t buf_len) const
        K_(question_mark_count),
        K_(last_closed_timestamp),
        K_(tenant_version),
-       K_(no_param_sql),
+       K(no_param_sql_.length()),
        K_(num_of_returning_into));
   J_COMMA();
   J_NAME("columns");

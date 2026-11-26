@@ -105,7 +105,7 @@ int ObDMLSqlSplicer::append_value(const char *str, bool &is_null)
   int ret = OB_SUCCESS;
   if (!is_null) {
     if (OB_FAIL(values_.append_fmt(mode_ == NAKED_VALUE_MODE ? "%s" : "'%s'", str))) {
-      LOG_WARN("append string to values failed", K(ret), K(str));
+      LOG_WARN("append string to values failed", K(ret));
     }
   }
   return ret;
@@ -133,7 +133,7 @@ int ObDMLSqlSplicer::append_value(const ObString &str, bool &is_null)
   if (!is_null) {
     if (OB_FAIL(values_.append_fmt(mode_ == NAKED_VALUE_MODE ? "%.*s" : "'%.*s'",
         str.length(), str.ptr()))) {
-      LOG_WARN("append string to values failed", K(ret), K(str));
+      LOG_WARN("append string to values failed", K(ret));
     }
   }
   return ret;
@@ -1285,7 +1285,7 @@ int ObDMLSqlSplicer::splice_batch_predicates_sql(common::ObSqlString &sql) const
     } else if (OB_FAIL(splicer.splice_##dml##_sql(table_name, sql))) {               \
       LOG_WARN("splice sql failed", K(ret));                                         \
     } else if (OB_FAIL(sql_client_.write(tenant_id_, sql.ptr(), affected_rows))) {   \
-      LOG_WARN("execute sql failed", K(ret), K(sql));                                \
+      LOG_WARN("execute sql failed", K(ret), K(sql.length()));                                \
     }  \
     return ret;                                                                      \
   }
@@ -1317,7 +1317,7 @@ int ObDMLExecHelper::exec_insert_ignore(const char *table_name,
       if (OB_FAIL(splicer.splice_insert_sql(table_name, sql))) {
         LOG_WARN("splice sql failed", K(ret), K(exist));
       } else if (OB_FAIL(sql_client_.write(tenant_id_, sql.ptr(), affected_rows))) {
-        LOG_WARN("execute sql failed", K(ret), K(sql));
+        LOG_WARN("execute sql failed", K(ret), K(sql.length()));
       }
     }
   }
@@ -1338,7 +1338,7 @@ int ObDMLExecHelper::check_row_exist(const char *table_name,
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       if (OB_FAIL(sql_client_.read(res, tenant_id_, sql.ptr()))) {
-        LOG_WARN("execute query failed", K(ret), K(sql));
+        LOG_WARN("execute query failed", K(ret), K(sql.length()));
       } else {
         if (res.get_result() != NULL && OB_SUCCESS == (ret = res.get_result()->next())) {
           exist = true;

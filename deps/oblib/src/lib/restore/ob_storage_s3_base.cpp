@@ -1014,14 +1014,14 @@ int ObS3Account::parse_from(const char *storage_info_str, const int64_t size)
     if (OB_SUCC(ret) && bitmap != 0x07) {
       ret = OB_INVALID_ARGUMENT;
       OB_LOG(WARN, "failed to init s3 account", K(ret), KCSTRING(region_),
-          KCSTRING(endpoint_), KCSTRING(access_id_), K(bitmap));
+          KCSTRING(endpoint_), "has_access_id", '\0' != access_id_[0], K(bitmap));
     }
   }
 
   if (OB_SUCC(ret)) {
     is_valid_ = true;
     OB_LOG(DEBUG, "succeed to init s3 account",
-        KCSTRING(region_), KCSTRING(endpoint_), KCSTRING(access_id_));
+        KCSTRING(region_), KCSTRING(endpoint_), "has_access_id", '\0' != access_id_[0]);
   } else {
     reset();
   }

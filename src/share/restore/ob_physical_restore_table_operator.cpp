@@ -116,10 +116,10 @@ int ObPhysicalRestoreTableOperator::insert_job(const ObPhysicalRestoreJob &job_i
     } else if (OB_FAIL(dml.splice_batch_insert_sql(OB_ALL_RESTORE_JOB_TNAME, sql))) {
       LOG_WARN("splice_insert_sql failed", KR(ret));
     } else if (OB_FAIL(sql_client_->write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
-      LOG_WARN("execute sql failed", KR(ret), K(exec_tenant_id), K(sql));
+      LOG_WARN("execute sql failed", KR(ret), K(exec_tenant_id), K(job_info.get_restore_key()));
     } else if (affected_rows <= 0) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid affected rows", KR(ret), K(affected_rows), K(sql));
+      LOG_WARN("invalid affected rows", KR(ret), K(affected_rows), K(job_info.get_restore_key()));
     }
   }
   LOG_INFO("[RESTORE] insert job", KR(ret), K(tenant_id_), K(job_info));
@@ -149,8 +149,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
       LOG_WARN("fail to add pk column", K(ret), "name", #COLUMN_NAME);         \
     } else if (OB_FAIL(                                                        \
                    dml.add_column("value", (JOB_INFO).get_##COLUMN_NAME()))) { \
-      LOG_WARN("fail to add column", K(ret), "value",                          \
-               (JOB_INFO).get_##COLUMN_NAME());                                \
+      LOG_WARN("fail to add column", K(ret), "name", #COLUMN_NAME, K(JOB_INFO)); \
     } else if (OB_FAIL(dml.finish_row())) {                                    \
       LOG_WARN("fail to finish row", K(ret));                                  \
     }                                                                          \
@@ -169,7 +168,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
     } else if (OB_FAIL(dml.add_pk_column("name", #COLUMN_NAME))) {         \
       LOG_WARN("fail to add pk column", K(ret), "name", #COLUMN_NAME);     \
     } else if (OB_FAIL(dml.add_column("value", COLUMN_VALUE))) {           \
-      LOG_WARN("fail to add column", K(ret), "value", COLUMN_VALUE);       \
+      LOG_WARN("fail to add column", K(ret), "name", #COLUMN_NAME, K(JOB_INFO)); \
     } else if (OB_FAIL(dml.finish_row())) {                                \
       LOG_WARN("fail to finish row", K(ret));                              \
     }                                                                      \
@@ -419,10 +418,8 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     LOG_WARN("invalid job", K(ret), K(job));
   } else {
     ObString name;
-    ObString debug_value;
     EXTRACT_VARCHAR_FIELD_MYSQL(result, "name", name);
-    EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "value", debug_value);
-    LOG_DEBUG("retrieve restore option", K(ret), "name", name, "value", debug_value);
+    LOG_DEBUG("retrieve restore option", K(ret), K(name));
 
 #define RETRIEVE_UINT_VALUE(COLUMN_NAME, OBJ)                        \
   if (OB_SUCC(ret)) {                                                \
@@ -456,7 +453,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
       ObString value;                                              \
       EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "value", value, true, false, value);\
       if (FAILEDx((OBJ).set_##COLUMN_NAME(value))) {               \
-        LOG_WARN("failed to set column value", KR(ret), K(value)); \
+        LOG_WARN("failed to set column value", KR(ret), K(name)); \
       }                                                            \
     }                                                              \
   }
@@ -519,7 +516,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
         ObString value;
         EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "value", value, true, false, value);
         if (FAILEDx((job).set_backup_dest(value))) {
-          LOG_WARN("failed to set column value", KR(ret), K(value));
+          LOG_WARN("failed to set column value", KR(ret), K(name));
         }
       }
     }
@@ -628,7 +625,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
         EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "value", str);
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(job.get_multi_restore_path_list().backup_set_list_assign_with_format_str(str))) {
-          LOG_WARN("fail to assign backup set list", KR(ret), K(str));
+          LOG_WARN("fail to assign backup set list", KR(ret), "str", ObSensitiveStringView(str));
         }
       }
     }
@@ -650,7 +647,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
         EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "value", str);
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(job.get_multi_restore_path_list().backup_piece_list_assign_with_format_str(str))) {
-          LOG_WARN("fail to assign backup piece list", KR(ret), K(str));
+          LOG_WARN("fail to assign backup piece list", KR(ret), "str", ObSensitiveStringView(str));
         }
       }
     }
@@ -661,7 +658,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
         EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "value", str);
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(job.get_multi_restore_path_list().log_path_list_assign_with_format_str(str))) {
-          LOG_WARN("fail to assign log path list", KR(ret), K(str));
+          LOG_WARN("fail to assign log path list", KR(ret), "str", ObSensitiveStringView(str));
         }
       }
     }

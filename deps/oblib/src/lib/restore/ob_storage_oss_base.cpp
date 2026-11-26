@@ -547,7 +547,7 @@ int ObOssAccount::parse_oss_arg(const common::ObString &storage_info)
         }
       } else if (0 == strncmp(ACCESS_ID, token, strlen(ACCESS_ID))) {
         if (OB_FAIL(ob_set_field(token + strlen(ACCESS_ID), oss_id_, sizeof(oss_id_)))) {
-          OB_LOG(WARN, "failed to set oss_id_", K(ret), KCSTRING(token));
+          OB_LOG(WARN, "failed to set oss_id_", K(ret), K(strlen(token)));
         }
       } else if (0 == strncmp(ACCESS_KEY, token, strlen(ACCESS_KEY))) {
         if (OB_FAIL(ob_set_field(token + strlen(ACCESS_KEY), oss_key_, sizeof(oss_key_)))) {
@@ -555,7 +555,7 @@ int ObOssAccount::parse_oss_arg(const common::ObString &storage_info)
         }
       } else if (0 == strncmp(DELETE_MODE, token, strlen(DELETE_MODE))) {
         if (OB_FAIL(set_delete_mode(token + strlen(DELETE_MODE)))) {
-          OB_LOG(WARN, "failed to set delete mode", K(ret), K(token)); 
+          OB_LOG(WARN, "failed to set delete mode", K(ret), K(strlen(token)));
         }
       } else {
         OB_LOG(DEBUG, "unkown oss info", K(*token), KP(storage_info.ptr()));
@@ -565,10 +565,10 @@ int ObOssAccount::parse_oss_arg(const common::ObString &storage_info)
     if (strlen(oss_domain_) == 0 || strlen(oss_id_) == 0 || strlen(oss_key_) == 0) {
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "failed to parse oss info",
-          K(ret), KCSTRING(oss_domain_), KCSTRING(oss_id_));
+          K(ret), KCSTRING(oss_domain_), "has_access_id", '\0' != oss_id_[0]);
     } else {
       STORAGE_LOG(DEBUG, "success to parse oss info",
-          K(ret), KCSTRING(oss_domain_), KCSTRING(oss_id_));
+          K(ret), KCSTRING(oss_domain_), "has_access_id", '\0' != oss_id_[0]);
     }
   }
   return ret;
@@ -782,17 +782,17 @@ void ObStorageOssBase::handle_oss_error(
       }
       OB_LOG_RET(ERROR, OB_OBJECT_STORAGE_CHECKSUM_ERROR, "oss info ", K(aos_ret->code), KCSTRING(aos_ret->error_code),
         KCSTRING(aos_ret->error_msg), KCSTRING(aos_ret->req_id),  KCSTRING(delay_time),
-        KCSTRING(oss_account_.oss_domain_), KCSTRING(oss_endpoint_), KCSTRING(oss_account_.oss_id_), KCSTRING(req_content_md5), KCSTRING(resp_content_md5));
+        KCSTRING(oss_account_.oss_domain_), KCSTRING(oss_endpoint_), "has_access_id", '\0' != oss_account_.oss_id_[0], KCSTRING(req_content_md5), KCSTRING(resp_content_md5));
       // checksum error are offten caused by network issues, so we convert it to
       // io error to make it easier for user to retry.
       ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
     } else {
       OB_LOG_RET(WARN, OB_SUCCESS, "oss info ", K(aos_ret->code), KCSTRING(aos_ret->error_code),
         KCSTRING(aos_ret->error_msg), KCSTRING(aos_ret->req_id),  KCSTRING(delay_time),
-        KCSTRING(oss_account_.oss_domain_), KCSTRING(oss_endpoint_), KCSTRING(oss_account_.oss_id_));
+        KCSTRING(oss_account_.oss_domain_), KCSTRING(oss_endpoint_), "has_access_id", '\0' != oss_account_.oss_id_[0]);
     }
   } else {
-    OB_LOG_RET(WARN, OB_SUCCESS, "oss info ", KCSTRING(oss_account_.oss_domain_), KCSTRING(oss_endpoint_), KCSTRING(oss_account_.oss_id_));
+    OB_LOG_RET(WARN, OB_SUCCESS, "oss info ", KCSTRING(oss_account_.oss_domain_), KCSTRING(oss_endpoint_), "has_access_id", '\0' != oss_account_.oss_id_[0]);
   }
 }
 

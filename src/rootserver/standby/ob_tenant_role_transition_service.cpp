@@ -1632,9 +1632,9 @@ int ObTenantRoleTransitionService::check_restore_source_for_switchover_to_primar
   } else if (share::is_location_log_source_type(item.type_) || share::is_raw_path_log_source_type(item.type_)) {
     // archive mode, cannot check whether previous primary tenant becomes standby
   } else if (OB_FAIL(standby_source_value.assign(item.value_))) {
-    LOG_WARN("fail to assign standby source value", K(item.value_));
+    LOG_WARN("fail to assign standby source value", KR(ret), K(item));
   } else if (OB_FAIL(service_attr.parse_service_attr_from_str(standby_source_value))) {
-    LOG_WARN("fail to parse service attr", K(item), K(standby_source_value));
+    LOG_WARN("fail to parse service attr", KR(ret), K(item));
   } else {
     // net service mode, check whether previous primary tenant becomes standby
     share::ObTenantRole tenant_role;

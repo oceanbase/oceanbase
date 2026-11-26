@@ -24,6 +24,9 @@
 #include "common/ob_common_types.h"
 #include "common/ob_store_format.h"
 #include "common/ob_tablet_id.h"
+#include "share/ob_config_log_util.h"
+#include "lib/string/ob_sensitive_fixed_length_string.h"
+#include "lib/string/ob_sensitive_string_view.h"
 #include "share/ob_ddl_common.h"
 #include "share/ob_debug_sync.h"
 #include "share/ob_partition_modify.h"
@@ -5932,22 +5935,23 @@ public:
                K_(initiator_tenant_id));
 
   common::ObString tenant_name_;
-  common::ObString uri_;
-  common::ObString restore_option_;
+  // Sensitive views retain the original ObString wire format.
+  common::ObSensitiveStringView uri_; // FARM COMPAT WHITELIST
+  common::ObSensitiveStringView restore_option_; // FARM COMPAT WHITELIST
   share::SCN restore_scn_;
-  common::ObString kms_info_;  //Encryption use
-  common::ObString passwd_array_; // Password verification
+  common::ObSensitiveStringView kms_info_; // FARM COMPAT WHITELIST
+  common::ObSensitiveStringView passwd_array_; // FARM COMPAT WHITELIST
   common::ObSArray<ObTableItem> table_items_;
-  common::ObString multi_uri_; // 备份拆分用
+  common::ObSensitiveStringView multi_uri_; // FARM COMPAT WHITELIST
   common::ObString description_;
   bool with_restore_scn_;
-  common::ObString encrypt_key_;
-  common::ObString kms_uri_;
-  common::ObString kms_encrypt_key_;
+  common::ObSensitiveStringView encrypt_key_; // FARM COMPAT WHITELIST
+  common::ObSensitiveStringView kms_uri_; // FARM COMPAT WHITELIST
+  common::ObSensitiveStringView kms_encrypt_key_; // FARM COMPAT WHITELIST
   common::ObString restore_timestamp_;
   uint64_t initiator_job_id_;
   uint64_t initiator_tenant_id_;
-  common::ObString sts_credential_;
+  common::ObSensitiveStringView sts_credential_; // FARM COMPAT WHITELIST
 };
 
 struct ObServerZoneArg
@@ -6180,8 +6184,8 @@ public:
   ObAdminSetConfigItem() : name_(), value_(), comment_(), zone_(), server_(), tenant_name_(),
                            exec_tenant_id_(common::OB_SYS_TENANT_ID), tenant_ids_(),
                            want_to_set_tenant_config_(false) {}
-  TO_STRING_KV(K_(name), KS(value_.ptr()), K_(comment), K_(zone), K_(server), K_(tenant_name),
-               K_(exec_tenant_id), K_(tenant_ids), K_(want_to_set_tenant_config));
+  TO_STRING_KV(K_(name), "value", share::get_config_value_for_log(name_.str(), value_.str()),
+               K_(comment), K_(zone), K_(server), K_(tenant_name), K_(exec_tenant_id), K_(tenant_ids), K_(want_to_set_tenant_config));
 
   common::ObFixedLengthString<common::OB_MAX_CONFIG_NAME_LEN> name_;
   common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> value_;
@@ -9063,8 +9067,7 @@ public:
   int assign(const ObBackupDatabaseArg &arg);
   bool is_valid() const;
 	TO_STRING_KV(K_(tenant_id), K_(initiator_tenant_id), K_(initiator_job_id), K_(backup_tenant_ids),
-      K_(is_incremental), K_(backup_dest), K_(backup_description), K_(is_compl_log), K_(encryption_mode),
-      K_(passwd));
+      K_(is_incremental), K_(backup_description), K_(is_compl_log), K_(encryption_mode), K_(passwd));
   uint64_t tenant_id_; // target tenant to do backup
   uint64_t initiator_tenant_id_; // the tenant id who initiate the backup
   int64_t initiator_job_id_; // only used when sys tenant send rpc to user teannt to insert a backup job
@@ -9074,7 +9077,8 @@ public:
   share::ObBackupPathString backup_dest_;
   share::ObBackupDescription backup_description_;
   share::ObBackupEncryptionMode::EncryptionMode encryption_mode_;
-  common::ObFixedLengthString<common::OB_MAX_PASSWORD_LENGTH> passwd_;
+  // Serialization delegates to ObFixedLengthString without changing the wire format.
+  common::ObSensitiveFixedLengthString<common::OB_MAX_PASSWORD_LENGTH> passwd_; // FARM COMPAT WHITELIST
 };
 
 struct ObBackupManageArg
@@ -9352,7 +9356,7 @@ public:
   ObGetMasterKeyResultArg() : str_(share::OB_CLOG_ENCRYPT_MASTER_KEY_LEN, 0, buf_) {}
   ~ObGetMasterKeyResultArg() {}
   bool is_valid() const { return true; }
-  TO_STRING_KV(K_(str));
+  TO_STRING_KV(K(str_.length()));
   char buf_[share::OB_CLOG_ENCRYPT_MASTER_KEY_LEN];
   common::ObString str_;
 };
@@ -9371,8 +9375,9 @@ public:
   int assign(const ObRestoreKeyArg &other);
   TO_STRING_KV(K_(tenant_id), K_(backup_dest), K_(encrypt_key));
   uint64_t tenant_id_;
-  common::ObString backup_dest_;
-  common::ObString encrypt_key_;
+  // Serialization delegates to ObString without changing the wire format.
+  common::ObSensitiveStringView backup_dest_; // FARM COMPAT WHITELIST
+  common::ObSensitiveStringView encrypt_key_; // FARM COMPAT WHITELIST
 };
 
 struct ObRestoreKeyResult
@@ -9412,7 +9417,7 @@ public:
   int init_for_get(const uint64_t tenant_id);
   int init(const uint64_t tenant_id, RootKeyType key_type,
             ObString &root_key);
-  TO_STRING_KV(K_(tenant_id), K_(is_set), K_(key_type), K_(root_key));
+  TO_STRING_KV(K_(tenant_id), K_(is_set), K_(key_type), "root_key", common::ObSensitiveStringView(root_key_));
   uint64_t tenant_id_;
   bool is_set_;
   enum RootKeyType key_type_;
@@ -9431,7 +9436,7 @@ public:
   ~ObRootKeyResult() {}
   int assign(const ObRootKeyResult &other);
   void reset();
-  TO_STRING_KV(K_(key_type), K_(root_key));
+  TO_STRING_KV(K_(key_type), "root_key", common::ObSensitiveStringView(root_key_));
   enum RootKeyType key_type_;
   common::ObString root_key_;
 private:

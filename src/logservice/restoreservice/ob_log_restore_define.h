@@ -79,7 +79,6 @@ struct ObLogRestoreSourceTenant final
   TO_STRING_KV(K_(source_cluster_id),
       K_(source_tenant_id),
       K_(user_name),
-      K_(user_passwd),  // TODO remove it
       K_(is_oracle),
       K_(ip_list));
 };

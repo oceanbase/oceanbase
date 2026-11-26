@@ -138,7 +138,7 @@ struct ObObjectStorageCredential
     reset();
   }
   TO_STRING_KV(K_(expiration_s), K_(access_time_us), K_(born_time_us),
-      K_(access_id), KP_(access_key), K_(sts_token));
+      "has_access_id", '\0' != access_id_[0], KP_(access_key), K_(sts_token));
   void reset();
   int assign(const ObObjectStorageCredential &credential);
 
@@ -195,8 +195,8 @@ public:
   virtual bool is_valid() const { return is_valid_; }
   virtual int assign(const ObObjectStorageInfo *storage_info) = 0;
 
-  TO_STRING_KV(K(is_valid_), K(delete_mode_), K(endpoint_), K(access_id_),
-      K(sts_token_), KP(access_key_));
+  TO_STRING_KV(K(is_valid_), K(delete_mode_), K(endpoint_),
+      "has_access_id", '\0' != access_id_[0], K(sts_token_), KP(access_key_));
 
 public:
   bool is_valid_;
@@ -236,7 +236,7 @@ public:
   int64_t hash() const;
   bool operator==(const ObObjectStorageInfo &storage_info) const;
   bool operator!=(const ObObjectStorageInfo &storage_info) const;
-  TO_STRING_KV(K_(endpoint), K_(access_id), K_(extension), "type", get_type_str(),
+  TO_STRING_KV(K_(endpoint), "has_access_id", '\0' != access_id_[0], K_(extension), "type", get_type_str(),
       K_(checksum_type), KP_(role_arn), KP_(external_id), K_(enable_worm));
   bool is_assume_role_mode() const;
   int reset_access_id_and_access_key(const char *access_id, const char *access_key);
@@ -312,8 +312,8 @@ public:
   int construct_signed_url(char *url_buf, const int64_t url_buf_len) const;
   static int register_sts_credential_mgr(ObTenantStsCredentialBaseMgr *sts_credential_mgr);
 
-  TO_STRING_KV(K_(is_inited), KP_(role_arn), KP_(external_id), K_(sts_url),
-      K_(sts_ak), KP_(sts_sk), KP_(sts_credential_mgr));
+  TO_STRING_KV(K_(is_inited), KP_(role_arn), KP_(external_id), "has_sts_url", '\0' != sts_url_[0],
+      "has_sts_ak", '\0' != sts_ak_[0], KP_(sts_sk), KP_(sts_credential_mgr));
 
 public:
   char role_arn_[OB_MAX_ROLE_ARN_LENGTH];

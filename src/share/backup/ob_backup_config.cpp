@@ -98,7 +98,7 @@ int BackupConfigItemPair::assign(const BackupConfigItemPair &that)
   } else if (OB_FAIL(key_.assign(that.key_))) {
     LOG_WARN("fail to assign key", K(ret), K(that.key_));
   } else if (OB_FAIL(value_.assign(that.value_))) {
-    LOG_WARN("fail to assign key", K(ret), K(that.value_));
+    LOG_WARN("fail to assign value", K(ret), K(that));
   }
   return ret;
 }
@@ -172,7 +172,7 @@ int ObBackupConfigParserGenerator::set_restore_source_type_(const common::ObSqlS
   if (value.empty()) {
     restore_source_type_ = share::ObLogRestoreSourceType::LOCATION;
   } else if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%.*s", static_cast<int>(value.length()), value.ptr()))) {
-    LOG_WARN("fail to set config value", K(value));
+    LOG_WARN("fail to set config value", K(ret), "value_length", value.length());
   } else {
     saveptr = tmp_str;
     for (char *str = saveptr; OB_SUCC(ret); str = nullptr) {
@@ -181,7 +181,7 @@ int ObBackupConfigParserGenerator::set_restore_source_type_(const common::ObSqlS
         break;
       } else if (OB_ISNULL(tmp_token = ::STRTOK_R(token, "=", &tmp_saveptr))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to split config str", K(ret), KP(tmp_token), K(tmp_saveptr));
+        LOG_WARN("fail to split config str", K(ret), KP(tmp_token));
       } else if (OB_FALSE_IT(str_tolower(tmp_token, strlen(tmp_token)))) {
       } else if (0 == STRCASECMP(tmp_token, OB_STR_LOCATION)) {
         is_location = true;
@@ -190,10 +190,10 @@ int ObBackupConfigParserGenerator::set_restore_source_type_(const common::ObSqlS
       }
     }
     if (OB_FAIL(ret)) {
-      LOG_WARN("fail to parse value", K(value));
+      LOG_WARN("fail to parse value", K(ret), "value_length", value.length());
     } else if ((is_location && is_service) || (!is_location && !is_service)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("fail to parse restore source type", K(ret), K(value));
+      LOG_WARN("fail to parse restore source type", K(ret), K(is_location), K(is_service), "value_length", value.length());
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "log restore source type");
     } else if (is_location) {
       restore_source_type_ = share::ObLogRestoreSourceType::LOCATION;
@@ -332,7 +332,7 @@ int ObBackupConfigParserMgr::init(const common::ObSqlString &name, const common:
     LOG_WARN("fail to check backup config is valid", K(ret));
   } else if (!is_valid) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid backup config argumnet", K(ret), K(name), K(value));
+    LOG_WARN("invalid backup config argumnet", K(ret), K(name), "value_length", value.length());
   } else if (OB_FAIL(type.set_backup_config_type(name.ptr()))) {
     LOG_WARN("fail to set backup config type", K(ret), K(name));
   } else if (OB_FAIL(parser_generator_.set(type, tenant_id, value))) {
@@ -341,7 +341,7 @@ int ObBackupConfigParserMgr::init(const common::ObSqlString &name, const common:
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("config parser must not be nullptr", K(ret));
   } else if (OB_FAIL(config_parser->parse_from(value))) {
-    LOG_WARN("fail to parse value", K(ret), K(type), KS(value.ptr()));
+    LOG_WARN("fail to parse value", K(ret), K(type), K(name), "value_length", value.length());
   } else {
     is_inited_ = true;
   }
@@ -443,7 +443,7 @@ int ObDataBackupDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
     if (OB_FAIL(backup_dest.assign(config_items_.at(0).value_.ptr()))) {
       LOG_WARN("fail to assign backup dest", K(ret), K_(tenant_id), K_(config_items));
     } else if (OB_FAIL(ObIBackupConfigItemParser::set_default_checksum_type(backup_dest))) {
-      LOG_WARN("fail to check dest checksum type", K(ret), K(backup_dest));
+      LOG_WARN("fail to check dest checksum type", K(ret), "dest_length", backup_dest.size());
     } else if (OB_FAIL(dest.set(backup_dest))) {
       LOG_WARN("fail to set backup dest", K(ret));
     } else {
@@ -452,20 +452,20 @@ int ObDataBackupDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
       ObBackupSrcType src_type = ObBackupSrcType::EMPTY;
       if (OB_FAIL(ObBackupDestIOPermissionMgr::get_src_info_from_extension(ObString(extension),
                                                     src_locality, sizeof(src_locality), src_type))) {
-        LOG_WARN("failed to get src info from extension", K(ret), K(extension));
+        LOG_WARN("failed to get src info from extension", K(ret), KP(extension));
       } else if (ObBackupSrcType::EMPTY != src_type &&
                     OB_FAIL(ObBackupDestIOPermissionMgr::check_backup_src_info_valid(src_locality, src_type))) {
         LOG_WARN("please check backup src info valid", K(src_locality), K(src_type));
       } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest, trans))) {
-        LOG_WARN("fail to init dest manager", K(ret), K_(tenant_id), K(backup_dest));
+        LOG_WARN("fail to init dest manager", K(ret), K_(tenant_id), "dest_length", backup_dest.size());
       } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/, true/*need_check_permission*/))) {
         if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret) {
         LOG_USER_ERROR(OB_INVALID_ARGUMENT,
                           "set backup dest: parameter enable_worm=true is required for bucket with worm.");
       }
-      LOG_WARN("fail to check dest validity", K(ret), K_(tenant_id), K(backup_dest));
+      LOG_WARN("fail to check dest validity", K(ret), K_(tenant_id), "dest_length", backup_dest.size());
       } else {
-        LOG_INFO("succ to check data dest config", K_(tenant_id), K(backup_dest));
+        LOG_INFO("succ to check data dest config", K_(tenant_id), "dest_length", backup_dest.size());
       }
     }
   }
@@ -496,11 +496,11 @@ int ObDataBackupDestConfigParser::update_data_backup_dest_config_(common::ObISQL
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("MTL ObBackupDestIOPermissionMgr is null", K(ret));
   } else if (OB_FAIL(dest_io_permission_mgr->delete_locality_info_in_backup_dest_str(backup_dest_str))) {
-    LOG_WARN("failed to delete locality info in backup dest str", K(ret), K(backup_dest_str));
+    LOG_WARN("failed to delete locality info in backup dest str", K(ret), K_(tenant_id));
   } else if (OB_FAIL(helper.init(tenant_id_, trans))) {
     LOG_WARN("fail to init backup help", K(ret), K(tenant_id_), K(dest));
   } else if (OB_FAIL(helper.set_backup_dest(backup_dest_str))) {
-    LOG_WARN("fail to set backup dest", K(ret), K(backup_dest_str));
+    LOG_WARN("fail to set backup dest", K(ret), K_(tenant_id), K(dest));
   }
   return ret;
 } 
@@ -521,7 +521,7 @@ int ObDataBackupDestConfigParser::update_inner_config_table(common::ObISQLClient
     if (OB_FAIL(backup_dest.assign(config_items_.at(0).value_.ptr()))) {
       LOG_WARN("fail to assign backup dest", K(ret), K_(tenant_id), K_(config_items));
     } else if (OB_FAIL(ObIBackupConfigItemParser::set_default_checksum_type(backup_dest))) {
-      LOG_WARN("fail to check dest checksum type", K(ret), K(backup_dest));
+      LOG_WARN("fail to check dest checksum type", K(ret), K_(tenant_id), K_(config_items));
     } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest, trans))) {
       LOG_WARN("fail to init dest manager", K(ret), K_(tenant_id));
     } else if (OB_FAIL(dest_mgr.write_format_file())) {
@@ -571,7 +571,7 @@ int ObLogArchiveDestConfigParser::parse_from(const common::ObSqlString &value)
     // allow set empty archive dest
     is_empty_ = true;
   } else if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%.*s", static_cast<int>(value.length()), value.ptr()))) {
-    LOG_WARN("fail to set config value", K(ret), KS(value.ptr()));
+    LOG_WARN("fail to set config value", K(ret), K_(tenant_id), K_(dest_no), "value_length", value.length());
   } else {
     token = tmp_str;
     for (char *str = token; OB_SUCC(ret); str = nullptr) {
@@ -600,10 +600,10 @@ int ObLogArchiveDestConfigParser::update_archive_dest_config_(common::ObISQLClie
   } else if (OB_FAIL(helper.lock_archive_dest(trans, dest_no_, is_exist))) {
     LOG_WARN("fail to lock archive dest", K(ret), K_(dest_no));
   } else if (OB_FAIL(ObTenantArchiveMgr::is_archive_running(trans, tenant_id_, dest_no_, is_running))) {
-    LOG_WARN("failed to check archive running.", K(ret), K_(backup_dest));
+    LOG_WARN("failed to check archive running.", K(ret), K_(tenant_id), KPC(this));
   } else if (is_running) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("cannot change archive dest when archive is running.", K(ret), K_(backup_dest));
+    LOG_WARN("cannot change archive dest when archive is running.", K(ret), K_(tenant_id), KPC(this));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "change archive dest when archive is running is");
   } else if (is_empty_) {
     if (OB_FAIL(helper.del_dest(trans, dest_no_))) {
@@ -670,13 +670,13 @@ int ObLogArchiveDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
     LOG_WARN("invalid parser", K(ret), KPC(this));
   } else if (backup_dest_.is_empty()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("cannot set archive dest without location.", K(ret), K_(backup_dest));
+    LOG_WARN("cannot set archive dest without location.", K(ret), K_(dest_no));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "set archive dest without location is");
   } else if (OB_FAIL(ObTenantArchiveMgr::is_archive_running(trans, tenant_id_, dest_no_, is_running))) {
-    LOG_WARN("failed to check archive running.", K(ret), K_(backup_dest));
+    LOG_WARN("failed to check archive running.", K(ret), K_(dest_no));
   } else if (is_running) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("cannot change archive dest when archive is running.", K(ret), K_(backup_dest));
+    LOG_WARN("cannot change archive dest when archive is running.", K(ret), K_(dest_no));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "change archive dest when archive is running is");
   } else if (OB_FAIL(ObIBackupConfigItemParser::set_default_checksum_type(backup_dest_))) {
     LOG_WARN("fail to check dest checksum type", K(ret));
@@ -716,29 +716,29 @@ int ObLogArchiveDestConfigParser::do_parse_sub_config_(const common::ObString &c
   const char *target= nullptr;
   if (config_str.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("empty log archve dest sub config is not allowed", K(ret), K(config_str));
+    LOG_WARN("empty log archve dest sub config is not allowed", K(ret), K_(tenant_id), K_(dest_no));
   } else {
     char tmp_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
     char *token = nullptr;
     char *saveptr = nullptr;
     char *p_end = nullptr;
     if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%.*s", config_str.length(), config_str.ptr()))) {
-      LOG_WARN("fail to set config value", K(ret), K(config_str));
+      LOG_WARN("fail to set config value", K(ret), K_(dest_no), "config_length", config_str.length());
     } else if (OB_ISNULL(token = ::STRTOK_R(tmp_str, "=", &saveptr))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to split config str", K(ret), KP(token));
     } else if (OB_FALSE_IT(str_tolower(token, strlen(token)))) {
     } else if (0 == STRCASECMP(token, OB_STR_BINDING)) {
       if (OB_FAIL(do_parse_log_archive_mode_(token, saveptr))) {
-        LOG_WARN("fail to do parse log archive mode", KS(token), K(saveptr));
+        LOG_WARN("fail to do parse log archive mode", K(token), "config_length", config_str.length());
       }
     } else if (0 == STRCASECMP(token, OB_STR_LOCATION)) {
       if (OB_FAIL(do_parse_log_archive_dest_(token, saveptr))) {
-        LOG_WARN("fail to do parse log archive dest", K(ret), KS(token), K(saveptr));
+        LOG_WARN("fail to do parse log archive dest", K(ret), K(token), "config_length", config_str.length());
       }
     } else if (0 == STRCASECMP(token, OB_STR_PIECE_SWITCH_INTERVAL)) {
       if (OB_FAIL(do_parse_piece_switch_interval_(token, saveptr))) {
-        LOG_WARN("fail to do parse piece switch interval", K(ret), KS(token), K(saveptr));
+        LOG_WARN("fail to do parse piece switch interval", K(ret), K(token), "config_length", config_str.length());
       }
     } else {
       ret = OB_NOT_SUPPORTED;
@@ -753,9 +753,9 @@ int ObLogArchiveDestConfigParser::do_parse_log_archive_mode_(const common::ObStr
   int ret = OB_SUCCESS;
   if (value.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid log archve binding config", K(ret), K(name), K(value));
+    LOG_WARN("invalid log archve binding config", K(ret), K(name), K(value.length()));
   } else if (OB_FAIL(archive_dest_.set_binding(value.ptr()))) {
-    LOG_WARN("failed to set binding", K(ret), K(name), K(value));
+    LOG_WARN("failed to set binding", K(ret), K(name), K(value.length()));
   }
   return ret;
 }
@@ -765,7 +765,7 @@ int ObLogArchiveDestConfigParser::do_parse_log_archive_dest_(const common::ObStr
   int ret = OB_SUCCESS;
   if (value.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid log archve dest config", K(ret), K(value));
+    LOG_WARN("invalid log archve dest config", K(ret), K(value.length()));
   } else if (OB_FAIL(backup_dest_.assign(value.ptr()))) {
     LOG_WARN("fail to set log archive dest", K(ret));
   } else if (OB_FAIL(archive_dest_.set_log_archive_dest(value))) {
@@ -781,17 +781,17 @@ int ObLogArchiveDestConfigParser::do_parse_piece_switch_interval_(const common::
   const int64_t MAX_LOG_ARCHIVE_PIECE_SWITCH_INTERVAL = 7 * 24 * 3600 * 1000LL * 1000LL; //7d
   if (name.empty() || value.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid log archve dest config", K(ret), K(name), K(value));
+    LOG_WARN("invalid log archve dest config", K(ret), K(name), K(value.length()));
   } else if (OB_FAIL(archive_dest_.set_piece_switch_interval(value.ptr()))) {
-    LOG_WARN("fail to set piece switch interval", K(ret), K(value));
+    LOG_WARN("fail to set piece switch interval", K(ret), K(value.length()));
   } else if (!archive_dest_.is_piece_switch_interval_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("piece switch interval is not valid", K(ret), K(value));
+    LOG_WARN("piece switch interval is not valid", K(ret), K(value.length()));
   } else if (archive_dest_.piece_switch_interval_ > MAX_LOG_ARCHIVE_PIECE_SWITCH_INTERVAL
             || archive_dest_.piece_switch_interval_ < MIN_LOG_ARCHIVE_PIECE_SWITCH_INTERVAL) {
 #ifndef ERRSIM
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("invalid piece_switch_interval", K(ret), K(value));
+    LOG_WARN("invalid piece_switch_interval", K(ret), K(value.length()));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid piece_switch_interval out of range [1d,7d] is");
 #endif
   }
@@ -803,20 +803,20 @@ int ObLogArchiveDestConfigParser::do_parse_compression_(const common::ObString &
   int ret = OB_SUCCESS;
   if (name.empty() || value.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid log archve dest config", K(ret), K(name), K(value));
+    LOG_WARN("invalid log archve dest config", K(ret), K(name), K(value.length()));
   } else if (0 == STRCASECMP(value.ptr(), OB_STR_ENABLE)
       || 0 == STRCASECMP(value.ptr(), OB_STR_DISABLE)) {
     share::BackupConfigItemPair pair;
     if (OB_FAIL(pair.key_.assign(name))) {
       LOG_WARN("fail to assign compression", K(ret), K(name));
     } else if (OB_FAIL(pair.value_.assign(value))) {
-      LOG_WARN("fail to assign value", K(ret), K(value));
+      LOG_WARN("fail to assign value", K(ret), K(value.length()));
     } else if (OB_FAIL(config_items_.push_back(pair))) {
       LOG_WARN("fail to push back pair", K(ret), K(pair));
     }
   } else {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("compression not support value", K(ret), K(value));
+    LOG_WARN("compression not support value", K(ret), K(value.length()));
   }
   return ret;
 }
@@ -828,16 +828,16 @@ int ObLogArchiveDestStateConfigParser::parse_from(const common::ObSqlString &val
   share::BackupConfigItemPair pair;
   if (value.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid log archve dest config", K(ret), K(value));
+    LOG_WARN("invalid log archve dest config", K(ret), K(value.length()));
   } else if (OB_FAIL(dest_state.set_state(value.ptr()))) {
-    LOG_WARN("fail to set piece switch interval", K(ret), K(value));
+    LOG_WARN("fail to set piece switch interval", K(ret), K(value.length()));
   } else if (!dest_state.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("dest state is not valid", K(ret), K(value));
+    LOG_WARN("dest state is not valid", K(ret), K(value.length()));
   } else if (OB_FAIL(pair.key_.assign(OB_STR_STATE))) {
-    LOG_WARN("fail to assign check point", K(ret), K(value));
+    LOG_WARN("fail to assign check point", K(ret), K(value.length()));
   } else if (OB_FAIL(pair.value_.assign(value))) {
-    LOG_WARN("fail to assign value", K(ret), K(value));
+    LOG_WARN("fail to assign value", K(ret), K(value.length()));
   } else if (OB_FAIL(config_items_.push_back(pair))) {
     LOG_WARN("fail to push back pair", K(ret), K(pair));
   }
@@ -915,7 +915,7 @@ int ObIBackupConfigItemParser::set_default_checksum_type(ObBackupDest &backup_de
       LOG_WARN("fail to set default checksum type", K(ret), K(backup_dest));
     } else if (OB_FALSE_IT(backup_dest.reset())) {
     } else if (OB_FAIL(backup_dest.set(backup_dest_str))) {
-      LOG_WARN("fail to set backup dest", K(ret), K(backup_dest_str));
+      LOG_WARN("fail to set backup dest", K(ret), K(backup_dest));
     }
   }
   return ret;
@@ -958,16 +958,16 @@ int ObChangeExternalStorageDestMgr::init(
     LOG_WARN("ChangeExternalStorageDest init twice.", K(ret));
   } else if (OB_INVALID_TENANT_ID == tenant_id || path.is_empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid dest", K(ret), K(path));
+    LOG_WARN("invalid dest", K(ret), K(tenant_id), "path_length", path.size());
   } else if (OB_FAIL(backup_dest_.set_storage_path(path.ptr()))) {
-    LOG_WARN("failed to set backup dest", K(ret), K(path));
+    LOG_WARN("failed to set backup dest", K(ret), K(tenant_id), K_(backup_dest), "path_length", path.size());
   } else if (OB_FAIL(backup_dest_.get_backup_path_str(backup_path.ptr(), backup_path.capacity()))) {
     LOG_WARN("fail to get backup path str", K(ret), K(tenant_id));
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(sql_proxy, tenant_id, backup_path, backup_dest_))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "the path does not exist");
     }
-    LOG_WARN("failed to get backup dest", K(ret), K(tenant_id), K(backup_path));
+    LOG_WARN("failed to get backup dest", K(ret), K(tenant_id), K(backup_path.size()));
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_type(sql_proxy, tenant_id, backup_dest_, dest_type_))) {
     LOG_WARN("failed to get dest type", K(ret), K(tenant_id), K(backup_dest_));
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(sql_proxy, tenant_id, backup_dest_, dest_id_))) {
@@ -998,15 +998,15 @@ int ObChangeExternalStorageDestMgr::update_and_validate_authorization(const char
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("rpc_proxy should not be NULL", K(ret), KP(rpc_proxy));
   } else if (OB_FAIL(update_backup_dest_authorization_(access_id, access_key))) {
-    LOG_WARN("failed to update backup dest authorization", K(ret), KCSTRING(access_id));
+    LOG_WARN("failed to update backup dest authorization", K(ret), KP(access_id));
   } else if (OB_FAIL(backup_dest_.get_backup_dest_str(backup_dest_str.ptr(), backup_dest_str.capacity()))) {
     LOG_WARN("fail to get backup dest str", K(ret));
   } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type_, backup_dest_str, *sql_proxy_))) {
-    LOG_WARN("failed to init dest mgr", K(ret), K(tenant_id_), K(backup_dest_str));
+    LOG_WARN("failed to init dest mgr", K(ret), K(tenant_id_), K_(backup_dest));
   } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy, true/*need_format_file*/, true/*need_check_permission*/))) {
-    LOG_WARN("fail to check archive dest validity", K(ret), K(tenant_id_), K(backup_dest_str));
+    LOG_WARN("fail to check archive dest validity", K(ret), K(tenant_id_), K_(backup_dest));
   } else {
-    LOG_INFO("succeed to check archive dest validity", K(tenant_id_), K(backup_dest_str));
+    LOG_INFO("succeed to check archive dest validity", K(tenant_id_), K_(backup_dest));
   }
 
   return ret;
@@ -1032,7 +1032,7 @@ int ObChangeExternalStorageDestMgr::update_backup_dest_authorization_(const char
     LOG_WARN("assume role mode not support reset ak/sk", K(ret), K(backup_dest_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "reset ak/sk of path with assume role mode ");
   } else if (OB_FAIL(backup_dest_.reset_access_id_and_access_key(access_id, access_key))) {
-    LOG_WARN("failed to reset access id and access key", K(ret), KCSTRING(access_id));
+    LOG_WARN("failed to reset access id and access key", K(ret), KP(access_id));
   }
 
   return ret;
@@ -1062,7 +1062,7 @@ int ObChangeExternalStorageDestMgr::update_backup_parameter_(common::ObISQLClien
     if (OB_FAIL(backup_dest_.get_backup_dest_str(backup_dest_str.ptr(), backup_dest_str.capacity()))) {
       LOG_WARN("fail to get backup dest str", K(ret), K(tenant_id_));
     } else if (OB_FAIL(backup_helper.set_backup_dest(backup_dest_str))) {
-      LOG_WARN("fail to set backup dest", K(ret), K(backup_dest_str));
+      LOG_WARN("fail to set backup dest", K(ret), K_(tenant_id), K_(backup_dest));
     }
   }
 
@@ -1135,7 +1135,7 @@ int ObChangeExternalStorageDestMgr::set_authorization(const common::ObString &ac
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("access_info is empty", K(ret));
   } else if (OB_FAIL(ObBackupDestAttributeParser::parse_access_info(access_info, access_info_option))) {
-    LOG_WARN("failed to parse access_info", K(ret), K(access_info));
+    LOG_WARN("failed to parse access_info", K(ret), K(access_info.length()));
   } else if (OB_FAIL(update_and_validate_authorization(
                     access_info_option.access_id_, access_info_option.access_key_))) {
     LOG_WARN("failed to reset access id and access key", K(ret));
@@ -1157,7 +1157,7 @@ int ObChangeExternalStorageDestMgr::set_attribute(const common::ObString &attrib
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("attribute is empty", K(ret));
   } else if (OB_FAIL(ObBackupDestAttributeParser::parse(attribute, change_option_))) {
-    LOG_WARN("failed to parse attribute", K(ret), K(attribute));
+    LOG_WARN("failed to parse attribute", K(ret), K(attribute.length()));
   }
 
   return ret;

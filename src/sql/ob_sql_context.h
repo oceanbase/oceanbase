@@ -246,7 +246,7 @@ public:
   inline bool is_update_join_group_commit() const { return is_update_join_group_commit_; }
   inline void set_update_join_group_commit(bool value) { is_update_join_group_commit_ = value; }
 
-  TO_STRING_KV(K_(is_part_of_multi_stmt), K_(seq_num), K_(sql), KPC_(batched_queries),
+  TO_STRING_KV(K_(is_part_of_multi_stmt), K_(seq_num), K(sql_.length()), K(get_batched_stmt_cnt()),
                K_(is_ps_mode), K_(ab_cnt), K_(is_batch_group_commit), K_(is_update_join_group_commit));
 
 private:

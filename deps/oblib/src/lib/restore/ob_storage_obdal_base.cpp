@@ -184,7 +184,7 @@ int ObDalAccount::assign(const ObObjectStorageInfo *storage_info)
   if (OB_SUCC(ret)) {
     is_valid_ = true;
     OB_LOG(DEBUG, "succeed to init obdal account",
-        KCSTRING(region_), KCSTRING(endpoint_), KCSTRING(access_id_));
+        KCSTRING(region_), KCSTRING(endpoint_), "has_access_id", '\0' != access_id_[0]);
   } else {
     reset();
   }
@@ -274,7 +274,7 @@ int set_obdal_options_with_account(
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "region", obdal_account.region_))) {
         OB_LOG(WARN, "failed to set region", K(ret), K(obdal_account.region_));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "access_key_id", obdal_account.access_id_))) {
-        OB_LOG(WARN, "failed to set access id", K(ret), K(obdal_account.access_id_));
+        OB_LOG(WARN, "failed to set access id", K(ret), "has_access_id", '\0' != obdal_account.access_id_[0]);
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "secret_access_key", obdal_account.access_key_))) {
         OB_LOG(WARN, "failed to set access key", K(ret));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "disable_config_load", "true"))) {
@@ -294,7 +294,7 @@ int set_obdal_options_with_account(
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "endpoint", obdal_account.endpoint_))) {
         OB_LOG(WARN, "failed to set endpoint", K(ret), K(obdal_account.endpoint_));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "access_key_id", obdal_account.access_id_))) {
-        OB_LOG(WARN, "failed to set access id", K(ret), K(obdal_account.access_id_));
+        OB_LOG(WARN, "failed to set access id", K(ret), "has_access_id", '\0' != obdal_account.access_id_[0]);
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "access_key_secret", obdal_account.access_key_))) {
         OB_LOG(WARN, "failed to set access key", K(ret));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "timeout", "60"))) {
@@ -306,7 +306,7 @@ int set_obdal_options_with_account(
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "endpoint", obdal_account.endpoint_))) {
         OB_LOG(WARN, "failed to set endpoint", K(ret), K(obdal_account.endpoint_));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "account_name", obdal_account.access_id_))) {
-        OB_LOG(WARN, "failed to set access id", K(ret), K(obdal_account.access_id_));
+        OB_LOG(WARN, "failed to set access id", K(ret), "has_access_id", '\0' != obdal_account.access_id_[0]);
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "account_key", obdal_account.access_key_))) {
         OB_LOG(WARN, "failed to set access key", K(ret));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "timeout", "120"))) {

@@ -58,7 +58,7 @@ int ObSTSToken::set(const ObString &token)
   }
   if (!token.empty()) {
     if (OB_FAIL(ob_dup_cstring(allocator_, token, data_))) {
-      OB_LOG(WARN, "failed to deep copy ObSTSToken", K(ret), K(token));
+      OB_LOG(WARN, "failed to deep copy ObSTSToken", K(ret), K(token.length()));
     }
   }
   return ret;
@@ -211,7 +211,7 @@ int ObObjectStorageInfo::reset_access_id_and_access_key(
   if (OB_NOT_NULL(access_id)) {
     int64_t pos = 0;
     if (OB_FAIL(databuff_printf(access_id_, OB_MAX_BACKUP_ACCESSID_LENGTH, pos, "%s%s", ACCESS_ID, access_id))) {
-      LOG_WARN("failed to databuff printf", K(ret), KCSTRING(access_id));
+      LOG_WARN("failed to databuff printf", K(ret), K(strlen(access_id)));
     }
   }
   if (OB_NOT_NULL(access_key)) {
@@ -323,12 +323,12 @@ int ObObjectStorageInfo::validate_arguments() const
         if (OB_UNLIKELY(0 != strlen(access_id_) || 0 != strlen(access_key_))) {
           ret = OB_INVALID_BACKUP_DEST;
           LOG_WARN("ak/sk should not given in assume_role mode",
-              K(ret), K_(access_id), KP_(access_key), K(strlen(access_id_)), K(strlen(access_key_)));
+              K(ret), KP_(access_key), K(strlen(access_id_)), K(strlen(access_key_)));
         }
       } else {
         if (OB_UNLIKELY(0 == strlen(access_id_) || 0 == strlen(access_key_))) {
           ret = OB_INVALID_BACKUP_DEST;
-          LOG_WARN("ak/sk must be given in in ak/sk mode", K(ret), K_(access_id), KP_(access_key),
+          LOG_WARN("ak/sk must be given in in ak/sk mode", K(ret), KP_(access_key),
               K(strlen(access_id_)), K(strlen(access_key_)));
         }
       }
@@ -338,7 +338,7 @@ int ObObjectStorageInfo::validate_arguments() const
         || 0 != strlen(role_arn_) || 0 != strlen(external_id_))) {
       ret = OB_INVALID_BACKUP_DEST;
       LOG_WARN("backup device is nfs, endpoint/access_id/access_key must be empty", K(ret),
-          K_(device_type), K_(endpoint), K_(access_id), KP_(access_key), KP_(role_arn), KP_(external_id));
+          K_(device_type), K_(endpoint), KP_(access_key), KP_(role_arn), KP_(external_id));
     }
   }
   if (OB_SUCC(ret) && enable_worm_ && !(OB_MD5_ALGO == checksum_type_ && OB_STORAGE_OSS == device_type_)) {
@@ -393,7 +393,7 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
         }
       } else if (0 == strncmp(ACCESS_ID, token, strlen(ACCESS_ID))) {
         if (OB_FAIL(set_storage_info_field_(token, access_id_, sizeof(access_id_)))) {
-          LOG_WARN("failed to set access id", K(ret), K(token));
+          LOG_WARN("failed to set access id", K(ret), K(strlen(token)));
         }
       } else if (0 == strncmp(ACCESS_KEY, token, strlen(ACCESS_KEY))) {
         if (OB_FAIL(set_storage_info_field_(token, access_key_, sizeof(access_key_)))) {
@@ -728,8 +728,7 @@ int ObObjectStorageInfo::get_authorization_str(
     LOG_WARN("invalid args", K(ret), KP(authorization_str), K(authorization_str_len));
   } else if (!is_assume_role_mode_
              && OB_FAIL(get_info_str_(authorization_str, authorization_str_len))) {
-    OB_LOG(WARN, "failed to get authorization str", K(ret), K(authorization_str), KPC(this),
-        K(authorization_str_len));
+    OB_LOG(WARN, "failed to get authorization str", K(ret), KPC(this), K(authorization_str_len));
   } else if (is_assume_role_mode_) {
     // access by assume role
     ObObjectStorageCredential credential;
@@ -777,17 +776,17 @@ int ObObjectStorageInfo::to_account(ObStorageAccount &account) const
     if (OB_FAIL(ObDeviceCredentialMgr::get_instance().get_credential(*this, credential))) {
       OB_LOG(WARN, "failed to get credential", K(ret), KPC(this), K(credential));
     } else if (OB_FAIL(ob_set_field(credential.access_id_ + strlen(ACCESS_ID), account.access_id_, sizeof(account.access_id_)))) {
-      OB_LOG(WARN, "failed to set access_id", K(ret), K(access_id_));
+      OB_LOG(WARN, "failed to set access_id", K(ret));
     } else if (OB_FAIL(ob_set_field(credential.access_key_ + strlen(ACCESS_KEY), account.access_key_, sizeof(account.access_key_)))) {
-      OB_LOG(WARN, "failed to set access_key", K(ret), K(access_key_));
+      OB_LOG(WARN, "failed to set access_key", K(ret));
     } else if (OB_FAIL(account.sts_token_.assign(credential.sts_token_))) {
       OB_LOG(WARN, "failed to set sts_token_", K(ret), K(account.sts_token_), K(credential.sts_token_));
     }
   } else {
     if (OB_FAIL(ob_set_field(access_id_ + strlen(ACCESS_ID), account.access_id_, sizeof(account.access_id_)))) {
-      OB_LOG(WARN, "failed to set access_id", K(ret), K(access_id_));
+      OB_LOG(WARN, "failed to set access_id", K(ret));
     } else if (OB_FAIL(ob_set_field(access_key_ + strlen(ACCESS_KEY), account.access_key_, sizeof(account.access_key_)))) {
-      OB_LOG(WARN, "failed to set access_key", K(ret), K(access_key_));
+      OB_LOG(WARN, "failed to set access_key", K(ret));
     }
   }
 
@@ -946,7 +945,7 @@ int ObDeviceCredentialKey::get_sts_credential_()
   } else if (OB_UNLIKELY(sts_credential_len <= 0
       || sts_credential_len >= OB_MAX_STS_CREDENTIAL_LENGTH)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("sts_credential is invalid", K(ret), K(sts_credential), K(sts_credential_len));
+    LOG_WARN("sts_credential is invalid", K(ret), KP(sts_credential), K(sts_credential_len));
   } else if (OB_FAIL(check_sts_credential_format(sts_credential, *this))) {
     LOG_WARN("failed to check sts credential format", K(ret), KP(sts_credential), KPC(this));
   }
@@ -980,19 +979,19 @@ int ObDeviceCredentialKey::construct_signed_url(char *url_buf, const int64_t url
     LOG_WARN("failed to generate request id", K(ret), K(request_id), K(sizeof(request_id)));
   } else {
     if (OB_FAIL(params.push_back(ParamType("Action", STS_ACTION)))) {
-      OB_LOG(WARN, "fail to push back", K(ret), K(params.count()), K(params));
+      OB_LOG(WARN, "fail to push back", K(ret), K(params.count()));
     } else if (OB_FAIL(params.push_back(ParamType("RequestSource", STS_RESOURCE_SOURCE)))) {
-      OB_LOG(WARN, "fail to push back", K(ret), K(params.count()), K(params));
+      OB_LOG(WARN, "fail to push back", K(ret), K(params.count()));
     } else if (OB_FAIL(params.push_back(ParamType("RequestId", request_id)))) {
-      OB_LOG(WARN, "fail to push back", K(ret), K(params.count()), K(params));
+      OB_LOG(WARN, "fail to push back", K(ret), K(params.count()));
     } else if (OB_FAIL(params.push_back(ParamType("RoleArn", role_arn)))) {
-      OB_LOG(WARN, "fail to push back", K(ret), K(params.count()), K(params));
+      OB_LOG(WARN, "fail to push back", K(ret), K(params.count()));
     } else if (OB_FAIL(params.push_back(ParamType("SignatureNonce", signature_nonce)))) {
-      OB_LOG(WARN, "fail to push back", K(ret), K(params.count()), K(params));
+      OB_LOG(WARN, "fail to push back", K(ret), K(params.count()));
     } else if (OB_FAIL(params.push_back(ParamType("ObSignatureKey", sts_ak_)))) {
-      OB_LOG(WARN, "fail to push back", K(ret), K(params.count()), K(params));
+      OB_LOG(WARN, "fail to push back", K(ret), K(params.count()));
     } else if (OB_FAIL(params.push_back(ParamType("ObSignatureSecret", sts_sk_)))) {
-      OB_LOG(WARN, "fail to push back", K(ret), K(params.count()), K(params));
+      OB_LOG(WARN, "fail to push back", K(ret), K(params.count()));
     // be careful to handle external_id_ and external_id
     } else if (external_id_[0] != '\0'
         && OB_FAIL(params.push_back(ParamType("ExternalId", external_id)))) {
@@ -1010,7 +1009,7 @@ int ObDeviceCredentialKey::construct_signed_url(char *url_buf, const int64_t url
         && OB_FAIL(databuff_printf(url_buf, url_buf_len, pos, "&ExternalId=%s", external_id))) {
       LOG_WARN("failed to concat external id", K(ret), K(url_buf_len), K(pos), KPC(this));
     } else if (OB_FAIL(sign_request(params, "POST", signature, sizeof(signature)))) {
-      LOG_WARN("failed to sign request", K(ret), K(signature), K(params), KPC(this));
+      LOG_WARN("failed to sign request", K(ret), K(request_id), K(params.count()), KPC(this));
     } else if (OB_FAIL(databuff_printf(url_buf, url_buf_len, pos, "&ObSignature=%s", signature))) {
       LOG_WARN("failed to concat sts signature", K(ret), K(pos), K(url_buf_len), KPC(this));
     }
@@ -1061,7 +1060,7 @@ int check_sts_credential_format(const char *sts_credential, ObDeviceCredentialKe
         break;
       } else if (0 == strncmp(STS_AK, token, strlen(STS_AK))) {
         if (OB_FAIL(ob_set_field(token + strlen(STS_AK), sts_ak, sizeof(credential_key.sts_ak_)))) {
-          LOG_WARN("failed to set sts ak", K(ret), KP(token), K(sts_ak),
+          LOG_WARN("failed to set sts ak", K(ret), KP(token), KP(sts_ak),
               K(sizeof(credential_key.sts_ak_)));
         }
       } else if (0 == strncmp(STS_SK, token, strlen(STS_SK))) {
@@ -1071,7 +1070,7 @@ int check_sts_credential_format(const char *sts_credential, ObDeviceCredentialKe
         }
       } else if (0 == strncmp(STS_URL, token, strlen(STS_URL))) {
         if (OB_FAIL(ob_set_field(token + strlen(STS_URL), sts_url, sizeof(credential_key.sts_url_)))) {
-          LOG_WARN("failed to set sts url", K(ret), K(token), K(sts_url),
+          LOG_WARN("failed to set sts url", K(ret), KP(token), KP(sts_url),
               K(sizeof(credential_key.sts_url_)));
         }
       }
@@ -1079,7 +1078,7 @@ int check_sts_credential_format(const char *sts_credential, ObDeviceCredentialKe
     if (OB_SUCC(ret)) {
       if (OB_UNLIKELY(sts_ak[0] == '\0' || sts_sk[0] == '\0' || sts_url[0] == '\0')) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid sts credential", K(ret), K(sts_ak), KP(sts_sk), K(sts_url));
+        LOG_WARN("invalid sts credential", K(ret), KP(sts_ak), KP(sts_sk), KP(sts_url));
       }
     }
   }
@@ -1276,7 +1275,7 @@ int ObDeviceCredentialMgr::curl_credential(
       ObObjectStorageCredential device_credential;
       CredentialAccessTimeCallBack read_callback(false /*update_access_time*/);
       if (OB_FAIL(parse_device_credential_(res_and_allocator.response_, device_credential))) {
-        LOG_WARN("fail to parse device credential", K(ret), K(res_and_allocator.response_), K(credential_key));
+        LOG_WARN("fail to parse device credential", K(ret), KP(res_and_allocator.response_), K(credential_key));
       } else {
         SpinWLockGuard w_guard(credential_lock_);
         if (update_access_time) {
@@ -1427,7 +1426,7 @@ int64_t ObDeviceCredentialMgr::on_write_data_(
       char *tmp_response = nullptr;
       const int64_t prev_response_size = STRLEN(response);
       if (OB_FAIL(ob_dup_cstring(tmp_allocator, ObString(response), tmp_response))) {
-        LOG_WARN("fail to dup cstring", K(ret), K(response), K(prev_response_size));
+        LOG_WARN("fail to dup cstring", K(ret), KP(response), K(prev_response_size));
       }
       // 2. copy previous response data and current response data to response
       if (OB_SUCC(ret)) {
@@ -1469,11 +1468,11 @@ int64_t ObDeviceCredentialMgr::debug_callback(
     switch (type) {
       case CURLINFO_HEADER_OUT:
       case CURLINFO_DATA_OUT:
-        LOG_WARN("Send data", K(size), K(data));
+        LOG_WARN("Send data", K(type), K(size), KP(data));
         break;
       case CURLINFO_HEADER_IN:
       case CURLINFO_DATA_IN:
-        LOG_WARN("Recv data", K(size), K(data));
+        LOG_WARN("Recv data", K(type), K(size), KP(data));
         break;
       case CURLINFO_TEXT: {
         int http_code = 0;
@@ -1586,7 +1585,7 @@ int ObDeviceCredentialMgr::parse_device_credential_(
             security_token.empty(), "expiration", expiration);
       } else if (OB_FAIL(databuff_printf(credential.access_id_, sizeof(credential.access_id_),
                      "%.*s", access_key_id.length(), access_key_id.ptr()))) {
-        LOG_WARN("failed to set credential access id", K(ret), K(access_key_id));
+        LOG_WARN("failed to set credential access id", K(ret), K(access_key_id.length()));
       } else if (OB_FAIL(databuff_printf(credential.access_key_, sizeof(credential.access_key_),
                      "%.*s", access_key_secret.length(), access_key_secret.ptr()))) {
         LOG_WARN("failed to set credential access key", K(ret), K(access_key_secret.length()));

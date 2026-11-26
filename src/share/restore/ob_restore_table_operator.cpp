@@ -60,7 +60,7 @@ int ObTenantRestoreTableOperator::insert_source(const ObLogRestoreSourceItem &it
   } else if (OB_FAIL(dml.splice_insert_update_sql(OB_ALL_LOG_RESTORE_SOURCE_TNAME, sql))) {
     LOG_WARN("splice insert update sql failed", K(ret), K(item));
   } else if (OB_FAIL(proxy_->write(get_exec_tenant_id_(), sql.ptr(), affected_rows))) {
-    LOG_WARN("exec sql failed", K(ret), K(item), K(sql), K_(user_tenant_id));
+    LOG_WARN("exec sql failed", K(ret), K(item), K_(user_tenant_id));
   }
   return ret;
 }

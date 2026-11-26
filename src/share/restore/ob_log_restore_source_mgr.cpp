@@ -77,7 +77,7 @@ int ObLogRestoreSourceMgr::add_service_source(const SCN &recovery_until_scn,
     LOG_WARN("ObLogRestoreSourceMgr not init", K(ret), K(is_inited_));
   } else if (OB_UNLIKELY(service_source.empty() || !recovery_until_scn.is_valid()) ) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(service_source), K(recovery_until_scn));
+    LOG_WARN("invalid argument", K(ret), K(recovery_until_scn));
   } else {
     ObLogRestoreSourceItem item(tenant_id_,
                                 OB_DEFAULT_LOG_RESTORE_SOURCE_ID,
@@ -87,7 +87,7 @@ int ObLogRestoreSourceMgr::add_service_source(const SCN &recovery_until_scn,
     if (OB_FAIL(table_operator_.insert_source(item))) {
       LOG_WARN("table_operator_ insert_source failed", K(ret), K(item));
     } else {
-      LOG_INFO("add service source succ", K(recovery_until_scn), K(service_source));
+      LOG_INFO("add service source succ", K(recovery_until_scn));
     }
   }
   return ret;
@@ -104,10 +104,10 @@ int ObLogRestoreSourceMgr::add_location_source(const SCN &recovery_until_scn,
     LOG_WARN("ObLogRestoreSourceMgr not init", K(ret), K(is_inited_));
   } else if (OB_UNLIKELY(archive_dest.empty() || !recovery_until_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(archive_dest), K(recovery_until_scn));
+    LOG_WARN("invalid argument", K(ret), K(recovery_until_scn));
   } else if (OB_FAIL(dest.set(archive_dest.ptr()))) {
     // use backup dest to manage oss key
-    LOG_WARN("set backup dest failed", K(ret), K(archive_dest));
+    LOG_WARN("set backup dest failed", K(ret));
   } else if (OB_FAIL(dest.get_backup_dest_str(dest_buf, sizeof(dest_buf)))) {
     // store primary cluster id and tenant id in log restore source
     LOG_WARN("get backup dest str with primary attr failed", K(ret), K(dest));
@@ -120,7 +120,7 @@ int ObLogRestoreSourceMgr::add_location_source(const SCN &recovery_until_scn,
     if (OB_FAIL(table_operator_.insert_source(item))) {
       LOG_WARN("table_operator_ insert_source failed", K(ret), K(item));
     } else {
-      LOG_INFO("add location source succ", K(recovery_until_scn), K(archive_dest));
+      LOG_INFO("add location source succ", K(recovery_until_scn));
     }
   }
   return ret;
@@ -135,26 +135,26 @@ int ObLogRestoreSourceMgr::add_rawpath_source(const SCN &recovery_until_scn, con
     LOG_WARN("ObLogRestoreSourceMgr not init", K(ret), K_(is_inited));
   } else if (OB_UNLIKELY(array.empty() || !recovery_until_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument to add rawpath source", K(ret), K(array), K(recovery_until_scn));
+    LOG_WARN("invalid argument to add rawpath source", K(ret), "path_count", array.count(), K(recovery_until_scn));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < array.count(); i++) {
       ObBackupDest dest;
       ObBackupPathString rawpath = array[i];
       char dest_buf[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
       if (OB_UNLIKELY(rawpath.is_empty())) {
-        LOG_WARN("raw path is empty", K(array));
+        LOG_WARN("raw path is empty", "path_count", array.count());
       } else if (OB_FAIL(dest.set(rawpath.ptr()))) {
-        LOG_WARN("set rawpath backup dest failed", K(ret), K(rawpath));
+        LOG_WARN("set rawpath backup dest failed", K(ret), K(i));
       } else if (OB_FAIL(dest.get_backup_dest_str(dest_buf, sizeof(dest_buf)))) {
         LOG_WARN("get rawpath backup path failed", K(ret), K(dest));
       } else if (0 == i) {
         if (OB_FAIL(rawpath_value.assign(dest_buf))) {
-          LOG_WARN("fail to assign rawpath", K(ret), K(dest_buf));
+          LOG_WARN("fail to assign rawpath", K(ret), K(i));
         }
       } else if (OB_FAIL(rawpath_value.append(","))) {
         LOG_WARN("fail to append rawpath", K(ret));
       } else if (OB_FAIL(rawpath_value.append(dest_buf))) {
-        LOG_WARN("fail to append rawpath", K(ret), K(dest_buf));
+        LOG_WARN("fail to append rawpath", K(ret), K(i));
       }
     }
     if (OB_SUCC(ret)) {
@@ -166,7 +166,7 @@ int ObLogRestoreSourceMgr::add_rawpath_source(const SCN &recovery_until_scn, con
       if (OB_FAIL(table_operator_.insert_source(item))) {
         LOG_WARN("table_operator_ insert_source failed", K(ret), K(item));
       } else {
-        LOG_INFO("add rawpath source succ", K(recovery_until_scn), K(array));
+        LOG_INFO("add rawpath source succ", K(recovery_until_scn), "path_count", array.count());
       }
     }
   }

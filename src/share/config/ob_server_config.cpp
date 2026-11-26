@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SHARE_CONFIG
+#include "share/ob_config_log_util.h"
 
 #include "ob_server_config.h"
 #include "observer/ob_server.h"
@@ -116,7 +117,7 @@ int ObServerConfig::check_all() const
     } else if (!it->second->check()) {
       int temp_ret = OB_INVALID_CONFIG;
       OB_LOG_RET(WARN, temp_ret, "Configure setting invalid",
-             "name", it->first.str(), "value", it->second->str(), K(temp_ret));
+             "name", it->first.str(), "value", share::get_config_value_for_log(it->first.str(), it->second->str()), K(temp_ret));
     } else {
       // do nothing
     }
@@ -147,7 +148,8 @@ void ObServerConfig::print() const
     if (OB_ISNULL(it->second)) {
       OB_LOG_RET(WARN, OB_ERROR, "config item is null", "name", it->first.str());
     } else {
-      _OB_LOG(INFO, "| %-36s = %s", it->first.str(), it->second->str());
+      const ObString value = share::get_config_value_for_log(it->first.str(), it->second->str());
+      _OB_LOG(INFO, "| %-36s = %.*s", it->first.str(), value.length(), value.ptr());
     }
   }
   OB_LOG(INFO, "===================== *stop server config report* =======================");

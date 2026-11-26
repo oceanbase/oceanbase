@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SERVER_OMT
+#include "share/ob_config_log_util.h"
 
 #include "ob_tenant_config.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
@@ -54,7 +55,8 @@ void ObTenantConfig::print() const
     if (OB_ISNULL(it->second)) {
       OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "config item is null", "name", it->first.str());
     } else {
-      _OB_LOG(INFO, "| %-36s = %s", it->first.str(), it->second->str());
+      const ObString value = share::get_config_value_for_log(it->first.str(), it->second->str());
+      _OB_LOG(INFO, "| %-36s = %.*s", it->first.str(), value.length(), value.ptr());
     }
   }
   OB_LOG(INFO, "===================== * stop tenant config report * =======================", K(tenant_id_));
@@ -66,7 +68,7 @@ void ObTenantConfig::trace_all_config() const
   for (; it != container_.end(); ++it) {
     if (OB_ISNULL(it->second)) {
     } else if (it->second->case_compare(it->second->default_str()) != 0) {
-      OPT_TRACE("  ", it->first.str(), " = ", it->second->str());
+      OPT_TRACE("  ", it->first.str(), " = ", share::get_config_value_for_log(it->first.str(), it->second->str()));
     }
   }
 }
@@ -376,7 +378,7 @@ int ObTenantConfig::add_extra_config_unsafe(const char *config_str,
       ObConfigItem *const *pp_item = NULL;
       if (OB_ISNULL(name = STRTOK_R(token, "=", &saveptr_one))) {
         ret = OB_INVALID_CONFIG;
-        LOG_ERROR("Invalid config string", K(token), K(ret));
+        LOG_ERROR("Invalid config string", KP(token), K(ret));
       } else if (OB_ISNULL(saveptr_one) || OB_UNLIKELY('\0' == *(value = saveptr_one))) {
         LOG_INFO("Empty config string", K(token), K(name));
         // ret = OB_INVALID_CONFIG;
@@ -408,7 +410,7 @@ int ObTenantConfig::add_extra_config_unsafe(const char *config_str,
             } else if (FALSE_IT(external_info_val[0] = '\0')) {
             } else if (OB_ISNULL(pp_item = container_.get(ObConfigStringKey(name)))) {
               ret = OB_SUCCESS;
-              LOG_WARN("Invalid config string, no such config item", K(name), K(value), K(ret));
+              LOG_WARN("Invalid config string, no such config item", K(name), "value", share::get_config_value_for_log(name, value), K(ret));
             }
             if (OB_FAIL(ret) || OB_ISNULL(pp_item)) {
             } else if (compatible_cfg.case_compare(name) == 0) {
@@ -429,18 +431,19 @@ int ObTenantConfig::add_extra_config_unsafe(const char *config_str,
               }
             } else if (!(*pp_item)->set_value_unsafe(value)) {
               ret = OB_INVALID_CONFIG;
-              LOG_WARN("Invalid config value", K(name), K(value), K(ret));
+              LOG_WARN("Invalid config value", K(name), "value", share::get_config_value_for_log(name, value), K(ret));
             } else if (check_config && (!(*pp_item)->check_unit(value) || !(*pp_item)->check())) {
               ret = OB_INVALID_CONFIG;
               const char* range = (*pp_item)->range();
               if (OB_ISNULL(range) || strlen(range) == 0) {
-                LOG_ERROR("Invalid config, value out of range", K(name), K(value), K(ret));
+                LOG_ERROR("Invalid config, value out of range", K(name), "value", share::get_config_value_for_log(name, value), K(ret));
               } else {
-                _LOG_ERROR("Invalid config, value out of %s (for reference only). name=%s, value=%s, ret=%d", range, name, value, ret);
+                _LOG_ERROR("Invalid config, value out of %s (for reference only). name=%s, value=%s, ret=%d", range, name,
+                    share::get_config_value_for_log(name, value).ptr(), ret);
               }
             } else {
               (*pp_item)->set_version(version);
-              LOG_INFO("Load tenant config succ", K(name), K(value));
+              LOG_INFO("Load tenant config succ", K(name), "value", share::get_config_value_for_log(name, value));
             }
           }
         }

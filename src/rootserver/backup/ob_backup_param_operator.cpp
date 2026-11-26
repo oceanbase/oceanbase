@@ -88,12 +88,14 @@ int ObBackupParamOperator::backup_cluster_parameters(const ObBackupPathString &b
 const char *ObBackupParamOperator::TENANT_BLACK_PARAMETER_LIST[] = {
   "external_kms_info",
   "tde_method",
+  "sts_credential",
 };
 
 const char *ObBackupParamOperator::CLUSTER_BLACK_PARAMETER_LIST[] = {
   "all_server_list",
   "rootservice_list",
   "debug_sync_timeout",
+  "ssl_external_kms_info",
 };
 
 int ObBackupParamOperator::construct_tenant_param_sql_(const uint64_t tenant_id,

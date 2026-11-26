@@ -94,9 +94,9 @@ int ObBackupFileWriteCtx::write_buffer_(const char *buf, const int64_t len, cons
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf) || len <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(buf), K(len));
+    LOG_WARN("get invalid args", K(ret), KP(buf), K(len));
   } else if (OB_FAIL(data_buffer_.write(buf, len))) {
-    LOG_WARN("failed to write file writer", K(ret), K(buf), K(len));
+    LOG_WARN("failed to write file writer", K(ret), KP(buf), K(len));
   } else if (OB_FAIL(flush_buffer_(is_last_part))) {
     LOG_WARN("failed to flush buffer", K(ret), K(is_last_part));
   }

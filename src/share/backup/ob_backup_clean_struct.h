@@ -121,7 +121,7 @@ public:
 
   TO_STRING_KV(K_(job_id), K_(tenant_id), K_(incarnation_id), K_(initiator_job_id), K_(executor_tenant_id), K_(initiator_tenant_id),  K_(clean_type),
       K_(expired_time), K_(backup_set_id), K_(backup_piece_id), K_(dest_id), K_(job_level), 
-      K_(backup_path), K_(start_ts), K_(end_ts), K_(status), K_(description), K_(result), K_(retry_count), K_(can_retry), K_(task_count),
+      K(backup_path_.size()), K_(start_ts), K_(end_ts), K_(status), K_(description), K_(result), K_(retry_count), K_(can_retry), K_(task_count),
       K_(success_task_count)); 
 
   int64_t job_id_; // pk
@@ -164,7 +164,7 @@ public:
   int set_backup_clean_id(const int64_t id);
   TO_STRING_KV(K_(task_id), K_(tenant_id), K_(task_type), K_(job_id),  K_(backup_set_id),
       K_(backup_piece_id), K_(round_id), K_(dest_id), K_(start_ts), K_(end_ts),
-      K_(backup_path),  K_(status), K_(result), K_(total_ls_count),
+      K(backup_path_.size()),  K_(status), K_(result), K_(total_ls_count),
       K_(finish_ls_count), K_(stats)); 
   int64_t task_id_;
   uint64_t tenant_id_;

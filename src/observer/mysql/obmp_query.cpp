@@ -78,18 +78,18 @@ int ObMPQuery::process()
     // do-nothing
   } else if (OB_ISNULL(req_) || OB_ISNULL(conn) || OB_ISNULL(cur_trace_id)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null conn ptr", K_(sql), K_(req), K(conn), K(cur_trace_id), K(ret));
+    LOG_WARN("null conn ptr", K(sql_.length()), K_(req), K(conn), K(cur_trace_id), K(ret));
   } else if (OB_UNLIKELY(!conn->is_in_authed_phase())) {
     ret = OB_ERR_NO_PRIVILEGE;
-    LOG_WARN("receive sql without session", K_(sql), K(ret));
+    LOG_WARN("receive sql without session", K(sql_.length()), K(ret));
   } else if (OB_ISNULL(conn->tenant_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid tenant", K_(sql), K(conn->tenant_), K(ret));
+    LOG_ERROR("invalid tenant", K(sql_.length()), K(conn->tenant_), K(ret));
   } else if (OB_FAIL(get_session(sess))) {
-    LOG_WARN("get session fail", K_(sql), K(ret));
+    LOG_WARN("get session fail", K(sql_.length()), K(ret));
   } else if (OB_ISNULL(sess)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session is NULL or invalid", K_(sql), K(sess), K(ret));
+    LOG_WARN("session is NULL or invalid", K(sql_.length()), K(sess), K(ret));
   } else {
     register_query_trace(MTL_ID(), sess->get_server_sid());
     lib::CompatModeGuard g(sess->get_compatibility_mode() == ORACLE_MODE ?
@@ -128,19 +128,19 @@ int ObMPQuery::process()
       const bool enable_flt = session.get_control_info().is_valid();
       if (OB_UNLIKELY(!session.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("invalid session", K_(sql), K(ret));
+        LOG_ERROR("invalid session", K(sql_.length()), K(ret));
       } else if (OB_FAIL(process_kill_client_session(session))) {
         LOG_WARN("client session has been killed", K(ret));
       } else if (OB_UNLIKELY(session.is_zombie())) {
         //session has been killed some moment ago
         ret = OB_ERR_SESSION_INTERRUPTED;
-        LOG_WARN("session has been killed", K(session.get_session_state()), K_(sql),
+        LOG_WARN("session has been killed", K(session.get_session_state()), K(sql_.length()),
                  K(session.get_server_sid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
       } else if (OB_FAIL(session.check_and_init_retry_info(*cur_trace_id, sql_))) {
         // 注意，retry info和last query trace id的逻辑要写在query lock内，否则会有并发问题
-        LOG_WARN("fail to check and init retry info", K(ret), K(*cur_trace_id), K_(sql));
+        LOG_WARN("fail to check and init retry info", K(ret), K(*cur_trace_id), K(sql_.length()));
       } else if (OB_FAIL(session.get_query_timeout(query_timeout))) {
-        LOG_WARN("fail to get query timeout", K_(sql), K(ret));
+        LOG_WARN("fail to get query timeout", K(sql_.length()), K(ret));
       } else if (OB_FAIL(gctx_.schema_service_->get_tenant_received_broadcast_version(
                   session.get_effective_tenant_id(), tenant_version))) {
         LOG_WARN("fail get tenant broadcast version", K(ret));
@@ -159,7 +159,7 @@ int ObMPQuery::process()
         //packet size check with session variable max_allowd_packet or net_buffer_length
         need_disconnect = false;
         ret = OB_ERR_NET_PACKET_TOO_LARGE;
-        LOG_WARN("packet too large than allowed for the session", K_(sql), K(ret));
+        LOG_WARN("packet too large than allowed for the session", K(sql_.length()), K(ret));
       } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(),
                               session,
                               conn->proxy_cap_flags_.is_full_link_trace_support(),
@@ -167,7 +167,7 @@ int ObMPQuery::process()
         LOG_WARN("failed to update flt extra info", K(ret));
       } else if (OB_FAIL(session.check_tenant_status())) {
         need_disconnect = false;
-        LOG_INFO("unit has been migrated, need deny new request", K(ret), K(MTL_ID()), K(sql_));
+        LOG_INFO("unit has been migrated, need deny new request", K(ret), K(MTL_ID()), K(sql_.length()));
       } else if (OB_FAIL(session.gen_configs_in_pc_str())) {
         LOG_WARN("fail to generate configuration strings that can influence execution plan",
                  K(ret));
@@ -207,7 +207,7 @@ int ObMPQuery::process()
           } else {
             session.set_app_trace_id(pre_parse_result.trace_id_);
             LOG_DEBUG("app trace id", "app_trace_id", pre_parse_result.trace_id_,
-                                      "sessid", session.get_server_sid(), K_(sql));
+                                      "sessid", session.get_server_sid(), K(sql_.length()));
           }
         }
 
@@ -223,7 +223,7 @@ int ObMPQuery::process()
         } else if (OB_UNLIKELY(queries.count() <= 0)) {
           ret = OB_ERR_UNEXPECTED;
           need_response_error = true;//进入此分支之后，要断连接，极其严重错误
-          LOG_ERROR("emtpy query count. client would have suspended. never be here!", K_(sql), K(ret));
+          LOG_ERROR("emtpy query count. client would have suspended. never be here!", K(sql_.length()), K(ret));
         } else if (OB_UNLIKELY(1 == session.get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS)) {
           // 处理Multiple Statement
           /* MySQL处理Multi-Stmt出错时候的行为：
@@ -321,7 +321,7 @@ int ObMPQuery::process()
             ret = OB_ERR_PARSER_SYNTAX;
             need_disconnect = false;
             need_response_error = true;
-            LOG_WARN("unexpected error. multi stmts sql while OB_CLIENT_MULTI_STATEMENTS not enabled.", K(ret), K(sql_));
+            LOG_WARN("unexpected error. multi stmts sql while OB_CLIENT_MULTI_STATEMENTS not enabled.", K(ret), K(sql_.length()));
           } else {
             EVENT_INC(SQL_SINGLE_QUERY_COUNT);
             // 处理普通的Single Statement
@@ -703,7 +703,7 @@ void ObMPQuery::check_is_trans_ctrl_cmd(const ObString &sql,
     }
   }
 #ifdef ENABLE_DEBUG_LOG
-  LOG_TRACE("check is trans ctrl cmd ", K(sql), K(is_trans_ctrl_cmd), K(stmt_type));
+  LOG_TRACE("check is trans ctrl cmd ", K(sql.length()), K(is_trans_ctrl_cmd), K(stmt_type));
 #endif
 }
 
@@ -786,7 +786,7 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
                                          force_sync_resp,
                                          stmt_type))) {
         need_response_error = true;
-        LOG_WARN("fail to execute trans ctrl cmd", KR(ret), K(sql));
+        LOG_WARN("fail to execute trans ctrl cmd", KR(ret), K(sql.length()));
       }
 
       // 如果没有异步提交，且执行成功，则发送ok包给客户端
@@ -811,7 +811,7 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
     tmp_ret = OB_E(EventTable::EN_PRINT_QUERY_SQL) OB_SUCCESS;
     if (OB_SUCCESS != tmp_ret) {
       LOG_INFO("query info:",
-               "sql", session.get_current_query_string(),
+               "sql_id", ctx_.sql_id_,
                "sess_id", session.get_server_sid(),
                "database_id", session.get_database_id(),
                "database_name", session.get_database_name(),
@@ -838,7 +838,7 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
 
     if (OB_FAIL(ret) && !async_resp_used && need_response_error && is_conn_valid() &&
           !ctx_.multi_stmt_item_.is_batched_multi_stmt()) {
-      LOG_WARN("query failed", K(ret), K(session), K(sql));
+      LOG_WARN("query failed", K(ret), K(session), K(sql.length()));
       // 这个请求出错了，还没处理完。如果不是已经交给异步EndTrans收尾，
       // 则需要在下面回复一个error_packet作为收尾。
       // 否则后面没人帮忙发错误包给客户端了，可能会导致客户端挂起等回包。
@@ -1093,10 +1093,10 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
           retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret);
           if (OB_ERR_PROXY_REROUTE == ret) {
             LOG_DEBUG("run stmt_query failed, check if need retry",
-                      K(ret), K(cli_ret), K(retry_ctrl_.need_retry()), K(sql));
+                      K(ret), K(cli_ret), K(retry_ctrl_.need_retry()), K(sql.length()));
           } else {
             LOG_WARN("run stmt_query failed, check if need retry",
-                     K(ret), K(cli_ret), K(retry_ctrl_.need_retry()), K(sql));
+                     K(ret), K(cli_ret), K(retry_ctrl_.need_retry()), K(sql.length()));
           }
           ret = cli_ret;
           if (OB_ERR_PROXY_REROUTE == ret) {
@@ -1165,7 +1165,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       tmp_ret = OB_E(EventTable::EN_PRINT_QUERY_SQL) OB_SUCCESS;
       if (OB_SUCCESS != tmp_ret) {
         LOG_INFO("query info:",
-              "sql", result.get_session().get_current_query_string(),
+              "sql_id", ctx_.sql_id_,
               "sess_id", result.get_session().get_server_sid(),
               "database_id", result.get_session().get_database_id(),
               "database_name", result.get_session().get_database_name(),
@@ -1225,7 +1225,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
           if (OB_ERR_PROXY_REROUTE == ret) {
             LOG_DEBUG("query should be rerouted", K(ret), K(async_resp_used));
           } else {
-            LOG_WARN("query failed", K(ret), K(session), K(sql), K(retry_ctrl_.need_retry()));
+            LOG_WARN("query failed", K(ret), K(session), K(sql.length()), K(retry_ctrl_.need_retry()));
           }
           // 当need_retry=false时，可能给客户端回过包了，可能还没有回过任何包。
           // 不过，可以确定：这个请求出错了，还没处理完。如果不是已经交给异步EndTrans收尾，

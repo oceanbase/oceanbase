@@ -41,7 +41,7 @@ int ObKVParser::emit(int sym)
   } else {
     if (sym == SYM_VALUE && NULL != cb_) {
       if (OB_FAIL(cb_->match(key_buf_, value_buf_))) {
-        LOG_WARN("fail match callback", K_(key_buf), K_(value_buf));
+        LOG_WARN("fail match callback", K(ret), K_(key_buf), "value_length", strlen(value_buf_));
       }
     }
     if (OB_SUCC(ret)) {

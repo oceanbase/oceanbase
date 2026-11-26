@@ -194,7 +194,7 @@ int ObBackupCleanJobAttr::assign(const ObBackupCleanJobAttr &other)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(other));
   } else if (OB_FAIL(backup_path_.assign(other.backup_path_))) {
-    LOG_WARN("failed to assign backup dest", K(ret), K(other.backup_path_));
+    LOG_WARN("failed to assign backup dest", K(ret), K(other.backup_path_.size()));
   } else if (OB_FAIL(description_.assign(other.description_))) {
     LOG_WARN("failed to assign description", K(ret), K(other.description_));
   } else if (OB_FAIL(executor_tenant_id_.assign(other.executor_tenant_id_))) {

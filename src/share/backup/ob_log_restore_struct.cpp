@@ -107,7 +107,7 @@ int ObRestoreSourceServiceAttr::parse_service_attr_from_str(ObSqlString &value)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("log restore source attr value is invalid");
   } else if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%.*s", static_cast<int>(value.length()), value.ptr()))) {
-    LOG_WARN("fail to print attr value", K(value));
+    LOG_WARN("fail to print attr value", KR(ret), "value_length", value.length());
   } else {
     token = tmp_str;
     for (char *str = token; OB_SUCC(ret); str = nullptr) {
@@ -115,7 +115,7 @@ int ObRestoreSourceServiceAttr::parse_service_attr_from_str(ObSqlString &value)
       if (nullptr == token) {
         break;
       } else if (OB_FAIL(do_parse_sub_service_attr(token))) {
-        LOG_WARN("fail to parse service attr str", K(token));
+        LOG_WARN("fail to parse service attr str", KR(ret));
       }
     }
   }
@@ -128,45 +128,45 @@ int ObRestoreSourceServiceAttr::do_parse_sub_service_attr(const char *sub_value)
 
   if (OB_ISNULL(sub_value) || OB_UNLIKELY(0 == STRLEN(sub_value) || STRLEN(sub_value) > OB_MAX_BACKUP_DEST_LENGTH)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("log restore source service attr sub value is invalid", K(sub_value));
+    LOG_WARN("log restore source service attr sub value is invalid", KR(ret));
   } else {
     char tmp_str[OB_MAX_BACKUP_DEST_LENGTH + 1] = { 0 };
     char *token = nullptr;
     char *saveptr = nullptr;
     if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%s", sub_value))) {
-      LOG_WARN("fail to print sub_value", K(sub_value));
+      LOG_WARN("fail to print sub_value", KR(ret));
     } else if (OB_ISNULL(token = ::STRTOK_R(tmp_str, "=", &saveptr))) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("fail to split sub_value str", K(token), KP(tmp_str));
+      LOG_WARN("fail to split sub_value str", KR(ret));
     } else if (OB_FALSE_IT(str_tolower(token, strlen(token)))) {
     } else if (0 == STRCASECMP(token, OB_STR_IP_LIST)) {
       if (OB_FAIL(parse_ip_port_from_str(saveptr, ";"/*delimiter*/))) {
-        LOG_WARN("fail to parse ip list from str", K(token), K(saveptr));
+        LOG_WARN("fail to parse ip list from str", KR(ret));
       }
     } else if (0 == STRCASECMP(token, OB_STR_USER)) {
       if (OB_FAIL(set_service_user_config(saveptr))) {
-        LOG_WARN("fail to set restore service user and tenant", K(token), K(saveptr));
+        LOG_WARN("fail to set restore service user and tenant", KR(ret));
       }
     } else if (0 == STRCASECMP(token, OB_STR_TENANT_ID)) {
       if (OB_FAIL(set_service_tenant_id(saveptr))) {
-        LOG_WARN("fail to set restore service user and tenant", K(token), K(saveptr));
+        LOG_WARN("fail to set restore service user and tenant", KR(ret));
       }
     } else if (0 == STRCASECMP(token, OB_STR_CLUSTER_ID)) {
       if (OB_FAIL(set_service_cluster_id(saveptr))) {
-        LOG_WARN("fail to set restore service user and tenant", K(token), K(saveptr));
+        LOG_WARN("fail to set restore service user and tenant", KR(ret));
       }
     } else if (0 == STRCASECMP(token, OB_COMPATIBILITY_MODE)) {
       if (OB_FAIL(set_service_compatibility_mode(saveptr))) {
-        LOG_WARN("fail to set restore service compatibility mode", K(token), K(saveptr));
+        LOG_WARN("fail to set restore service compatibility mode", KR(ret));
       }
     } else if (0 == STRCASECMP(token, OB_STR_PASSWORD)) {
       if (OB_FAIL(set_service_passwd_no_encrypt(saveptr))) {
-        LOG_WARN("fail to set restore service passwd", K(token), K(saveptr));
+        LOG_WARN("fail to set restore service passwd", KR(ret));
       }
     } else if (0 == STRCASECMP(token, OB_STR_IS_ENCRYPTED)) {
     } else {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("log restore source service do not have this config", K(token));
+      LOG_WARN("log restore source service do not have this config", KR(ret));
     }
   }
   return ret;
@@ -360,7 +360,7 @@ int ObRestoreSourceServiceAttr::gen_config_items(common::ObIArray<BackupConfigIt
   } else if (OB_FAIL(config.value_.assign(tmp.ptr()))) {
     LOG_WARN("failed to assign ip list value");
   } else if(OB_FAIL(items.push_back(config))) {
-     LOG_WARN("failed to push service source attr config", K(config));
+     LOG_WARN("failed to push service source attr config", KR(ret), K(config.key_));
   }
 
   // gen user config
@@ -372,7 +372,7 @@ int ObRestoreSourceServiceAttr::gen_config_items(common::ObIArray<BackupConfigIt
   } else if (OB_FAIL(config.value_.assign(tmp.ptr()))) {
     LOG_WARN("failed to assign user value");
   } else if (OB_FAIL(items.push_back(config))) {
-    LOG_WARN("failed to push service source attr config", K(config));
+    LOG_WARN("failed to push service source attr config", KR(ret), K(config.key_));
   }
 
   // gen password config
@@ -384,7 +384,7 @@ int ObRestoreSourceServiceAttr::gen_config_items(common::ObIArray<BackupConfigIt
   } else if (OB_FAIL(config.value_.assign(tmp.ptr()))) {
     LOG_WARN("failed to assign password value");
   } else if (OB_FAIL(items.push_back(config))) {
-    LOG_WARN("failed to push service source attr config", K(config));
+    LOG_WARN("failed to push service source attr config", KR(ret), K(config.key_));
   }
 
   // gen tenant id
@@ -396,7 +396,7 @@ int ObRestoreSourceServiceAttr::gen_config_items(common::ObIArray<BackupConfigIt
   } else if (OB_FAIL(config.value_.assign(tmp.ptr()))) {
     LOG_WARN("failed to assign tenant id value");
   } else if (OB_FAIL(items.push_back(config))) {
-    LOG_WARN("failed to push service source attr config", K(config));
+    LOG_WARN("failed to push service source attr config", KR(ret), K(config.key_));
   }
 
   // gen cluster id
@@ -408,7 +408,7 @@ int ObRestoreSourceServiceAttr::gen_config_items(common::ObIArray<BackupConfigIt
   } else if (OB_FAIL(config.value_.assign(tmp.ptr()))) {
     LOG_WARN("failed to assign cluster id value");
   } else if (OB_FAIL(items.push_back(config))) {
-    LOG_WARN("failed to push service source attr config", K(config));
+    LOG_WARN("failed to push service source attr config", KR(ret), K(config.key_));
   }
 
   // gen compatibility mode
@@ -420,7 +420,7 @@ int ObRestoreSourceServiceAttr::gen_config_items(common::ObIArray<BackupConfigIt
   } else if (OB_FAIL(config.value_.assign(tmp.ptr()))) {
     LOG_WARN("failed to assign compatibility mode value");
   } else if (OB_FAIL(items.push_back(config))) {
-    LOG_WARN("failed to push service source attr config", K(config));
+    LOG_WARN("failed to push service source attr config", KR(ret), K(config.key_));
   }
 
   // gen is encrypted
@@ -432,7 +432,7 @@ int ObRestoreSourceServiceAttr::gen_config_items(common::ObIArray<BackupConfigIt
   } else if (OB_FAIL(config.value_.assign(tmp.ptr()))) {
     LOG_WARN("failed to assign encrypted value");
   } else if (OB_FAIL(items.push_back(config))) {
-    LOG_WARN("failed to push service source attr config", K(config));
+    LOG_WARN("failed to push service source attr config", KR(ret), K(config.key_));
   }
 
   return ret;
@@ -465,7 +465,7 @@ int ObRestoreSourceServiceAttr::gen_service_attr_str(char *buf, const int64_t bu
     ip_str.ptr(), user_str.ptr(), passwd_str.ptr(), user_.tenant_id_, user_.cluster_id_, compat_str.ptr(), is_encrypted_str.ptr()))) {
     LOG_WARN("fail to assign str", K(compat_str), K(is_encrypted_str));
   } else if (OB_FAIL(databuff_printf(buf, buf_size, "%.*s", static_cast<int>(str.length()), str.ptr()))) {
-    LOG_WARN("fail to print str", K(str));
+    LOG_WARN("fail to print str", KR(ret));
   }
   return ret;
 }
@@ -681,13 +681,13 @@ int ObRestoreSourceServiceAttr::set_encrypt_password_key_(const char *passwd)
     OB_MAX_BACKUP_ENCRYPTKEY_LENGTH, key_len))) {
     LOG_WARN("failed to encrypt authorization key");
   } else if (OB_FAIL(hex_print(encrypted_key, key_len, serialize_buf, sizeof(serialize_buf), serialize_pos))) {
-    LOG_WARN("failed to serialize encrypted key", K(encrypted_key));
+    LOG_WARN("failed to serialize encrypted key", KR(ret), K(key_len));
   } else if (serialize_pos >= sizeof(serialize_buf) || serialize_pos >= sizeof(encrypt_passwd_)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("encode error", K(serialize_pos), K(sizeof(serialize_buf)), K(sizeof(encrypt_passwd_)));
   } else if (FALSE_IT(serialize_buf[serialize_pos] = '\0')) {
   } else if (OB_FAIL(databuff_printf(encrypt_passwd_, sizeof(encrypt_passwd_), "%s", serialize_buf))) {
-    LOG_WARN("failed to get encrypted key", K(serialize_buf));
+    LOG_WARN("failed to get encrypted key", KR(ret), K(serialize_pos));
   }
   return ret;
 }
@@ -709,7 +709,7 @@ int ObRestoreSourceServiceAttr::get_decrypt_password_key_(char *unencrypt_key, c
     LOG_WARN("failed to get cstr from hex", K(buf_len), K(sizeof(deserialize_buf)));
   } else if (OB_FAIL(ObEncryptionUtil::decrypt_sys_data(OB_SYS_TENANT_ID, deserialize_buf, deserialize_size,
       decrypt_key, sizeof(decrypt_key), key_len))) {
-    LOG_WARN("failed to decrypt authorization key", K(ret), K(deserialize_buf), K(deserialize_size));
+    LOG_WARN("failed to decrypt authorization key", K(ret), KP(deserialize_buf), K(deserialize_size));
   } else if (key_len >= sizeof(decrypt_key) || (key_len) >= buf_size) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("decrypt key size overflow", K(ret), K(key_len), K(sizeof(decrypt_key)), K(sizeof(unencrypt_key)));
@@ -727,16 +727,16 @@ int ObRestoreSourceServiceAttr::get_password(char *passwd, const int64_t buf_siz
   char tmp_passwd[OB_MAX_PASSWORD_LENGTH + 1] = { 0 };
   if (OB_ISNULL(passwd) || OB_UNLIKELY((buf_size <= 0) || (buf_size < OB_MAX_PASSWORD_LENGTH))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid parameter when get password", K(passwd), K(STRLEN(passwd)));
+    LOG_WARN("invalid parameter when get password", KP(passwd), K(buf_size));
 #ifdef OB_BUILD_TDE_SECURITY
   } else if (OB_FAIL(get_decrypt_password_key_(tmp_passwd, sizeof(tmp_passwd)))) {
     LOG_WARN("failed to get decrypt password key");
   } else if (OB_FAIL(databuff_printf(passwd, buf_size, "%s", tmp_passwd))) {
-    LOG_WARN("failed to print encrypt_passwd_ key", K(encrypt_passwd_));
+    LOG_WARN("failed to print encrypt_passwd_ key", KP(encrypt_passwd_));
   }
 #else
   } else if (OB_FAIL(databuff_printf(passwd, buf_size, "%s", encrypt_passwd_))) {
-    LOG_WARN("failed to print encrypt_passwd_ key", K(encrypt_passwd_));
+    LOG_WARN("failed to print encrypt_passwd_ key", KP(encrypt_passwd_));
   }
 #endif
   return ret;
@@ -824,7 +824,7 @@ int ObRestoreSourceLocationPrimaryAttr::parse_location_attr_from_str(const commo
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("location log restore source is empty");
   } else if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%.*s", static_cast<int>(value.length()), value.ptr()))) {
-    LOG_WARN("fail to set config value", K(ret), K(value));
+    LOG_WARN("fail to set config value", K(ret), "value_length", value.length());
   } else {
     token = tmp_str;
     for (char *str = token; OB_SUCC(ret); str = nullptr) {
@@ -832,7 +832,7 @@ int ObRestoreSourceLocationPrimaryAttr::parse_location_attr_from_str(const commo
       if (nullptr == token) {
         break;
       } else if (OB_FAIL(do_parse_sub_config_(token))) {
-        LOG_WARN("fail to do parse location restore source sub config from string", K(token));
+        LOG_WARN("fail to do parse location restore source sub config from string", KR(ret));
       }
     }
   }
@@ -844,31 +844,31 @@ int ObRestoreSourceLocationPrimaryAttr::do_parse_sub_config_(const char *sub_val
   int ret = OB_SUCCESS;
   if (OB_ISNULL(sub_value) || OB_UNLIKELY(0 == STRLEN(sub_value) || STRLEN(sub_value) > OB_MAX_BACKUP_DEST_LENGTH)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("location log restore source primary attr sub value is invalid", K(sub_value));
+    LOG_WARN("location log restore source primary attr sub value is invalid", KR(ret));
   } else {
     char tmp_str[OB_MAX_BACKUP_DEST_LENGTH + 1] = { 0 };
     char *token = nullptr;
     char *saveptr = nullptr;
     if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%s", sub_value))) {
-      LOG_WARN("fail to print sub_value", K(sub_value));
+      LOG_WARN("fail to print sub_value", KR(ret));
     } else if (OB_ISNULL(token = ::STRTOK_R(tmp_str, "=", &saveptr))) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("fail to split sub_value str", K(token), KP(tmp_str));
+      LOG_WARN("fail to split sub_value str", KR(ret));
     } else if (0 == STRCASECMP(token, OB_STR_LOCATION)) {
       if (OB_FAIL(set_location_path_(saveptr))) {
-        LOG_WARN("fail to do parse location path", K(token), K(saveptr));
+        LOG_WARN("fail to do parse location path", KR(ret));
       }
     } else if (0 == STRCASECMP(token, OB_STR_CLUSTER_ID)) {
       if (OB_FAIL(set_location_cluster_id_(saveptr))) {
-        LOG_WARN("fail to do parse location primary cluster id", K(token), K(saveptr));
+        LOG_WARN("fail to do parse location primary cluster id", KR(ret));
       }
     } else if (0 == STRCASECMP(token, OB_STR_TENANT_ID)) {
       if (OB_FAIL(set_location_tenant_id_(saveptr))) {
-        LOG_WARN("fail to do parse location primary tenant id", K(token), K(saveptr));
+        LOG_WARN("fail to do parse location primary tenant id", KR(ret));
       }
     } else {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("location log restore source does not support this sub config", K(token));
+      LOG_WARN("location log restore source does not support this sub config", KR(ret));
     }
   }
   return ret;
@@ -879,9 +879,9 @@ int ObRestoreSourceLocationPrimaryAttr::set_location_path_(const char *path)
   int ret = OB_SUCCESS;
   if (OB_ISNULL(path) || OB_UNLIKELY(0 == STRLEN(path) || STRLEN(path) > OB_MAX_BACKUP_DEST_LENGTH)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("location path is invalid", K(path));
+    LOG_WARN("location path is invalid", KR(ret));
   } else if (OB_FAIL(location_.assign(path))) {
-    LOG_WARN("fail to assign location path", K(path));
+    LOG_WARN("fail to assign location path", KR(ret));
   }
   return ret;
 }

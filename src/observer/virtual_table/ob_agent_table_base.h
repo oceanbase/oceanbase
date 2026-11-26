@@ -91,7 +91,7 @@ protected:
       common::ObSqlString &cols, common::ObSqlString &vals);
 
   int construct_sql(const uint64_t exec_tenant_id, common::ObSqlString &sql);
-  int construct_columns(
+  virtual int construct_columns(
       const uint64_t exec_tenant_id,
       common::ObSqlString &sql);
   int cast_as_default_value(

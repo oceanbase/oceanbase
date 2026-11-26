@@ -73,7 +73,7 @@ int ObTenantShowRestorePreview::init()
   } else if (OB_FAIL(session_->get_user_variable_value(OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR, backup_dest_value))) {
     SHARE_LOG(WARN, "failed to get user variable value", KR(ret));
   } else if (OB_FAIL(backup_dest_value.get_varchar(uri_))) {
-    SHARE_LOG(WARN, "failed to varchar", KR(ret), K(backup_dest_value));
+    SHARE_LOG(WARN, "failed to varchar", KR(ret));
   } else if (OB_FAIL(ObPhysicalRestoreUriParser::parse(uri_, allocator, tenant_path_array))) {
     SHARE_LOG(WARN, "fail to parse uri", K(ret));
   } else if (OB_FAIL(rootserver::ObRestoreUtil::check_restore_using_complement_log(tenant_path_array, only_contain_backup_set_))) {
@@ -89,7 +89,7 @@ int ObTenantShowRestorePreview::init()
     SHARE_LOG(WARN, "failed to parse restore timestamp from session", KR(ret));
   } else if (OB_FAIL(rootserver::ObRestoreUtil::get_restore_source(only_contain_backup_set_,
       tenant_path_array, backup_passwd, restore_scn_, backup_set_list_, backup_piece_list_, log_path_list_))) {
-    SHARE_LOG(WARN, "failed to get restore source", K(ret), K(restore_scn_), K(backup_passwd));
+    SHARE_LOG(WARN, "failed to get restore source", K(ret), K(restore_scn_));
   } else {
     idx_ = 0;
     total_cnt_ = backup_set_list_.count() + backup_piece_list_.count();

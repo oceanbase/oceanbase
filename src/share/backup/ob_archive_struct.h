@@ -265,7 +265,7 @@ struct ObTenantArchiveRoundAttr final : public ObIInnerTableRow
   TO_STRING_KV(K_(key), K_(incarnation), K_(dest_id), K_(round_id), K_(state), K_(start_scn),
     K_(checkpoint_scn), K_(max_scn), K_(compatible), K_(base_piece_id), K_(used_piece_id), K_(piece_switch_interval),
     K_(frozen_input_bytes), K_(frozen_output_bytes), K_(active_input_bytes), K_(active_output_bytes),
-    K_(deleted_input_bytes), K_(deleted_output_bytes), K_(path), K_(comment));
+    K_(deleted_input_bytes), K_(deleted_output_bytes), K(path_.size()), K_(comment));
 };
 
 
@@ -403,7 +403,7 @@ struct ObTenantArchiveHisRoundAttr final : public ObIInnerTableRow
   TO_STRING_KV(K_(key), K_(incarnation), K_(dest_id), K_(start_scn), K_(checkpoint_scn),
     K_(max_scn), K_(compatible), K_(base_piece_id), K_(used_piece_id), K_(piece_switch_interval),
     K_(input_bytes), K_(output_bytes), K_(deleted_input_bytes), K_(deleted_output_bytes),
-    K_(path), K_(comment));
+    K(path_.size()), K_(comment));
 };
 
 
@@ -700,7 +700,7 @@ public:
 
   TO_STRING_KV(K_(key), K_(incarnation), K_(dest_no), K_(file_count),
     K_(start_scn), K_(checkpoint_scn), K_(max_scn), K_(end_scn), K_(compatible), K_(input_bytes),
-    K_(output_bytes), K_(status), K_(file_status), K_(cp_file_id), K_(cp_file_offset), K_(path));
+    K_(output_bytes), K_(status), K_(file_status), K_(cp_file_id), K_(cp_file_offset), K(path_.size()));
 };
 
 

@@ -329,9 +329,9 @@ int ObLogMetaDataService::read_meta_info_in_archive_log_(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc buffer for datadict metainfo failed", KR(ret), K(buffer_size));
   } else if (OB_FAIL(archive_dest.set(archive_dest_str))) {
-    LOG_ERROR("archive_dest set archive_dest_str failed", KR(ret), K(archive_dest), K(archive_dest_str));
+    LOG_ERROR("archive_dest set archive_dest_str failed", KR(ret), K(archive_dest));
   } else if (OB_FAIL(piece_ctx.init(share::SYS_LS, archive_dest))) {
-    LOG_ERROR("piece_ctx init failed", KR(ret), K(archive_dest), K(archive_dest_str));
+    LOG_ERROR("piece_ctx init failed", KR(ret), K(archive_dest));
   } else  {
     // Assume the recycle interval of data in __all_data_dictionary_in_log is a month
     constexpr int64_t DATADICT_META_RECYCLE_INTERVAL_NS = 30L * _DAY_ * NS_CONVERSION;

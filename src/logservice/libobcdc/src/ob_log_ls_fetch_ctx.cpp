@@ -174,9 +174,9 @@ int LSFetchCtx::init(
 
   if (OB_SUCC(ret) && is_direct_fetching_mode(fetching_mode)) {
     if (OB_FAIL(init_archive_dest_(archive_dest_str, archive_dest))) {
-      LOG_ERROR("init archive dest failed", KR(ret), K(archive_dest_str));
+      LOG_ERROR("init archive dest failed", KR(ret));
     } else if (OB_FAIL(init_archive_source_(archive_dest))) {
-      LOG_ERROR("init_archive_source failed", KR(ret), K(archive_dest_str), K_(tls_id));
+      LOG_ERROR("init_archive_source failed", KR(ret), K_(tls_id));
     }
   }
 
@@ -215,7 +215,7 @@ int LSFetchCtx::init_archive_dest_(const ObBackupPathString &archive_dest_str,
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(archive_dest.set(archive_dest_str))) {
-    LOG_ERROR("archive dest set archive_dest_str failed", KR(ret), K(archive_dest_str));
+    LOG_ERROR("archive dest set archive_dest_str failed", KR(ret));
   }
   return ret;
 }

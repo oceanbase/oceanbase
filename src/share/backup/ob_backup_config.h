@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_BACKUP_OB_BACKUP_CONFIG_H_
 
 #include <utility>
+#include "share/ob_config_log_util.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/container/ob_array_serialization.h"
@@ -89,7 +90,7 @@ struct BackupConfigItemPair final
   bool is_valid() const;
   void reset();
   int set_value(const int64_t &value);
-  TO_STRING_KV(K_(key), K_(value));
+  TO_STRING_KV(K_(key), "value", get_config_value_for_log(key_.string(), value_.string()));
   common::ObSqlString key_;
   common::ObSqlString value_;  
 };
@@ -189,7 +190,7 @@ public:
   virtual int parse_from(const common::ObSqlString &value) override;
   virtual int update_inner_config_table(common::ObISQLClient &trans) override;
   virtual int check_before_update_inner_config(obrpc::ObSrvRpcProxy &rpc_proxy, common::ObISQLClient &trans) override;
-  TO_STRING_KV(K_(dest_no), K_(archive_dest), K_(backup_dest), K_(is_empty));
+  TO_STRING_KV(K_(dest_no), K_(archive_dest), K_(is_empty));
 protected:
   virtual int do_parse_sub_config_(const common::ObString &config_str);
   int do_parse_log_archive_dest_(const common::ObString &dest_type_str, const common::ObString &url);

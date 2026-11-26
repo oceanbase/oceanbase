@@ -2108,11 +2108,11 @@ int ObRootService::check_config_result(const char *name, const char* value)
     while(OB_SUCC(ret) || OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH == ret /* remote schema not ready, return -4029 on remote */) {
       if (ObTimeUtility::current_time() - start > timeout) {
         ret = OB_TIMEOUT;
-        LOG_WARN("sync config info use too much time", K(ret), K(name), K(value),
+        LOG_WARN("sync config info use too much time", K(ret), K(name), "value", share::get_config_value_for_log(name, value),
                  "cost_us", ObTimeUtility::current_time() - start);
       } else {
         if (OB_FAIL(sql_proxy_.read(res, sql.ptr()))) {
-          LOG_WARN("fail to execute sql", K(ret), K(sql));
+          LOG_WARN("fail to execute sql", K(ret), K(name));
         } else if (NULL == (result = res.get_result())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail to get sql result", K(ret));
@@ -10543,7 +10543,7 @@ int ObRootService::admin_set_backup_config(const obrpc::ObAdminSetConfigArg &arg
       } else if (OB_FAIL(value.assign(item.value_.ptr()))) {
         LOG_WARN("fail to assign value", K(ret));
       } else if (OB_FAIL(config_parser_mgr.init(name, value, exec_tenant_id))) {
-        LOG_WARN("fail to init backup config parser mgr", K(ret), K(name), KS(value.ptr()));
+        LOG_WARN("fail to init backup config parser mgr", K(ret), K(name));
       } else if (OB_FAIL(config_parser_mgr.update_inner_config_table(rpc_proxy_, trans))) {
         LOG_WARN("fail to update inner config table", K(ret));
       }

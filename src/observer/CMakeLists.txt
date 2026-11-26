@@ -521,6 +521,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_log_transport_dest_stat.cpp
   virtual_table/ob_all_virtual_kv_group_commit_info.cpp
   virtual_table/ob_all_virtual_kv_client_info.cpp
+  virtual_table/ob_all_virtual_restore_job.cpp
   virtual_table/ob_all_virtual_dba_source.cpp
   virtual_table/ob_all_virtual_sql_group_commit_stat.cpp
 )

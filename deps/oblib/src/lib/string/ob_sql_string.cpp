@@ -109,7 +109,7 @@ int ObSqlString::assign(const char *str, const int64_t len)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(len));
   } else if (OB_FAIL(append(str, len))) {
-    LOG_WARN("append string failed", K(ret), KCSTRING(str), K(len));
+    LOG_WARN("append string failed", K(ret), K(len));
   }
   return ret;
 }
@@ -125,9 +125,9 @@ int ObSqlString::assign(const ObSqlString &sql)
   int ret = OB_SUCCESS;
   if (!sql.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("assign get invalid argument", K(ret), K(sql));
+    LOG_WARN("assign get invalid argument", K(ret), K(sql.length()));
   } else if (OB_FAIL(assign(sql.ptr()))) {
-    LOG_WARN("fail to append sql", K(ret), K(sql));
+    LOG_WARN("fail to append sql", K(ret), K(sql.length()));
   }
   return ret;
 }

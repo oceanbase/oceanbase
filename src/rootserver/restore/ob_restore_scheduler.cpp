@@ -480,7 +480,7 @@ int ObRestoreScheduler::fill_restore_statistics(const share::ObPhysicalRestoreJo
     storage::ObExternBackupSetInfoDesc backup_set_info;
     const share::ObBackupSetPath &backup_set_path = job_info.get_multi_restore_path_list().get_backup_set_path_list().at(idx);
     if (OB_FAIL(store.init(backup_set_path.ptr()))) {
-      LOG_WARN("fail to init backup data store", K(backup_set_path));
+      LOG_WARN("fail to init backup data store", K(ret), K(idx));
     } else if (OB_FAIL(store.read_backup_set_info(backup_set_info))) {
       LOG_WARN("fail to read backup set info", K(ret));
     } else if (OB_FAIL(store.read_ls_attr_info(backup_set_info.backup_set_file_.meta_turn_id_, ls_info))) {
@@ -1180,18 +1180,18 @@ int ObRestoreScheduler::restore_init_ls(const share::ObPhysicalRestoreJob &job_i
       LOG_WARN("failed to init restore_source_mgr", KR(ret));
     } else if (1 == log_path_array.count() 
       && OB_FAIL(restore_source_mgr.add_location_source(job_info.get_restore_scn(), log_path_array.at(0).str()))) {
-      LOG_WARN("failed to add log restore source", KR(ret), K(job_info), K(log_path_array));
+      LOG_WARN("failed to add log restore source", KR(ret), K(job_info), "log_path_count", log_path_array.count());
     } else if (0 == log_path_array.count()) /*add restore source*/ {
       DirArray piece_dir_array;
       const common::ObSArray<share::ObBackupPiecePath> piece_array = job_info.get_multi_restore_path_list().get_backup_piece_path_list();
       ARRAY_FOREACH_X(piece_array, i, cnt, OB_SUCC(ret)) {
         ObBackupPiecePath piece_path = piece_array.at(i);
         if (OB_FAIL(piece_dir_array.push_back(piece_path))) {
-          LOG_WARN("fail to push back", K(ret), K(piece_path), K(piece_dir_array));
+          LOG_WARN("fail to push back", K(ret), K(i), "piece_count", piece_dir_array.count());
         }
       }
       if (FAILEDx(restore_source_mgr.add_rawpath_source(job_info.get_restore_scn(), piece_dir_array))) {
-        LOG_WARN("fail to add raw path source", K(ret), K(job_info), K(piece_dir_array));
+        LOG_WARN("fail to add raw path source", K(ret), K(job_info), "piece_count", piece_dir_array.count());
       }
     }
   }
